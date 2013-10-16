@@ -1,8 +1,48 @@
 xBasicSystem: @
   (# with Containers; 
      %OSDvisibility=disguised %
+     test: (#  exit 0 #);
+     Lock:
+       (# M: @integer;
+          get:
+            (# 
+            do 
+               Loop: 
+                 (if 1 then
+                     disable;
+                     (if (1 -> M.cmpAndSwap) = 1 then 
+                         enable;
+                        (* 500 -> sleep; *)
+                         restart Loop 
+                 if)if);
+            #);
+          free: (# do 0 -> M; enable #)
+       #);
      System: 
-       (# BasicProcess: 
+       (#  Core: 
+            (# %core%
+               S: ^gScheduler;
+               attach:
+                 (#
+                 enter S[]
+                 do 
+                 #);
+            do 'q'->put; loop:
+                 (if S[] <> none then 'e'->put;
+                     S                   
+                  else 'w'->put;
+                     110->sleep;
+                     restart loop
+                 if)
+            #);
+          core1,core2: @Core;
+          
+          init_core:
+            (#
+            do core1[] -> fork; 
+               (*core2[] -> fork; *)
+            #);
+          BasicProcess: 
             (# start:< 
                  (# 
                  enter id
@@ -172,7 +212,11 @@ xBasicSystem: @
                                     -> display
                              if);
                              enable;
-                             scheduler.active.suspend;
+                             (if MultiCore then
+                                 thisCore.S.active.suspend
+                              else
+                                 theScheduler.active.suspend
+                             if);
                              (if cTest then
                                  '\nactiviyScheduling resumed after waiting activities'
                                     -> display
@@ -188,7 +232,7 @@ xBasicSystem: @
                    ':terminated' -> display; newline
                if)
             #);
-          scheduler: @ gScheduler
+          scheduler:  gScheduler
             (# init:: 
                  (# 
                  do 'gScheduler' -> idf[]; idf.print
@@ -198,7 +242,7 @@ xBasicSystem: @
                waitingActivities:: (#  do  #)
             do (if 0 then
                    active
-                else
+                else 
                    50 -> active.attach
                if)
             #);
@@ -250,7 +294,22 @@ xBasicSystem: @
                newline: (#  do disable; 10 -> put; enable #);
                display: (#  do disable; inner; enable #)
             #);
-          test: @ boolean
-       do scheduler.init; inner; scheduler
+          test: @ boolean;
+          theScheduler: ^Scheduler;
+          MultiCore: (# exit 0 #)
+       do '!' -> put;
+          (if MultiCore  then
+              init_core;              
+              inner;
+              &Scheduler[] -> theScheduler[]; theScheduler.init;
+              theScheduler[] -> core1.attach;
+           else 'Q'->put;
+              &Scheduler[] -> theScheduler[]; 
+               'E'->put;
+              theScheduler.init;
+               'W'->put;
+              inner; 
+              theScheduler
+          if)
        #)
   #)
