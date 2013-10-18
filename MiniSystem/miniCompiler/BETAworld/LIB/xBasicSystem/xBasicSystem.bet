@@ -3,16 +3,21 @@ xBasicSystem: @
      %OSDvisibility=disguised %
      test: (#  exit 0 #);
      Lock:
-       (# M: @integer;
+       (# id: ^text; M: @integer;
+          init: (# T: ^text enter T[] do T[] -> id[] #);
           get:
-            (# 
-            do 
-               Loop: 
+            (# V: @integer
+            do Loop: 
                  (if 1 then
                      disable;
                      (if (1 -> M.cmpAndSwap) = 1 then 
                          enable;
-                        (* 500 -> sleep; *)
+                         (if (V + 1 -> V) > 1000 then
+                             '\n\n***** Timeout for Lock: '.print;
+                             id.print;
+                             '\n'.print
+                         if);
+                         (* 500 -> sleep; *)
                          restart Loop 
                  if)if);
             #);
@@ -21,27 +26,23 @@ xBasicSystem: @
      System: 
        (#  Core: 
             (# %core%
-               S: ^gScheduler;
-               attach:
-                 (#
-                 enter S[]
-                 do 
-                 #);
-            do 'q'->put; loop:
-                 (if S[] <> none then 'e'->put;
+               S: ^Scheduler;
+               attach: (# enter S[] do #);
+            do loop:
+                 (if S[] <> none then 
                      S                   
-                  else 'w'->put;
-                     110->sleep;
+                  else 
+                     100->sleep;
                      restart loop
                  if)
             #);
-          core1,core2: @Core;
-          
+          core1,core2: @Core;          
           init_core:
             (#
             do core1[] -> fork; 
-               (*core2[] -> fork; *)
+               core2[] -> fork; 
             #);
+          
           BasicProcess: 
             (# start:< 
                  (# 
@@ -63,7 +64,6 @@ xBasicSystem: @
                  #);
                id: @ integer;
                status: @ integer;
-               sch: ^gScheduler
             do inner;
                disable;
                P_status.TERMINATED -> status;
@@ -72,34 +72,11 @@ xBasicSystem: @
           P_status: @ 
             (# ACTIVE: (#  exit 1 #);
                WAITING: (#  exit 2 #);
-               RESUMED: (#  exit 3 #);
+               RESUMED: (# exit 3 #);
                TERMINATED: (#  exit 4 #)
             #);
-          gScheduler: 
-            (# init:< (#  do inner #);
-               insert:< 
-                 (# P: ^BasicProcess
-                 enter P[]
-                 do (if test then
-                        console.display
-                        (# 
-                        do ':insert:'.print;
-                           idf.print;
-                           P.id -> putint;
-                           newline
-                        #)
-                    if);
-                    inner;
-                    (if test then
-                        SQS.display
-                    if)
-                 #);
-               remove:< 
-                 (# P: ^BasicProcess
-                 enter P[]
-                 do inner
-                 #);
-               SQS: @ ProcessQueue;
+          Scheduler: 
+            (# init: (#  do 'Scheduler' -> idf[]; idf.print #);
                active: ^BasicProcess;
                idf: ^text;
                display: 
@@ -131,120 +108,49 @@ xBasicSystem: @
                        '[' -> put;
                        processId -> putint;
                        ']' -> put;
-                       ':waiting:'.print;
-                       noOfWaiting -> putint;
                        msg.print;
                        ':' -> put;
                        SQS.display
                     #)
                  #);
                processId:< (# id: @ integer do inner exit id #);
-               waitingActivities:< booleanValue
-                 (# 
-                 do (if test then
-                        ':SQS is empty:' -> display
-                    if);
-                    inner
-                 #);
-               incrWaiting: 
-                 (# 
-                 do noOfWaiting + 1 -> noOfWaiting
-                 #);
-               decrWaiting: 
-                 (# 
-                 do noOfWaiting - 1 -> noOfWaiting
-                 #);
-               noOfWaiting: @ integer;
-               cTest: @ integer
+               P: ^BasicProcess;
+               cTest: (#exit 0 #)
             do (if cTest then
                    ':Initial:' -> display
                if);
                Loop:
                  (if true then
-                     (if cTest then
-                         ':scheduler:loop: '
-                            -> display
-                     if);
+                     (if cTest then ':scheduler:loop: ' -> display if);
                      disable;
-                     SQS.removeNext[] -> active[];
+                     SQS.removeNext -> active[];
                      (if active[] <> none then
-                         (if cTest then
-                             ':next:' -> display
-                         if);
-                         P_status.ACTIVE
-                            -> active.status;
+                         (if cTest then ':next:' -> display if);
+                         P_status.ACTIVE -> active.status;
                          enable;
-                         inner;
+                         50 -> active.attach
                          disable;
-                         (if cTest then
-                             ':after suspend:status:'
-                                -> display
-                         if);
+                         (if cTest then ':after suspend:status:' -> display if);
                          (if active.status = P_status.ACTIVE then
-                             (if true then
-                                 active[]
-                                    -> SQS.insert
-                              else
-                                 (if not (active[] -> SQS.find) then
-                                     active[]
-                                        -> SQS.insert
-                                 if)
-                             if);
+                             active[] -> SQS.insert;
                              (if cTest then
-                                 ':scheduler:insert active'
-                                    -> display
+                                 ':scheduler:insert active' -> display
                              if)
                          if)
                       else
-                         (if cTest then
-                             '\nNo processes in SQS'
-                                -> display
-                         if)
+                         (if cTest then '\nNo processes in SQS' -> display if)
                      if);
                      (if SQS.isEmpty then
-                         (if cTest then
-                             ':SQS.isEmpty:'
-                                -> display
-                         if);
-                         (if this(gScheduler).waitingActivities then
-                             (if cTest then
-                                 ':waiting activities'
-                                    -> display
-                             if);
-                             enable;
-                             (if MultiCore then
-                                 thisCore.S.active.suspend
-                              else
-                                 theScheduler.active.suspend
-                             if);
-                             (if cTest then
-                                 '\nactiviyScheduling resumed after waiting activities'
-                                    -> display
-                             if);
-                             restart Loop
-                         if);
+                         (if cTest then ':SQS.isEmpty:' -> display if);
                          enable
                       else
                          enable; restart Loop
                      if)
                  if);
-               (if cTest then
-                   ':terminated' -> display; newline
-               if)
-            #);
-          scheduler:  gScheduler
-            (# init:: 
-                 (# 
-                 do 'gScheduler' -> idf[]; idf.print
-                 #);
-               insert::< (#  do P[] -> SQS.insert #);
-               remove::< (#  do P[] -> SQS.remove #);
-               waitingActivities:: (#  do  #)
-            do (if 0 then
-                   active
-                else 
-                   50 -> active.attach
-               if)
+               console.display
+               (#
+               do '\n*** terminated: '.print; idf.print; '\n'.print
+               #)
             #);
           ProcessQueue: Queue
             (# display: 
@@ -271,43 +177,57 @@ xBasicSystem: @
                        newline
                     #)
                  #);
-               find: BooleanValue
+            #);
+          SQS: @ 
+            (# Q: @ ProcessQueue;
+               L: @lock;
+               init: entry(# do 'SQS' -> L.init; #);
+               entry: (# do L.get; inner; L.free #);
+               insert: entry
                  (# P: ^BasicProcess
                  enter P[]
-                 do L:
-                      scan
-                      (# P1: ^BasicProcess
-                      do current[] -> P1[];
-                         (if P.id = P1.id then
-                             true -> value;
-                             '\n************* Process already in Queue: '.print;
-                             P.id -> putint;
-                             display;
-                             leave L
-                         if)
-                      #)
-                 #)
+                 do P[] -> Q.insert
+                 #);
+               removeNext: entry
+                 (# P: ^BasicProcess
+                 do Q.removeNext -> P[]
+                 exit P[]
+                 #);
+               remove: entry
+                 (# P: ^BasicProcess
+                 enter P[]
+                 do P[] -> Q.remove
+                 #);              
+               isEmpty: entry
+                 (# P: ^BasicProcess; value: @boolean
+                 enter P[]
+                 do Q.isEmpty -> value
+                 exit value
+                 #);
+               display: entry(# do Q.display #);
             #);
+          coreLock: @Lock;
           console: @ stream
-            (# putx:: (#  do disable; ch -> put; enable #);
-               puttext:: (#  do disable; T.print; enable #);
-               newline: (#  do disable; 10 -> put; enable #);
-               display: (#  do disable; inner; enable #)
+            (# init: (# do L.get; 'Console' -> L.init; L.free #);
+               display: (#do L.get; inner; L.free #);               
+               L: @lock
             #);
-          test: @ boolean;
+          test: (# exit 0 #)
           theScheduler: ^Scheduler;
-          MultiCore: (# exit 0 #)
+          MultiCore: (# exit 1 #)
        do '!' -> put;
           (if MultiCore  then
+              console.init;
+              SQS.init;              
               init_core;              
-              inner;
               &Scheduler[] -> theScheduler[]; theScheduler.init;
+              inner;
               theScheduler[] -> core1.attach;
-           else 'Q'->put;
+              &Scheduler[] -> theScheduler[]; theScheduler.init;
+              theScheduler[] -> core2.attach;
+           else 
               &Scheduler[] -> theScheduler[]; 
-               'E'->put;
               theScheduler.init;
-               'W'->put;
               inner; 
               theScheduler
           if)

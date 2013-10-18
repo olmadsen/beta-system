@@ -6,11 +6,11 @@ xRendezvousSystem: @xBasicSystem
                init: 
                  (# V: @ integer
                  enter (id[],V)
-                 do V -> cnt
+                 do V -> cnt; id[] -> M.init;
                  #);
                wait: 
                  (# P: ^Process
-                 do disable;
+                 do M.get; (*disable;*)
                     (if sTest then
                         console.display
                         (# 
@@ -21,60 +21,51 @@ xRendezvousSystem: @xBasicSystem
                     cnt - 1 -> cnt;
                     (if cnt < 0 then
                         (if sTest then
-                            console.display
-                            (# 
-                            do ':isBlocked:'.print
-                            #)
+                            console.display(#do ':isBlocked:'.print #)
                         if);
                         (if MultiCore then
-                            thisCore.S.active -> P[];
+                            thisCore.S.active[] -> P[];
                          else
                             theScheduler.active[] -> P[];
                         if);
                         (if P[] = none then
-                            'Scheduler.active is none'.print;
-                            newline
+                            'Scheduler.active is none\n'.print;
                         if);
-                        (if P.activityScheduler.active[] = none then
-                            'Scheduler.active.activityScheduler.active is none'.print;
-                            newline
+                        (if P.myAS.active[] = none then
+                            'Scheduler.active.myAS.active is none\n'.print;
                         if);
-                        P_status.WAITING
-                           -> P.activityScheduler.active.status;
-                        P.activityScheduler[]
-                           -> P.activityScheduler.active.sch[];
-                        P.activityScheduler.incrWaiting;
-                        P.activityScheduler.active[]
-                           -> Q.insert;
-                        enable;
+                        P_status.WAITING -> P.myAS.active.status;
+                        P.myAS[] -> P.myAS.active.sch[];
+                        P.myAS.incrWaiting;
+                        P.myAS.active[] -> Q.insert;
+                        M.free; (*enable;*)
                         '?' -> put;
-                        P.activityScheduler.active.suspend
+                        P.myAS.active.suspend
                      else
-                        enable
+                        M.free (*enable*)
                     if)
                  #);
                signal: 
-                 (# P: ^BasicProcess; cP: ^Process
-                 do disable;
+                 (# A: ^(*BasicProcess*) Process.Activity; cP: ^Process
+                 do M.get; (*disable;*)
                     (if sTest then
                         console.display
                         (#
-                        do '\nSem:signal:'.print;
-                           id.print
+                        do '\nSem:signal:'.print; id.print
                         #)
                     if);
                     cnt + 1 -> cnt;
                     (if cnt <=  0 then
                         (if sTest then
-                            console.display
-                            (# 
-                            do ':waiting processes'.print
-                            #)
+                            console.display(#do ':waiting processes'.print #)
                         if);
-                        Q.removeNext -> P[];
-                        P_status.RESUMED -> P.status;
-                        P[] -> P.sch.insert;
-                        P.sch.decrWaiting;
+                        Q.removeNext -> A[];
+                        (if A[] = none then 'A none\n'.print if);
+                        P_status.RESUMED -> A.status;
+                        (if A.sch[] = none then 'A.sch none\n'.print if);
+                        A[] -> A.sch.insert;
+
+                        A.sch.decrWaiting;
                         (if MultiCore then
                             thisCore.S.active[] -> cP[];
                          else
@@ -84,21 +75,18 @@ xRendezvousSystem: @xBasicSystem
                             console.display
                             (# 
                             do ':activate:'.print;
-                               P.id -> putint;
+                               A.id -> putint;
                                ':inQueue:'.print;
-                               P.sch.processid
-                                  -> putint;
+                               A.sch.processid -> putint;
                                ':processExecutingSignal:'.print;
                                cp.id -> putint;
-                               newline;
-                               ':whenActivated:'
-                                  -> P.sch.display
+                               '\n:whenActivated:' -> A.sch.display
                             #)
                         if);
-                        enable;
-                        cP.activityScheduler.active.suspend
+                        M.free; (*enable;*)
+                        cP.myAS.active.suspend
                      else
-                        enable
+                        M.free; (*enable*)
                     if)
                  #);
                display: 
@@ -112,25 +100,24 @@ xRendezvousSystem: @xBasicSystem
                  #);
                cnt: @ integer;
                M: @Lock;
-               Q: @ ProcessQueue;
+               Q: @ProcessQueue;
                sTest: (#  exit 0 #)
             #);
           Process: BasicProcess
             (# start::< 
                   (# 
-                  do 'A'->put; activityScheduler.init; 'B'->put;
-                     (if MultiCore then
-                         this(Process)[] -> thisCore.S.insert; 'C'->put;
+                  do myAS.init;
+                     (if MultiCore then 
+                         this(Process)[] -> SQS.insert; 
                       else
-                         this(Process)[] -> theScheduler.insert;
+                         this(Process)[] -> SQS.insert;
                      if);
                      inner
                   #);
                Activity: BasicProcess
                  (# start::< 
                        (# 
-                       do this(Activity)[]
-                             -> activityScheduler.insert;
+                       do this(Activity)[] -> myAS.insert;
                           inner
                        #);
                     wait: BooleanValue
@@ -140,20 +127,17 @@ xRendezvousSystem: @xBasicSystem
                                inner;
                                (if not value then
                                    (if test then
-                                       ':activity:wait:'
-                                          -> display
+                                       ':activity:wait:' -> display
                                    if);
-                                   activityScheduler.active.suspend;
+                                   myAS.active.suspend;
                                    (if test then
-                                       ':activity:wait:restart'
-                                          -> display
+                                       ':activity:wait:restart' -> display
                                    if);
                                    restart testCondition
-                                else
-                                   '>' -> put
                                if)
                            if)
-                      #)
+                      #);
+                    sch: ^ActivityScheduler
                  do inner
                  #);
                port: 
@@ -168,9 +152,7 @@ xRendezvousSystem: @xBasicSystem
                          this(port).id[] -> T2.puttext;
                          ':mutex' -> T2.puttext;
                          (T2[],0) -> mutex.init;
-                         (if pTest then
-                             ':init' -> display
-                         if)
+                         (if pTest then ':init' -> display if)
                       #);
                     display: 
                       (# msg: ^text
@@ -186,59 +168,55 @@ xRendezvousSystem: @xBasicSystem
                       #);
                     entry: 
                       (# 
-                      do (if pTest then
-                             ':entry:A' -> display
-                         if);
+                      do (if pTest then ':entry:A' -> display if);
                          m.wait;
-                         (if pTest then
-                             ':entry:after:wait:beforeInner'
-                                -> display
-                         if);
+                         (if pTest then ':entry:B' -> display if);
                          inner;
-                         (if pTest then
-                             ':entry:C' -> display
-                         if);
+                         (if pTest then ':entry:C' -> display if);
                          mutex.signal;
-                         (if pTest then
-                             ':entry:D' -> display
-                         if)
+                         (if pTest then ':entry:D' -> display if)
                       #);
                     accept:< 
                       (# 
-                      do (if pTest then
-                             ':accept:A' -> display
-                         if);
+                      do (if pTest then ':accept:A' -> display if);
                          m.signal;
-                         (if pTest then
-                             ':accept:B:' -> display
-                         if);
+                         (if pTest then ':accept:B:' -> display if);
                          mutex.wait;
                          inner
                       #);
                     pTest: (# exit 0 #)
                  #);
-               activityScheduler: @ gScheduler
-                 (# init:: 
+               activityScheduler: 
+                 (# active: ^ Activity;
+                    idf: ^text;
+                    init:
                       (# 
                       do 'activityScheduler' -> idf[]
                       #);
-                    insert::< (#  do P[] -> SQS.insert #);
-                    remove::< (#  do P[] -> SQS.remove #);
-                    processId:: 
-                      (# 
-                      do this(Process).id -> id
+                    insert: 
+                      (# P: ^activity
+                      enter P[] 
+                      do P[] -> aSQS.insert 
                       #);
-                    waitingActivities:: 
+                    remove: 
+                      (# P: ^Activity
+                      enter P[] 
+                      do P[] -> aSQS.remove 
+                      #);
+                    processId:
+                      (# 
+                      do this(Process).id -> id 
+                      exit id
+                      #);
+                    waitingActivities: booleanValue
                       (# 
                       do (if atest then
-                             ':activityScheduler:SQSisEmpty'
-                                -> display;
-                             SQS.display
+                             ':myAS:aSQSisEmpty' -> display;
+                             aSQS.display
                          if);
                          (if noOfWaiting > 0 then
                              (if atest then
-                                 '\n:Waiting Activities'
-                                    -> display
+                                 '\n:Waiting Activities' -> display
                              if);
                              true -> value
                           else
@@ -248,27 +226,93 @@ xRendezvousSystem: @xBasicSystem
                              if)
                          if)
                       #);
-                    aTest: (#  exit 0 #)
-                 do (if test then
-                        newline;
-                        newline;
-                        'Process:'.print;
-                        this(Process).id -> putint;
-                        ':activityScheduler'
-                           -> console.puttext
-                    if);
-                    active;
-                    (if test then
-                        ':activityScheduler:after:active.suspend'
-                           -> display
-                    if)
-                 #)
+                    incrWaiting: 
+                      (# 
+                      do noOfWaiting + 1 -> noOfWaiting
+                      #);
+                    decrWaiting: 
+                      (# 
+                      do noOfWaiting - 1 -> noOfWaiting
+                      #);
+                    display: (# T: ^text enter T[] do T.print #);
+                    noOfWaiting: @ integer;
+                    ach: ^activityScheduler;
+                    P: ^Process;
+                    aTest: (# exit 0 #);
+                    cTest: (# exit 0 #)
+                 do (if cTest then ':Initial:' -> display if);
+                    Loop:
+                      (if true then
+                          (if cTest then ':scheduler:loop: ' -> display if);
+                          disable;
+                          aSQS.removeNext -> active[];
+                          (if active[] <> none then
+                              (if cTest then ':next:' -> display if);
+                              P_status.ACTIVE -> active.status;
+                              enable;                              
+                              (if test then
+                                  '\n\nProcess:'.print;
+                                  this(Process).id -> putint;
+                                  ':activityScheduler' -> console.puttext
+                              if);
+                              active;
+                              (if test then
+                                  ':activityScheduler:after:active.suspend'
+                                    -> display
+                              if);
+                              disable;
+                              (if cTest then
+                                  ':after suspend:status:' -> display
+                              if);
+                              (if active.status = P_status.ACTIVE then
+                                  active[] -> aSQS.insert
+                                  (if cTest then
+                                      ':scheduler:insert active' -> display
+                                  if)
+                              if)
+                           else
+                              (if cTest then '\nNo processes ina aSQS' -> display if)
+                          if);
+                          (if aSQS.isEmpty then 
+                              (if cTest then ':SQS.isEmpty:' -> display if);
+                              (if waitingActivities then
+                                  (if cTest then
+                                      console.display
+                                      (#
+                                      do ':waiting activities'.print
+                                      #)
+                                  if);
+                                  enable;
+                                  coreLock.get;
+                                  thisCore.S.active[] -> P[];
+                                  coreLock.free;
+                                  (*enable;*)
+                                  (if MultiCore then
+                                     P.suspend
+                                   else
+                                      theScheduler.active.suspend
+                                  if);
+                                  (if cTest then
+                                      '\nactiviyScheduling resumed after waiting activities'
+                                        -> display
+                                  if);
+                                  restart Loop
+                              if);
+                              enable
+                           else
+                              enable; restart Loop
+                          if)
+                      if);
+                    (if cTest then ':terminated\n' -> display if)
+                 #);
+               myAS: @ActivityScheduler;
+               aSQS: @ ProcessQueue;
             do inner;
                (if test then
-                   'Rsystem:aSQS:'.print;
-                   activityScheduler.SQS.display
+                   'Rsystem:aaSQS:'.print;
+                   aSQS.display
                if);
-               activityScheduler
+               myAS
             #)
        do 'Rendezvous system'.print; inner
        #)
