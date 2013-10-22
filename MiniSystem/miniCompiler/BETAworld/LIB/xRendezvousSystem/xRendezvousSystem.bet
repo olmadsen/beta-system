@@ -18,16 +18,14 @@ xRendezvousSystem: @xBasicSystem
                          else
                             theScheduler.active[] -> P[];
                         if);
-                        (if P[] = none then
-                            'Scheduler.active is none\n'.print;
-                        if);
-                        (if P.myAS.active[] = none then
-                            'Scheduler.active.myAS.active is none\n'.print;
-                        if);
                         P_status.WAITING -> P.myAS.active.status;
-                        P.myAS[] -> P.myAS.active.sch[];
+                        (*P.myAS[] -> P.myAS.active.sch[];*)
                         P.myAS.incrWaiting;
                         P.myAS.active[] -> Q.insert;
+                        console.display_t
+                        (#do '\nWait:'.print; P.id->putint; 
+                           ':'->put; P.myAs.active.id->putint
+                        #);
                         M.free; (*enable;*)
                         P.myAS.active.suspend
                      else
@@ -48,6 +46,10 @@ xRendezvousSystem: @xBasicSystem
                          else
                             theScheduler.active[] -> cP[]; 
                         if);
+                        console.display_t
+                        (#do '\nSignal:'.print; cP.id -> putint;
+                           ':'->put; A.ID->PUTINT
+                        #);
                         M.free; (*enable;*)
                         cP.myAS.active.suspend
                      else
@@ -56,7 +58,7 @@ xRendezvousSystem: @xBasicSystem
                  #);
                display: 
                  (# 
-                 do console.display
+                 do console.display_t
                     (# 
                     do 'Semaphore: '.print;
                        id.print;
@@ -82,6 +84,7 @@ xRendezvousSystem: @xBasicSystem
                  (# start::< 
                        (# 
                        do this(Activity)[] -> myAS.insert;
+                          myAs[] -> sch[];
                           inner
                        #);
                     wait: BooleanValue
@@ -114,7 +117,7 @@ xRendezvousSystem: @xBasicSystem
                     display: 
                       (# msg: ^text
                       enter msg[]
-                      do console.display
+                      do console.display_t
                          (# 
                          do '\nPort:'.print;
                             id.print;
@@ -149,39 +152,61 @@ xRendezvousSystem: @xBasicSystem
                       (# 
                       do 'activityScheduler' -> idf[]
                       #);
-                    insert: 
+                    L: @lock;
+                    entry: (# do L.get; inner; L.free #);
+                    insert:  entry
                       (# P: ^activity
                       enter P[] 
                       do P[] -> aSQS.insert 
                       #);
-                    remove: 
+                    remove: entry
                       (# P: ^Activity
                       enter P[] 
                       do P[] -> aSQS.remove 
                       #);
-                    processId:
+                    processId: (* in use ?*)
                       (# 
                       do this(Process).id -> id 
                       exit id
                       #);
-                    waitingActivities: booleanValue
-                      (# 
+                    waitingActivities:entry
+                      (# value: @boolean
                       do (if noOfWaiting > 0 then
                              true -> value
                          if)
+                      exit value
                       #);
-                    incrWaiting: 
+                    incrWaiting: entry
                       (# 
-                      do noOfWaiting + 1 -> noOfWaiting
+                      do noOfWaiting + 1 -> noOfWaiting;
+                         console.display_t
+                         (#
+                         do '\nProcess:'.print;
+                            id -> putint;
+                            ' activity:'.print;
+                            active.id -> putint;
+                            ' +now:'.print; noOfwaiting -> putint 
+                         #);
                       #);
-                    decrWaiting: 
+                    decrWaiting: entry
                       (# 
-                      do noOfWaiting - 1 -> noOfWaiting
+                      do noOfWaiting - 1 -> noOfWaiting;
+                         console.display_t
+                         (#
+                         do '\nProcess:'.print;
+                            id -> putint;
+                            ' activity:'.print;
+                            (if active[] = none then 
+                                'none'.print
+                             else
+                                active.id ->putint
+                            if);
+                            ' -now:'.print; noOfwaiting -> putint 
+                         #);
                       #);
                     display: (# T: ^text enter T[] do T.print #);
                     noOfWaiting: @ integer;
-                    ach: ^activityScheduler;
-                    P: ^Process;
+                    P: ^Process; 
                  do Loop:
                       (if true then
                           disable;
@@ -217,8 +242,10 @@ xRendezvousSystem: @xBasicSystem
                  #);
                myAS: @ActivityScheduler;
                aSQS: @ ProcessQueue;
+
             do inner;
-               myAS
+               myAS;
+               terminate;
             #)
        do 'Rendezvous system'.print; inner
        #)
