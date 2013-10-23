@@ -10,14 +10,10 @@ xRendezvousSystem: @xBasicSystem
                  #);
                wait: 
                  (# P: ^Process
-                 do M.get; (*disable;*)
+                 do M.get; 
                     cnt - 1 -> cnt;
                     (if cnt < 0 then
-                        (if MultiCore then
-                            thisCore.S.active[] -> P[];
-                         else
-                            theScheduler.active[] -> P[];
-                        if);
+                        thisCore.main.active[] -> P[];
                         P_status.WAITING -> P.myAS.active.status;
                         P.myAS.incrWaiting;
                         P.myAS.active[] -> Q.insert;
@@ -25,34 +21,31 @@ xRendezvousSystem: @xBasicSystem
                         (#do '\nWait:'.print; P.id->putint; 
                            ':'->put; P.myAs.active.id->putint
                         #);
-                        M.free; (*enable;*)
+                        M.free;
                         P.myAS.active.suspend
                      else
-                        M.free (*enable*)
+                        M.free
                     if)
                  #);
                signal: 
                  (# A: ^Process.Activity; cP: ^Process
-                 do M.get; (*disable;*)
+                 do M.get; 
                     cnt + 1 -> cnt;
                     (if cnt <=  0 then
                         Q.removeNext -> A[];
-                        P_status.RESUMED -> A.status;
+                        A.resume;
+                        (*P_status.RESUMED -> A.status;
                         A[] -> A.sch.insert;
-                        A.sch.decrWaiting;
-                        (if MultiCore then
-                            thisCore.S.active[] -> cP[];
-                         else
-                            theScheduler.active[] -> cP[]; 
-                        if);
+                        A.sch.decrWaiting;*)
+                        thisCore.main.active[] -> cP[];
                         console.display_t
                         (#do '\nSignal:'.print; cP.id -> putint;
                            ':'->put; A.ID->PUTINT
                         #);
-                        M.free; (*enable;*)
+                        M.free; 
                         cP.myAS.active.suspend
                      else
-                        M.free; (*enable*)
+                        M.free; 
                     if)
                  #);
                display: 
@@ -72,18 +65,14 @@ xRendezvousSystem: @xBasicSystem
             (# start::< 
                   (# 
                   do myAS.init;
-                     (if MultiCore then 
-                         this(Process)[] -> SQS.insert; 
-                      else
-                         this(Process)[] -> SQS.insert;
-                     if);
+                     this(Process)[] -> SQS.insert; 
                      inner
                   #);
                Activity: BasicProcess
                  (# start::< 
                        (# 
                        do this(Activity)[] -> myAS.insert;
-                          myAs[] -> sch[];
+                          (*myAs[] -> sch[];*)
                           inner
                        #);
                     wait: BooleanValue
@@ -97,7 +86,13 @@ xRendezvousSystem: @xBasicSystem
                                if)
                            if)
                       #);
-                    sch: ^ActivityScheduler
+                    resume:
+                      (#
+                      do P_status.WAITING -> status;
+                         this(Activity)[] -> myAS.insert;
+                         myAS.decrWaiting;
+                      #);
+                    xsch: ^ActivityScheduler
                  do inner
                  #);
                port: 
@@ -157,7 +152,7 @@ xRendezvousSystem: @xBasicSystem
                       enter P[] 
                       do P[] -> aSQS.remove 
                       #);
-                    waitingActivities:entry
+                    waitingActivities: entry
                       (# value: @boolean
                       do (if noOfWaiting > 0 then
                              true -> value
@@ -210,16 +205,9 @@ xRendezvousSystem: @xBasicSystem
                           if);
                           (if aSQS.isEmpty then 
                               (if waitingActivities then
-                                  (*enable;
-                                  coreLock.get;*)
-                                  thisCore.S.active[] -> P[];
-                                  (*coreLock.free;*)
+                                  thisCore.main.active[] -> P[];
                                   enable;
-                                  (if MultiCore then
-                                     P.suspend
-                                   else
-                                      theScheduler.active.suspend
-                                  if);
+                                  P.suspend;
                                   restart Loop
                               if);
                               enable
