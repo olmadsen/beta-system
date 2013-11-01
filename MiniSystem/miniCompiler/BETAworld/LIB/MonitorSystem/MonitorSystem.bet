@@ -1,66 +1,20 @@
-MonitorSystem: @
+MonitorSystem: @ BasicSystem
   (# with Containers; 
      test: (#  exit 0 #);
-     Lock:
-       (# M: @integer;
-          get:
-            (# 
-            do 
-               Loop: 
-                 (if 1 then
-                     disable;
-                     (if (1 -> M.cmpAndSwap) = 1 then 
-                         enable;
-                        (* 500 -> sleep; *)
-                         restart Loop 
-                 if)if);
-            #);
-          free: (# do 0 -> M; enable #)
-       #);
-     System: 
-       (# Core: 
-            (# %core%
-               main: ^Scheduler;
-               attach:
-                 (#
-                 enter main[]
-                 do 
-                 #);
-            do loop:
-                 (if main[] <> none then 
-                     main                   
-                  else
-                     100->sleep;
-                     restart loop
-                 if)
-            #);
-          core1,core2: @Core;
-          
-          init_core:
-            (#
-            do core1[] -> fork; 
-               core2[] -> fork; 
-            #);
-          Process: 
+     System: BasicSystem
+       (# Process: BasicProcess
             (# [interface[],globals[monitor]]
-               start: 
+               start::< 
                  (# 
-                 enter id
+                 (*enter id*)
                  do 'Starting: '.print;
                     id -> putint;
                     newline;
                     this(Process)[] -> SQS.insert
                  #);
-               id: @ integer;
-               status: @ integer
             do P_status.ACTIVE -> status;
                inner;
                P_status.TERMINATED -> status
-            #);
-          P_status: @ 
-            (# ACTIVE: (#  exit 1 #);
-               WAITING: (#  exit 2 #);
-               TERMINATED: (#  exit 3 #)
             #);
           Monitor: 
             (# [globals[],interface[entry]]
@@ -161,87 +115,38 @@ MonitorSystem: @
                M: @Lock;
                Q: @ ProcessQueue
             #);
-          scheduler: 
+          xscheduler: 
             (# idf: @char; active: ^Process
             enter idf
             do '%'->put;
                SQS.display;
                Loop:                 
                  (# 
-                 do (if test then
-                        'scheduler:loop: '.print;
-                        newline;
-                        SQS.display
-                    if);
-                    SQS.removeNext -> active[]; 
+                 do SQS.removeNext -> active[]; 
                     (if active[] <> none then
-                        (if test then
-                            newline;
-                            'Scheduler:active:'.print;
-                            active.id -> putint;
-                            ' ' -> put;
-                            SQS.display;
-                        if);
-                       (* idf->put;*)
                         50 -> active.attach;
-                        (if test then
-                            'scheduler:after suspend'.print;
-                            newline
-                        if);
                         (if active.status = P_status.ACTIVE then
-                            (if test then
-                                'scheduler:insert active'.print;
-                                newline
-                            if);
                             active[] -> SQS.insert;
-                            (if test then
-                                SQS.display
-                            if)
                         if)
                     if);
                     (if not SQS.isEmpty then
                         restart Loop
-                     (*else
+                     else
                         (if SQS.hasWaiting then
                             100 -> sleep;
                             restart loop
-                        if)*)
+                        if)
                     if);                    
                  #);
                '?'->put; idf -> put
             exit this(Scheduler)[]
             #);
-          ProcessQueue: Queue
-            (# display: 
-                 (# P: ^Process
-                 do 'SQS:head:'.print;
-                    (if head[] <> none then
-                        head.elm[] -> P[];
-                        P.id -> putint
-                    if);
-                    '[' -> put;
-                    scan
-                    (# 
-                    do current[] -> P[];
-                       P.id -> putint;
-                       ' ' -> put
-                    #);
-                    '] last:'.print;
-                    (if last[] <> none then
-                        last.elm[] -> P[];
-                        P.id -> putint
-                    if);
-                    newline
-                 #)
-            #);
-          XSQS: @ProcessQueue;
           xput: (# ch: @char enter ch do (if false then ch -> put if)#);
-          SQS: @ 
+          YSQS: @ 
             (# Q: @ProcessQueue;
                M: @lock;
                init: (# do  #);
-               entry: 
-                 (# do M.get; inner; M.free #);
+               entry: (# do M.get; inner; M.free #);
                insert: entry(# P: ^Process enter P[] do '['->xput; P[] -> Q.insert; ']'->xput #);
                remove: entry(# P: ^Process enter P[] do '{'->xput; P[] -> Q.remove; '}'->xput #);
                removeNext: entry(# P: ^Process do '('->xput; Q.removeNext -> P[]; ')'->xput exit P[] #);
@@ -256,12 +161,13 @@ MonitorSystem: @
                hasWaiting: entry(# B: @boolean do W > 0 -> B exit B #);
                W: @integer
             #);
-          S: ^Scheduler
-       do init_core; SQS.init; 
+          S: ^xScheduler
+       do (*init_core; 
+          SQS.init; *)
           inner;  
-          &scheduler[] -> S[]; 
+         (* &xscheduler[] -> S[]; 
           '*' -> S.idf; S[] -> core1.attach;
-          &scheduler[] -> S[]; 
-          '&' -> S.idf; S[] -> core2.attach;
+          &xscheduler[] -> S[]; 
+          '&' -> S.idf; S[] -> core2.attach;*)
        #)
   #)
