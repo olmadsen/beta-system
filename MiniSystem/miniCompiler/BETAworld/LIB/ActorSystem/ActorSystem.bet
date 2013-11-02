@@ -1,0 +1,51 @@
+ActorSystem: @ BasicSystem
+  (# System: BasicSystem
+       (# Message:
+            (# id: @integer
+            enter id
+            exit this(Message)[]
+            #);
+          Actor: BasicProcess
+            (# start:: (# do this(actor)[] -> SQS.insert #);
+               send: 
+                 (# M: ^Message 
+                 enter M[] 
+                 do L.get; 
+                    M[] -> Q.insert; 
+                    (if status = P_status.WAITING then '!'->put;
+                        this(Actor)[] -> SQS.insert;
+                        SQS.dcrWaiting
+                    if)
+                    L.free 
+                 #);
+               receive: 
+                 (# M: ^Message
+                 do waitMessage:
+                      (if Q.isEmpty then '?'->put;
+                          SQS.addWaiting;
+                          P_status.WAITING -> status;
+                          this(Actor).suspend;
+                          (*50 -> sleep; (* makes the thread sleep 
+                                        * - we should have an xBeta sleep
+                                        *)
+                          restart waitMessage
+                       else 
+                          Q.removeNext -> M[];
+                          inner;
+                          restart waitMessage
+                      if)
+                 #);
+               Q: @ProcessQueue;
+               L: @Lock
+            do 'Actor:\n'.print;
+               'Lock'->L.init;
+               P_status.ACTIVE -> status;
+               inner;
+               P_status.TERMINATED -> status  
+            #)
+       do console.display(#do '\nActor System:\n'.print; #);
+
+          inner
+       #)
+  #)
+
