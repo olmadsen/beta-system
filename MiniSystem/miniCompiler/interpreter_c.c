@@ -130,7 +130,7 @@ enum {
   exeAlloc = 43 ,
   rtnc = 44 ,
   rpop = 45 ,
-  
+  vpop= 46,
   eq = 50,
   lt = 51,
   le = 52,
@@ -369,7 +369,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case pushC: 
 	arg1 = op1();
-	fprintf(trace,"pushC: %i", arg1);
+	fprintf(trace,"pushC %i", arg1);
 	break;
       case push:
 	fprintf(trace,"push %i",op1());
@@ -393,19 +393,19 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"store %i",op1());
      	break;
       case rstore:
-	fprintf(trace,"rstore: %i ",op1());
+	fprintf(trace,"rstore %i ",op1());
 	break;
       case storeg:
-	fprintf(trace,"storeg: %i ",op1());
+	fprintf(trace,"storeg %i ",op1());
 	break;
       case rstoreg:   
-	fprintf(trace,"rstoreg: %i ",op1());
+	fprintf(trace,"rstoreg %i ",op1());
 	break; 
       case xstore:
-	fprintf(trace,"xstore: %i ",op1());
+	fprintf(trace,"xstore %i ",op1());
 	break;
       case xstoreg:
-	fprintf(trace,"xstoreg: %i ",op1());
+	fprintf(trace,"xstoreg %i ",op1());
 	break;
       case _double:
 	fprintf(trace,"double");
@@ -421,7 +421,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case call:
 	arg1 = (char) op1();
-	fprintf(trace,"call: %c ",arg1);
+	fprintf(trace,"call %c ",arg1);
 	break;
       case susp:
 	fprintf(trace,"susp");
@@ -429,7 +429,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case alloc:
 	arg1 = op2();
 	arg2 = op1();
-	fprintf(trace,"alloc: %i %i",arg1,arg2);
+	fprintf(trace,"alloc %i %i",arg1,arg2);
 	break;
       case doExit:
 	fprintf(trace,"doExit");
@@ -498,6 +498,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case rpop:
 	fprintf(trace,"rpop");
+	break;
+      case vpop:
+	fprintf(trace,"vpop");
 	break;
       case eq:
 	fprintf(trace,"eq");
@@ -574,13 +577,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	fprintf(trace,"break: %i %i",op1(),op2());
+	fprintf(trace,"break %i %i",op1(),op2());
 	break;
       case stop: 
-	fprintf(trace,"stop: ");
+	fprintf(trace,"stop ");
 	break;
       default:
-	fprintf(trace,"Op: %i ",bc[glsc]);
+	fprintf(trace,"Op: %i ",bc[glsc - 1]);
 	break;
       }
     fprintf(trace,"\n");
@@ -1510,6 +1513,10 @@ DWORD WINAPI interpreter(LPVOID B){;
       case rpop:
 	fprintf(trace,"rpop\n");
 	rPop(thisStack);
+	break;
+      case vpop:
+	fprintf(trace,"vpop\n");
+	vPop(thisStack);
 	break;
       case eq:
 	arg1 = vPop(thisStack);
