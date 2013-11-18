@@ -139,7 +139,9 @@ enum {
   ne = 55,
   req = 56,
   rne = 57,
-  
+  seq = 58,
+  sne = 59,
+
   plus = 61,
   minus = 62,
   
@@ -162,6 +164,7 @@ enum {
   _allocFromStrucRefObj = 77 ,
   rtnEvent = 78 ,
   _break = 79,
+  mkObjStrucRef = 80,
 };
 
 void runTimeError(char *msg){
@@ -526,6 +529,12 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case rne:
 	fprintf(trace,"rne");
 	break;
+      case seq:
+	fprintf(trace,"seq");
+	break;
+      case sne:
+	fprintf(trace,"sne");
+	break;
       case plus: 
 	fprintf(trace,"plus");
 	break;
@@ -569,6 +578,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case mkStrucRef: 
 	fprintf(trace,"mkStrucRef");
+	break;
+      case mkObjStrucRef: 
+	fprintf(trace,"mkObjStrucRef");
 	break;
       case mkVirtualStrucRef:
 	fprintf(trace,"mkVirtualStrucRef");
@@ -1129,7 +1141,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     rPush(thisStack,callee);
   };
 
-  int opCode,arg1,arg2,arg3,descNo,V;
+  int opCode,arg1,arg2,arg3,dscNo,V;
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
@@ -1221,6 +1233,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"rstore ");
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
+	//printf("rstore: %s %i %s\n",nameOf(X),arg1,nameOf(thisObj));
 	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
 	break;
       case storeg:
@@ -1449,9 +1462,9 @@ DWORD WINAPI interpreter(LPVOID B){;
       case rtnInner:
 	fprintf(trace,"returnInner\n");
 	glsc = cRestoreReturn(thisObj);
-	descNo = cRestoreReturn(thisObj);
-	currentDescNo = descNo;
-	bc = codeFromDescNo(descNo);
+	dscNo = cRestoreReturn(thisObj);
+	currentDescNo = dscNo;
+	bc = codeFromDescNo(dscNo);
 	break;
       case innerExit:
 	arg1 = op1();
@@ -1558,13 +1571,31 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
 	fprintf(trace,"req %i == %i\n",(int)X,(int)Y);
-	vPush(thisStack,X == Y);
+	vPush(thisStack, X == Y);
 	break;
       case rne:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
 	fprintf(trace,"rne %i != %i\n",(int)X,(int)Y);
 	vPush(thisStack,X != Y);
+	break;    
+      case seq:
+	X = rPop(thisStack);
+	Y = rPop(thisStack);
+	//printf("\nseq:struc: %s %s\n",nameOf(X),nameOf(Y));
+	arg1 = X->vfields[1];
+	arg2 = Y->vfields[1];
+	X = X->rfields[2];
+	Y = Y->rfields[2];
+	fprintf(trace,"seq %s %i %s %i\n",nameOf(X),arg1,nameOf(Y),arg2);
+	vPush(thisStack,(arg1 == arg2) && (X->rfields[2] == Y->rfields[2]));
+	//printf("vTop: %i\n",thisStack->vstack[thisStack->vtop]);
+	break;
+      case sne:
+	X = rPop(thisStack);
+	Y = rPop(thisStack);
+	fprintf(trace,"sne %i != %i\n",(int)X,(int)Y);
+	vPush(thisStack,(X->vfields[1] != Y->vfields[1]) || (X->rfields[2] != Y->rfields[2]));
 	break;
       case plus:
 	arg1 = vPop(thisStack);
@@ -1649,6 +1680,21 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	fprintf(trace,"mkStrucRef %i %s\n",arg1,nameOf(X));
 	allocStrucRefObj(X,arg1,false);
+	//X = thisStack->rstack[thisStack->rtop];
+	//printf("mkStrucRef:Result: %s\n",nameOf(X));
+	break;
+      case mkObjStrucRef: 
+	X = rPop(thisStack);
+	//Y = thisStack->rstack[thisStack->rtop];
+	//printf("Result-top: %s\n",nameOf(Y));
+	fprintf(trace,"\nmkObjStrucRef X: %s  X.origin: %s X.descNo: %i \n"
+	      ,nameOf(X)
+	      ,nameOf(myCorigin(X)),descNo(X->desc));
+	allocStrucRefObj(myCorigin(X),descNo(X->desc),false);
+	//X = thisStack->rstack[thisStack->rtop];
+	//printf("Result-top: %s\n",nameOf(X));
+	//X = thisStack->rstack[thisStack->rtop - 1];
+	//printf("Result-top-1: %s\n",nameOf(X));
 	break;
       case mkVirtualStrucRef:
 	arg1 = op1();

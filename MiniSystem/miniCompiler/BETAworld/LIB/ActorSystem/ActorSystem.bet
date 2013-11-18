@@ -1,9 +1,14 @@
 ActorSystem: @ BasicSystem
-  (# System: BasicSystem
+  (# with Containers;
+     System: BasicSystem
        (# Message:
-            (# id: @integer
+            (# id: @integer;
+               display: (# do '\nMessage here:\n'.print#)
             enter id
             exit this(Message)[]
+            #);
+          MessageQueue: Queue
+            (#
             #);
           Actor: BasicProcess
             (# start:: (# do this(actor)[] -> SQS.insert #);
@@ -40,7 +45,104 @@ ActorSystem: @ BasicSystem
                           restart waitMessage
                       if)
                  #);
-               Q: @ProcessQueue;
+                xreceive: 
+                 (# msgs: [3]@integer; M: ^Message
+                 enter(msgs[1],msgs[2],msgs[3])
+                 do 
+                    console.display
+                    (#
+                    do '\nxreceive: '.print;
+                       (for i: 3 repeat
+                            msgs[i] -> putint;  ' '-> put
+                       for);
+                       newline
+                    #);
+                    waitMessage:
+                      (if 1 then
+                          L.get;
+                          (if Q.isEmpty then 
+                              '?'->put;
+                              SQS.addWaiting;
+                              P_status.WAITING -> status;
+                              L.free;
+                              this(Actor).suspend;
+                              L.get;
+                              (*50 -> sleep; * makes the thread sleep 
+                                              * - we should have an xBeta sleep
+                                              *)
+                              restart waitMessage
+                           else 
+                              '\nScan: '.print;
+                              Q.scan
+                              (#do current[] -> M[]; M.id->putint; ' ' -> put#);
+                              newline;
+                              L:
+                                (if 1 then
+                                    Q.scan
+                                    (#
+                                    do current[] -> M[];
+                                       (for i: 3 repeat
+                                            (if M.id = msgs[i] then
+                                                M[] -> Q.remove;
+                                                leave L
+                                       if)for);
+                                    #);
+                                   restart waitMessage
+                                if);
+                              L.free;
+                              inner;
+                          if)
+                      if)
+                 #);     
+               select:
+                 (# receive:
+                      (# id: @integer; msg: ## Message; match: @boolean
+                      enter msg##
+                      do L.get; 
+                         L:
+                           Q.scan
+                           (# 
+                           do current[] -> M[]; 
+                              (if msg## = M## then 
+                                  '\nmatch:\n'.print;
+                                  M[] -> Q.remove;
+                                  true -> match -> found;
+                                  leave L
+                              if)
+                           #);
+                         L.free
+                      exit match
+                      #);
+                    found: @boolean;
+                    M: ^Message
+                 do false -> found;
+                    waitMessage:
+                      (if 1 then
+                          L.get;
+                          (if Q.isEmpty then 
+                              '?'->put;
+                              SQS.addWaiting;
+                              P_status.WAITING -> status;
+                              L.free;
+                              this(Actor).suspend;
+                              L.get;
+                              (*50 -> sleep; * makes the thread sleep 
+                                              * - we should have an xBeta sleep
+                                              *)
+                              restart waitMessage
+                           else 
+                              '\nScan: '.print;
+                              Q.scan
+                              (#do current[] -> M[]; M.id->putint; ' ' -> put#);
+                              L.free;
+                              inner;
+                              (if not found then                              
+                                  restart waitMessage
+                              if);
+                          if)
+                      if)
+                 #);               
+               Q: @MessageQueue;
                L: @Lock
             do 'Lock'->L.init;
                P_status.ACTIVE -> status;
