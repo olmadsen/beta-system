@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <string.h>
 
-#define MAX_THREADS 3
+#define MAX_THREADS 5
 
 /* Format of ObjDescs
    0: -xBeta--
@@ -686,9 +686,28 @@ char * nameOf(template *obj){
   return getString(inx);
 }
 
+int threadStubDescNo; // perhaps a hack?
+void dumpStackX(template *obj);
+
 void runTimeErrorX(char *msg, template *thisObj, int glsc){
-  printf("\n\n*** Run-time error: %s object: %s %i at: %i\n\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
+ 
+  printf("\n\n*** Run-time error: %s\n\nObject: %s(%i) at: %i\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
+
+  dumpStackX(thisObj);
+
   exit(-1);
+}
+
+
+void dumpStackX(template *obj){
+  template *X, *Y;
+  if (X != NULL) {
+    X = obj->rstack[1];
+    Y = obj->rstack[2];
+    printf("Caller: %s(%i) at: %i %s thisStack: %s\n"
+	   ,nameOf(X),topOfLsc(X,-1),topOfLsc(X,0),nameOf(Y));
+    if (descNo(X->desc) != threadStubDescNo) dumpStackX(X);
+  }
 }
 
 int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
@@ -870,7 +889,7 @@ void rswap(template *obj, template **R, template **S){
   if (*R == 0) { printf("*R == 0\n"); obj->rtop = 0;} // 
 }
 
-int threadStubDescNo; // perhaps a hack?
+
 
 DWORD WINAPI interpreter(LPVOID B);
 
@@ -1159,6 +1178,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	if (timeToSuspend <= 0) {
 	  if (enablee != 0) {
 	    suspendEnabled = suspendEnabled - 1;
+	    if (suspendEnabled > 0) printf("\npSuspend: %i\n",suspendEnabled);
 	    doSuspend(enablee,true);
 	    enablee = 0;
 	  }
@@ -1386,8 +1406,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    arg2 = vPop(thisStack); // new value
 	    X = rPop(thisStack);
 	    arg3 = X->vfields[arg1];
+	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
+	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
+	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
 	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i ",arg2,arg3,nameOf(X),&X->vfields[arg1]);
-	    V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
+	    if (V) {V = 0;} else {V = 1;}; 
 	    fprintf(trace,"%i\n",V);
 	    vPush(thisStack,V);
 	    break;
@@ -1743,7 +1766,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       }
     };
   fclose(trace);
-  //printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
+  printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
   if (threadNo > 0) {
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
     int j;

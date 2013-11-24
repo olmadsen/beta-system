@@ -11,7 +11,7 @@ BasicSystem: @
                      disable;
                      (if (1 -> M.cmpAndSwap) = 1 then 
                          enable;
-                         (if (V + 1 -> V) > 2000 then
+                         (if (V + 1 -> V) > 5000 then
                              0 -> V;
                              '\n\n***** Timeout for Lock: '.print;
                              id.print;
@@ -32,17 +32,28 @@ BasicSystem: @
                  (if main[] <> none then 
                      main                   
                   else 
-                     100 -> sleep;
+                    (* 100 -> sleep;*)
                      restart loop
                  if)
             #);
-          core1,core2: @Core;          
+          core1,core2,core3,core4: @Core;          
           init_core:
             (#
             do core1[] -> fork; 
                core2[] -> fork; 
+               core3[] -> fork;
+               (* core4[] -> fork; *)
             #);
-          
+          (*
+          noOfCores: (# exit 4 #);
+          cores: [noOfCores] ^Core;
+          init_core:
+            (# 
+            do (for i: noOfCores repeat
+                       &Core[] -> fork
+                  for)
+           #);   
+           *)     
           BasicProcess: 
             (# start:< 
                  (# 
@@ -172,8 +183,14 @@ BasicSystem: @
           SQS: @ 
             (# Q: @ ProcessQueue;
                L: @lock;
+               V: @integer; 
                init: entry(# do 'SQS' -> L.init; #);
-               entry: (# do L.get; inner; L.free #);
+               entry: (# do L.get; V + 1 -> V; 
+                         (if V > 1 then 
+                             console.display
+                             (#do '\nLock:entry: V:'.print; V -> putint; newline #)
+                         if);
+                         inner; V - 1 -> V; L.free #);
                insert: entry
                  (# P: ^BasicProcess
                  enter P[]
@@ -222,9 +239,18 @@ BasicSystem: @
           SQS.init;              
           init_core;              
           &Scheduler[] -> theScheduler[]; theScheduler.init;
+
           inner;
           theScheduler[] -> core1.attach;
+          
           &Scheduler[] -> theScheduler[]; theScheduler.init;
           theScheduler[] -> core2.attach;
+
+          &Scheduler[] -> theScheduler[]; theScheduler.init;          
+          theScheduler[] -> core3.attach;
+          (*          
+          &Scheduler[] -> theScheduler[]; theScheduler.init;
+           theScheduler[] -> core4.attach;
+           * *)
        #)
   #)
