@@ -4,6 +4,9 @@
 #include <windows.h>
 #include <string.h>
 
+//#define TRACE
+//#define EVENT
+
 #define MAX_THREADS 5
 
 /* Format of ObjDescs
@@ -745,8 +748,10 @@ int xlabs(int descNo,int labNo){
 }
 
 int vdtTable(FILE *trace,template *obj,int inx){
+#ifdef TRACE
   fprintf(trace," vdtTable[%i] = %i "
 	  ,inx,desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4));
+#endif
   return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
 }
 
@@ -978,8 +983,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   int threadNo = 0;
   bool hasThreads = false;
 
-
-  printf("\n***interpreter\n");
+  printf("\n***C interpreter\n");
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
   setbuf(trace, NULL);
@@ -1003,9 +1007,13 @@ DWORD WINAPI interpreter(LPVOID B){;
   };
 
   Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
+#ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
+#endif
     callee = allocTemplate(newId(),descNo,isObj,vInxSize,rInxSize);
+#ifdef TRACE
     fprintf(trace,"callee: %s %i ",nameOf(callee),callee);
+#endif
     template *Y;
     Y = thisObj;
     rPush(callee,thisObj);
@@ -1017,19 +1025,25 @@ DWORD WINAPI interpreter(LPVOID B){;
     thisObj = thisStack;
     bc = (ObjDesc) myCode(thisObj);
     glsc = getAllocE(thisObj->desc);
+#ifdef TRACE
     fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
 	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,bc);
+#endif
     mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,currentDescNo,glsc,false);
   };
 
   void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
+#ifdef TRACE
     fprintf(trace,"allocIndexedObj(%i,%i) ",dinx,rangee);
+#endif
     allocObj(origin,descNo,isObj,rangee,0);
     thisObj->vfields[dinx] = rangee; 
   };
 
   void allocStrucRefObj(template *origin,int inx, bool isVirtual){
+#ifdef TRACE
     fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
+#endif
     template * X = allocTemplate(newId(),getStrucRefDescNo(),0,0,0);
     if (isVirtual) inx = vdtTable(trace,origin,inx);
     X->vfields[1] = inx;
@@ -1038,7 +1052,9 @@ DWORD WINAPI interpreter(LPVOID B){;
   };
   
   void allocFromStrucRefObj(template *obj){
+#ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
+#endif
     allocObj(obj->rfields[2],obj->vfields[1],0,0,0);
   };
   
@@ -1065,9 +1081,13 @@ DWORD WINAPI interpreter(LPVOID B){;
     int arg1;
     template *Y;
     arg1 = (char) op1();
+#ifdef TRACE
     fprintf(trace,"call %c ",arg1);
+#endif
     callee = rPop(thisStack);
+#ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
+#endif
     if (withEnablingSuspend) enablee = callee;
     cSaveReturn(thisObj,currentDescNo,glsc);
     if (callee->rtop == 0) { 
@@ -1075,23 +1095,31 @@ DWORD WINAPI interpreter(LPVOID B){;
       rPush(callee,thisObj); 
       rPush(callee,thisStack);
       thisObj = callee;
+#ifdef TRACE
       fprintf(trace,"TO %s",nameOf(callee));
+#endif
       switch (arg1)
 	{
 	case 'N':
 	  currentDescNo = descNoOf(thisObj);
 	  bc = myCode(thisObj);
 	  glsc = getEnterE(thisObj->desc);
+#ifdef TRACE
 	  fprintf(trace,"(%i,%i,%i) N\n",currentDescNo,glsc,bc);
+#endif
 	  break;
 	case 'D':
 	  arg1 = topDescNo(thisObj);
 	  currentDescNo = arg1;
 	  bc = codeFromDescNo(arg1);
 	  glsc = getDoE(getDesc(arg1));
+#ifdef TRACE
 	  fprintf(trace,"D(%i,%i,%s) ",currentDescNo,glsc,nameOf(thisStack));
 	  dumpStack(trace,thisStack);
+#endif
+#ifdef EVENT
 	  mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,currentDescNo,glsc); // withEnablingSuspend
+#endif
 	  break;
 	case 'X':
 	  arg1 = topDescNo(thisObj);
@@ -1099,7 +1127,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  //dumpDesc(arg1);
 	  bc = codeFromDescNo(arg1);
 	  glsc = getExitE(getDesc(arg1));
+#ifdef TRACE
 	  fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,bc);
+#endif
 	  break;
 	}}
     else {
@@ -1112,21 +1142,29 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  currentDescNo = descNoOf(thisObj);
 	  bc = codeFromDescNo(currentDescNo);
 	  glsc = getEnterE(getDesc(currentDescNo));
+#ifdef TRACE
 	  fprintf(trace, "resumeN %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
+#endif
 	  break;
 	case 'D':
+#ifdef TRACE
 	  fprintf(trace, "resumeD %s ",nameOf(callee));
 	  dumpSwapped(trace,callee,thisObj,thisStack);
+#endif
 	  rswap(callee,&thisObj,&thisStack);
+#ifdef TRACE
 	  dumpSwapped(trace,callee,thisObj,thisStack);
 	  if (thisStack != thisObj) { // external suspend?
 	    fprintf(trace,"thisObj != thisStack %s %s ",nameOf(thisObj),nameOf(thisStack));
 	  };
+#endif
 	  glsc = cRestoreReturn(thisObj);
 	  currentDescNo = cRestoreReturn(thisObj);
 	  bc = codeFromDescNo(currentDescNo);
+#ifdef TRACE
 	  fprintf(trace,"AT %s(%i,%i,%s) \n"
 		  ,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+#endif
 	  break;
 	case 'X': // same as for callX
 	  rPush(callee,thisObj);
@@ -1135,27 +1173,40 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  currentDescNo = topDescNo(thisObj);
 	  bc = codeFromDescNo(currentDescNo);
 	  glsc = getExitE(getDesc(currentDescNo));
+#ifdef TRACE
 	  fprintf(trace, "resumeX %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
+#endif
 	  break;
 	}
     }
   }
 
   void doSuspend(template *callee, bool preemptive){
-    fprintf(trace," AT %s FROM %s(%i,%i,%s) ",nameOf(callee),nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+#ifdef TRACE
+    fprintf(trace," AT %s FROM %s(%i,%i,%s) "
+	    ,nameOf(callee),nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
     if (preemptive) fprintf(trace,"preemptive ");
+#endif
     
     thisObj->lsc = glsc; // is this necessary?
+#ifdef TRACE
     if (thisObj != thisStack) // external suspend ??
       { fprintf(trace,"thisObj != thisStack %s %s ",nameOf(thisObj),nameOf(thisStack));
       }
+#endif
     cSaveReturn(thisObj,currentDescNo,glsc);
+#ifdef TRACE
     dumpSwapped(trace,callee,thisObj,thisStack);
+#endif
     rswap(callee,&thisObj,&thisStack); // notice &
+#ifdef TRACE
     dumpSwapped(trace,callee,thisObj,thisStack);
+#endif
     glsc = cRestoreReturn(thisObj);
     currentDescNo = cRestoreReturn(thisObj);
+#ifdef TRACE
     fprintf(trace,"TO %s(%i,%i,%s)\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+#endif
     bc = codeFromDescNo(currentDescNo);
     rPush(thisStack,callee);
   };
@@ -1168,7 +1219,9 @@ DWORD WINAPI interpreter(LPVOID B){;
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
  
+#ifdef EVENT
   mkEvent(start_event,0,thisObj,0,true,thisBlock->currentDescNo,thisBlock->glsc);
+#endif
   while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
@@ -1184,30 +1237,41 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  }
 	}
       }
+#ifdef TRACE
       fprintf(trace,"%i:\t",glsc);
+#endif
       opCode = bc[glsc]; glsc = glsc + 1; 
       switch (opCode) {
       case pushthis:
+#ifdef TRACE
 	fprintf(trace,"pushthis\n");
+#endif
 	rPush(thisStack,thisObj);
 	break;
       case pushC: 
 	arg1 = op1();
 	vPush(thisStack,arg1);
+#ifdef TRACE
 	fprintf(trace,"pushc %i\n", arg1);
+#endif
 	break;
       case push:
 	arg1 = op1();
+#ifdef TRACE
 	fprintf(trace,"push ");
+#endif
 	arg2 = thisObj->vfields[arg1];
 	vPush(thisStack,arg2);
+#ifdef TRACE
 	fprintf(trace,"%s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
+#endif
 	break;
       case rpush:
 	arg1 = op1();
 	X = thisObj->rfields[arg1];
-	fprintf(trace,"rpush ");
-	fprintf(trace,"%s[%i] = %s \n",nameOf(thisObj),arg1,nameOf(X));
+#ifdef TRACE
+	fprintf(trace,"rpush %s[%i] = %s \n",nameOf(thisObj),arg1,nameOf(X));
+#endif
 	rPush(thisStack,X);
 	break;
       case pushg:
@@ -1215,7 +1279,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = X->vfields[arg1];
+#ifdef TRACE
 	fprintf(trace,"pushg %s[%i] = %i\n",nameOf(X),arg1,arg2);
+#endif
 	vPush(thisStack,arg2);
 	break;
       case rpushg:
@@ -1224,14 +1290,18 @@ DWORD WINAPI interpreter(LPVOID B){;
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	Y = X->rfields[arg1];
 	rPush(thisStack,Y);
+#ifdef TRACE
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
+#endif
 	break;
       case xpush:
 	arg1 = op1(); // off
 	arg2 = vPop(thisStack); // inx
 	arg3 = thisObj->vfields[arg1 + arg2];
 	vPush(thisStack,arg3);
+#ifdef TRACE
 	fprintf(trace,"xpush %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
+#endif
 	break;
       case xpushg:
 	arg1 = op1();
@@ -1239,28 +1309,38 @@ DWORD WINAPI interpreter(LPVOID B){;
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
 	arg3 = X->vfields[arg1 + arg2]; // need range check - and do we adjust for range?
+#ifdef TRACE
 	fprintf(trace,"xpushg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
+#endif
 	vPush(thisStack,arg3); 
 	break;
       case store:
 	arg1 = op1();
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"store %s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
+#endif
 	thisObj->vfields[arg1] = arg2; 
      	break;
       case rstore:
 	arg1 = op1();
+#ifdef TRACE
 	fprintf(trace,"rstore ");
+#endif
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
+#ifdef TRACE
 	//printf("rstore: %s %i %s\n",nameOf(X),arg1,nameOf(thisObj));
 	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
+#endif
 	break;
       case storeg:
 	arg1 = op1(); // off/inx
 	X = rPop(thisStack);
 	arg2 = vPop(thisStack); // value
+#ifdef TRACE
 	fprintf(trace,"storeg %s[%i] = %i \n",nameOf(X),arg1,arg2);
+#endif
 	X->vfields[arg1] = arg2;
 	break;
       case rstoreg:   
@@ -1271,13 +1351,17 @@ DWORD WINAPI interpreter(LPVOID B){;
 	};
 	Y = rPop(thisStack);
 	X->rfields[arg1] = Y;
+#ifdef TRACE
 	fprintf(trace,"rstoreg %s[%i] = %s \n",nameOf(X),arg1,nameOf(Y));
+#endif
 	break; 
       case xstore:
 	arg1 = op1();
 	arg2 = vPop(thisStack); // inx
 	arg3 = vPop(thisStack); // value;
+#ifdef TRACE
 	fprintf(trace,"xstore %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
+#endif
 	thisObj->vfields[arg1 + arg2] = arg3;
 	break;
       case xstoreg:
@@ -1285,27 +1369,37 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	arg2 = vPop(thisStack);
 	arg3 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"xstoreg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
+#endif
 	X->vfields[arg1 + arg2] = arg3;
 	break;
       case _double:
 	arg1 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"double %i\n",arg1);
+#endif
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg1);
 	break;
       case rdouble:
 	X = rPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"rdouble %s\n",nameOf(X));
+#endif
 	rPush(thisStack,X);
 	rPush(thisStack,X);
 	break;
       case rtn:
 	arg1 = op1();
+#ifdef TRACE
 	fprintf(trace,"rtn %c ",arg1);
+#endif
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
+#ifdef TRACE
 	fprintf(trace,"FROM %s(%i,%i,%s) ",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+#endif
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
@@ -1313,24 +1407,34 @@ DWORD WINAPI interpreter(LPVOID B){;
 	currentDescNo = cRestoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
 	rPush(thisStack,X);
+#ifdef TRACE
 	fprintf(trace,"TO %s(%i,%i,%s)",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 	dumpStack(trace,thisStack);
+#endif
+#ifdef EVENT
 	if (((char)arg1 == 'A') && (thisObj != X)){
 	  mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 	}
+#endif
 	break;
       case mvStack:
+#ifdef TRACE
 	fprintf(trace,"mvStack %s -> %s [",nameOf(thisObj),nameOf(thisStack));
+#endif
 	thisStack = thisObj;
+#ifdef TRACE
 	int i;
 	for (i = 0; i < thisStack->rtop; i++) fprintf(trace,"%s ",nameOf(thisStack->rstack[i+1]));
 	fprintf(trace,"]\n");
+#endif
 	break;
       case call:
 	/*return*/ doCall(false);
 	break;
       case susp:
+#ifdef TRACE
 	fprintf(trace,"susp ");
+#endif
 	callee = rPop(thisStack);
 	if ((suspendEnabled == 1) && (callee == enablee)) suspendEnabled = suspendEnabled - 1;
 	doSuspend(callee,false);
@@ -1338,62 +1442,87 @@ DWORD WINAPI interpreter(LPVOID B){;
       case alloc:
 	arg1 = op2();
 	arg2 = op1();
+#ifdef TRACE
 	fprintf(trace,"alloc %i %i ",arg1,arg2);
+#endif
 	/*return*/ allocObj(rPop(thisStack),arg1,arg2,0,0);
 	break;
       case doExit:
+#ifdef TRACE
 	fprintf(trace,"doExit\n");
+#endif
 	thisStack = thisObj->rstack[thisObj->rtop];
+#ifdef EVENT
 	mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,currentDescNo,glsc);
+#endif
 	break;
       case rtnExit:
+#ifdef TRACE
 	fprintf(trace,"rtnExit");
+#endif
 	runTimeError("rtnExit not implemented");
 	break;
       case prim:
 	arg1 = op1();
+#ifdef TRACE
 	fprintf(trace,"prim %i ",arg1);
+#endif
 	switch (arg1)
 	  {
 	  case 2: // put
 	    arg2 = vPop(thisStack);
+#ifdef TRACE
 	    fprintf(trace,"put \'%c\'\n",(char)arg2);
+#endif
 	    printf("%c",(char)arg2);
 	    break;
 	  case 10: // attach
 	    arg2 = vPop(thisStack);
+#ifdef TRACE
 	    fprintf(trace,"attach %i\n",arg2);
+#endif
 	    suspendEnabled = suspendEnabled + 1;
 	    timeToSuspend = arg2;
 	    //glsc = glsc - 1;
 	    doCall(true);
 	    break;
 	  case 11: // disable
+#ifdef TRACE
 	    fprintf(trace,"disable\n");
+#endif
 	    suspendEnabled = suspendEnabled - 1;
 	    break;
 	  case 12: // enable
+#ifdef TRACE
 	    fprintf(trace,"enable\n");
+#endif
 	    suspendEnabled = suspendEnabled + 1;
 	    break;
 	  case 13: // fork
+#ifdef TRACE
 	    fprintf(trace,"fork ");
-	    Block *B = (Block *)heapAlloc(sizeof(Block));
+#endif
 	    Y = rPop(thisStack);
+	    Block *B = (Block *)heapAlloc(sizeof(Block));	    
 	    X = allocTemplate(newId(),threadStubDescNo,true,0,0);
 	    rPush(X,Y);
+#ifdef TRACE
 	    fprintf(trace,"%s\n",nameOf(X));
+#endif
 	    B->thisModule = X;
 	    B->thisObj = X;
 	    B->thisStack = X;
 	    B->bc = myCode(X);
 	    B->currentDescNo = threadStubDescNo;
 	    B->top = Y;
-	    printf("currentDescNo: %i %i %i threadNo: %i\n",B->currentDescNo,B->glsc,B->bc,threadNo);
+#ifdef TRACE
+	    printf("currentDescNo: %i %i %i threadNo: %i\n"
+		   ,B->currentDescNo,B->glsc,B->bc,threadNo);
+#endif
 	    B->glsc = 0;
 	    char *fileName = heapAlloc(12);
 	    int n = sprintf (fileName,"traceF%i.s",threadNo);
-	    printf("\n%s\n",fileName);
+	    //printf("\n%s\n",fileName);
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
@@ -1409,18 +1538,27 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
 	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
-	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i ",arg2,arg3,nameOf(X),&X->vfields[arg1]);
+#ifdef TRACE
+	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i %i"
+		    ,arg2,arg3,nameOf(X),&X->vfields[arg1,V]);
+#endif
 	    if (V) {V = 0;} else {V = 1;}; 
+#ifdef TRACE
 	    fprintf(trace,"%i\n",V);
+#endif
 	    vPush(thisStack,V);
 	    break;
 	  case 15: // sleep
 	    arg1 = vPop(thisStack);
+#ifdef TRACE
 	    fprintf(trace,"sleep %i\n",arg1);
+#endif
 	    Sleep(arg1);
 	    break;
 	  case 17: 
+#ifdef TRACE
 	   fprintf(trace,"thisCore %s %s\n",nameOf(thisBlock->thisObj),nameOf(thisBlock->top));
+#endif
 	    rPush(thisStack,thisBlock->top);
 	    break;
 	  default:
@@ -1430,38 +1568,54 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       case jmp:
 	glsc = op2() - 1;
+#ifdef TRACE
 	fprintf(trace,"jmp %i\n",glsc);
+#endif
 	break;
       case jmpFalse:
 	arg1 = op2();
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"jmpFalse %i %i \n",arg1, arg2);
+#endif
 	if (arg2 == 0) glsc = arg1 - 1;
 	break;
       case jmpGT:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
 	arg3 = op2();
+#ifdef TRACE
 	fprintf(trace,"jmpGT %i > %i -> %i \n",arg2,arg1,arg3 - 1);
+#endif
 	if (arg2 > arg1) glsc = arg3 - 1;
 	break;
       case pushNone:
+#ifdef TRACE
 	fprintf(trace,"pushNone\n");
+#endif
 	rPush(thisStack,0);
 	break;
       case rtnEvent:
 	arg1 = op1();
 	X = rPop(thisObj);
+#ifdef TRACE
 	fprintf(trace,"rtnEvent %i %s\n",arg1,nameOf(X));
+#endif
+#ifdef EVENT
 	mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
+#endif
 	break;
       case saveBETAworld:
+#ifdef TRACE
 	fprintf(trace,"saveBETAworld\n");
+#endif
 	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
 	break;
       case doSuper:
 	arg1 = op2();
+#ifdef TRACE
 	fprintf(trace,"doSuper %i\n",arg1);
+#endif
 	//cSaveReturn(thisObj,descNoOf(thisObj),glsc);
 	//rPush(thisObj,thisObj);
 	//rPush(thisObj,thisStack);
@@ -1472,9 +1626,13 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       case innerx:
 	arg1 = op1();
+#ifdef TRACE
 	fprintf(trace,"innerx %i",arg1);
+#endif
 	arg2 = vdtTable(trace,thisObj,arg1); // descNo
+#ifdef TRACE
 	fprintf(trace,"\n");
+#endif
 	if (arg2 > 0) {
 	  cSaveReturn(thisObj,currentDescNo,glsc);
 	  currentDescNo = arg2;
@@ -1483,7 +1641,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	}
 	break;
       case rtnInner:
+#ifdef TRACE
 	fprintf(trace,"returnInner\n");
+#endif
 	glsc = cRestoreReturn(thisObj);
 	dscNo = cRestoreReturn(thisObj);
 	currentDescNo = dscNo;
@@ -1491,47 +1651,65 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       case innerExit:
 	arg1 = op1();
+#ifdef TRACE
 	fprintf(trace,"innerExit %i ",arg1);
+#endif
 	arg2 = vdtTable(trace,thisObj,arg1);
 	if (arg2 > 0) {
 	  cSaveReturn(thisObj,currentDescNo,glsc);
 	  bc = codeFromDescNo(arg2);
 	  currentDescNo = arg2;
 	  glsc = getExitE(getDesc(arg2));
+#ifdef TRACE
 	  fprintf(trace,"TO %i %i",currentDescNo,glsc);
+#endif
 	};
+#ifdef TRACE
 	fprintf(trace,"\n");
+#endif
 	break;
       case sendv: 
 	arg1 = op1();
 	X = rPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"sendv %i",arg1);
+#endif
 	arg2 = vdtTable(trace,X,arg1); // descNo
 	allocObj(X,arg2,false,0,0);
 	break;
       case send: 
+#ifdef TRACE
 	fprintf(trace,"send %i",op1());
+#endif
 	runTimeError("send is not implemented");
 	break;
       case newVrep:
+#ifdef TRACE
 	fprintf(trace,"newVrep");
+#endif
 	runTimeError("newVrep is not implemented");
 	break;
       case jmpTrue:
 	arg1 = op2();
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"jmpTrue %i\n",arg1);
+#endif
 	if (arg2 == 1) glsc = arg1 - 1;
 	break;
       case pushText:
 	arg1 = op1();
+#ifdef TRACE
 	fprintf(trace,"pushText %i ",arg1);
+#endif
 	allocTextObj(arg1);
 	break;
       case exeAlloc:
 	arg1 = op2();
+#ifdef TRACE
 	fprintf(trace,"exeAlloc %i ",arg1);
 	fprintf(trace,"FROM %s(%i,%i) ", nameOf(thisObj),currentDescNo,glsc);
+#endif
 	X = rPop(thisStack);
 	cSaveReturn(thisObj,currentDescNo,glsc);
 	rPush(thisObj,thisObj);
@@ -1541,65 +1719,89 @@ DWORD WINAPI interpreter(LPVOID B){;
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
 	glsc = getAllocE(getDesc(arg1));
+#ifdef TRACE
 	fprintf(trace,"TO %s(%i,%i)\n",nameOf(thisObj),currentDescNo,glsc);
+#endif
 	break;
       case rtnc:
+#ifdef TRACE
 	fprintf(trace,"rtnC");
+#endif
 	break;
       case rpop:
+#ifdef TRACE
 	fprintf(trace,"rpop\n");
+#endif
 	rPop(thisStack);
 	break;
       case vpop:
+#ifdef TRACE
 	fprintf(trace,"vpop\n");
+#endif
 	vPop(thisStack);
 	break;
       case eq:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"eq %i %i\n",arg1,arg2);
+#endif
 	if (arg1 == arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case lt:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"lt %i < %i\n",arg2,arg1);
+#endif
 	if (arg1 > arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case le:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"le %i <= %i\n",arg2,arg1);
+#endif
 	if (arg1 >= arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case gt:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"gt %i > %i\n",arg2,arg1);
+#endif
 	if (arg1 < arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case ge:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"ge %i >= %i\n",arg2,arg1);
+#endif
 	if (arg1 <= arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case ne:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"ne %i != %i\n",arg1,arg2);
+#endif
 	if (arg1 != arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case req:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"req %i == %i\n",(int)X,(int)Y);
+#endif
 	vPush(thisStack, X == Y);
 	break;
       case rne:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"rne %i != %i\n",(int)X,(int)Y);
+#endif
 	vPush(thisStack,X != Y);
 	break;    
       case seq:
@@ -1610,89 +1812,119 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = Y->vfields[1];
 	X = X->rfields[2];
 	Y = Y->rfields[2];
+#ifdef TRACE
 	fprintf(trace,"seq %s %i %s %i\n",nameOf(X),arg1,nameOf(Y),arg2);
+#endif
 	vPush(thisStack,(arg1 == arg2) && (X->rfields[2] == Y->rfields[2]));
 	//printf("vTop: %i\n",thisStack->vstack[thisStack->vtop]);
 	break;
       case sne:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"sne %i != %i\n",(int)X,(int)Y);
+#endif
 	vPush(thisStack,(X->vfields[1] != Y->vfields[1]) || (X->rfields[2] != Y->rfields[2]));
 	break;
       case plus:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"plus %i + %i\n",arg1,arg2);
+#endif
 	vPush(thisStack,arg1 + arg2);
 	break;
       case minus:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"minus %i - %i\n",arg2,arg1);
+#endif
 	vPush(thisStack,arg2 - arg1);
 	break;
       case orr: 
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"orr %i || %i\n",arg1,arg2);
+#endif
 	if ((arg1 == 1) || (arg2 ==1)) {vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case xorr:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"Not mplemented xorr %i %i\n",arg1,arg2);
+#endif
 	if ((arg1 == 1) || (arg2 ==1)) {vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case nott:
 	arg1 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"nott %i\n",arg1);
+#endif
 	if (arg1 == 0) {vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case mult:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"mult %i * %i\n",arg1,arg2);
+#endif
 	vPush(thisStack,arg1 * arg2);
 	break;
       case rdiv:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"\n**** rdiv is not implemented!\n\n");
+#endif
 	runTimeError(" rdiv is not implemented");
 	break;
       case idiv:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"idiv %i div %i\n",arg2,arg1);
+#endif
 	vPush(thisStack,arg2 / arg1);
 	break;
       case modd:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"modd %i %i\n", arg2,arg1);
+#endif
 	vPush(thisStack,arg2 % arg1);
 	break;
       case andd:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"andd %i %i\n",arg1,arg2);
+#endif
 	vPush(thisStack,arg1 && arg2);
 	break;
       case uminus:
 	arg1 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"uminus %i\n",arg1);
+#endif
 	vPush(thisStack,-arg1);
 	break;
       case pushc2:
 	arg1 = op2();
+#ifdef TRACE
 	fprintf(trace,"pushc2 %i\n",arg1);
+#endif
 	vPush(thisStack,arg1);
 	break;
       case allocIndexed:	
 	arg1 = op2();
 	arg2 = op1();
+#ifdef TRACE
 	fprintf(trace,"allocIndexed %i %i\n",arg1,arg2);
+#endif
 	X = rPop(thisStack);
 	dinx = vPop(thisStack);
 	rangee = vPop(thisStack);
@@ -1701,7 +1933,9 @@ DWORD WINAPI interpreter(LPVOID B){;
       case mkStrucRef: 
 	arg1 = vPop(thisStack);
 	X = rPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"mkStrucRef %i %s\n",arg1,nameOf(X));
+#endif
 	allocStrucRefObj(X,arg1,false);
 	//X = thisStack->rstack[thisStack->rtop];
 	//printf("mkStrucRef:Result: %s\n",nameOf(X));
@@ -1710,9 +1944,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	//Y = thisStack->rstack[thisStack->rtop];
 	//printf("Result-top: %s\n",nameOf(Y));
+#ifdef TRACE
 	fprintf(trace,"\nmkObjStrucRef X: %s  X.origin: %s X.descNo: %i \n"
 	      ,nameOf(X)
 	      ,nameOf(myCorigin(X)),descNo(X->desc));
+#endif
 	allocStrucRefObj(myCorigin(X),descNo(X->desc),false);
 	//X = thisStack->rstack[thisStack->rtop];
 	//printf("Result-top: %s\n",nameOf(X));
@@ -1722,18 +1958,24 @@ DWORD WINAPI interpreter(LPVOID B){;
       case mkVirtualStrucRef:
 	arg1 = op1();
 	X = rPop(thisObj);
+#ifdef TRACE
 	fprintf(trace,"mkVirtualStrucRef %i %s\n",arg1,nameOf(X));
+#endif
 	allocStrucRefObj(X,arg1,true);
 	break;
       case _allocFromStrucRefObj:
 	X = rPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"allocFromStrucRefObj %s\n",nameOf(X));
+#endif
 	allocFromStrucRefObj(X);
 	break;
       case _break:
 	arg1 = op1();
 	arg2 = op2();
+#ifdef TRACE
 	fprintf(trace,"break %i %i\n",arg1,arg2);
+#endif
 	X = thisObj;
 	for (i = 0; i < arg1; i++) { 
 	  //fprintf(trace,"popCallStackA: %s \n",nameOf(X));
@@ -1755,7 +1997,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
 	break;
       case stop: 
+#ifdef TRACE
 	fprintf(trace,"stop: %i\n",threadNo);
+#endif
 	running = false;
 	//threadNo = threadNo - 1;
 	break;
