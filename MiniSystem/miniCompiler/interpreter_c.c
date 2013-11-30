@@ -773,26 +773,26 @@ template *getR(template *obj,int inx){ return obj->rfields[inx];};
 
 void vPush(template *thisStack,int V){
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) 
-    runTimeError("vstack overflow");
+    runTimeErrorX("vstack overflow",thisStack,-1);
   thisStack->vstack[thisStack->vtop] = V;
 }
 
 void rPush(template *stack,template *R){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
-  if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeError("stack overflow");
+  if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeErrorX("stack overflow",stack,-1);
   stack->rstack[stack->rtop] = R;
 }
 
 int vPop(template *thisStack){
   if ((thisStack->vtop = thisStack->vtop - 1) < -1) 
-    runTimeError("vstack underflow");
+    runTimeErrorX("vstack underflow",thisStack,-1);
   return thisStack->vstack[thisStack->vtop + 1];
 }
 
 template *rPop(template *stack){
   //template *R = stack->rstack[stack->rtop];
   // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
-  if ((stack->rtop = stack->rtop - 1) < -1) runTimeError("rStack underflow");
+  if ((stack->rtop = stack->rtop - 1) < -1) runTimeErrorX("rStack underflow",stack,-1);
   return stack->rstack[stack->rtop + 1];
 }
 
@@ -801,7 +801,8 @@ void cSaveReturn(template *obj,int descNo, int lsc){
   //int i;
   //for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
   //fprintf(trace,"\n");
-  if ((obj->lscTop = obj->lscTop + 2) > 16) runTimeError("lsc stack overflow");
+  if ((obj->lscTop = obj->lscTop + 2) > 16) 
+    runTimeErrorX("lsc stack overflow",obj,-1);
   obj->lscStack[obj->lscTop-1] = descNo;
   obj->lscStack[obj->lscTop] = lsc;
 }
@@ -812,7 +813,7 @@ int topOfLsc(template *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
 int cRestoreReturn(template * obj){
   //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
-  if (obj->lscTop < 0) runTimeError("\n**** ERROR:  lscStack underflow\n");
+  if (obj->lscTop < 0) runTimeErrorX("\n**** ERROR:  lscStack underflow\n",obj,-1);
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
   return V;
@@ -1528,7 +1529,6 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 	    threadNo = threadNo + 1;
 	    hasThreads = true;
-	    printf("\nAfter fork\n");
 	    break;
 	  case 14: // cmpAndSwap
 	    arg1 = vPop(thisStack); // offset 
