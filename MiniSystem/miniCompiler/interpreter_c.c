@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <string.h>
 
-#define TRACE
+//#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -1537,7 +1537,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    arg3 = X->vfields[arg1];
 	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
 	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
+	    //printf("[");
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
+	    //printf("]");
 #ifdef TRACE
 	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i %i"
 		    ,arg2,arg3,nameOf(X),&X->vfields[arg1,V]);
