@@ -1030,7 +1030,9 @@ DWORD WINAPI interpreter(LPVOID B){;
     fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
 	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,bc);
 #endif
+#ifdef event
     mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,currentDescNo,glsc,false);
+#endif
   };
 
   void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 

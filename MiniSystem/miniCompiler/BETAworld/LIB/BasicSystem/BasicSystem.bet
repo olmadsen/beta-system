@@ -52,16 +52,6 @@ BasicSystem: @
                core3[] -> fork;
                (* core4[] -> fork; *)
             #);
-          (*
-          noOfCores: (# exit 4 #);
-          cores: [noOfCores] ^Core;
-          init_core:
-            (# 
-            do (for i: noOfCores repeat
-                       &Core[] -> fork
-                  for)
-           #);   
-           *)     
           BasicProcess: 
             (# start:< 
                  (# 
@@ -85,15 +75,12 @@ BasicSystem: @
                id: @ integer;
                status: @ integer;
             do inner;
-               disable;
                P_status.TERMINATED -> status;
-               enable
             #);
           P_status: @ 
             (# ACTIVE: (#  exit 1 #);
                WAITING: (#  exit 2 #);
-               RESUMED: (# exit 3 #);
-               TERMINATED: (#  exit 4 #)
+               TERMINATED: (#  exit 3 #)
             #);
           Scheduler: 
             (# init: 
@@ -108,19 +95,14 @@ BasicSystem: @
                  enter msg[]
                  do console.display
                     (# 
-                    do '\nScheduler:'.print;
-                       idf.print;
-                       'active:'.print;
+                    do '\nScheduler:'.print; idf.print; 'active:'.print;
                        (if active[] <> none then
-                           active.id -> putint;
-                           ':status='.print;
+                           active.id -> putint; ':status='.print;
                            (if active.status
                             // P_status.ACTIVE then
                                'ACTIVE'.print
                             // P_status.WAITING then
                                'WAITING'.print
-                            // P_status.RESUMED then
-                               'RESUME'.print
                             // P_status.TERMINATED then
                                'TERMINATED'.print
                             else
@@ -129,12 +111,8 @@ BasicSystem: @
                         else
                            'none'.print
                        if);
-                       '[' -> put;
-                       processId -> putint;
-                       ']' -> put;
-                       msg.print;
-                       ':' -> put;
-                       SQS.display
+                       '[' -> put; processId -> putint; ']' -> put;
+                       msg.print; ':' -> put; SQS.display
                     #)
                  #);
                processId:< (# id: @ integer do inner exit id #);
@@ -143,26 +121,22 @@ BasicSystem: @
             do true -> inScheduler;
                Loop:
                  (if 1 then
-                     (*disable;*)
                      SQS.removeNext -> active[];
                      (if active[] <> none then
                          P_status.ACTIVE -> active.status;
-                         (*enable;*)
                          false -> inScheduler;
                          50 -> active.attach
                          true -> inScheduler;
-                         (*disable;*)
                          (if active.status = P_status.ACTIVE then
                              active[] -> SQS.insert;                            
                      if)if);
                      (if SQS.isEmpty then 
-                         (*enable;*)
                          (if SQS.hasWaiting then
                              100 -> sleep;
                              restart loop
                          if)
                       else
-                         (*enable;*) restart Loop
+                         restart Loop
                  if)if);
                console.display
                (#
@@ -200,12 +174,16 @@ BasicSystem: @
                L: @lock;
                V: @integer; 
                init: entry(# do 'SQS' -> L.init; #);
-               entry: (# do L.get; V + 1 -> V; 
-                         (if V > 1 then 
-                             console.display
-                             (#do '\nLock:entry: V:'.print; V -> putint; newline #)
-                         if);
-                         inner; V - 1 -> V; L.free #);
+               entry: 
+                 (# 
+                 do L.get;
+                    (if (V + 1 -> V) > 1 then 
+                        console.display(#do '\nLock:entry: V:'.print; V -> putint; newline #)
+                    if);
+                    inner; 
+                    V - 1 -> V; 
+                    L.free 
+                 #);
                insert: entry
                  (# P: ^BasicProcess
                  enter P[]
@@ -248,33 +226,24 @@ BasicSystem: @
                display_t: (#do (if 0 then L.get; inner; L.free if) #);               
                L: @lock; V: @integer
             #);
-          theScheduler: ^Scheduler;
-          logFile: @ File
-            (# display:
-                 (#
-                 do L.get;
-                    inner;
-                    L.free
-                 #);
-               L: @lock
+          init_schedulers:
+            (# theScheduler: ^Scheduler;
+            do &Scheduler[] -> theScheduler[]; theScheduler.init;
+               theScheduler[] -> core1.attach;
+               &Scheduler[] -> theScheduler[]; theScheduler.init;
+               theScheduler[] -> core2.attach;               
+               &Scheduler[] -> theScheduler[]; theScheduler.init;          
+               theScheduler[] -> core3.attach;
+               (*          
+                &Scheduler[] -> theScheduler[]; theScheduler.init;
+                theScheduler[] -> core4.attach;
+                *)
             #);
        do 'BasicSystem\n'.print;
           console.init;
           SQS.init;              
           init_core;  
-          &Scheduler[] -> theScheduler[]; theScheduler.init;
-
           inner;
-          theScheduler[] -> core1.attach;
-          
-          &Scheduler[] -> theScheduler[]; theScheduler.init;
-          theScheduler[] -> core2.attach;
-
-          &Scheduler[] -> theScheduler[]; theScheduler.init;          
-          theScheduler[] -> core3.attach;
-          (*          
-          &Scheduler[] -> theScheduler[]; theScheduler.init;
-           theScheduler[] -> core4.attach;
-           * *)
+          init_schedulers;
        #)
   #)
