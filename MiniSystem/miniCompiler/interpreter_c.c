@@ -2014,11 +2014,9 @@ DWORD WINAPI interpreter(LPVOID B){;
       }
     };
   fclose(trace);
-  printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
+  //printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
   if (threadNo > 0) {
-    printf("Q");
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
-    printf("W");
     int j;
     for( j=0; j < threadNo; j++)
       { printf("Close\n");
