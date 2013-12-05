@@ -1340,6 +1340,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case storeg:
 	arg1 = op1(); // off/inx
 	X = rPop(thisStack);
+	if ( X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	arg2 = vPop(thisStack); // value
 #ifdef TRACE
 	fprintf(trace,"storeg %s[%i] = %i \n",nameOf(X),arg1,arg2);
