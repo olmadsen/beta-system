@@ -707,7 +707,7 @@ void dumpStackX(template *obj){
   if (X != NULL) {
     X = obj->rstack[1];
     Y = obj->rstack[2];
-    printf("Caller: %s(%i) at: %i %s thisStack: %s\n"
+    printf("Caller: %s(%i) at: %i thisStack: %s\n"
 	   ,nameOf(X),topOfLsc(X,-1),topOfLsc(X,0),nameOf(Y));
     if (descNo(X->desc) != threadStubDescNo) dumpStackX(X);
   }
@@ -1675,6 +1675,9 @@ DWORD WINAPI interpreter(LPVOID B){;
       case sendv: 
 	arg1 = op1();
 	X = rPop(thisStack);
+	if ( X == 0) {
+	  runTimeErrorX("Reference is none",thisObj,glsc);
+	};
 #ifdef TRACE
 	fprintf(trace,"sendv %i",arg1);
 #endif
