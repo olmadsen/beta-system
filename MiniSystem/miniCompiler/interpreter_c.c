@@ -1373,6 +1373,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	arg2 = vPop(thisStack);
 	arg3 = vPop(thisStack);
+	if ( X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
 	fprintf(trace,"xstoreg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
 #endif
@@ -1676,9 +1677,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case sendv: 
 	arg1 = op1();
 	X = rPop(thisStack);
-	if ( X == 0) {
-	  runTimeErrorX("Reference is none",thisObj,glsc);
-	};
+	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
 	fprintf(trace,"sendv %i",arg1);
 #endif
