@@ -182,7 +182,7 @@ ObjDesc:
           vfields: [16] @integer;
           rfields: [36] ^template;
           vstack: [16] @integer; (* perhaps stacks can be integrated with fields *) 
-          rstack : [16] ^template;
+          rstack : [24] ^template;
           vtop,rtop: @integer;
           lscStack: [8] @integer; 
           lscTop: @integer;
@@ -235,11 +235,14 @@ ObjDesc:
                    'Illegal/unimplemented op-code' -> msg.putline;
                 // 6 then
                    'Execution of of object reference that is NONE' -> msg.putline
+                // 7 then
+                   'ReferenceStack overflow' -> msg.putline
                if);
                '*** ObjecDesc: "' -> msg.puttext; myFullName -> msg.puttext;
                '" - DescInx: ' -> msg.puttext; myDescInx -> msg.putint;
                ' - ObjectId: ' -> msg.puttext; id -> msg.putint; msg.newline;
                inner;   
+               msg[] -> putline; (* stupid *)
             #);
 
           myName:: (# do name[] -> theName[] #);
@@ -279,8 +282,9 @@ ObjDesc:
 
           saveReturn::
             (# 
-            do (*'\nsaveReturn:' ->out.puttext; lscTop -> out.putint; ' ' -> out.put;*)
-               myId -> out.puttext; out.newline;
+            do (*'\nsaveReturn:' ->out.puttext; lscTop -> out.putint; ' ' -> out.put;
+                myId -> out.puttext; out.newline;
+                *)
                (if (lscTop + 2 -> lscTop) > lscStack.range then
                    lscStack.range -> lscStack.extend 
                if);
@@ -332,7 +336,8 @@ ObjDesc:
             #);
           rpop:
             (# val: ^template
-            do (if rtop = 0 then 2 -> fatalError if);
+            do (if rtop < 1 then 2 -> fatalError if);
+               (if rtop > rstack.range then 7 -> fatalerror if);
                rstack[rtop][] -> val[]; rtop-1 -> rtop
             exit val[]
             #);
@@ -405,13 +410,22 @@ ObjDesc:
                    (for i: lscTop repeat lscStack[i] -> out.putint; ' ' -> out.put for);
                    '\n--------------' -> out.putline;
                if)
-            #) 
-       enter(vinxsize,inx)
-       do vinxsize + 1 -> vfields.new;  (* vfields[inx]  : range
-                                         * vfields[inx+1]: rep[1]
-                                         * ...
-                                         *)
-          vinxsize -> vfields[inx];
+            #);
+          isRindexed: @integer
+       enter(vinxsize,inx,isRindexed)
+       do (if isRindexed = 0 then
+              vinxsize + 1 -> vfields.new;  (* vfields[inx]  : range
+                                             * vfields[inx+1]: rep[1]
+                                             * ...
+                                             *)
+              vinxsize -> vfields[inx];
+           else
+              vinxsize + 1 -> rfields.new;  (* vfields[inx]  : range << OBS
+                                             * rfields[inx+1]: rep[1] <<
+                                             * ...
+                                             *)
+              vinxsize -> vfields[inx]              
+          if)
        exit this(Template)[]
        #);
      literals: [4] @integer; (* preliminary *) litTop: @integer;
@@ -639,6 +653,8 @@ ByteCode:
                        nl
                     // codes.xpush then
                        '\txpush ' -> cde; op1; nl
+                    // codes.xrpush then
+                       '\txrpush ' -> cde; op1; nl                
                     // codes.xpushg then
                        '\txpushg ' -> cde; op1; nl
                     // codes.rstore  then
@@ -659,6 +675,8 @@ ByteCode:
                        nl
                     // codes.xstore then
                        '\txstore ' -> cde; op1; nl
+                    // codes.xrstore then
+                       '\txrstore ' -> cde; op1; nl                       
                     // codes.xstoreg then
                        '\txstoreg ' -> cde; op1; nl
                     // codes.double then
@@ -884,6 +902,9 @@ byteCodes:
      rtnEvent: (# exit 78 #);
      break: (# exit 79 #);
      mkObjStrucRef: (# exit 80 #);
+     
+     xrpush: (# exit 81 #);
+     xrstore: (# exit 82 #)
   #);
 
      

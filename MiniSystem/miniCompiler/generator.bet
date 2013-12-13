@@ -100,12 +100,14 @@ generator: Restrictions
             #);
        #);
      NameDecl::
-       (# gen:: (* is called from NameApl *)
+       (# gen:: (* is called from NameApl, indexed,  *)
             (#  LMR: @char; isLocal,isRef: @boolean
             enter(LMR,isLocal,isRef)
             do cd.bcPos -> beginBCP;
                (if isLocal then
-                   'NameDcl:isLocal' -> cd.comment else 'NameDcl:isNotLocal' -> cd.comment if);
+                   'NameDcl:isLocal' -> cd.comment else 'NameDcl:isNotLocal' -> cd.comment 
+               if);
+               this(nameDecl).doPT -> cd.comment;
                (if primNo
                 // 3 then
                    (if LMR
@@ -123,6 +125,17 @@ generator: Restrictions
                if);
                cd.bcPos -> endBCP;
             #);
+          evalIndexed:<
+            (# LMR: @char; isLocal,isRef: @boolean 
+            enter(LMR,isLocal,isRef) 
+            do  
+               (if isLocal then
+                   'NameDcl:evalIndexed:isLocal' -> cd.comment
+                else 'NameDcl:evalIndexed:isNotLocal' -> cd.comment 
+               if);
+               this(nameDecl).doPT -> cd.comment;
+               (this(nameDecl)[],LMR,isLocal,isRef) -> itm.evalIndexed
+            #);          
           doAlloc: 
             (# ND: ^nameDecl 
             enter ND[] 
@@ -137,7 +150,7 @@ generator: Restrictions
        #);
      staticItem::
        (# gen::
-            (# N: ^text;
+            (# N: ^text; OD: ^objectDesc
             do (*'StaticItem:gen: ' -> puttext; ND.lexemsy->putline;*)
                cd.bcPos -> beginBCP;
                ND.lexemSy -> N[]; 
@@ -148,10 +161,17 @@ generator: Restrictions
                     * patternDen: follow origin
                     *)
                    OS.loadOrigin;
-                   (if (OS.desc).isIndexed then
+                   (if (OS.desc->OD[]).isIndexed then
                        100 -> cd.pushConst; (* we need &TT(e) *)
-                       (OS.desc).vsize -> cd.pushConst;
-                       ('StaticRep',(Os.desc).descNo,true) -> cd.allocIndexed
+                       (if (OS.desc).isRindexed then
+                           '\nIsRindexed: ' -> puttext; N[] -> putline;
+                           1 -> cd.pushconst;
+                           OD.rsize -> cd.pushConst;
+                        else
+                           0 -> cd.pushconst;
+                           OD.vsize -> cd.pushConst;
+                       if);
+                       ('StaticRep',OD.descNo,OD.isRindexed,true) -> cd.allocIndexed
                     else
                        (* 'staticItem:gen:'->puttext; ND.lexemSy -> putline;
                         * DoPT -> putline;
@@ -169,6 +189,8 @@ generator: Restrictions
           activate:: 
             (# N: ^text; org: ^objectDesc
             do ND.lexemSy -> N[]; 
+               'staticItem:activate' -> cd.comment;
+               N[] -> cd.comment;
                (* we need : isRef condition; R[] *)
                (if LMR
                 // 'S' then 
@@ -236,6 +258,10 @@ generator: Restrictions
                    if)
                if);
             #);
+          evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
+            #);
           doAlloc::(# do ND[] -> OS.doAlloc #);
           genStrucRef::
             (# 
@@ -264,7 +290,8 @@ generator: Restrictions
                 else
                    (N[],ND.off) -> cd.pushg
                if)
-            #)
+            #);
+          evalIndexed::(# do '\n***OPS: forImpItem:evalIndexed'->putline #)
        #);;
      dynamicItem::
        (# gen::
@@ -343,6 +370,10 @@ generator: Restrictions
                if);
                              
             #);
+           evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
+            #);
           genStrucRef::
             (# N: ^text
             do ND.lexemSy -> N[];
@@ -375,7 +406,9 @@ generator: Restrictions
             #);
           activate:: (* load/store the indexed element *)
             (# off: @integer; D: ^ObjectDesc
-            do (if LMR 
+            do 'repetition:activate' -> cd.comment;
+               
+               (if LMR 
                 // 'L' then
                    (if isRef then
                        (if isLocal then
@@ -400,6 +433,7 @@ generator: Restrictions
                 // 'R' then
                    (if isRef then (* assign a reference to a rep to this rep *)
                        (if isLocal then
+                           'bingo' -> cd.comment;
                            ('inx',ND.off) -> cd.rstore
                         else
                            ('inx',ND.off) -> cd.rstoreg
@@ -412,6 +446,57 @@ generator: Restrictions
                            ('inx',off) -> cd.xstoreg
                    if)if)
                if)
+            #);
+          evalIndexed::< 
+            (# off: @integer; D: ^ObjectDesc
+            do (*(ND[],LMR,isLocal,isRef) -> activate *)
+                'repetition:evalIndexed' -> cd.comment;
+               (if LMR 
+                // 'S' 
+                       
+                // 'L' then
+                   (if isRef then
+                       (getODorigin->D[]).rsize-> off;
+                       (if isLocal then
+                           ('inx',off) -> cd.xrpush
+                        else
+                           ('inx',off) -> cd.rpushg
+                       if)
+                    else
+                       (getODorigin->D[]).vsize-> off;
+                       (* 'Repetition: '->puttext; 
+                        getODorigin->D[];
+                        D.vsize-> off -> putint; newline;
+                        D.doPT -> putline;*)
+                       
+                       (if isLocal then
+                           ('inx',off) -> cd.xpush
+                        else
+                           ('inx',off) -> cd.xpushg
+                   if)if)
+                // 'M' then
+                   'Rep: M not implemented!' -> putline
+                // 'R' then
+                   (if isRef then 
+                       (getODorigin->D[]).rsize-> off;
+                       (if isLocal then
+                           'bingo' -> cd.comment;
+                           ('inx',off) -> cd.xrstore
+                        else
+                           ('inx',off) -> cd.rstoreg
+                       if)
+                    else
+                       (getODorigin->D[]).vsize-> off;
+                       (if isLocal then
+                           ('inx',off) -> cd.xstore
+                        else
+                           ('inx',off) -> cd.xstoreg
+                   if)if)
+                else
+                   '\n***** repetition:evalIndexed: LMR undefined: ' -> puttext;
+                   LMR -> put; newline;
+               if)
+               
             #)
        #);   
      Index::
@@ -458,8 +543,14 @@ generator: Restrictions
                            * OD.father.doPt -> putline;
                            *)
                            100 -> cd.pushConst;
-                           OD.vsize -> cd.pushConst;
-                           (ND.lexemSy,OD.descNo,false) -> cd.allocIndexed
+                           (if OD.isRindexed then
+                               1 -> cd.pushconst;
+                               OD.rsize -> cd.pushConst;
+                            else
+                               0 -> cd.pushconst;
+                               OD.vsize -> cd.pushConst;
+                           if);
+                           (ND.lexemSy,OD.descNo,OD.isRindexed,false) -> cd.allocIndexed
                         else
                            (ND.lexemSy,OD.descNo,false) -> cd.alloc;
                        if);
@@ -475,6 +566,10 @@ generator: Restrictions
                        (ND.lexemSy,OD.descNo) -> cd.send
                    if)
                if)
+            #);
+           evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
             #);
           doAlloc:: 
             (# 
@@ -506,6 +601,10 @@ generator: Restrictions
                (ND.lexemSy,ND.off) -> cd.sendVirtual; 
                (ND.lexemSy,LMR) -> (OS.desc).doCall
             #);
+           evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
+            #);
           doAlloc:: 
             (# 
             do 'vP:doAlloc'->putline ;
@@ -527,6 +626,10 @@ generator: Restrictions
             (# 
             do (ND.lexemSy,ND.off) -> cd.sendVirtual; 
                (ND.lexemSy,LMR) -> (OS.desc).doCall
+            #);
+           evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
             #);
           doAlloc:: 
             (#
@@ -550,12 +653,16 @@ generator: Restrictions
             do (ND.lexemSy,ND.off) -> cd.sendVirtual; 
                (ND.lexemSy,LMR) -> (OS.desc).doCall
             #);
+           evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
+            #);
           doAlloc:: (# do (ND.lexemSy,ND.off) -> cd.sendVirtual;  #);
           descInx::< (# do (OS.desc).descNo -> inx #);
        #);
      ModuleItem::
        (# gen::
-            (# N: ^text
+            (# N: ^text; OD: ^objectDesc
             do 
                (if isParsed then                   
                    (if md.isIncluded then 
@@ -563,11 +670,18 @@ generator: Restrictions
                        (N[],'isIncluded') -> LG.TTn;
                        false -> md.isIncluded;
                        md.loadOrigin;
-                       (if (md.desc).isIndexed then
-                           (*'Indexed module:'->putline;*)
+                       (if (md.desc -> OD[]).isIndexed then
+                           'Indexed module:'->putline;
                            103 -> cd.pushConst;
-                           (md.desc).vsize -> cd.pushConst;
-                           ('Module',descInx,true) -> cd.allocIndexed
+                           (if (md.desc).isRindexed then
+                               '\nIsRindexed: ' -> puttext; N[] -> putline;
+                               1 -> cd.pushconst;
+                               OD.rsize -> cd.pushConst;
+                            else
+                               0 -> cd.pushconst;
+                               OD.vsize -> cd.pushConst;
+                           if);
+                           ('Module',descInx,OD.isRindexed,true) -> cd.allocIndexed
                         else
                            (N[],DescInx,true) -> cd.alloc;
                        if);
@@ -580,6 +694,10 @@ generator: Restrictions
             (#
             do (md.name.lexemSy,ND.off) -> cd.rpush;
                (md.name.lexemSy,LMR) -> (desc).docall
+            #);
+           evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
             #);
           doAlloc:: (#do ND[] -> md.doAlloc #);
           descInx:: (# do md.descNo -> inx #);
@@ -670,23 +788,16 @@ generator: Restrictions
                 else
                    'noName' -> T[]
                if);
-               (if true
-                // isVindexed then
-                   (* 'IsIndexed: ' -> puttext; 
-                    * vsize -> putint; ' ' -> put; 
-                    * doPt -> putline;
-                    *
-                   (if EV[] <> none then
-                       'L' -> EV.gen
-                    else
-                       '****DynamicObjectGeneration:EV is none\n' -> puttext
-                    if);
-                    *)
+               (if isIndexed then
                    100 -> cd.pushConst;
-                   vsize -> cd.pushConst;
-                   ('Dyn',descNo,true) -> cd.allocIndexed
-                // isRindexed then
-                   '\n**** Indexed object of references is not imlemented' -> putline
+                   (if isRindexed then
+                       1 -> cd.pushconst;
+                       rsize -> cd.pushConst;
+                    else
+                       0 -> cd.pushconst;
+                       vsize -> cd.pushConst;
+                   if);
+                   ('Dyn',descNo,isRindexed,true) -> cd.allocIndexed
                 else
                    (T[],descNo,true) -> cd.alloc; 
                if)
@@ -825,6 +936,10 @@ generator: Restrictions
                    cd.allocFromStrucRefObj;
                    (N[],LMR) -> (desc).doCall 
                if)
+            #);
+           evalIndexed::
+            (#
+            do (ND[],LMR,isLocal,isRef) -> activate
             #);
           doAlloc:: 
             (# 
@@ -1333,6 +1448,8 @@ generator: Restrictions
        (# gen::
             (# 
             do cd.bcPos -> beginBCP;
+               'Reference:gen'-> cd.comment;
+               OV.doPT -> cd.comment;
                (LMR,true) -> OV.gen; (* here we might call OV.activateRef and eliminate isRef
                                       * apparenlty there is call, (LMR,false) -> OV.gen
                                       *)
@@ -1357,6 +1474,7 @@ generator: Restrictions
             enter isRef
             do cd.bcPos -> beginBCP;
                (* none: no dcl here *)
+               ('objEval:gen:',this(node).doPT) -> cd.com2;
                (none,LMR,isLocal,isRef) -> OS.activate;
                cd.bcPos -> endBCP;
             #);
@@ -1464,10 +1582,17 @@ generator: Restrictions
                    '(' -> put; AD.name -> puttext; ','->put;
                    AD.on -> putint; ')'->put; newline;
                if);
+               ('PatternDen:',AD.doPt) -> CD.com2;
                AD.loadOrigin -> (NA[],isLocal); (* NA is a nameApl 
                                                  * We never call attributeDen.gen
                                                  *)
-               (if isLocal then 'local'->cd.comment else 'non-local'->cd.comment if);
+
+               (if isLocal then 
+                   'patternDen:activate:local'->cd.comment
+                else 
+                   'patternDen:activate:non-local'->cd.comment 
+               if);
+               AD.doPT -> cd.comment;
                (LMR,isLocal,isRef) -> NA.gen;
             #);
           loadOrigin::
@@ -1517,9 +1642,7 @@ generator: Restrictions
                  scanSons
                  (# T: @text
                  do current[] -> NA[];   (* could be indexed *)
-                    (* 'loadOrigin:AD:NA:' -> puttext; NA.dcl.off -> putint; ' ' -> put;
-                     NA.doPT -> putline;*)
-                    
+                    ('AD:loadOrigin:',NA.doPT) -> CD.com2;
                     (if NA.dcl[] = none then 
                         ('AD:loadOrigin: NA.N none',NA.name) -> LG.TTn;
                         ('NA',NA.doPT) -> LG.TTn;
@@ -1545,45 +1668,48 @@ generator: Restrictions
                                 ('thisCore',prim.thisCore) -> CD.callPrim
                              else
                                 (if NA.ON > 0 then
-                                'NA.goOrigin:'-> T; NA.lexemSy -> T.puttext; 
+                                    'NA.goOrigin:'-> T; NA.lexemSy -> T.puttext; 
                                     ',ON='->T.puttext; NA.on -> T.putint; 
-                                (if continue then ' C=T'->T.puttext else ' C=F' -> T.puttext if);
-                                T[] -> cd.comment;
-                                (*'AD: ' -> puttext; doPT -> putline;
-                                'goOrigin:desc: '->putline;
-                                theDesc.doPT -> putline; 
-                                'lastDen:' -> putline;
-                                lastDen.doPT -> putline;*)
-
-                                (continue,withP[],this(AttributeDenotation)[]) -> NA.goOrigin; 
-                                (* Here we may know if we go beyond
-                                 * a rectricted globals
-                                 * Below, with the last NA we have the qualification
-                                 * and may test if we violate globals
-                                 * Can we pass more than one OD with globals?
-                                 *)
-                                (if NA.withAD[] <> none then
-                                    (true,NA.withP[]) -> loadWithPart
-                                if)
-                             else    
-                                (if NA.withAD[] <> none then
-                                    (false,none) -> loadWithPart
-                                 else
-                                    (* An implicit this.foo -> pushThis
-                                     * For this.R, we generate a push Roff
-                                     * Alternative: pushThis; gpush Roff
-                                     * Thus optimization adds to complexecity
+                                    (if continue then ' C=T'->T.puttext else ' C=F' -> T.puttext if);
+                                    T[] -> cd.comment;
+                                    (*'AD: ' -> puttext; doPT -> putline;
+                                     'goOrigin:desc: '->putline;
+                                     theDesc.doPT -> putline; 
+                                     'lastDen:' -> putline;
+                                     lastDen.doPT -> putline;*)
+                                    
+                                    (continue,withP[],this(AttributeDenotation)[]) -> NA.goOrigin; 
+                                    (* Here we may know if we go beyond
+                                     * a rectricted globals
+                                     * Below, with the last NA we have the qualification
+                                     * and may test if we violate globals
+                                     * Can we pass more than one OD with globals?
                                      *)
-                                    (if NA.dcl.itm## 
-                                     // pattern## 
-                                     // virtualPattern##
-                                     // furtherBinding##
-                                     // finalBinding## then
-                                        (* but we should fix this to be nicer *)
+                                    (if NA.withAD[] <> none then
+                                        (true,NA.withP[]) -> loadWithPart
+                                    if)
+                                 else    
+                                    (if NA.withAD[] <> none then
+                                        (false,none) -> loadWithPart
+                                     else
+                                        (* An implicit this.foo -> pushThis
+                                         * For this.R, we generate a push Roff
+                                         * Alternative: pushThis; gpush Roff
+                                         * Thus optimization adds to complexecity
+                                         *)
+                                        ('AD:loadOrigin:first:on=0:',NA.doPT) -> cd.com2;
+                                        (if NA.dcl.itm## 
+                                         // pattern## 
+                                         // virtualPattern##
+                                         // furtherBinding##
+                                         // finalBinding## 
+                                            (* // repetition## *)
+                                            then
+                                            (* but we should fix this to be nicer *)
                                             cd.pushThis;
-                                    if);
-                                    true -> isLocal
-                                if)
+                                        if);
+                                        true -> isLocal
+                                    if)
                                 if)
                             if)
                         if)
@@ -1620,6 +1746,10 @@ generator: Restrictions
                             false -> isLocal
                          // NA## = textDenotation## then
                             NA.gen
+                         // NA## = indexed## then
+                            'HUUH HA!'->putline;
+                            ('S',true,true) -> NA.gen;
+                            false -> isLocal
                         if)
                     if);
                     false -> first
@@ -1683,7 +1813,7 @@ generator: Restrictions
      NameApl::
        (# gen::
             (# 
-            do (*'NameApl:gen: ' -> puttext; N.lexemSy -> putline;*)
+            do 'NameApl:gen' -> cd.comment; N.lexemSy -> cd.comment;
                (if isLocal then 
                    'NameAPl:isLocal' -> cd.comment 
                 else 
@@ -1725,8 +1855,13 @@ generator: Restrictions
        (# gen::
             (#
             do cd.bcPos -> beginBCP;
+               ('Indexed:',this(node).doPT) -> cd.com2;
                'L' -> inx.gen;
-               (LMR,isLocal,isRef) -> dcl.gen;
+               (if true then
+                   (LMR,isLocal,isRef) -> dcl.evalIndexed
+                else
+                   (LMR,isLocal,isRef) -> dcl.gen;
+               if);
                cd.bcPos -> endBCP;
             #);
           goOrigin::

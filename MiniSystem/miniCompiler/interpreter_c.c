@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <string.h>
 
-//#define TRACE
+#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -772,8 +772,11 @@ int getV(template *obj,int inx){ return obj->vfields[inx];};
 template *getR(template *obj,int inx){ return obj->rfields[inx];};
 
 void vPush(template *thisStack,int V){
-  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) 
+  int i;
+  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) {
+    for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
     runTimeErrorX("vstack overflow",thisStack,-1);
+  }
   thisStack->vstack[thisStack->vtop] = V;
 }
 
@@ -1215,7 +1218,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   };
 
   int opCode,arg1,arg2,arg3,dscNo,V;
-  int dinx,rangee,i;
+  int dinx,isRindexed,rangee,i;
   bool running = true;
   template *X, *Y;
 
@@ -1934,6 +1937,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	X = rPop(thisStack);
 	dinx = vPop(thisStack);
+	isRindexed = vPop(thisStack);
 	rangee = vPop(thisStack);
 	allocIndexedObj(X,arg1,arg2,dinx,rangee);
 	break;

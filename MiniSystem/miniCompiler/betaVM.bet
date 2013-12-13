@@ -510,7 +510,7 @@ betaVM:
                length: @integer; 
                ch: @char
             enter length
-            do (length+1+100,3) 
+            do (length+1+100,3,0) 
                  -> descs.OD[descs.textDescNo].template 
                  -> X[] 
                  -> thisStack.rpush;
@@ -540,7 +540,7 @@ betaVM:
                 * 'strucrefDescNo:'->puttext; 
                 * descs.structureRefDescNo -> putint; newline;
                 *)
-               (0,1) -> descs.OD[descs.structureRefDescNo].template -> X[];
+               (0,1,0) -> descs.OD[descs.structureRefDescNo].template -> X[];
                2 -> X.rfields.new;
                (if isVirtual then
                    (origin.myObjDesc).vdtTable[inx] -> inx
@@ -789,7 +789,7 @@ betaVM:
                       (# T: ^text ; F: ^file
                       enter T[] 
                       do inner;
-                         ' ' -> out.put; glsc -> out.putint;':' -> out.put;
+                         out.newline; glsc -> out.putint;':' -> out.put;
                          T[] -> out.puttext; ' '-> out.put; glsc+1 -> glsc; 
                          (if out## = File## then
                              out[] -> F[]; F.flush
@@ -814,8 +814,8 @@ betaVM:
                          glsc + 2 -> glsc
                       exit arg
                       #);
-                    descInx,dinx,rangee,inx,length,serverId,handle,msgId
-                    ,rtnVal, off, value,on,lab:
+                    descInx,isRindexed,dinx,rangee,inx,length,serverId
+                    ,handle,msgId,rtnVal, off, value,on,lab:
                       @integer;
                     hasRtnVal: @boolean;
                     callee,X,Y,rtnRef: ^ObjDesc.template;
@@ -878,11 +878,16 @@ betaVM:
                      // codes.rpush then
                         'rpush' -> exe;
                         thisObj.rfields[op1->off][] -> X[];
+                        ' ' -> out.put; thisObj.myName -> out.puttext;
+                        '.R[' -> out.puttext; off -> out.putint; ']' -> out.put;
+                        '='->out.put; 
+                        (if X[] = none then 
+                            'none' -> out.puttext
+                         else
+                            X.myName -> out.puttext;
+                        if);
                         X[] -> thisStack.rpush;
-                        (*(':rpush',true,screen[]) -> X.dump;*)
-                        (*(if X[]<> none then
-                         ('rpush:',true,screen[]) -> X.dump;
-                         if)*)
+
                         (thisObj[],thisObj[],false,thisStack[],off,false,thisCode.descInx,glsc,0,thisStack.rTopElm) 
                           -> rPushEvent
                      // codes.pushg then
@@ -928,6 +933,14 @@ betaVM:
                         
                         (thisObj[],thisObj[],false,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent
+                     // codes.xrpush then
+                        'xrpush' -> exe;
+                        op1 -> off;
+                        thisStack.vpop -> inx;
+                        thisObj.rfields[off + inx][] -> X[];
+                        X[] -> thisStack.rpush;
+                        (thisObj[],thisObj[],false,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.rTopElm)
+                          -> rPushEvent
                      // codes.xpushg then
                         'xpushg' -> exe;
                         thisStack.rpop -> X[];
@@ -945,16 +958,19 @@ betaVM:
                           -> vPushEvent                        
                      // codes.rstore  then
                         'rstore' -> exe; 
+                        op1->off;
                         thisStack.rpop -> X[]; (* if multiple assignment of X, 
                                                 * violation error happens
                                                 * compiler error?
                                                 *)
                         (if X[] <> none then
                             X.myName -> out.puttext; '->' -> out.puttext;
+                            thisObj.myName -> out.puttext;
+                            '[' -> out.put; off -> out.putint; ']'-> out.put
                          else
                             'none '->out.puttext
                         if);
-                        X[] -> thisObj.rfields[op1->off][]; 
+                        X[] -> thisObj.rfields[off][]; 
                         (thisObj[],thisStack[],false,thisObj[],off,false,0,thisCode.descInx,glsc,X[]) 
                           -> rStoreEvent
                      // codes.store  then
@@ -975,7 +991,7 @@ betaVM:
                      // codes.rstoreg  then
                         'rstoreg' -> exe;
                         thisStack.rpop -> X[];
-                         (if X[] = none then
+                        (if X[] = none then
                             3 -> fatalError(#do leave loop #)
                         if);
                         thisStack.rpop -> Y[];
@@ -990,7 +1006,13 @@ betaVM:
                             op1 -> off;
                             thisStack.vpop -> inx;
                             (thisStack.vpop -> value,off + inx) 
-                              -> thisObj.assign
+                              -> thisObj.assign;
+                            ' ' -> out.put; value -> out.putint; 
+                            '->' -> out.puttext; 
+                            thisObj.myName -> out.puttext;
+                            '.V[' -> out.puttext; 
+                            off -> out.putint; '+' -> out.put;
+                            inx -> out.putint; ']' -> out.put
                          else
                             (* op1 = adr(rep)
                              * vpop = index in rep
@@ -1000,6 +1022,14 @@ betaVM:
                             (thisStack.vpop ,dinx + 2) -> R.assign
                         if);
                         (*('xstoreB',true,screen[])  -> thisObj.dump;*)
+                        (thisObj[],thisStack[],false,thisObj[],off,true,inx,thisCode.descInx,glsc,value) 
+                          -> vStoreEvent 
+                     // codes.xrstore then
+                        'xrstore' -> exe;
+                        op1 -> off;
+                        thisStack.vpop -> inx;
+                        thisStack.rpop -> X[];
+                        X[] -> thisObj.rfields[off + inx][];
                         (thisObj[],thisStack[],false,thisObj[],off,true,inx,thisCode.descInx,glsc,value) 
                           -> vStoreEvent                        
                      // codes.xstoreg then
@@ -1014,6 +1044,7 @@ betaVM:
                         thisStack.vpop -> inx;
                         (thisStack.vpop -> value,off + inx) -> R.assign;
                         (thisObj[],thisStack[],true,R[],off,true,inx,thisCode.descInx,glsc,value) -> vStoreEvent
+                        
                      // codes.double then
                         'double' -> exe;
                         thisStack.vdub;
@@ -1039,14 +1070,17 @@ betaVM:
                         'allocIndexed' -> exel; op2 -> descInx; op1 -> isObj;
                         thisStack.rpop -> X[]; (* origin *)
                         thisStack.vpop -> dinx;
+                        thisStack.vpop -> isRindexed;
                         thisStack.vpop -> rangee;
-                        (if true then
-                            (rangee,dinx) -> descs.OD[descInx].template -> callee[];
-                            descs.OD[descInx].OSDvisibility -> callee.OSDvisibility;
-                         else
-                            &descs.OD[descInx].template[] -> callee[];
-                        if);
-                        (*('allocIndexed',true,screen[])  -> callee.dump;*)
+                        
+                       (* (if isRindexed  = 1 then 'isRindexed' -> putline if);
+                        rangee -> putint; ' ' -> put;
+                        dinx -> putint; ' ' -> put;
+                        descinx -> putint; newline;*)
+                        
+                        (rangee,dinx,isRindexed) -> descs.OD[descInx].template -> callee[];
+                        
+                        descs.OD[descInx].OSDvisibility -> callee.OSDvisibility;
                         descInx -> callee.myDescInx;
                         newId -> callee.id;
 
@@ -1063,7 +1097,7 @@ betaVM:
                         (if isObj = 1 then 
                             true -> thisObj.isObj
                         if);
-                        (Y[],thisObj[],X[],descInx,glsc,isObj=1,true) -> allocEvent
+                        (Y[],thisObj[],X[],descInx,glsc,isObj=1,true) -> allocEvent;
                      // codes.exeAlloc then
                         'exeAlloc' -> exel; op2 -> descInx;
                         (*'exeAlloc'->putline;*)
@@ -1092,7 +1126,9 @@ betaVM:
                         allocLevel + 1 -> allocLevel
                      // codes.newVrep then
                         'newVrep' -> exe;
-                        (thisStack.vpop,2) -> descs.OD[1].template -> thisStack.rpush;
+                        (thisStack.vpop,2,0) 
+                          -> descs.OD[1].template 
+                          -> thisStack.rpush;
                      // codes.send then 
                         'send' -> exel; op1 -> descInx;
                         &descs.OD[descInx].template[] -> callee[];
@@ -1277,8 +1313,8 @@ betaVM:
                      // codes.prim then
                         '%prim' -> exe;
                         (if op1
-                         // prim.put then
-                            thisObj.vpop -> value -> putCh;
+                         // prim.put then 
+                            thisObj.vpop -> value -> putCh; 
                             ('put',thisStack[],1,thisCode.descInx,glsc) -> popEvent
                          // prim.get then
                             getCh -> thisStack.vPush;
