@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <string.h>
 
-#define TRACE
+//#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -168,6 +168,8 @@ enum {
   rtnEvent = 78 ,
   _break = 79,
   mkObjStrucRef = 80,
+  xrpush = 81,
+  xrstore = 82
 };
 
 void runTimeError(char *msg){
@@ -392,7 +394,10 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case xpush:
 	fprintf(trace,"xpush %i",op1());
 	break;
-      case xpushg:
+       case xrpush:
+	fprintf(trace,"xrpush %i",op1());
+	break;
+     case xpushg:
 	fprintf(trace,"xpushg %i",op1());
 	break;
       case store:
@@ -409,6 +414,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break; 
       case xstore:
 	fprintf(trace,"xstore %i ",op1());
+	break;
+      case xrstore:
+	fprintf(trace,"xrstore %i ",op1());
 	break;
       case xstoreg:
 	fprintf(trace,"xstoreg %i ",op1());
@@ -1038,11 +1046,17 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
   };
 
-  void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
+  void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
-    fprintf(trace,"allocIndexedObj(%i,%i) ",dinx,rangee);
+    fprintf(trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif
-    allocObj(origin,descNo,isObj,rangee,0);
+    //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+    if (isRindexed == 0) {
+      allocObj(origin,descNo,isObj,rangee,0);
+    } else {
+      printf("\n***allocIndexedObj:ref\n");
+      allocObj(origin,descNo,isObj,0,rangee);
+    };
     thisObj->vfields[dinx] = rangee; 
   };
 
@@ -1072,7 +1086,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     rangee = getLiteral(thisObj,litInx);
     template *X = thisObj;
     
-    allocIndexedObj(origin,getTextDescNo(),1,dinx,rangee);
+    allocIndexedObj(origin,getTextDescNo(),1,dinx,rangee,0);
     thisObj->vfields[1] = rangee; // pos = rangee
     for (i = 0; i < rangee; i++) {
       char ch = getLiteral(X, litInx + i + 1);
@@ -1309,6 +1323,15 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"xpush %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
 #endif
 	break;
+      case xrpush:
+	arg1 = op1(); // off
+	arg2 = vPop(thisStack); // inx
+	X = thisObj->rfields[arg1 + arg2];
+	rPush(thisStack,X);
+#ifdef TRACE
+	fprintf(trace,"xrpush %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
+#endif
+	break;
       case xpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
@@ -1370,6 +1393,15 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"xstore %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
 #endif
 	thisObj->vfields[arg1 + arg2] = arg3;
+	break;
+      case xrstore:
+	arg1 = op1();
+	arg2 = vPop(thisStack); // inx
+	X = rPop(thisStack); // value;
+#ifdef TRACE
+	fprintf(trace,"xrstore %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
+#endif
+	thisObj->rfields[arg1 + arg2] = X;
 	break;
       case xstoreg:
 	arg1 = op1();
@@ -1939,7 +1971,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	dinx = vPop(thisStack);
 	isRindexed = vPop(thisStack);
 	rangee = vPop(thisStack);
-	allocIndexedObj(X,arg1,arg2,dinx,rangee);
+	allocIndexedObj(X,arg1,arg2,dinx,rangee,isRindexed);
 	break;
       case mkStrucRef: 
 	arg1 = vPop(thisStack);
