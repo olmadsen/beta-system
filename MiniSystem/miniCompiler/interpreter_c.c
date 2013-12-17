@@ -1056,7 +1056,6 @@ DWORD WINAPI interpreter(LPVOID B){;
     if (isRindexed == 0) {
       allocObj(origin,descNo,isObj,rangee,0);
     } else {
-      printf("\n***allocIndexedObj:ref\n");
       allocObj(origin,descNo,isObj,0,rangee);
     };
     thisObj->vfields[dinx] = rangee; 
