@@ -169,7 +169,9 @@ enum {
   _break = 79,
   mkObjStrucRef = 80,
   xrpush = 81,
-  xrstore = 82
+  xrstore = 82,
+  xrpushg = 83,
+  xrstoreg = 84
 };
 
 void runTimeError(char *msg){
@@ -1343,6 +1345,17 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	vPush(thisStack,arg3); 
 	break;
+      case xrpushg:
+	arg1 = op1();
+	X = rPop(thisStack);
+	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	arg2 = vPop(thisStack);
+	Y = X->rfields[arg1 + arg2]; // need range check - and do we adjust for range?
+#ifdef TRACE
+	fprintf(trace,"xrpushg %s[%i+%i] = %s\n",nameOf(X),arg1,arg2,Y);
+#endif
+	rPush(thisStack,Y); 
+	break;
       case store:
 	arg1 = op1();
 	arg2 = vPop(thisStack);
@@ -1414,6 +1427,17 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	X->vfields[arg1 + arg2] = arg3;
 	break;
+      case xrstoreg:
+	arg1 = op1();
+	X = rPop(thisStack);
+	arg2 = vPop(thisStack);
+	Y = rPop(thisStack);
+	if ( X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+#ifdef TRACE
+	fprintf(trace,"xrstoreg %s[%i+%i] = %s\n",nameOf(X),arg1,arg2,nameOf(Y));
+#endif
+	X->rfields[arg1 + arg2] = Y;
+	break;
       case _double:
 	arg1 = vPop(thisStack);
 #ifdef TRACE
@@ -1422,6 +1446,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg1);
 	break;
+
       case rdouble:
 	X = rPop(thisStack);
 #ifdef TRACE
