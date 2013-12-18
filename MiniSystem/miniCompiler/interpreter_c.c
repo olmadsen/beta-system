@@ -292,7 +292,7 @@ typedef struct template {
   int lscStack[16];
   int lscTop;
   int lsc;
-  struct template *rfields[32];
+  struct template *rfields[164];
   int vfields[];
 } template;
 
@@ -402,6 +402,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
      case xpushg:
 	fprintf(trace,"xpushg %i",op1());
 	break;
+     case xrpushg:
+	fprintf(trace,"xrpushg %i",op1());
+	break;
       case store:
 	fprintf(trace,"store %i",op1());
      	break;
@@ -422,6 +425,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case xstoreg:
 	fprintf(trace,"xstoreg %i ",op1());
+	break;
+      case xrstoreg:
+	fprintf(trace,"xrstoreg %i ",op1());
 	break;
       case _double:
 	fprintf(trace,"double");
@@ -1056,6 +1062,10 @@ DWORD WINAPI interpreter(LPVOID B){;
     if (isRindexed == 0) {
       allocObj(origin,descNo,isObj,rangee,0);
     } else {
+      if (rangee > 132) {
+	printf("\n\n**** Ref-rep range: %i\n",rangee);
+	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
+      };
       allocObj(origin,descNo,isObj,0,rangee);
     };
     thisObj->vfields[dinx] = rangee; 
@@ -1351,7 +1361,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = vPop(thisStack);
 	Y = X->rfields[arg1 + arg2]; // need range check - and do we adjust for range?
 #ifdef TRACE
-	fprintf(trace,"xrpushg %s[%i+%i] = %s\n",nameOf(X),arg1,arg2,Y);
+	fprintf(trace,"xrpushg %s[%i+%i] = %s/%i)\n",nameOf(X),arg1,arg2,nameOf(Y),Y);
 #endif
 	rPush(thisStack,Y); 
 	break;
@@ -1378,7 +1388,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case storeg:
 	arg1 = op1(); // off/inx
 	X = rPop(thisStack);
-	if ( X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	arg2 = vPop(thisStack); // value
 #ifdef TRACE
 	fprintf(trace,"storeg %s[%i] = %i \n",nameOf(X),arg1,arg2);
@@ -1388,7 +1398,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case rstoreg:   
 	arg1 = op1();
 	X = rPop(thisStack);
-	if ( X == 0) {
+	if (X == 0) {
 	  runTimeErrorX("Reference is none",thisObj,glsc);
 	};
 	Y = rPop(thisStack);
@@ -1420,7 +1430,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	arg2 = vPop(thisStack);
 	arg3 = vPop(thisStack);
-	if ( X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
 	fprintf(trace,"xstoreg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
 #endif
@@ -1431,9 +1441,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	X = rPop(thisStack);
 	arg2 = vPop(thisStack);
 	Y = rPop(thisStack);
-	if ( X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
-	fprintf(trace,"xrstoreg %s[%i+%i] = %s\n",nameOf(X),arg1,arg2,nameOf(Y));
+	fprintf(trace,"xrstoreg %s[%i+%i] = %s(%i)\n",nameOf(X),arg1,arg2,nameOf(Y),Y);
 #endif
 	X->rfields[arg1 + arg2] = Y;
 	break;
