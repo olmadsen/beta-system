@@ -233,7 +233,7 @@ void BetaError(BetaErr err, Object *theObj)
       if (err==QuaErr || err==QuaOrigErr){
 	if (QuaCont) {
 	  fprintf(output, "\n*** OBS. ");
-	  fprintf(output, ErrorMessage(QuaErr));
+	  fprintf(output, "%s",ErrorMessage(QuaErr));
 	  if( theObj != 0 ){
 	    if( isObject(theObj)){
 	      fprintf(output, ".\nCurrent object:\n");
@@ -366,9 +366,9 @@ GLOBAL(static char UnknownError[25]);
 char *ErrorMessage(BetaErr errorNumber)
 {
   long  index = 0;
-  long  dummy;
+  //long  dummy;
   
-  dummy = strlen(UnknownError);
+  //dummy = strlen(UnknownError);
   
   while( errorTable[index].errorNumber != 0){
     if( errorNumber == errorTable[index].errorNumber){

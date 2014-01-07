@@ -307,6 +307,8 @@ void Initialize()
   InsertGuardPage();
 #endif /* USEMMAP */
 
+  tmpIOATop = NULL; // OLM:3.1.2014 - otherwise C compilation error in mbs_make
+
 #ifdef USEMMAP
   tmpIOA          = IOABaseBlock->top;
   tmpIOATop       = IOABaseBlock->top;

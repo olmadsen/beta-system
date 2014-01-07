@@ -663,20 +663,20 @@ static int OpenDumpFile(long errorNumber)
     /* beta.dump cannot be opened - use stderr */
     output = stderr;
     fprintf(output, "\n# Beta execution aborted: ");
-    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, "%s",ErrorMessage(errorNumber));
     fprintf(output, ".\n");
     fprintf(output, "# Generating dump.  This may take a little while - please be patient\n");
     fflush(output);
   } else {
     /* beta.dump opened successfully */
     fprintf(stderr, "\n# Beta execution aborted: ");
-    fprintf(stderr, ErrorMessage(errorNumber));
+    fprintf(stderr, "%s",ErrorMessage(errorNumber));
     fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
     fprintf(stderr, "# Generating dump file.  This may take a little while - please be patient\n");
     fflush(stderr);
     /* Write diagnostics to dump file too */
     fprintf(output, "Beta execution aborted: ");
-    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, "%s",ErrorMessage(errorNumber));
     fprintf(output, ".\n");
     fflush(output);
   }
