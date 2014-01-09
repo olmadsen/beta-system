@@ -162,7 +162,7 @@ sub bootbeta {
         print "$compiler --verbose @_\n";
     	print `$compiler --verbose @_`;
     } else {
-	system "$betalib/boot/bin/$objdir/beta --grammar $betalib/boot/grammars/beta/beta @_";
+	system "$betalib/boot/bin/$objdir/beta --gram $betalib/boot/grammars/beta/beta @_";
     }
 }
 
