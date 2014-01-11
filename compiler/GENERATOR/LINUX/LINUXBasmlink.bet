@@ -1,6 +1,14 @@
 ORIGIN '../asmlinkbody';
 INCLUDE '~beta/unixlib/unixfile';
 BODY '../UNIXasmlink'
+---lib:attributes---
+isLinux64:
+(# B: @boolean;
+   crt1: @diskentry;
+do '/usr/lib32/crt1.o' -> crt1.path;
+   crt1.exists -> B
+exit b
+#)
 --asmState:descriptor--
 (# tmpCount: @integer #)
 --HasSharedLibs:descriptor--
@@ -47,7 +55,7 @@ do '\\'->AFF.put; AFF.newLine; ascii.ht->AFF.put;
 do '#! /bin/sh '->AFF.putLine;
    'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
    'export BETALIB'->AFF.putLine;
-   'CC=${CC-"gcc -O6"}\nexport CC'-> AFF.putLine;
+   'CC=${CC-"gcc -m32 -O6"}\nexport CC'-> AFF.putLine;
    'MACHINETYPE='->AFF.putText; targetMachine->AFF.putLine;
    'export MACHINETYPE'->AFF.putLine;
    'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine;
@@ -148,13 +156,14 @@ do (if common.switch[53] then
 --ldTmp:descriptor--
 (#
 do tmpArgs[]
-     ->ldUNIXtmpFile(#do 'ld -r -o '->AFF.putText #)
+     ->ldUNIXtmpFile(#do 'ld -m elf_i386 -r -o '->AFF.putText #)
      ->TmpF[] 
 #)
 ---link: descriptor ---
 (# betaLinkOpt: ^text; ldLibPath: ^text;
    start: @integer;
    e: @diskentry;
+   usr_lib: ^text
 do 'trap "echo :linking interrupted.; /bin/rm -f '->AFF.puttext;
    objName[]->AFF.puttext;
    '; exit 2" 2 9 10'->AFF.putLine;
@@ -213,12 +222,18 @@ do 'trap "echo :linking interrupted.; /bin/rm -f '->AFF.puttext;
    asmlink.ExeExt->(objName.copy).Append->AFF.puttext; 
    ' '->AFF.put; cont;
    
+   (if isLinux64 then
+       '/usr/lib32/' -> usr_lib[]
+    else
+       '/usr/lib/' -> usr_lib[]
+   if);
    (if true//common.switch[29]//common.switch[30]//common.switch[31] then
        '/usr/lib/gcrt1.o' -> AFF.puttext;
     else
-       '/usr/lib/crt1.o' -> AFF.puttext;
+       (*'/usr/lib/crt1.o' -> AFF.puttext;*)
+       'crt1.o ' -> (usr_lib.copy).append -> AFF.puttext;
    if);
-   ' /usr/lib/crti.o' ->AFF.puttext;
+   'crti.o' -> (usr_lib.copy).append -> AFF.puttext;
    (if common.switch[13] (* full debug (betarun_debug.o) *) then
        '/usr/lib/crtbegin.o' -> e.path;
        (if e.exists then
@@ -249,7 +264,8 @@ do (if common.switch[17] then
    if);
 #)
 ---libraries: descriptor ---
-(# e: @diskentry
+(# e: @diskentry;
+   usr_lib: ^ text
 do (if common.switch[17] then
        (* static X libraries requires -lSM -lICE *)
        ' -lSM -lICE' -> ldA.puttext;
@@ -264,14 +280,23 @@ do (if common.switch[17] then
         *)
        ' -export-dynamic -ldl'->ldA.puttext
    if);
-   ' -lm -lc'->ldA.puttext;
+   ' -lm -lc '->ldA.puttext;
+
+   
+   (if isLinux64 then
+       '/usr/lib32/' -> usr_lib[]
+    else
+       '/usr/lib/' -> usr_lib[]
+   if);
+
    (if common.switch[13] (* full debug (betarun_debug.o) *) then
        '/usr/lib/crtend.o' -> e.path;
        (if e.exists then
            ' /usr/lib/crtend.o' -> ldA.putText;
        if);
    if);
-   ' /usr/lib/crtn.o' -> ldA.puttext;
+
+   'crtn.o' -> (usr_lib.copy).append -> ldA.puttext;
    ' 2>&1' -> ldA.puttext;
    ldA.newline;
 #)
