@@ -1,7 +1,18 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#if defined(nti)
 #include <windows.h>
+#else
+typedef unsigned long DWORD;
+typedef void *LPVOID;
+typedef void *PVOID;
+typedef PVOID HANDLE;
+#define TRUE 1
+#define INFINITE 0xFFFFFFFF // not the correct value 
+// and in any case the threading routines must be changed to Posix?
+#define WAIT_OBJECT_0 0x00000000L
+#endif
 #include <string.h>
 
 //#define TRACE
@@ -915,8 +926,11 @@ void rswap(template *obj, template **R, template **S){
 }
 
 
-
+#if defined(nti)
 DWORD WINAPI interpreter(LPVOID B);
+#else
+DWORD interpreter(LPVOID B);
+#endif
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   FILE *trace;
@@ -990,7 +1004,11 @@ Event *getEvent(bool first){
   return E;
 }
 
+#if defined(nti)
 DWORD WINAPI interpreter(LPVOID B){;
+#else
+DWORD interpreter(LPVOID B){;
+#endif
   Block *thisBlock = (Block *)B;
   int threadId = thisBlock->threadId;
   int ID = 1000;
