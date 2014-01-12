@@ -11,14 +11,14 @@ errorneous programs will pass the parser, and subesquent phaes may
 fail.
 
 Compile compiler.bet using the std. BETA compiler
-Call: compiler foo.bet - remember '.bet' extension
+Call: compiler foo.bet 
 
 Checker: a number of semantic checks are nor performed , incluing
 typechecking of assignments and enter/exit-lists
 
 Code generator: ...
 
-BETAvm: a new VM for BETA interpredted by BETA
+BETAvm: a new VM for BETA interpreted by BETA
 
 minienv:
 --------
