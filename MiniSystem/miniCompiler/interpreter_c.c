@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <windows.h>
+
 #if defined(linux)
 typedef unsigned long DWORD;
 typedef void *LPVOID;
@@ -11,6 +11,8 @@ typedef PVOID HANDLE;
 #define INFINITE 0xFFFFFFFF // not the correct value 
 // and in any case the threading routines must be changed to Posix?
 #define WAIT_OBJECT_0 0x00000000L
+#else
+#include <windows.h>
 #endif
 
 #include <string.h>
