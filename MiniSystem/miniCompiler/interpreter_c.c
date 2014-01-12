@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#if defined(nti)
 #include <windows.h>
-#else
+#if defined(linux)
 typedef unsigned long DWORD;
 typedef void *LPVOID;
 typedef void *PVOID;
@@ -13,6 +12,7 @@ typedef PVOID HANDLE;
 // and in any case the threading routines must be changed to Posix?
 #define WAIT_OBJECT_0 0x00000000L
 #endif
+
 #include <string.h>
 
 //#define TRACE
@@ -926,10 +926,10 @@ void rswap(template *obj, template **R, template **S){
 }
 
 
-#if defined(nti)
-DWORD WINAPI interpreter(LPVOID B);
-#else
+#if defined(linux)
 DWORD interpreter(LPVOID B);
+#else
+DWORD WINAPI interpreter(LPVOID B);
 #endif
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
@@ -1004,10 +1004,10 @@ Event *getEvent(bool first){
   return E;
 }
 
-#if defined(nti)
-DWORD WINAPI interpreter(LPVOID B){;
-#else
+#if defined(linux)
 DWORD interpreter(LPVOID B){;
+#else
+DWORD WINAPI interpreter(LPVOID B){;
 #endif
   Block *thisBlock = (Block *)B;
   int threadId = thisBlock->threadId;
