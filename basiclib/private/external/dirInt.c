@@ -27,7 +27,7 @@
 #      include <utime.h>
 #    endif
 #    include <dir.h>
-#    include <dirent.h>
+#    include <dirent.h> 
 #    define DIRENT dirent
 #  endif
 #else
