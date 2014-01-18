@@ -83,6 +83,7 @@ enum {
 
 
 enum {
+  dummy_event = 0,
   start_event = 1,
   alloc_event = 2,
   do_event = 3,
@@ -991,6 +992,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   thisBlock->traceFile = "trace.s";
   fprintf(trace,"**** Execute:\n\n");
 #ifdef linux
+  interpreter(thisBlock);
 #else
   eventReady = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
@@ -1015,6 +1017,7 @@ Event *getEvent(bool first){
   }
 
 #ifdef linux
+    E = mkEvent(stop_event,0,0,0,0,0,0); 
 #else
   dwWaitResult = WaitForSingleObject(eventReady,INFINITE);
 #endif
