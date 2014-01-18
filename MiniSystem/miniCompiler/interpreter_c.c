@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#if defined(linux)
+#ifdef linux
 typedef unsigned long DWORD;
 typedef void *LPVOID;
 typedef void *PVOID;
@@ -199,14 +199,22 @@ HANDLE allocMutex;
 void *heapAlloc(int size) {
   void *obj; char S[50];
   if (true) { 
+#ifdef linux
+#else
     switch(WaitForSingleObject(allocMutex,INFINITE)) {
     case WAIT_OBJECT_0:
       break;
     default:
       runTimeError("Wait failure: allocMutex");
     } ;
+#endif
     obj = malloc(size);
-    if (!ReleaseSemaphore(allocMutex,1,NULL)) runTimeError("ReleaseSemaphoreError: allocMutex");
+#ifdef linux 
+#else
+    if (!ReleaseSemaphore(allocMutex,1,NULL)) 
+runTimeError("ReleaseSemaphoreError: allocMutex");
+#endif
+       
     if (obj == 0) {
       sprintf(S,"malloc failed; size: %i",size);
       runTimeError(S);
@@ -868,9 +876,11 @@ void *mkEvent(int type,template *caller,template *thisObj,template *org
   E->bcPos = bcPos;
   //printf("\nmkEvent: %i",E->type);
 
-  //if (type == stop_event) 
-  {
+#ifdef linux
+  int res = 0;
+#else
     int res = WaitForSingleObject(eventTaken,INFINITE);
+#endif
     switch (res) {
     case WAIT_OBJECT_0: 
       theEvent = E; 
@@ -878,14 +888,20 @@ void *mkEvent(int type,template *caller,template *thisObj,template *org
     default: 
       runTimeError("Wait failiure for eventTaken");
     };
-    if (!ReleaseSemaphore(eventReady,1,NULL)) runTimeError("ReleaseSemaphoreError: eventReady");
+#ifdef linux
+#else
+    if (!ReleaseSemaphore(eventReady,1,NULL)) 
+        runTimeError("ReleaseSemaphoreError: eventReady");
+#endif
+#ifdef linux
+#else
     switch(WaitForSingleObject(eventProcessed,INFINITE)) {
     case WAIT_OBJECT_0:
       break;
     default:
       runTimeError("Wait failure: eventProcessed");
-    } 
-  };
+    }; 
+#endif
   return E;  
 };
 
@@ -928,7 +944,7 @@ void rswap(template *obj, template **R, template **S){
 }
 
 
-#if defined(linux)
+#ifdef linux
 DWORD interpreter(LPVOID B);
 #else
 DWORD WINAPI interpreter(LPVOID B);
@@ -950,8 +966,10 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   setbuf(trace, NULL);
   descs = descs_a; // this is necessary for getImageSize() below
   // we must copy from Beta memory to avoid GC problems
+#ifdef linux
+#else
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
-
+#endif
   int imageSize = getImageSize();
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   descs = heapAlloc(imageSize);
@@ -972,12 +990,14 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   thisBlock->threadId = 0;
   thisBlock->traceFile = "trace.s";
   fprintf(trace,"**** Execute:\n\n");
-
+#ifdef linux
+#else
   eventReady = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
 
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
+#endif
 }
 
 Event *getEvent(bool first){
@@ -985,12 +1005,19 @@ Event *getEvent(bool first){
   DWORD dwWaitResult; 
   //printf("\n***run_interpreter");
   if (!first) {
+#ifdef linux
+#else
     if (!ReleaseSemaphore(eventProcessed,1,NULL)){ 
       printf("Errorcode: %i",GetLastError());
       runTimeError("ReleaseSemaphoreError: eventProcessed");
     };
+#endif
   }
+
+#ifdef linux
+#else
   dwWaitResult = WaitForSingleObject(eventReady,INFINITE);
+#endif
   //printf("\nGot mutex\n");
   switch (dwWaitResult) 
     {
@@ -1001,8 +1028,11 @@ Event *getEvent(bool first){
     default: 
       runTimeError("Wait failiure for waitEvent");
     };
+#ifdef linux
+#else
   if (!ReleaseSemaphore(eventTaken,1,NULL))
     runTimeError("ReleaseSemaphoreError: eventTaken");
+#endif
   return E;
 }
 
@@ -1619,7 +1649,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    //printf("\n%s\n",fileName);
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
+#ifdef linux
+#else
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
+#endif
 	    threadNo = threadNo + 1;
 	    hasThreads = true;
 	    break;
@@ -1648,7 +1681,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	    fprintf(trace,"sleep %i\n",arg1);
 #endif
+#ifdef linux
+#else
 	    Sleep(arg1);
+#endif
 	    break;
 	  case 17: 
 #ifdef TRACE
@@ -2109,6 +2145,8 @@ DWORD WINAPI interpreter(LPVOID B){;
   fclose(trace);
   //printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
   if (threadNo > 0) {
+#ifdef linux
+#else
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
     int j;
     for( j=0; j < threadNo; j++)
@@ -2117,6 +2155,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       };
     printf("After Wait\n");
     //mkEvent(stop_event,0,0,0,0,0,0); 
+#endif
   };
   if (threadId == 0) mkEvent(stop_event,0,0,0,0,0,0); 
   return 0;

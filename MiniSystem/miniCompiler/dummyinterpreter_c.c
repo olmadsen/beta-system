@@ -50,7 +50,16 @@ template *myCorigin(template *obj){ }
 
 int descNoOf(template * obj){ }
 
-Event *init_interpreter(ObjDesc descs_a, int mainDescNo) { }
+Event *init_interpreter(ObjDesc descs_a, int mainDescNo) { 
+
+#if defined(linux)
+  printf("\n\n **** This is Linux!");
+#else
+  printf("\nNot Linux!");
+#endif
+
+}
+
 void close_interpreter(){ }
 
 Event *getEvent(bool first){ }
