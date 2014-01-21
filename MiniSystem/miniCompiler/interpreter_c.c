@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #ifdef linux
+#include <pthread.h>
 typedef unsigned long DWORD;
 typedef void *LPVOID;
 typedef void *PVOID;
@@ -31,11 +32,11 @@ typedef PVOID HANDLE;
    24: no of Object descriptors
    26: ObjDesc1
    ...: ...
-   
+    
    Format of ObjDesc:
    0: index of name in stringtable
-   2: descNo
-   6: topDescNo
+   2: descNo 
+   6: topDescNo 
    10: vSize - size of value fields
    14: rSize - size of reference fields
    18: originOff
@@ -946,7 +947,7 @@ void rswap(template *obj, template **R, template **S){
 
 
 #ifdef linux
-DWORD interpreter(LPVOID B);
+void *interpreter(void *B);
 #else
 DWORD WINAPI interpreter(LPVOID B);
 #endif
@@ -1040,7 +1041,7 @@ Event *getEvent(bool first){
 }
 
 #if defined(linux)
-DWORD interpreter(LPVOID B){;
+void  *interpreter(void *B){;
 #else
 DWORD WINAPI interpreter(LPVOID B){;
 #endif
@@ -1052,7 +1053,11 @@ DWORD WINAPI interpreter(LPVOID B){;
     // printf("\nID:%i %i",threadId,ID + threadId); 
     return ID + threadId;
   }
+#ifdef linux
+ pthread_t pthreadArray[MAX_THREADS];
+#else
   HANDLE  hThreadArray[MAX_THREADS];
+#endif
   int threadNo = 0;
   bool hasThreads = false;
 
@@ -1653,13 +1658,17 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
 #ifdef linux
+	   pthread_t thread1;
+	   int iret1 = pthread_create(&thread1,NULL,interpreter,(void *)B);
+	    //int iret = 
+            //pthread_create(&pthreadArray[threadNo],NULL,interpreter,(void *)B);
 #else
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 #endif
 	    threadNo = threadNo + 1;
 	    hasThreads = true;
 	    break;
-	  case 14: // cmpAndSwap
+	  case 14: // cmpAndSwap 
 	    arg1 = vPop(thisStack); // offset 
 	    arg2 = vPop(thisStack); // new value
 	    X = rPop(thisStack);
@@ -1674,7 +1683,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 		    ,arg2,arg3,nameOf(X),&X->vfields[arg1,V]);
 #endif
 	    if (V) {V = 0;} else {V = 1;}; 
-#ifdef TRACE
+#ifdef TRACE  
 	    fprintf(trace,"%i\n",V);
 #endif
 	    vPush(thisStack,V);
