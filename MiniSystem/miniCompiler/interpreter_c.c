@@ -18,7 +18,7 @@ typedef PVOID HANDLE;
 
 #include <string.h>
 
-//#define TRACE
+#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -196,12 +196,17 @@ void runTimeError(char *msg){
 
 unsigned char heap[10]; int heapTop; // not in use
 
+#ifdef linux
+pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
+#else
 HANDLE allocMutex;
+#endif
 
 void *heapAlloc(int size) {
   void *obj; char S[50];
   if (true) { 
 #ifdef linux
+    pthread_mutex_lock( &mutex1 );
 #else
     switch(WaitForSingleObject(allocMutex,INFINITE)) {
     case WAIT_OBJECT_0:
@@ -212,6 +217,7 @@ void *heapAlloc(int size) {
 #endif
     obj = malloc(size);
 #ifdef linux 
+    pthread_mutex_unlock( &mutex1 );
 #else
     if (!ReleaseSemaphore(allocMutex,1,NULL)) 
 runTimeError("ReleaseSemaphoreError: allocMutex");
@@ -1658,10 +1664,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
 #ifdef linux
-	   pthread_t thread1;
-	   int iret1 = pthread_create(&thread1,NULL,interpreter,(void *)B);
-	    //int iret = 
-            //pthread_create(&pthreadArray[threadNo],NULL,interpreter,(void *)B);
+	    int iret = 
+	      pthread_create(&pthreadArray[threadNo],NULL,interpreter,(void *)B);
 #else
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 #endif
@@ -1694,6 +1698,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    fprintf(trace,"sleep %i\n",arg1);
 #endif
 #ifdef linux
+	    usleep(arg1);
 #else
 	    Sleep(arg1);
 #endif
@@ -2157,17 +2162,21 @@ DWORD WINAPI interpreter(LPVOID B){;
   fclose(trace);
   //printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
   if (threadNo > 0) {
+    int j;
 #ifdef linux
+    for (j=0; j < threadNo; j++) {
+         pthread_join(pthreadArray[j],NULL);
+	 printf("Join of: %i\n",j);
+      }
 #else
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
-    int j;
+
     for( j=0; j < threadNo; j++)
       { printf("Close\n");
       CloseHandle(hThreadArray[j]);
       };
-    printf("After Wait\n");
-    //mkEvent(stop_event,0,0,0,0,0,0); 
 #endif
+    printf("After Wait\n");
   };
   if (threadId == 0) mkEvent(stop_event,0,0,0,0,0,0); 
   return 0;
