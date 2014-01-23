@@ -4,14 +4,6 @@
 
 #ifdef linux
 #include <pthread.h>
-typedef unsigned long DWORD;
-typedef void *LPVOID;
-typedef void *PVOID;
-typedef PVOID HANDLE;
-#define TRUE 1
-#define INFINITE 0xFFFFFFFF // not the correct value 
-// and in any case the threading routines must be changed to Posix?
-#define WAIT_OBJECT_0 0x00000000L
 #else
 #include <windows.h>
 #endif
@@ -867,7 +859,11 @@ int cRestoreReturn(template * obj){
   return V;
 }
 
+#ifdef linux
+#else
 HANDLE eventReady,eventTaken,eventProcessed;
+#endif
+
 Event *theEvent = NULL;
 
 void *mkEvent(int type,template *caller,template *thisObj,template *org
@@ -888,7 +884,6 @@ void *mkEvent(int type,template *caller,template *thisObj,template *org
   int res = 0;
 #else
     int res = WaitForSingleObject(eventTaken,INFINITE);
-#endif
     switch (res) {
     case WAIT_OBJECT_0: 
       theEvent = E; 
@@ -896,6 +891,8 @@ void *mkEvent(int type,template *caller,template *thisObj,template *org
     default: 
       runTimeError("Wait failiure for eventTaken");
     };
+#endif
+
 #ifdef linux
 #else
     if (!ReleaseSemaphore(eventReady,1,NULL)) 
@@ -1011,7 +1008,10 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
 
 Event *getEvent(bool first){
   Event *E;
+#ifdef linux
+#else
   DWORD dwWaitResult; 
+#endif
   //printf("\n***run_interpreter");
   if (!first) {
 #ifdef linux
@@ -1027,7 +1027,6 @@ Event *getEvent(bool first){
     E = mkEvent(stop_event,0,0,0,0,0,0); 
 #else
   dwWaitResult = WaitForSingleObject(eventReady,INFINITE);
-#endif
   //printf("\nGot mutex\n");
   switch (dwWaitResult) 
     {
@@ -1038,6 +1037,7 @@ Event *getEvent(bool first){
     default: 
       runTimeError("Wait failiure for waitEvent");
     };
+#endif
 #ifdef linux
 #else
   if (!ReleaseSemaphore(eventTaken,1,NULL))
@@ -1092,11 +1092,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 
   Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
-    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
+    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
 #endif
     callee = allocTemplate(newId(),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
-    fprintf(trace,"callee: %s %i ",nameOf(callee),callee);
+    fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
     template *Y;
     Y = thisObj;
@@ -1111,7 +1111,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     glsc = getAllocE(thisObj->desc);
 #ifdef TRACE
     fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
-	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,bc);
+	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,(int)bc);
 #endif
 #ifdef event
     mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,currentDescNo,glsc,false);
@@ -1181,7 +1181,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
     callee = rPop(thisStack);
 #ifdef TRACE
-    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
+    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
 #endif
     if (withEnablingSuspend) enablee = callee;
     cSaveReturn(thisObj,currentDescNo,glsc);
@@ -1200,7 +1200,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  bc = myCode(thisObj);
 	  glsc = getEnterE(thisObj->desc);
 #ifdef TRACE
-	  fprintf(trace,"(%i,%i,%i) N\n",currentDescNo,glsc,bc);
+	  fprintf(trace,"(%i,%i,%i) N\n",currentDescNo,glsc,(int)bc);
 #endif
 	  break;
 	case 'D':
@@ -1223,7 +1223,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  bc = codeFromDescNo(arg1);
 	  glsc = getExitE(getDesc(arg1));
 #ifdef TRACE
-	  fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,bc);
+	  fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,(int)bc);
 #endif
 	  break;
 	}}
@@ -1425,7 +1425,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = vPop(thisStack);
 	Y = X->rfields[arg1 + arg2]; // need range check - and do we adjust for range?
 #ifdef TRACE
-	fprintf(trace,"xrpushg %s[%i+%i] = %s/%i)\n",nameOf(X),arg1,arg2,nameOf(Y),Y);
+	fprintf(trace,"xrpushg %s[%i+%i] = %s/%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
 	rPush(thisStack,Y); 
 	break;
@@ -1507,7 +1507,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	Y = rPop(thisStack);
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
-	fprintf(trace,"xrstoreg %s[%i+%i] = %s(%i)\n",nameOf(X),arg1,arg2,nameOf(Y),Y);
+	fprintf(trace,"xrstoreg %s[%i+%i] = %s(%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
 	X->rfields[arg1 + arg2] = Y;
 	break;
@@ -1655,7 +1655,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    B->top = Y;
 #ifdef TRACE
 	    printf("currentDescNo: %i %i %i threadNo: %i\n"
-		   ,B->currentDescNo,B->glsc,B->bc,threadNo);
+		   ,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
 #endif
 	    B->glsc = 0;
 	    char *fileName = heapAlloc(12);
@@ -1683,8 +1683,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
 	    //printf("]");
 #ifdef TRACE
-	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i %i"
-		    ,arg2,arg3,nameOf(X),&X->vfields[arg1,V]);
+	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i"
+		    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
 #endif
 	    if (V) {V = 0;} else {V = 1;}; 
 #ifdef TRACE  
