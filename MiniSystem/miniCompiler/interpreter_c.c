@@ -10,7 +10,7 @@
 
 #include <string.h>
 
-#define TRACE
+//#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -198,7 +198,8 @@ void *heapAlloc(int size) {
   void *obj; char S[50];
   if (true) { 
 #ifdef linux
-    pthread_mutex_lock( &mutex1 );
+    int ret = pthread_mutex_lock( &mutex1 );
+    if (ret > 0) printf("\n\n*** mutex_lock error: %i \n",ret);
 #else
     switch(WaitForSingleObject(allocMutex,INFINITE)) {
     case WAIT_OBJECT_0:
@@ -209,17 +210,18 @@ void *heapAlloc(int size) {
 #endif
     obj = malloc(size);
 #ifdef linux 
-    pthread_mutex_unlock( &mutex1 );
+    ret = pthread_mutex_unlock( &mutex1 );
+    if (ret > 0) printf("\n\n*** mutex_unlock error: %i \n",ret);
 #else
     if (!ReleaseSemaphore(allocMutex,1,NULL)) 
-runTimeError("ReleaseSemaphoreError: allocMutex");
+      runTimeError("ReleaseSemaphoreError: allocMutex");
 #endif
        
-    if (obj == 0) {
+    if (obj == NULL) {
       sprintf(S,"malloc failed; size: %i",size);
       runTimeError(S);
     }
-  }else {
+  } else {
     void *obj = (void *)&heap[heapTop];
     heapTop = heapTop + size;
     if (heapTop > 10000000) {
@@ -1060,7 +1062,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     return ID + threadId;
   }
 #ifdef linux
- pthread_t pthreadArray[MAX_THREADS];
+  pthread_t pthreadArray[MAX_THREADS];
 #else
   HANDLE  hThreadArray[MAX_THREADS];
 #endif
