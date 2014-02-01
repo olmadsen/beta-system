@@ -194,6 +194,7 @@ pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
 HANDLE allocMutex;
 #endif
 
+int ZZ = 0;
 void *heapAlloc(int size) {
   void *obj; char S[50];
   if (true) { 
@@ -208,7 +209,10 @@ void *heapAlloc(int size) {
       runTimeError("Wait failure: allocMutex");
     } ;
 #endif
+    ZZ = ZZ + 1;
+    if (ZZ > 1) runTimeError("Two or more in malloc");
     obj = malloc(size);
+    ZZ = ZZ - 1;
 #ifdef linux 
     ret = pthread_mutex_unlock( &mutex1 );
     if (ret > 0) printf("\n\n*** mutex_unlock error: %i \n",ret);
@@ -1684,6 +1688,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    //printf("[");
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
 	    //printf("]");
+	    //printf("cmpAndSwap new: %i old: %i %s adr: %i\n"
+	    //	    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
 #ifdef TRACE
 	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i"
 		    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
