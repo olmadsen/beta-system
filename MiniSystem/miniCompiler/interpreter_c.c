@@ -319,7 +319,7 @@ typedef struct template {
   int lscStack[16];
   int lscTop;
   int lsc;
-  struct template *rfields[164];
+  struct template *rfields[64];
   int vfields[];
 } template;
 
