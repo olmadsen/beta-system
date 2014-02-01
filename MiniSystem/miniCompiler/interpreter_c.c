@@ -2168,7 +2168,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       }
     };
   fclose(trace);
-  //printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
+  printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
   if (threadNo > 0) {
     int j;
 #ifdef linux
