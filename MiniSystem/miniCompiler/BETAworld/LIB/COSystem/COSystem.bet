@@ -1,0 +1,68 @@
+COSystem: @ BasicSystem
+  { System: BasicSystem
+       { Process: BasicProcess
+            { start::< 
+                 {  
+                 do (*mutex.init; m.init; *)
+                    this(Process)[] -> SQS.insert
+                 };
+               entry: {  do mutex.wait; inner; m.signal };
+               accept: {  do mutex.signal; m.wait };
+               doAccept: 
+                 (# 
+                 do L: (if not doStop then accept; inner; restart L if)
+                 #);
+               stop: entry(# do true -> doStop #);
+               mutex,m: @ Semaphore;
+               doStop: @boolean
+            do console.display(#do 'Process:\n'.print;#)
+               P_status.ACTIVE -> status;
+               inner;
+               P_status.TERMINATED -> status
+            };
+          
+          Semaphore: 
+            (# init: (#  do 1 -> cnt #);
+               wait: 
+                 (# theActive: ^BasicProcess
+                 do M.get; 
+                    cnt - 1 -> cnt;
+                    (if cnt < 0 then
+                        P_status.WAITING
+                          -> thisCore.main.active.status;
+                        SQS.addWaiting;
+                        thisCore.main.active[] -> Q.insert;
+                        thisCore.main.active[] -> theActive[];
+                        M.free; 
+                        theActive.suspend
+                     else
+                        M.free
+                    if)
+                 #);
+               signal: 
+                 (# P: ^BasicProcess
+                 do M.get; 
+                    cnt + 1 -> cnt;
+                    (if cnt <=  0 then
+                        Q.removeNext -> P[];
+                        P_status.ACTIVE -> P.status;
+                        P[] -> SQS.insert;
+                        SQS.dcrWaiting;
+                        M.free; 
+                     else
+                        M.free 
+                    if)
+                 #);
+               display: 
+                 (# 
+                 do 'Semaphore: '.print; Q.display
+                 #);
+               cnt: @ integer;
+               M: @Lock;
+               Q: @ ProcessQueue
+            }
+       do console.display(#do'COSystem:\n'.print; #);
+          inner
+       }
+  }
+
