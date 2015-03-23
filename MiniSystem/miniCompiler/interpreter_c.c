@@ -178,7 +178,9 @@ enum {
   xrpush = 81,
   xrstore = 82,
   xrpushg = 83,
-  xrstoreg = 84
+  xrstoreg = 84,
+  swap = 85,
+  _rswap = 86
 };
 
 void runTimeError(char *msg){
@@ -461,6 +463,12 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case rdouble:
 	fprintf(trace,"rdouble");
+	break;
+      case swap:
+	fprintf(trace,"swap");
+	break;
+      case _rswap:
+	fprintf(trace,"rswap");
 	break;
       case rtn:
 	fprintf(trace,"rtn %c ",op1());
@@ -1533,6 +1541,17 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	rPush(thisStack,X);
 	rPush(thisStack,X);
+	break;
+      case swap:
+	printf("****Byte code swap i snot implemented\n");
+	break;
+      case _rswap:
+	//for (i=0; i <= thisStack->rtop; i++) { printf("%i ",thisStack->rstack[i]);};
+	X = rPop(thisStack);
+	Y = rPop(thisStack);
+	rPush(thisStack,X);
+	rPush(thisStack,Y);
+	//for (i=0; i <= thisStack->rtop; i++) { printf("%i ",thisStack->rstack[i]);};
 	break;
       case rtn:
 	arg1 = op1();
