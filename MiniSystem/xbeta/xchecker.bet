@@ -28,14 +28,20 @@ checker: Parser
                (if origin[] <> none then
                    (* origin is none if StaticObject is a Module *)
                    origin[] -> org[];
-                   org.vsize + 1 -> org.vsize -> off;
+                   org.MP.vsize + 1 -> org.MP.vsize -> off;
                if);
             #);
           desc::
-            (# elm:: MainPart
-            do OG.MP[] -> D[]
+            (# elm:: ObjectTemplate
+            do 'SI:desc:'->puttext; doPT -> putline;
+               (if OG.mp.isEmpty then
+                   '>>> ' -> puttext; doPT -> putline;
+                   OG.OI.desc -> D[]
+                else
+                   OG[] -> D[]
+               if);
             #);
-          org: ^MainPart
+          org: ^ObjectTemplate
        #);
      DynamicObject::<
        (# setUpOrigin::
@@ -56,12 +62,12 @@ checker: Parser
                    (*origin.doPT -> putline;*)
                    (* origin is none if StaticObject is a Module *)
                    origin[] -> org[];
-                   org.rsize + 1 -> org.rsize -> off;
+                   org.MP.rsize + 1 -> org.MP.rsize -> off;
                 else
                    'Origin is none' -> putline
                if);
             #);
-          org: ^MainPart
+          org: ^ObjectTemplate
        #);
      ObjectGeneration::<
        (# setUpOrigin::
@@ -72,6 +78,10 @@ checker: Parser
           check::
             (#
             do OI.check; MP.check
+            #);
+          searchSuperAndSig::
+            (#
+            do (*'OG:SearchSuperAndSig:'->putline*)
             #)
        #);
      ObjectInvocation::<
@@ -82,7 +92,14 @@ checker: Parser
             #);
           check::
             (#
-            do rec.check; inv.check
+            do rec.check -> inv.check
+            #);
+          desc::
+            (# elm:: ObjectTemplate
+            do '---> '->puttext; doPT -> putline;
+               '---+ '->puttext; inv.doPT -> putline;
+               inv.desc -> D[];
+               (if D[] <> none then D.doPT -> putline if)
             #)
        #);
      ObjectDescriptor::<
@@ -100,43 +117,15 @@ checker: Parser
      MainPart::<
        (# setUpOrigin::
             (#
-            do (if att[] <> none then this(MainPart)[] -> att.setUpOrigin if);
-               (if act[] <> none then this(MainPart)[] -> act.setUpOrigin if)
+            do (if att[] <> none then origin[] -> att.setUpOrigin if);
+               (if act[] <> none then origin[] -> act.setUpOrigin if)
             #);
           check::
             (#
             do (if att[] <> none then att.check if);
                (if act[] <> none then act.check if)
             #);
-          localSearch:
-             (# CS: ^ Text; ATd: ^Attribute
-             enter CS[]
-             do search:
-                  att.scanSons
-                  (# AT: ^Attribute
-                  do current[] -> AT[];
-                     (if (CS[] -> AT.compoundSymb.equalNCS) then
-                         'Found in: ' -> puttext;
-                         doPT -> putline;
-                         AT[] -> ATd[];
-                         Leave search
-                      else
-                         'No match:'->puttext; AT.compoundSymb[] -> putline
-                     if)
-                  #)
-             exit ATd[]
-             #);          
-          search:
-            (# CS: ^ Text; found: @boolean; org: ^MainPart; ATd: ^Attribute
-            enter CS[]
-            do 'MP:Search:'->puttext; CS[] -> putline;
-               (if (cs[] -> localSearch -> ATd[]) = none then
-                   (if (origin[] -> org[]) <> none then
-                       
-                       CS[] -> org.search -> ATd[]
-               if)if)
-            exit ATd[]
-            #);          
+      
        #);
      Attributes::<
        (# setUpOrigin::
@@ -161,12 +150,16 @@ checker: Parser
                origin[] -> OD.setUpOrigin #);
           check:: 
             (# 
-            do 'Pattern: ' -> puttext; compoundSymb[] -> putline;
-               sig.doPT -> puttext; ' & ' -> puttext; res.doPt -> putline;
+            do (*'Pattern: ' -> puttext; compoundSymb[] -> putline;*)
+               (* sig.doPT -> puttext; ' & ' -> puttext; res.doPt -> putline;*)
                sig.check;
                res.check;
                OD.check 
             #);
+          desc::
+            (# elm:: ObjectTemplate
+            do OD[] -> D[]
+            #)
        #);
      VirtualPattern::< 
        (# setUpOrigin:: (# do origin[] -> OD.setUpOrigin #);
@@ -183,13 +176,21 @@ checker: Parser
        #);
      Variable::<
        (# setUpOrigin:: (# do origin[] -> V.setUpOrigin #);
-          check:: (# do V.check #);          
+          check:: 
+            (# org: ^ObjectTemplate
+            do origin[] -> org[]; 
+               'Search: ' -> puttext; V.n[] -> putline;
+               (if (V.N[] -> org.search -> ATd[]) <> none then
+                   '*** Found var:'->puttext; V.N[] -> putline
+                else
+                   '*** Did NOT find var:'->puttext; V.N[] -> putline
+               if)
+            #);          
        #);
      Const::<
        (# setUpOrigin:: (# do origin[] -> V.setUpOrigin #); 
           check:: 
-            (# org: ^MainPart
-            do origin[] -> org[]; V.n[] -> org.search
+            (# 
             #);          
        #);
      TextExp::<
@@ -199,9 +200,9 @@ checker: Parser
      ReceiverPath::<
        (# setUpOrigin:: (# do scanSons(#do origin[] -> current.setUpOrigin #)#);
           check:: 
-            (# 
+            (# exp: ^Expression
             do scanSons
-               (# exp: ^Expression
+               (# 
                do 'Receiver: '->puttext; current.doPT -> puttext; ' ' -> put;
                   (if current ##
                    // lexem## then
@@ -214,17 +215,28 @@ checker: Parser
                       ' not Lexem '->puttext
                   if);
                   current.check;
-                  current[] -> exp[]
+                  current[] -> exp[];
+                  (if (exp.ATd[] <> none) and (exp.ATd.desc <> none) then 
+                      'desc:'->puttext; (exp.ATd.desc).doPT -> putline
+                  if);
                #)
+            exit exp[]
             #)
        #);
  
      Invocation::<
        (# setUpOrigin:: (# do scanSons(#do origin[] -> current.setUpOrigin #)#);
           check:: 
-            (# org: ^MainPart; ATd: ^Attribute
+            (# E: ^Expression; org: ^ObjectTemplate; (*ATd: ^Attribute*)
+            enter E[]
             do 'Invocation: '->puttext; compoundSymb[] -> putline;
-               (if (origin[] -> org[]) <> none then
+               (if (E[] <> none) and (E.ATd[] <> none) and (E.ATd.desc <> none) then
+                   E.ATd.desc -> origin[];
+                   (if origin[] = none then 'none?'->putline else
+                       origin.doPT -> putline
+                   if)
+               if);
+               (if (compoundSymb[] <> none) and ((origin[] -> org[]) <> none) then
                    (if (CompoundSymb[] -> org.search -> ATd[]) = none then
                        '\n*** Did not find: ' -> puttext;
                        CompoundSymb[] -> putline
@@ -233,11 +245,12 @@ checker: Parser
                        ATd.doPT -> putline
                    if)
                if);
-               scanSons
+               (*scanSons
                (#
                do 
                   current.check 
-            #)#)
+               #)*)
+            #)
        #);
      Lexem::< 
        (# check:: (# do  #);     
