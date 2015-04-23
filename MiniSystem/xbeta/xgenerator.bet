@@ -38,7 +38,7 @@ generator: checker
                (* OI? *)
                (* super ? *)
                MP.gen;
-               (4,3,1) -> CD.endClass
+    
             #);
 
           doCall::
@@ -90,8 +90,14 @@ generator: checker
        (# gen:: 
             (# 
             do (if not isEmpty then
+                   ('origin',originOff) -> cd.rstore; 
                    att.gen;
-                   act.gen
+                   'A' -> cd.rtn;
+                   cd.markEnterE;
+                   'N' -> cd.rtn ;
+                   false (* (superDesc[] <> none)*) -> cd.actions;                   
+                   act.gen;
+                   (vsize,rsize,1) -> CD.endClass
                if)
             #)
        #);
@@ -99,10 +105,22 @@ generator: checker
        (# gen:: (#do scanSons(#do current.gen #);#)
        #);
      Pattern::
-       (# gen:: (# do (compoundSymb[],OD[]) -> objTmpStack.add #)
+       (# gen:: (# do (compoundSymb[],OD[]) -> objTmpStack.add #);
+          alloc::
+            (#
+            do 'Pattern:alloc'->puttext; doPT -> putline
+            #);
        #);
      Actions::
-       (# gen:: (# do scanSons(#do 'A'->cd.comment; current.gen #)#);
+       (# gen:: 
+            (# 
+            do scanSons(#do 'A'->cd.comment; current.gen #);
+               (if false (*superDesc[] <> none *) then 
+                   cd.rtnInner 
+                else
+                   'D' -> cd.rtn
+               if)
+            #);
        #);
      ObjectInvocation::
        (# gen:: (# do rec.gen; inv.gen #);
@@ -132,7 +150,33 @@ generator: checker
             #);
        #);
      Variable::
-       (# gen:: (# do ('Var: ',V.N[]) -> MkCom #);
+       (# gen:: 
+            (# inv: ^invocation
+            do ('Var: ',V.N[]) -> MkCom;
+               father.father.father.father.doPT -> putline;
+               '---'->putline;
+               cd.pushThis;
+               (if ATd[] = none then 
+                   (if father[] = none then 'Variable:father is none:a:'->putline
+                    ELSE
+                       (if father## = invocation## then 
+                       father[] -> inv[];
+                           (if inv[] <> none then 
+                               (if ATd[] = none then 
+                                   'ATd none;X;'->putline
+                                else
+                                   inv.ATd.alloc
+                               if)
+                            else
+                               'Variable:father is none:B:'->putline
+                           if)
+                        else
+                           'ATd none'->putline
+                   if)if)
+                else
+                   (V.N[],ATd.off) -> cd.push
+               if)
+            #);
        #);
      FuncBracket::
        (# gen:: (# do ('FuncB:',N[]) -> MkCom #)
@@ -155,6 +199,7 @@ generator: checker
            *
            * ('x','S') -> (markIncludes.main.desc).doCall;          
            *)
+          ('BETAworld',1,true) -> cd.alloc;
           ('x','S') -> (main.desc).doCall;          
           cd.stop; (* we should generate stop here and not in betaVM *)
           
@@ -163,6 +208,12 @@ generator: checker
            *           if)
            *)
        #);
+     genEventProcessor:
+       (#
+       do ('EventProcessor',newDesc,false,1,0) -> cd.class;
+          cd.stop (* we should generate stop here and not in betaVM *)
+       #);
+     
      ObjTmpStack: @
        (# item: 
             (# N: ^text; OT: ^ObjectTemplate;
@@ -189,7 +240,9 @@ generator: checker
           OTL: [10] ^Item;top: @integer;
        #);
      main: ^Module;
+     mainDescNo: (# exit newDesc.noOfDescs -1 (*- 2*) (* ad hoc *) #);
      cd: @ObjectCode;
+     descs: ^RunTimeDescriptors;
      bclst: @File;
   do 'Generate code'->putline;
      (if true then
@@ -200,6 +253,9 @@ generator: checker
          m.gen;
          ObjTmpStack.next;
          genMain;
+         genEventProcessor;
+         cd.dump;
+         cd.descs[] -> descs[]; (* why ?*)         
          bclst.close;
      if)
   #)
