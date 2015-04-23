@@ -6,15 +6,19 @@ INCLUDE 'xAbstractSyntaxTree';
 parser: AbstractSyntaxTree
   (# pModule:
        (# symb: ^text;
+          sig: ^Signature;
+          res: ^Lexem;
           SO: ^StaticObject
        do (if lex.symb = lex.symbols.idf then 
               lex.sym[] -> symb[];
+              symb[] -> UnarySignature -> sig[];
+              none -> Lexem -> res[];
               lex;
               (if lex.symb = lex.symbols.colon then 
                   lex; 
                   (if lex.symb = lex.symbols.object then
                       lex;
-                      pStaticObject -> SO[]
+                      (sig[],res[]) -> pStaticObject -> SO[]
                    else
                       1 -> SyntaxError
                   if)
@@ -24,19 +28,23 @@ parser: AbstractSyntaxTree
            else
               1 -> SyntaxError
           if);
-          symb[] -> UnarySignature -> SO.sig[] -> SO.append;
-          none -> Lexem -> SO.res[] -> SO.append;
        exit SO[] -> Module
        #);
      pStaticObject:
-       (# O: ^ObjectGeneration
-       do pObjectGeneration -> O[];
-       exit O[] -> StaticObject          
+       (# O: ^ObjectGeneration;
+          sig: ^Signature;
+          res: ^Lexem;
+       enter(sig[],res[])
+       do  pObjectGeneration -> O[];
+       exit (sig[],res[],O[]) -> StaticObject          
        #);
      pDynamicObject:
-       (# pi: ^PatternId
+       (# pi: ^PatternId;
+          sig: ^Signature;
+          res: ^Lexem;
+       enter(sig[],res[])
        do pPatternId -> pi[]
-       exit pi[] -> DynamicObject
+       exit (sig[],res[],pi[]) -> DynamicObject
        #);
      pObjectGeneration:
        (* <ObjectInvocation>
@@ -59,7 +67,7 @@ parser: AbstractSyntaxTree
                KeyW: ^Keyword
             enter x
             do Keyword -> KeyW[];
-               'Keyword:'->puttext; symb[] -> putline;
+               (*'Keyword:'->puttext; symb[] -> putline;*)
                Loop:
                  (# E: ^Expression
                  do
@@ -72,11 +80,11 @@ parser: AbstractSyntaxTree
                         symb[] -> Separator -> keyW.append;
                     if);
                     0 -> x;
-                    'pExp:'->puttext; lex.symb -> putint; ' '->put;
-                    lex.sym[] -> putline;
+                    (*'pExp:'->puttext; lex.symb -> putint; ' '->put;
+                    lex.sym[] -> putline;*)
                     pExp -> E[] -> keyW.append;
-                    ' exp='->puttext; 
-                    E.doPT -> puttext; ' '-> put; keyW.doPT -> putline;
+                    (*' exp='->puttext;
+                    E.doPT -> puttext; ' '-> put; keyW.doPT -> putline; *)
                     (if lex.symb
                      // lex.symbols.fatComma then
                         lex.sym[] -> symb[] -> compoundSymb.append;;
@@ -115,8 +123,9 @@ parser: AbstractSyntaxTree
           exp: ^expression;
           isText: @boolean
        do 
-          Invocation -> inv[]; 
+         (* Invocation -> inv[]; *)
           pReceiverPath -> (rec[],symb[],isText);
+
           (* <idf> ('.' <idf>)* , <string> ('.' <idf>)*, '(' <exp> ')' 
            * symb <> none: possible unary 
            * exp[] <> none: ??
@@ -126,8 +135,7 @@ parser: AbstractSyntaxTree
            *)
           (*'pReceiverPath: ' -> puttext; 
            rec.doPT -> putline;
-           symb[] -> putline;
-           *)
+           symb[] -> putline;*)           
           
           (if lex.symb
            // lex.symbols.leftSquare then (* 'foo[' or 'R.foo[' *) 
@@ -135,34 +143,37 @@ parser: AbstractSyntaxTree
               symb.copy -> compoundSymb[];
               lex;
               (if (1->symb.inxGet) = '[' then (* ad hoc *)
-                  2 -> pActualArguments -> inv.append
+                  2 -> pActualArguments -> Invocation -> inv[];
                else
-                  1 -> pActualArguments  -> inv.append
+                  1 -> pActualArguments  -> Invocation -> inv[]
               if)
            // lex.symbols.special then (* binary *)
               (# bin: ^Binary
               do Binary -> bin[];
                  lex.sym[] -> Lexem -> bin.operator[] -> bin.append;                 
-                 lex.sym.copy -> compoundSymb[];
+                 lex.sym.copy -> compoundSymb[] -> bin.compoundSymb[];
                  lex; 
                  pExp -> bin.argument[] -> bin.append;
-                 bin[] -> inv.append; 
+                 bin[] -> Invocation -> inv[]; 
               #)
            else (* unary foo *)
               (if symb[] <> none then
-                  (if isText then
-                      symb[] -> Lexem -> TextExp -> inv.append
+                  (if isText then 
+                      symb[] -> Lexem -> TextExp -> Invocation -> inv[]
                    else
-                      symb[] -> Lexem -> Variable -> inv.append
+                      symb[] -> Lexem -> Variable -> Invocation -> inv[]
                   if);
                   symb.copy -> compoundSymb[];
-                  (* none in the case of empty super in '{...}' *)
-              if)
+                      (* none in the case of empty super in '{...}' *)
+               else
+                  Expression -> Invocation -> inv[]
+              if);
+              compoundSymb[] -> inv.compoundSymb[];
+              compoundSymb[] -> inv.exp.compoundSymb[];
           if);
-          compoundSymb[] -> inv.compoundSymb[];
           (* 'ReceiverPath: ' -> puttext; rec.doPT -> putline;
-           'Inv: ' -> puttext; inv.doPT -> putline;
-           'CS: ' -> puttext; compoundSymb[] -> putline;*)
+          'Inv: ' -> puttext; inv.doPT -> putline;
+          'CS: ' -> puttext; compoundSymb[] -> putline;*)
        exit (rec[],inv[],compoundSymb[]) -> ObjectInvocation
        #);
      pReceiverPath:
@@ -273,8 +284,8 @@ parser: AbstractSyntaxTree
        do MainPart -> mp[];
           (if lex.symb = lex.symbols.begin then
               lex;
-              pAttributes -> mp.att[];
-              pActions -> mp.act[];
+              pAttributes -> mp.att[] -> mp.append;
+              pActions -> mp.act[] -> mp.append;
               (if lex.symb = lex.symbols.end then
                   lex
                else
@@ -367,15 +378,15 @@ parser: AbstractSyntaxTree
               lex.sym[] -> symb[];
               symb.copy -> compoundSymb[];
               lex;
-              symb[] -> BinarySignature -> bsig[] -> sig[];
-              pAttribute -> bsig.par[]
+              symb[] -> compoundSymb[] -> BinarySignature -> bsig[] -> sig[];
+              pAttribute -> bsig.par[] -> bsig.append
            // lex.symbols.leftSquare then (* keyWordAtt *)
               lex.sym[] -> symb[];
               lex;
               symb.copy -> compoundSymb[];
               (* 'Q:'->puttext; compoundSymb[] -> putline; *)
               symb[] -> KeywordSignature -> ksig[] -> sig[];
-              pParameters -> ksig.par[];
+              pParameters -> ksig.par[] -> ksig.append;
            else
               2 -> syntaxError
           if);
@@ -392,9 +403,9 @@ parser: AbstractSyntaxTree
           if);
           (if lex.symb = lex.symbols.colon then
               lex;
-              pAttSpec -> ATT[];
-              symb[] -> Lexem -> ATT.res[];
-              sig[] -> ATT.sig[];
+              (sig[],''->lexem) -> pAttSpec -> ATT[];
+              (* symb[] -> Lexem -> ATT.res[] -> ATT.append;;
+               sig[] -> ATT.sig[] -> ATT.append;*)
               compoundSymb[] -> att.compoundSymb[]
            else
               SyntaxError
@@ -403,34 +414,41 @@ parser: AbstractSyntaxTree
        #);
 
      pAttSpec:
-       (# att: ^Attribute
+       (# sig: ^Signature;
+          res: ^Lexem;
+          att: ^Attribute
+       enter(sig[],res[])
        do (if lex.symb 
            // lex.symbols.object then
               lex;
-              pStaticObject -> att[]
+              (sig[],res[])-> pStaticObject -> att[]
            // lex.symbols.ref then
               lex;
-              pDynamicObject -> att[]
+              (sig[],res[])-> pDynamicObject -> att[]
            // lex.symbols.lt then
               lex;
-              pVirtualPattern -> att[];
+              (sig[],res[])-> pVirtualPattern -> att[];
            // lex.symbols.colon then
               lex;
               (if lex.symb = lex.symbols.lt then
                   lex;
-                  pFurtherBinding -> att[]
+                  (sig[],res[]) -> pFurtherBinding -> att[]
                else
-                  pFinalBinding -> att[]
+                  (sig[],res[]) -> pFinalBinding -> att[]
               if)
            else 
-              pPattern -> att[]
+              (sig[],res[]) -> pPattern -> att[]
           if)
        exit att[]
        #);
      pPattern:
-       (# OD: ^objectDescriptor
+       (# OD: ^objectDescriptor;
+          sig: ^Signature;
+          res: ^Lexem;
+          att: ^Attribute
+       enter(sig[],res[])
        do pObjectDescriptor -> OD[]
-       exit OD[] -> Pattern
+       exit (sig[],res[],OD[]) -> Pattern
        #);
      pObjectDescriptor:
        (# super: ^PatternId; MP: ^MainPart
@@ -513,17 +531,24 @@ parser: AbstractSyntaxTree
        exit pi[]
        #);
      pVirtualPattern:
-       (# OD: ^objectDescriptor
+       (# OD: ^objectDescriptor;
+          sig: ^Signature;
+          res: ^Lexem
+       enter(sig[],res[])
        do pObjectDescriptor -> OD[];
-       exit OD[] -> VirtualPattern
+       exit (sig[],res[],OD[]) -> VirtualPattern
        #);
      pFurtherBinding:
-       (#
+       (# sig: ^Signature;
+          res: ^Lexem
+       enter(sig[],res[])
        do '\n***** Parser: fix further binding' -> putline;
        exit Attribute
        #);
      pFinalBinding:
-       (#
+       (# sig: ^Signature;
+          res: ^Lexem
+       enter(sig[],res[])
        do '\n***** Parser: fix final binding' -> putline;
        exit Attribute
        #);
@@ -575,6 +600,7 @@ parser: AbstractSyntaxTree
      pModule -> M[];
      '\n\nAST:'->putline;
      M.doPT -> putline;
+     M.doPP -> putline;
      inner;
      (*M.doPT -> putline;*)
 
