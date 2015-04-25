@@ -15,12 +15,16 @@ generator: checker
      StaticObject::
        (# gen::
             (#
-            do OG.OI.gen;
+            do (if origin[] <> none then OG.OI.gen; if);
                (sig.name[],OG[]) ->  ObjTmpStack.add
             #);
-          activate::
+          load::
             (#
-            do 'SO:AC:'->putline; (sig.name[],off) -> cd.push
+            do 'SO:load:'->putline; (sig.name[],off) -> cd.pushg
+            #);
+          store::
+            (#
+            do 'SO:store:'->putline; (sig.name[],off) -> cd.push
             #);
        #);
      ObjectGeneration::
@@ -112,7 +116,8 @@ generator: checker
        (# gen:: (# do (compoundSymb[],OD[]) -> objTmpStack.add #);
           activate::
             (#
-            do 'Pattern:alloc'->puttext; doPT -> putline
+            do 'Pattern:alloc'->puttext; doPT -> putline;
+               (if '+' -> sig.name.equal then lex.symbols.add -> cd.op if)
             #);
        #);
      Actions::
@@ -127,16 +132,35 @@ generator: checker
             #);
        #);
      ObjectInvocation::
-       (# gen:: (# do rec.gen; inv.gen #);
+       (* a := 17;       a = rec, inv = := 17
+        * a := b + 1     a = rec, inv = := b + 1
+        *                b = rec, inv = + 1        *                
+        * 
+        *)
+       (# 
+          
+          gen:: 
+            (# 
+            do (false,(true,0) -> rec.gen) -> inv.gen;
+            #);
        #);
      ReceiverPath::
        (# gen:: 
             (# 
-            do 'RP: ' -> cd.comB; scanSons(# do current.doPT -> cd.comA #); cd.comE
+            do 'RP: ' -> cd.comB; scanSons(# do current.doPT -> cd.comA #); cd.comE;
+               (* 
+                * R.foo     R = receiver 
+                * R.S.foo   R.S = receiver
+                *)
+               scanSons
+               (#
+               do cd.pushThis;
+                  (true,off) -> current.gen -> off
+               #)
             #);
        #);
      Invocation:: 
-       (# gen:: (# do scanSons(#do current.gen #)#)
+       (# gen:: (# do scanSons(#do (false,off) -> current.gen #)#)
        #);
      Keyword::
        (# gen::
@@ -151,40 +175,36 @@ generator: checker
        (# gen::
             (#
             do ('Bin: ',operator.N[]) -> MkCom;
-               'a'->put;
-               (if not isAssign then 'b'->put; ATd.activate if);
-               'c'->put;
-               argument.gen
+               argument.gen;
+               (if isAssign then 
+                   ('var',off) -> cd.storeg
+                else
+                   'Binary:gen:ATd: '->puttext;
+                   (if ATd[] = none then 
+                       'none' -> putline
+                    else
+                       ATd.doPT -> putline;
+                       ATd.activate
+                   if);
+
+               if)
             #);
        #);
      Variable::
        (# gen:: 
             (# inv: ^invocation
             do ('Var: ',V.N[]) -> MkCom;
-               father.father.father.father.doPT -> putline;
-               '---'->putline;
-               (if false (*ATd[] = none*) then 
-                   (if father[] = none then 'Variable:father is none:a:'->putline
-                    ELSE
-                       (if father## = invocation## then 
-                       father[] -> inv[];
-                           (if inv[] <> none then 
-                               (if ATd[] = none then 
-                                   'ATd none;X;'->putline
-                                else
-                                   inv.ATd.activate
-                               if)
-                            else
-                               'Variable:father is none:B:'->putline
-                           if)
-                        else
-                           'ATd none'->putline
-                   if)if)
-                else 'Var:act:'->puttext; ATD.dopt->putline;
-                   ATd.activate
-               if)
+               (*father.father.father.father.doPT -> putline;*)
+               (if not isLeft or ATd.isSimple then 
+                   ATd.load 
+               if);
+               ATd.off -> off
             #);
        #);
+     const::
+       (# gen:: (#  do V.N.setpos; V.N.getInt -> cd.pushConst #)
+       #);
+          
      FuncBracket::
        (# gen:: (# do ('FuncB:',N[]) -> MkCom #)
        #);
