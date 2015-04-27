@@ -15,12 +15,26 @@ generator: checker
      StaticObject::
        (# gen::
             (#
-            do (if origin[] <> none then OG.OI.gen; if);
-               (sig.name[],OG[]) ->  ObjTmpStack.add
+            do (* Not for simple patterns like 
+                *    X: @integer
+                *)
+               (if not OG.OI.isSimple then 
+                   'not Simple' -> cd.comment;
+                   (if origin[] <> none then 
+                       OG.OI.gen; 
+                   if);
+                   (* only if singular - not for
+                    * x:@integer; R: @Foo
+                    *)
+                   (if not OG.MP.isEmpty then
+                       (sig.name[],OG[]) ->  ObjTmpStack.add
+                   if)
+               if)
             #);
           load::
             (#
-            do 'SO:load:'->putline; (sig.name[],off) -> cd.pushg
+            do 'SO:load:'->puttext; dopt -> putline;
+               (sig.name[],off) -> cd.pushg
             #);
           store::
             (#
@@ -46,9 +60,7 @@ generator: checker
                (* OI? *)
                (* super ? *)
                MP.gen;
-    
             #);
-
           doCall::
             (#
             do 'doCall'->cd.comment; true -> hasDoPart;
@@ -100,6 +112,7 @@ generator: checker
             do (if not isEmpty then
                    ('origin',originOff) -> cd.rstore; 
                    att.gen;
+                   'endAtt.gen'->cd.comment;
                    'A' -> cd.rtn;
                    cd.markEnterE;
                    'N' -> cd.rtn ;
@@ -110,7 +123,12 @@ generator: checker
             #)
        #);
      Attributes::
-       (# gen:: (#do scanSons(#do current.gen #);#)
+       (# gen:: 
+            (#
+            do scanSons
+               (#do 'A:' -> cd.comment; current.dopt -> cd.comment; current.gen #);
+               'AS'->cd.comment
+            #)
        #);
      Pattern::
        (# gen:: (# do (compoundSymb[],OD[]) -> objTmpStack.add #);
@@ -123,7 +141,7 @@ generator: checker
      Actions::
        (# gen:: 
             (# 
-            do scanSons(#do 'A'->cd.comment; current.gen #);
+            do scanSons(#do 'A'->cd.comment; (true,0) -> current.gen #);
                (if false (*superDesc[] <> none *) then 
                    cd.rtnInner 
                 else
@@ -135,13 +153,16 @@ generator: checker
        (* a := 17;       a = rec, inv = := 17
         * a := b + 1     a = rec, inv = := b + 1
         *                b = rec, inv = + 1        *                
-        * 
+        * X: @integer - also an object invocation
         *)
-       (# 
-          
-          gen:: 
+       (# gen:: 
             (# 
-            do (false,(true,0) -> rec.gen) -> inv.gen;
+            do 
+               (if true (*not isSimple*) then 
+                   (false,(isLeft,0) -> rec.gen) -> inv.gen
+                else
+                   'OI:isSimple: ' -> cd.comment; dopt -> cd.comment;
+               if)
             #);
        #);
      ReceiverPath::
@@ -152,15 +173,16 @@ generator: checker
                 * R.foo     R = receiver 
                 * R.S.foo   R.S = receiver
                 *)
+               cd.pushThis;
                scanSons
-               (#
-               do cd.pushThis;
+               (# notFirst: @boolean
+               do (*(if not notFirst  then cd.pushThis; true ->notFirst if);*)
                   (true,off) -> current.gen -> off
                #)
             #);
        #);
      Invocation:: 
-       (# gen:: (# do scanSons(#do (false,off) -> current.gen #)#)
+       (# gen:: (# do scanSons(#do (isLeft,off) -> current.gen #)#)
        #);
      Keyword::
        (# gen::
@@ -175,7 +197,11 @@ generator: checker
        (# gen::
             (#
             do ('Bin: ',operator.N[]) -> MkCom;
-               argument.gen;
+               (if '+' -> operator.N.equal then 
+                   ('$x',off) -> cd.pushg 
+               if);
+               (false,0) -> argument.gen;
+               'After arg.gen'->cd.comment;
                (if isAssign then 
                    ('var',off) -> cd.storeg
                 else
@@ -186,7 +212,6 @@ generator: checker
                        ATd.doPT -> putline;
                        ATd.activate
                    if);
-
                if)
             #);
        #);
@@ -194,9 +219,16 @@ generator: checker
        (# gen:: 
             (# inv: ^invocation
             do ('Var: ',V.N[]) -> MkCom;
-               (*father.father.father.father.doPT -> putline;*)
-               (if not isLeft or ATd.isSimple then 
+               father.father.father.father.doPT -> cd.comment;
+               'Var: ' -> puttext; V.N[] -> puttext;
+                (*  ' ' -> put; (if ATd.isSimple then 'isSimple' -> putline if);
+                *  ATd.doPT -> putline;
+                *)
+               (if not isLeft (*or ATd.isSimple*) then 
+                   ' right'->putline;
                    ATd.load 
+                else
+                   ' left'->putline;
                if);
                ATd.off -> off
             #);
