@@ -14,7 +14,7 @@ generator: checker
        #);
      StaticObject::
        (# gen::
-            (#
+            (# T: @text
             do (* Not for simple patterns like 
                 *    X: @integer
                 *)
@@ -22,6 +22,11 @@ generator: checker
                    'not Simple' -> cd.comment;
                    (if origin[] <> none then 
                        OG.OI.gen; 
+                       OG.descNo -> T.putint;
+                       ('staticObject: alloc: ',T[]) -> cd.com2;
+                       cd.pushThis;
+                       (sig.name[],OG.descno,true) -> cd.alloc;
+                       (sig.name[],this(StaticObject).off) -> cd.rstoreg
                    if);
                    (* only if singular - not for
                     * x:@integer; R: @Foo
@@ -31,14 +36,23 @@ generator: checker
                    if)
                if)
             #);
+          activate:: 
+            (* called when Receiver *)
+            (# 
+            do 'StaticObject:activate: '->puttext; dopt -> putline;
+            #);
           load::
+            (* called when not eceiver - i.e. value to be pushed *)
             (#
-            do 'SO:load:'->puttext; dopt -> putline;
+            do 'StaticObject:load: '->puttext; dopt -> putline;
                (sig.name[],off) -> cd.pushg
             #);
           store::
+            (* called when var to be stored
+             * does not seem to be used since store happens in Binary
+             *)
             (#
-            do 'SO:store:'->putline; (sig.name[],off) -> cd.push
+            do 'StaticObject:store: '->putline; (sig.name[],off) -> cd.push
             #);
        #);
      ObjectGeneration::
@@ -75,7 +89,7 @@ generator: checker
                    'exitType: ' -> puttext; xType -> putint; newline;
                if);
                (if LMR
-                // 'S' then 
+                // 'S' then
                    (if hasDoPart then (N[],'D') -> cd.call if);
                    cd.rtnEvent;                        
                 // 'L' then
@@ -105,6 +119,10 @@ generator: checker
                MP.gen;
                (4,3,1) -> CD.endClass
             #);
+          doCall::
+            (#
+            do (N[],'D') -> cd.call
+            #)
        #);
      MainPart::
        (# gen:: 
@@ -129,13 +147,24 @@ generator: checker
        (# gen:: (# do (compoundSymb[],OD[]) -> objTmpStack.add #);
           activate::
             (#
-            do 'Pattern:alloc'->puttext; doPT -> putline;
+            do 'Pattern:activate: '->puttext; doPT -> putline;
                (if '+' -> sig.name.equal then 
                    lex.symbols.add -> cd.op 
                 else
                    ('Call',doPT) -> cd.com2
                if)
             #);
+          load::
+            (#
+            do 'Pattern:load: '->puttext; doPT -> putline;
+               ('Pattern:load: ',doPT) -> cd.com2;
+               (sig.name[],OD.descno,true) -> cd.alloc;
+               (*('x','S') -> OD.doCall; *)
+            #);
+          store::
+            (#
+            do 'Pattern:store: '->puttext; doPT -> putline;
+            #);          
        #);
      Actions::
        (# gen:: 
@@ -156,13 +185,8 @@ generator: checker
         *)
        (# gen:: 
             (# 
-            do 
-               (if true (*not isSimple*) then 
-                   (false,(isReceiver,0) -> rec.gen) -> inv.gen
-                else
-                   'OI:isSimple: ' -> cd.comment; dopt -> cd.comment;
-               if)
-            #);
+            do (false,(isReceiver,0) -> rec.gen) -> inv.gen
+            #)
        #);
      ReceiverPath::
        (# gen:: 
@@ -174,8 +198,8 @@ generator: checker
                 *)
                cd.pushThis;
                scanSons
-               (# notFirst: @boolean
-               do (*(if not notFirst  then cd.pushThis; true ->notFirst if);*)
+               (# 
+               do 
                   (true,off) -> current.gen -> off;
                   (if not isLast then
                       ('xxx',off) -> cd.pushg
@@ -198,7 +222,7 @@ generator: checker
      Binary::
        (# gen::
             (#
-            do ('Bin: ',operator.N[]) -> MkCom;
+            do ('Binary: ',operator.N[]) -> MkCom;
                (if '+' -> operator.N.equal then 
                    ('$x',off) -> cd.pushg 
                if);
@@ -224,19 +248,20 @@ generator: checker
         *)
        (# gen:: 
             (# inv: ^invocation
-            do ('Var: ',V.N[]) -> MkCom;
-               (* 'Var: ' -> puttext; V.N[] -> puttext;
-                *  ' ' -> put; (if ATd.isSimple then 'isSimple' -> putline if);
-                *  ATd.doPT -> putline;
-                *)
-               (if not isReceiver (*or ATd.isSimple*) then 
-                   ' right'->putline; 
-                   ATd.load 
+            do ('Unary: ',V.N[]) -> MkCom;
+               'Unary: ' -> puttext; doPT -> puttext; ' ' -> put; 
+               (if ATd.isSimple then 'isSimple: ' -> puttext if);
+               (if isReceiver then
+                   'isReceiver: ' -> puttext
                 else
-                   ' left'->putline;
-                   ATd.activate
+                   'is not Receiver: ' -> puttext
                if);
-               dopt ->putline;
+               ATd.doPT -> putline;               
+               (if isReceiver then 
+                   ATd.activate
+                else
+                   ATd.load 
+               if);
                ATd.off -> off
             #);
        #);
@@ -266,7 +291,7 @@ generator: checker
            * ('x','S') -> (markIncludes.main.desc).doCall;          
            *)
           ('BETAworld',1,true) -> cd.alloc;
-          ('x','S') -> (main.desc).doCall;          
+          (* ('x','S') -> (main.desc).doCall;          *)
           cd.stop; (* we should generate stop here and not in betaVM *)
           
           (*   (if markIncludes.main## <> ObjectModule## then
