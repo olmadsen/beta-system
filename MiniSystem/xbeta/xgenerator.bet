@@ -32,7 +32,7 @@ generator: checker
                     * x:@integer; R: @Foo
                     *)
                    (if not OG.MP.isEmpty then
-                       (sig.name[],OG[]) ->  ObjTmpStack.add
+                       (sig.name[],none,OG[]) ->  ObjTmpStack.add
                    if)
                if)
             #);
@@ -40,6 +40,10 @@ generator: checker
             (* called when Receiver *)
             (# 
             do 'StaticObject:activate: '->puttext; dopt -> putline;
+               (if not OG.OI.isSimple then 
+                   ('StaticObject:activate: ',dopt) -> cd.com2;
+                   (sig.name[],this(StaticObject).off) -> cd.rpushg
+               if)
             #);
           load::
             (* called when not eceiver - i.e. value to be pushed *)
@@ -64,16 +68,19 @@ generator: checker
                OI.gen;
                (if not mp.isEmpty then
                    'OG:add:singular: '-> puttext; doPT -> putline;
-                   ('Singular',this(ObjectTemplate)[]) -> ObjTmpStack.add
+                   ('Singular',none,this(ObjectTemplate)[]) -> ObjTmpStack.add
                if)
             #);
           genClass::
             (# 
-            do 
-               (N[], descNo, false, 1,1) -> cd.class;
-               (* OI? *)
-               (* super ? *)
-               MP.gen;
+            do (if true then
+                   (N[],sig[],descNo) -> MP.genClass
+                else
+                   (N[], descNo, false, 1,1) -> cd.class;
+                   (* OI? *)
+                   (* super ? *)
+                   MP.gen;
+               if)
             #);
           doCall::
             (#
@@ -112,12 +119,15 @@ generator: checker
        (# gen:: (# (* never come here*) #);
           genClass::
             (# 
-            do 
-               (N[], descNo, false, 1,1) -> cd.class;
-               (* OI? *)
-               (* super ? *)
-               MP.gen;
-               (4,3,1) -> CD.endClass
+            do (if true then
+                   (N[],sig[],descNo) -> MP.genClass                   
+                else                   
+                   (N[], descNo, false, 1,1) -> cd.class;
+                   (* OI? *)
+                   (* super ? *)
+                   MP.gen;
+                   (4,3,1) -> CD.endClass
+               if)
             #);
           doCall::
             (#
@@ -130,12 +140,28 @@ generator: checker
             do (if not isEmpty then
                    ('origin',originOff) -> cd.rstore; 
                    att.gen;
-                   cd.markEnterE;
+                   cd.markEnterE;            
                    false (* (superDesc[] <> none)*) -> cd.actions;                   
                    act.gen;
                    (vsize,rsize,1) -> CD.endClass
                if)
-            #)
+            #);
+          genClass:
+            (# N: ^text; sig: ^Signature; descNo: @integer; T: @text
+            enter(N[],sig[],descNo)
+            do (N[], descNo, false, 1,1) -> cd.class;
+               (* OI? *)
+               (* super ? *)
+               ('origin',originOff) -> cd.rstore; 
+               att.gen;
+               cd.markEnterE; 
+               (if sig[] <> none then
+                   sig.storeParameters;
+               if);
+               false (* (superDesc[] <> none)*) -> cd.actions;                   
+               act.gen;
+               (vsize,rsize,1) -> CD.endClass               
+            #);
        #);
      Attributes::
        (# gen:: 
@@ -143,8 +169,34 @@ generator: checker
             do scanSons (#do current.gen #);
             #)
        #);
+     BinarySignature::
+       (# storeParameters:: 
+            (# 
+            do ('BinarySignature',dopt) -> cd.com2;
+               par.doPT -> cd.comment;
+               cd.setThisStack;
+               (par.sig.name[],par.off) -> cd.store
+            #)
+       #);
+     KeywordSignature::
+       (# storeParameters:: 
+            (# 
+            do ('KeywordSignature',dopt) -> cd.com2;
+               cd.setThisStack;
+               par.scanReverse
+               (# A: ^Attribute; B: @boolean
+               do current.doPT -> cd.comment;
+
+                  (if B then
+                      current[] -> A[];                      
+                      (A.sig.name[],A.off) -> cd.store
+                  if);
+                  not B -> B;
+               #)
+            #)
+       #);
      Pattern::
-       (# gen:: (# do (compoundSymb[],OD[]) -> objTmpStack.add #);
+       (# gen:: (# do (compoundSymb[],sig[],OD[]) -> objTmpStack.add #);
           activate::
             (#
             do 'Pattern:activate: '->puttext; doPT -> putline;
@@ -158,8 +210,13 @@ generator: checker
             (#
             do 'Pattern:load: '->puttext; doPT -> putline;
                ('Pattern:load: ',doPT) -> cd.com2;
-               (sig.name[],OD.descno,true) -> cd.alloc;
-               (*('x','S') -> OD.doCall; *)
+               (if '+' -> sig.name.equal then 
+                   lex.symbols.add -> cd.op 
+                else
+                   (sig.name[],OD.descno,true) -> cd.alloc;
+                   cd.rpop; (* depend on the return type *)
+                   (*('x','S') -> OD.doCall; *)
+               if)
             #);
           store::
             (#
@@ -215,7 +272,8 @@ generator: checker
             (#
             do 'KW:' -> cd.comment;
                scansons(#do ('KW:: ',current.doPT) -> cd.com2; current.gen #);
-               ATd.activate;
+               (*ATd.activate;*)
+               ATd.load;
                cd.comE
             #);
        #);
@@ -235,7 +293,8 @@ generator: checker
                        'none' -> putline
                     else
                        ATd.doPT -> putline;
-                       ATd.activate
+                       (* ATd.activate*)
+                       ATd.load
                    if);
                if)
             #);
@@ -307,15 +366,15 @@ generator: checker
      
      ObjTmpStack: @
        (# item: 
-            (# N: ^text; OT: ^ObjectTemplate;
-            enter(N[],OT[])
+            (# N: ^text; sig: ^Signature; OT: ^ObjectTemplate;
+            enter(N[],sig[],OT[])
             exit this(item)[]
             #);
           add:
-            (# N: ^text; OT: ^ObjectTemplate;
-            enter(N[],OT[])
+            (# N: ^text; sig: ^Signature; OT: ^ObjectTemplate;
+            enter(N[],sig[],OT[])
             do (if (top+1-> top) > OTL.range then OTL.range -> OTL.extend if);
-               (N[],OT[]) -> item -> OTL[top][]
+               (N[],sig[],OT[]) -> item -> OTL[top][]
             #);          
           next:
             (# inx: @integer
@@ -323,7 +382,7 @@ generator: checker
                  (#
                  do inx +1 -> inx;
                     (if inx <= top then
-                        OTL[inx].N[] -> OTL[inx].OT.genClass;
+                        (OTL[inx].N[],OTL[inx].sig[]) -> OTL[inx].OT.genClass;
                         restart Loop
                     if);
                  #)
