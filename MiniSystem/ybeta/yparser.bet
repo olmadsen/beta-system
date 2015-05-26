@@ -1,0 +1,174 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'ylexer';
+INCLUDE 'yAbstractSyntaxTree';
+
+---lib:attributes---
+parser: AbstractSyntaxTree
+  (# pModule:
+       (# symb: ^text;
+         (* sig: ^Signature;
+          res: ^Lexem;
+          SO: ^StaticObject*)
+       do (if lex.symb = lex.symbols.idf then '1'->put;
+              lex.sym[] -> symb[];
+              (*symb[] -> UnarySignature -> sig[];
+              none -> Lexem -> res[];*)
+              lex;
+              (if lex.symb = lex.symbols.colon then '1'->put;
+                  lex; 
+                  (if lex.symb = lex.symbols.object then '1'->put;
+                      lex;
+                      (*(sig[],res[]) -> pStaticObject -> SO[]*)
+                      pStaticObject
+                   else
+                      1 -> SyntaxError
+                  if)
+               else
+                  1 -> SyntaxError
+              if)
+           else
+              1 -> SyntaxError
+          if);
+       #);
+     pStaticObject:
+       (#
+       do pObject
+       #);
+     pObject:
+       (#
+       do (if lex.symb = lex.symbols.begin then '2'->put;
+              lex;
+              pItems;
+              (if lex.symb = lex.symbols.end then
+                  lex
+               else
+                  2 -> SyntaxError
+              if)
+           else
+              2 -> SyntaxError
+          if)
+       #);
+     pItems:
+       (# symbId: ^text; symb: @integer
+       do Loop:
+            (if lex.symb = lex.symbols.idf then '3'->put;
+                lex.sym[] -> symbId[];
+                lex;
+                (if lex.symb = lex.symbols.colon then '4'->put;
+                    lex;
+                    pDecl
+                 else '5'->put;
+                    lex.symb -> symb;
+                    (symbId[],symb) -> pAction
+                if);
+                (if lex.symb
+                 // lex.symbols.semicolon then
+                    lex; restart Loop
+                 // lex.symbols.end then
+                 else
+                    3 -> syntaxError
+                if)
+          if)
+       #);
+     pDecl: 
+       (#
+       do (if lex.symb 
+           // lex.symbols.object then
+              lex; 
+              (if lex.symb = lex.symbols.idf then
+                  lex
+               else
+                  4 -> SyntaxError
+              if)
+           // lex.symbols.begin then
+              pObject
+          if)
+       #);
+     pAction:
+       (# symbId: ^text; symb: @integer
+       enter(symbId[],symb)
+       do (if symb = lex.symbols.special then
+              lex.sym[] -> puttext;
+              (symbId[],symb) -> pBinary
+           else
+              symb -> lex.symbols.print; 
+          if)
+       #);
+     pBinary:
+       (# symbId: ^text; symb: @integer
+       enter(symbId[],symb)
+       do lex;
+          pExp
+       #);
+     pExp: 
+       (#
+       do 
+       #);
+     SyntaxError:
+        (# n: @integer
+       enter n
+       do '\nSyntax error: '-> puttext; n -> putint; newline;
+          3 -> lex.printlines;
+          (failureTrace (*dumpStack*), 'Syntax error')  -> stop
+        #);
+     genTokenStream:
+       (# ind: @integer
+       do Loop:
+           (if true then 
+               lex;
+               (*lex.symb -> putint; ' ' -> put;*)
+               (if lex.symb 
+                // lex.symbols.begin then
+                   newline;
+                   (for i: (ind + 2 -> ind) repeat ' ' -> put for);
+                   lex.symb -> lex.symbols.print; 
+                // lex.symbols.semicolon then
+                   lex.symb -> lex.symbols.print; 
+                   newline;
+                   (for i: ind repeat ' ' -> put for)
+                // lex.symbols.end then
+                   newline;
+                   (for i: ind repeat ' ' -> put for);
+                   lex.symb -> lex.symbols.print; 
+                   ind - 2 -> ind;
+                   newline;
+                   (for i: ind repeat ' ' -> put for);
+                // lex.symbols.idf 
+                // lex.symbols.special 
+                // lex.symbols.fatComma then
+                   lex.sym[] -> puttext
+                else
+                   lex.symb -> lex.symbols.print; 
+               if);
+               ' ' -> put;
+               (if lex.symb <> lex.symbols.eos then restart Loop if)
+           if)
+       #);
+     lex: @lexer;
+     in: ^Stream;
+     
+  enter in[]
+  do in[]-> lex.init;
+     (if True then
+         lex;
+         pModule
+      else
+         genTokenStream
+     if)
+  #)
+---program:descriptor---
+(# parse: @Parser;
+   FN: ^text;
+   F: @file;
+
+do 'ybeta compiler: ' -> puttext;
+   2 -> arguments -> FN[];
+   (if ('-x' -> FN.equalNCS) then
+       ' ' -> put;
+       3 -> arguments -> FN[]
+   if);
+   FN[] -> fixExtension_xbeta -> FN[] -> putline;
+   FN[] -> F.name;
+   F.openRead;
+   F[] -> parse
+#)
