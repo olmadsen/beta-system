@@ -9,6 +9,7 @@ parser: AbstractSyntaxTree
          (* sig: ^Signature;
           res: ^Lexem;
           SO: ^StaticObject*)
+          M: ^Module
        do (if lex.symb = lex.symbols.idf then
               lex.sym[] -> symb[];
               (*symb[] -> UnarySignature -> sig[];
@@ -19,7 +20,7 @@ parser: AbstractSyntaxTree
                   (if lex.symb = lex.symbols.object then 
                       lex;
                       (*(sig[],res[]) -> pStaticObject -> SO[]*)
-                      pStaticObject
+                      pStaticObject -> Module -> M[]
                    else
                       1 -> SyntaxError
                   if)
@@ -29,16 +30,20 @@ parser: AbstractSyntaxTree
            else
               1 -> SyntaxError
           if);
+       exit M[]
        #);
      pStaticObject:
-       (#
-       do pObject
+       (# SO: ^StaticObject
+       do pObject -> StaticObject -> SO[]
+       exit SO[]
        #);
      pObject:
-       (#
-       do (if lex.symb = lex.symbols.begin then '2'->put;
+       (# OG: ^ObjectGeneration;
+          OI: ^ObjectInvocation
+       do 'Kuk' -> ObjectInvocation -> OI[];
+          (if lex.symb = lex.symbols.begin then '2'->put;
               lex;
-              pItems;
+              (OI[],pItems) -> ObjectGeneration -> OG[];
               'j'->put;
               (if lex.symb = lex.symbols.end then
                   lex
@@ -48,17 +53,19 @@ parser: AbstractSyntaxTree
            else
               3 -> SyntaxError
           if)
+       exit OG[]
        #);
      pItems:
-       (# 
-       do (if lex.symb 
+       (# I: ^Items
+       do Items -> I[];
+          (if lex.symb 
            // lex.symbols.idf then '3'->put;
               (* Here we do lookahead of 1-3 symbols to determine
                * if the next item is a DECLARATION or an EXPRESSION
                *)
               (if 1 -> lex.peekNext 
                // lex.symbols.colon then '4'->put;
-                  pDecl; (* unary decl *)
+                  pDecl -> I.append; (* unary decl *)
                   'p'->put;
                   lex.symb -> lex.symbols.print
                // lex.symbols.leftBrack then 
@@ -66,42 +73,47 @@ parser: AbstractSyntaxTree
                    * Exp: foo(e1,e2,e2)
                    *)
                   (if (2 -> lex.peekNext) = lex.symbols.colon then
-                      pDecl
+                      pDecl -> I.append;
                    else
-                      pExp
+                      pExp -> I.append;
                   if)
                else '5'->put;
                   lex.symb -> lex.symbols.print;
-                  pExp;
+                  pExp -> I.append;
                   'u'->put;
                   lex.symb -> lex.symbols.print
               if);
            // lex.symbols.special then
               (* More lookahead *)
               (if (2 -> lex.peekNext) = lex.symbols.colon then
-                  pDecl
+                  pDecl -> I.append
                else
                   lex;
-                  pBinary
+                  pBinary -> I.append
               if)
            // lex.symbols.fatComma then
               (* More lookahead *)
               (if (2 -> lex.peekNext) = lex.symbols.colon then
-                  pDecl
+                  pDecl -> I.append
                else
                   lex;
-                  pKeyword;
+                  pKeyword -> I.append;
               if);
           if);
           (if lex.symb = lex.symbols.semicolon then 'w'->put;
               lex; 
               restart pItems
           if)
+       exit I[]
        #);
      pDecl:
-       (#
-       do (if lex.symb 
+       (# I: ^Item; L: ^Lexem; sig: ^Signature
+       do Item-> I[];
+          (if lex.symb 
            // lex.symbols.idf then 'I'->put;
+              lex.sym[] -> Lexem -> L[];
+              L[] -> Signature -> sig[];
+              sig[] -> I.sig[] -> I.append;
               lex;
               (if lex.symb 
                // lex.symbols.colon then
@@ -146,6 +158,7 @@ parser: AbstractSyntaxTree
            else
               SyntaxError
           if)
+       exit I[]
        #);
      pArgument:
        (#
@@ -205,8 +218,9 @@ parser: AbstractSyntaxTree
         * a + b
         * %if E0 %then  E1 %else E2
         *)
-       (#
-       do (if lex.symb 
+       (# I: ^Item
+       do Item -> I[];
+          (if lex.symb 
            // lex.symbols.idf then 'Q'->put; 
               lex; lex.symb -> lex.symbols.print; lex.sym[] -> puttext;
               (if lex.symb 
@@ -233,6 +247,7 @@ parser: AbstractSyntaxTree
            else
               lex.symb -> lex.symbols.print; 
           if)
+       exit I[]
        #);
        
      pFunction:
@@ -257,10 +272,11 @@ parser: AbstractSyntaxTree
             if)
        #);
      pBinary:
-       (# 
-       do pExp;
+       (# I: ^Item
+       do pExp -> I[];
           't'->put;
           lex.symb-> lex.symbols.print; 
+       exit I[]
        #);
      pReceiver:
        (# 
@@ -274,13 +290,14 @@ parser: AbstractSyntaxTree
           if)
        #);
      pKeyword:
-       (#
-       do (*lex;*)
-          pExp; '7' -> put; lex.symb->lex.symbols.print;
+       (#I: ^Item
+       do pExp -> I[]; 
+          '7' -> put; lex.symb->lex.symbols.print;
           (if lex.symb = lex.symbols.fatComma then '8'->put;
               lex;
               restart pKeyword
           if)
+       exit I[]
        #);
      SyntaxError:
        (# n: @integer
@@ -326,12 +343,16 @@ parser: AbstractSyntaxTree
        #);
      lex: @lexer;
      in: ^Stream;
-     doParse: @boolean
+     doParse: @boolean;
+     M: ^Module
   enter in[]
   do in[]-> lex.init;
      (if doParse then
          lex;
-         pModule
+         pModule -> M[];
+         newline;
+         M.doPP -> putline;
+         M.doPT -> putline
       else
          genTokenStream
      if)
@@ -340,7 +361,6 @@ parser: AbstractSyntaxTree
 (# parse: @Parser;
    FN: ^text;
    F: @file;
-
 do 'ybeta compiler: ' -> puttext;
    2 -> arguments -> FN[];
    (if ('-x' -> FN.equalNCS) then      
