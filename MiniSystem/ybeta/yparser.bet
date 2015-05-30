@@ -58,53 +58,61 @@ parser: AbstractSyntaxTree
      pItems:
        (# I: ^Items; sym: ^text
        do Items -> I[];
-          (if lex.symb 
-           // lex.symbols.idf then '3'->put;
-              (* Here we do lookahead of 1-3 symbols to determine
-               * if the next item is a DECLARATION or an EXPRESSION
-               *)
-              (if 1 -> lex.peekNext 
-               // lex.symbols.colon then '4'->put;
-                  pDecl -> I.append; (* unary decl *)
-                  'p'->put;
-                  lex.symb -> lex.symbols.print
-               // lex.symbols.leftBrack then 
-                  (* DECL foo(v: @integer, ...): ...
-                   * Exp: foo(e1,e2,e2)
-                   *)
-                  (if (2 -> lex.peekNext) = lex.symbols.colon then
-                      pDecl -> I.append;
-                   else
-                      pExp -> I.append;
-                  if)
-               else '5'->put;
-                  lex.symb -> lex.symbols.print;
-                  pExp -> I.append;
-                  'u'->put;
-                  lex.symb -> lex.symbols.print
-              if);
-           // lex.symbols.special then
-              (* More lookahead *)
-              (if (2 -> lex.peekNext) = lex.symbols.colon then
-                  pDecl -> I.append
-               else
-                  lex.sym[] -> sym[];
-                  lex;
-                  sym[] -> pBinary -> I.append
-              if)
-           // lex.symbols.fatComma then
-              (* More lookahead *)
-              (if (2 -> lex.peekNext) = lex.symbols.colon then
-                  pDecl -> I.append
-               else
-                  lex;
-                  pKeyword -> I.append;
-              if);
-          if);
-          (if lex.symb = lex.symbols.semicolon then 'w'->put;
-              lex; 
-              restart pItems
-          if)
+          Loop:
+            (#
+            do (if lex.symb 
+                // lex.symbols.idf then '3'->put;
+                   (* Here we do lookahead of 1-3 symbols to determine
+                    * if the next item is a DECLARATION or an EXPRESSION
+                    *)
+                   (if 1 -> lex.peekNext 
+                    // lex.symbols.colon then '4'->put;
+                       pDecl -> I.append; (* unary decl *)
+                       'p'->put;
+                       lex.symb -> lex.symbols.print
+                    // lex.symbols.leftBrack then 
+                       (* DECL foo(v: @integer, ...): ...
+                        * Exp: foo(e1,e2,e2)
+                        *)
+                       (if (2 -> lex.peekNext) = lex.symbols.colon then
+                           pDecl -> I.append;
+                        else
+                           pExp -> I.append;
+                       if)
+                    else '5'->put;
+                       lex.symb -> lex.symbols.print;
+                       pExp -> I.append;
+                       'u'->put;
+                       lex.symb -> lex.symbols.print
+                   if);
+                // lex.symbols.special then
+                   (* More lookahead *)
+                   (if (2 -> lex.peekNext) = lex.symbols.colon then
+                       pDecl -> I.append
+                    else
+                       lex.sym[] -> sym[];
+                       lex;
+                       (Receiver,sym[]) -> pBinary -> I.append
+                   if)
+                // lex.symbols.fatComma then
+                   (* More lookahead *)
+                   (if (2 -> lex.peekNext) = lex.symbols.colon then
+                       pDecl -> I.append
+                    else
+                       (if true then
+                           pExp -> I.append
+                        else                           
+                           lex.sym[] -> sym[];
+                           lex;
+                           (Receiver,sym[]) -> pKeyword -> I.append;
+                       if)
+                   if);
+               if);
+               (if lex.symb = lex.symbols.semicolon then 'w'->put;
+                   lex; 
+                   restart Loop
+               if)
+            #)
        exit I[]
        #);
      pDecl:
@@ -219,49 +227,89 @@ parser: AbstractSyntaxTree
         * a + b
         * %if E0 %then  E1 %else E2
         *)
-       (# E: ^Exp; sym: ^Text
-       do 
-          Exp -> E[];
-          (if lex.symb 
+       (# rec: ^Receiver; 
+          symb: @integer; sym: ^Text;
+          E: ^Exp; 
+       do pReceiver -> (rec[],symb,sym[]);
+          (* Receiver not empty if
+           *   R.foo ...    rec = (R)
+           *   R.S.foo ...  rec = (R S)
+           *   A := B ...   rec = (A isBinary=true)
+           * empty
+           *   rec = ()
+           * 
+           *)
+          '\nAfter pReceiver:'->putline;
+          symb -> lex.symbols.print; ' ' -> put; sym[] -> putline;
+          lex.symb -> lex.symbols.print; ' ' -> put; lex.sym[] -> putline;
+          (if symb 
            // lex.symbols.idf then 
-              lex.sym[] -> sym[];
-              lex; 
               (if lex.symb 
-               // lex.symbols.dot then
-                  '.'->put;
-                  lex;
-                  pReceiver
                // lex.symbols.leftBrack then
                   lex;
-                  'F'->put;
-                  pFunction;
-               // lex.symbols.special then
-                  'y'->put;
-                  lex.sym[] -> sym[];
-                  lex;
-                  sym[] -> pBinary -> E[]
+                  (rec[],sym[]) -> pFunction  -> E[]
                else (*unary *)
-                  sym[] -> Lexem -> Unary -> E[];
-                  lex.symb -> lex.symbols.print;
+                  'U'->put; sym[] -> putline;
+                  (rec[],sym[] -> Lexem) -> Unary -> E[]                  
               if)
+           // lex.symbols.special then 'S'->put;
+              lex;
+              (rec[],sym[]) -> pBinary -> E[]
            // lex.symbols.fatComma then '6'->put;
               lex.sym[] -> puttext;
-              lex;
-              pKeyword
+              (*lex;*)
+              (rec[],sym[]) -> pKeyword -> E[]
            else
+              Exp -> E[];              
               lex.symb -> lex.symbols.print; 
-          if)
+          if);
        exit E[]
        #);
-       
+     pReceiver:
+       (# rec: ^Receiver; symb: @integer; sym: ^text
+       do Receiver -> rec[];
+          Loop:
+            (#
+            do (if lex.symb 
+                // lex.symbols.idf then '9'->put;
+                   lex.symb -> symb;
+                   lex.sym[] -> sym[];
+                   lex; 
+                   lex.symb -> lex.symbols.print;
+                   (if lex.symb 
+                    // lex.symbols.dot then 'q'->put;
+                       sym[] -> Lexem -> rec.append;
+                       lex;
+                       restart Loop
+                    // lex.symbols.Special then
+                       sym[] -> Lexem -> rec.append;
+                       true -> rec.isBinary;
+                       lex.symb -> symb;
+                       lex.sym[] -> sym[]                       
+                   if)
+                // lex.symbols.fatComma then
+                   lex.symb -> symb;
+                   lex.sym[] -> sym[];
+                   lex;
+                // lex.symbols.textSy // lex.symbols.charSy then
+                   lex.symb -> symb;
+                   lex.sym[] -> sym[];
+                   lex; 
+                   '\n*** Parsing text: not implemented'->putline
+               if)
+            #)
+       exit(rec[],symb,sym[])
+       #);            
      pFunction:
-       (# symbId: ^text; symb: @integer
-       enter(symbId[],symb)
-       do loop:
+       (# rec: ^Receiver; sym: ^text;
+          F: ^Function
+       enter(rec[],sym[])
+       do rec[] -> Function -> F[];
+          loop:
             (if lex.symb = lex.symbols.idf then
                 'Z'->put;
                 lex;
-                pExp;
+                pExp -> F.append;
                 'X'->put;
                 lex.symb -> lex.symbols.print;
                 (if lex.symb 
@@ -274,37 +322,37 @@ parser: AbstractSyntaxTree
                     6 -> SyntaxError
                 if)
             if)
+       exit F[]
        #);
      pBinary:
-       (# op: ^Lexem; E: ^Exp; B: ^Binary
-       enter Lexem -> op[]
+       (# rec: ^Receiver; op: ^Lexem; E: ^Exp; B: ^Binary
+       enter(rec[],Lexem -> op[])
        do 'B'->put; op.doPP -> putline;
           pExp -> E[];
-          (op[],E[]) -> Binary -> B[];
+          (rec[],op[],E[]) -> Binary -> B[];
           't'->put;
           lex.symb-> lex.symbols.print; 
        exit B[]
        #);
-     pReceiver:
-       (# 
-       do (if lex.symb = lex.symbols.idf then '9'->put;
-              lex; 
-              lex.symb -> lex.symbols.print;
-              (if lex.symb = lex.symbols.dot then 'q'->put;
-                  lex;
-                  restart pReceiver
-              if)
-          if)
-       #);
      pKeyword:
-       (#I: ^Item
-       do pExp -> I[]; 
-          '7' -> put; lex.symb->lex.symbols.print;
-          (if lex.symb = lex.symbols.fatComma then '8'->put;
-              lex;
-              restart pKeyword
-          if)
-       exit I[]
+       (# rec: ^Receiver; 
+          sym: ^Text; (* sym = fatComma = %put *)
+          K: ^KeyWord
+       enter(rec[],sym[])
+       do '\npKeyword: ' -> puttext; sym[] -> putline;
+          rec[] -> KeyWord -> K[];
+          sym[] -> Lexem -> K.append;
+          Loop:
+            (#
+            do pExp -> K.append; 
+               '7' -> put; lex.symb->lex.symbols.print;
+               (if lex.symb = lex.symbols.fatComma then '8'->put;
+                   lex.sym[] -> Lexem -> K.append;
+                   lex;
+                   restart Loop
+               if)
+            #)
+       exit K[]
        #);
      SyntaxError:
        (# n: @integer
