@@ -16,7 +16,16 @@ AbstractSyntaxTree: Tree
        enter SO[] -> append
        #);
      Items:< node 
-       (# PT:: (# do scanSons(# do (pos,break) -> current.PT #)#);
+       (# PT:: 
+            (# 
+            do scanSons
+               (# 
+               do (pos,break) -> current.PT; 
+                  (if not isLast then
+                      (pos,break) -> mkbreak
+                  if)
+               #)
+            #);
           PP:: (# do 'Items' -> lx.append #);
           isEmpty: @boolean
        #);
@@ -32,8 +41,14 @@ AbstractSyntaxTree: Tree
        (* In xbeta, Signature have subpatterns UnarySignature, etc 
         * Consider including arguments in the Signature
         *)
-       (# PP::(# do 'Signature'-> lx.append #);
-          S: ^Lexem; (* other arguments, and fatComma are jus appended *)
+       (# PT:: 
+            (# 
+            do scanSons
+               (#do (pos,break) -> current.PT; 
+                  (if not isLast then ' ' -> lx.put if)
+            #)#);
+          PP::(# do 'Signature'-> lx.append #);
+          S: ^Lexem; (* other arguments, and fatComma are just appended *)
           id: ^text;
           setId:
             (# 
@@ -54,42 +69,56 @@ AbstractSyntaxTree: Tree
           (*isSimple:: (# do OG.isSimple -> value #);*)
           PT:: 
             (# 
-            do ' ' -> lx.put; '@' -> lx.put; ' ' -> lx.put; 
-               (pos + 2,break) -> OG.PT 
+            do (pos,break) -> sig.PT;
+               ':' -> lx.put;
+               ' ' -> lx.put; '@' -> lx.put; ' ' -> lx.put; 
+               (pos,break) -> OG.PT 
             #);
           length:: (# do 3 + OG.length -> value #);
           PP:: (# do 'StaticObject'-> lx.append #)
        enter(sig[] -> append,OG[] -> append)
        #);
-     UnaryPattern:< Decl
-       (# PP:: (# do 'UnaryPtn:' -> lx.append; sig.id[] -> lx.append #);
+     Pattern: Decl
+       (# PT:: 
+            (# 
+            do (pos,break) -> sig.PT; ':' -> lx.put;
+               (pos+4,true) -> mkBreak;
+               (pos+4,true) -> OD.PT
+            #);
           OD: ^ObjectDesc
+       #);
+     UnaryPattern:< Pattern
+       (# PP:: (# do 'UnaryPtn:' -> lx.append; sig.id[] -> lx.append #);         
        enter (sig[]->append,OD[]->append)
        #);
-     BinaryPattern:< Decl
+     BinaryPattern:< Pattern
        (# PP:: (#do 'BinaryPtn:'-> lx.append; sig.id[]-> lx.append #);
-          OD: ^ObjectDesc
        enter(sig[]->append,OD[]->append)
        #);
-     FunctionalPattern:< Decl
+     FunctionalPattern:< Pattern
        (# PP:: (# do 'FunctionalPtn:' -> lx.append; sig.id[] -> lx.append #);
-          OD: ^ObjectDesc
        enter(sig[] -> append,OD[]->append)
        #);
-     KeywordPattern:< Decl
+     KeywordPattern:< Pattern
        (# PP:: 
             (# 
             do 'KeywordPattern:' -> lx.append;  
                sig.id[] -> lx.append
             #);
-          OD: ^ObjectDesc
        enter(sig[] -> append, OD[]->append)
        #);
      ObjectTemplate: node
        (# IS: ^Items 
        #);
      ObjectGeneration:< ObjectTemplate
-       (# PT:: (# do (if IS[] <> none then (pos,break) -> IS.PT if)#);
+       (# PT:: 
+            (# 
+            do E.PT;
+               (if not IS.isEmpty then 
+                   (pos+4,true) -> mkBreak;
+                   (pos+4,true) -> IS.PT;
+               if)
+            #);
           PP:: (# do 'ObjectGeneration' -> lx.append #);
           E: ^Exp
        enter(E[] -> append,IS[] -> append)
@@ -100,6 +129,7 @@ AbstractSyntaxTree: Tree
        #);
      ObjectDesc:< ObjectTemplate
        (# PP:: (# do 'ObjectDesc' -> lx.append #);
+          PT:: (#do (pos,break) -> IS.PT #);
           superPI: ^PatternId;
        enter(superPI[] -> append,IS[] -> append)
        #);
@@ -110,29 +140,50 @@ AbstractSyntaxTree: Tree
        #);
      Receiver:< node
        (# PP:: (# do 'Receiver' -> lx.append #);
+          PT:: (# do scanSons(#do current.PT; (if not isBinary then '.' -> lx.put if)#)#);
           isBinary: @Boolean
        #);
      Unary:< Exp
-       (# PP:: (# do 'Unary' -> lx.append #);
+       (# PT:: (# do rec.PT; M.PT #);
+          PP:: (# do 'Unary' -> lx.append #);
           M: ^Lexem
        enter M[] -> append
        #);
      Binary:< Exp
        (# PP:: (# do 'Binary' -> lx.append #);
+          PT::
+            (#
+            do (*(pos,break) -> mkBreak;*)
+               rec.PT; 
+               operator.PT; ' '-> lx.put;
+               argument.PT
+            #);
           operator: ^Lexem;
           argument: ^Exp
        enter(operator[]->append, argument[]->append)
        #);
      Function:< Exp
        (# PP:: (# do 'Function' -> lx.append #);
+          PT:: (# do scanSons(#do current.PT; (if not isLast then ' ' -> lx.put if)#)#);
           F: ^Lexem
        enter(lexem->append)
        #);
      KeyWord:< Exp
-       (# PP:: (# do 'KeyWord' -> lx.append #)
+       (# PP:: (# do 'KeyWord' -> lx.append #);
+          PT:: 
+            (# first: @boolean
+            do (* first element in sons is receiver - may be empty *)
+               true -> first;
+               scanSons
+               (#do current.PT;
+                  (if not isLast and not first then ' ' -> lx.put if);
+                  false -> first
+               #)
+            #)
        #);
      lexem:< Node
-       (# PP:: (# do T[] -> lx.append #);
+       (# PT:: (# do T[] -> lx.append #);
+          PP:: (# do T[] -> lx.append #);
           T: ^text
        enter T[]
        #)     
