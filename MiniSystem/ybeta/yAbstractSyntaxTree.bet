@@ -31,11 +31,19 @@ AbstractSyntaxTree: Tree
                #)
             #);
           PP:: (# do 'Items' -> lx.append #);
+          isSimple,
           isEmpty: @boolean;
           props: ^Properties
        #);
      Item: node 
-       (# sig: ^Signature
+       (# sig: ^Signature;
+          isDecl:< BooleanValue;
+          isSimple:< BooleanValue(# do inner #);
+          desc:<
+            (# elm:< node; D: ^objectTemplate
+            do inner
+            exit D[]
+            #);
        do inner 
        #);
      Properties:< node
@@ -61,7 +69,10 @@ AbstractSyntaxTree: Tree
        #);
      Decl: Item
        (# PT::< (# do inner #);
-          sig: ^Signature
+          sig: ^Signature;
+          off: @integer;
+          isDecl:: TrueValue;
+          isSimple:< BooleanValue(# do inner #);
        #);
      Signature:< node
        (* In xbeta, Signature have subpatterns UnarySignature, etc 
@@ -145,6 +156,29 @@ AbstractSyntaxTree: Tree
                (*(pos+4,true) -> mkBreak;*)
                (pos+4,true) -> OD.PT
             #);
+          setUpOrigin::
+            (#
+            do origin[] -> sig.setUpOrigin;
+               origin[] -> OD.setupOrigin
+            #);
+          check:: 
+            (# 
+            do 'Pattern: ' -> puttext; sig.id[] -> putline;
+               sig.doPT -> puttext; ' & ' -> puttext; 
+               (if true
+                // 'integer' -> sig.id.equalNCS 
+                // 'char' -> sig.id.equalNCS then
+                   'Simple:'->putline;
+                   true -> OD.IS.isSimple;
+               if);
+               scope[] -> sig.check;
+               (*scope[] -> res.check;*)
+               scope[] -> OD.check 
+            #);
+          desc::
+            (# elm:: ObjectTemplate
+            do OD[] -> D[]
+            #);
           OD: ^ObjectDesc
        #);
      UnaryPattern:< Pattern
@@ -168,7 +202,47 @@ AbstractSyntaxTree: Tree
        enter(sig[] -> append, OD[]->append)
        #);
      ObjectTemplate: node
-       (# IS: ^Items 
+       (# IS: ^Items;
+          localSearch:
+            (# CS: ^ Text; ATd: ^Decl
+            enter CS[]
+            do (if IS[] <> none then 
+                   search:
+                     IS.scanSons
+                     (# I: ^Item; AT: ^Decl
+                     do current[] -> I[];
+                        (if I.isDecl then
+                            I[] -> AT[]; 
+                            (* 'Try: ' -> puttext; AT.id[] -> putline;*)
+                            (if (CS[] -> AT.sig.id.equalNCS) then
+                                (* 'Found in: ' -> puttext;
+                                 doPT -> putline;*)
+                                AT[] -> ATd[];
+                                Leave search
+                                (*else
+                                 'No match:'->puttext; AT.id[] -> putline*)
+                        if)if)
+               #)if)
+            exit ATd[]
+            #);      
+          searchSuperAndSig:<
+            (# CS: ^ Text; ATd: ^Decl
+            enter CS[]
+            do inner
+            exit ATd[]
+            #);    
+          search:
+            (# CS: ^ Text; org: ^ObjectTemplate; ATd: ^Decl
+            enter CS[]
+            do(* 'OT:Search:'->puttext; CS[] -> putline;*)
+               (if (cs[] -> localSearch -> ATd[]) = none then
+                   (if (CS[] -> SearchSuperAndSig -> ATd[]) = none then
+                       (if (origin[] -> org[]) <> none then
+                           CS[] -> org.search -> ATd[]
+               if)if)if)
+            exit ATd[]
+            #);
+          descNo: @integer;
        #);
      ObjectGeneration:< ObjectTemplate
        (# PT:: 
@@ -186,8 +260,14 @@ AbstractSyntaxTree: Tree
      PatternId:< Node
        (# PT:: (# do rec.PT; (if id[] <> none then id[] -> lx.append if) #);
           PP:: (#do 'PatternId'->lx.append #);
+          desc:
+            (# D: ^ObjectTemplate
+            do ATd.desc -> D[]
+            exit D[]
+            #);
           rec: ^Receiver;
-          id: ^text
+          id: ^text;
+          ATd: ^Decl;
        enter rec[] -> append
        #);
      ObjectDesc:< ObjectTemplate
@@ -203,7 +283,8 @@ AbstractSyntaxTree: Tree
        #);
 
      Exp: item 
-       (# rec: ^Receiver
+       (# rec: ^Receiver;
+          ATd: ^Decl;
        enter rec[] -> append
        #);
      Receiver:< node
@@ -240,7 +321,13 @@ AbstractSyntaxTree: Tree
        #);
      Function:< Exp
        (# PP:: (# do 'Function' -> lx.append #);
-          PT:: (# do scanSons(#do current.PT; (if not isLast then ' ' -> lx.put if)#)#);
+          PT:: 
+            (# 
+            do scanSons
+               (#
+               do current.PT; 
+                  (if not isLast then ' ' -> lx.put if)
+            #)#);
           F: ^Lexem
        enter(lexem->append)
        #);
