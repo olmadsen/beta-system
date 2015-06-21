@@ -1,0 +1,578 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '../miniCompiler/directoryComponents';
+---lib:attributes---
+Lexer:
+  (# init:< 
+       (# 
+       enter in[] 
+       do special.init;
+          indent.init;
+          inner 
+       #);     
+     
+     buffer: [1000] @ char; bTop: @integer;
+     nextCh: @
+       (# pos: @ integer;
+          lastWasCR: @boolean
+       do (if in.eos then
+              255 -> ch
+           else
+              in.get -> ch; 
+              pos+1 -> pos;
+          if);
+          (* pos -> putint; ' ' -> put;   ch -> put; *)
+          (if (bTop + 1 -> bTop) > buffer.range then buffer.range -> buffer.extend if);
+          ch -> buffer[bTop]
+       #);
+     printLines:
+       (# n,lc,c: @integer; ch: @char
+       enter n
+       do bTop - 1 -> bTop; (* last char is white space and may be newline, 
+                             * which should not be counted below
+                             *)
+          1 -> lc;
+          (for i: btop repeat (if buffer[i] = ascii.newline then lc + 1 -> lc if)for);
+          L:
+            (for i: bTop repeat
+                 (if (i = bTop) or (buffer[bTop - i + 1] = ascii.newline) then
+                     n - 1 -> n; lc - 1 -> lc;
+                     (if (n = 0) or (i = bTop) then   
+                         lc + 1 -> lc -> putint; ':' -> put; ' ' -> put; 
+                         (for j: i repeat 
+                              buffer[bTop - i + j] -> ch -> put;
+                              c + 1 -> c;
+                              (if ch = ascii.newline then 
+                                  lc + 1 -> lc -> putint; ':' -> put;
+                                  0 -> c;
+                              if)
+                         for);
+                         leave L
+                     if)
+                 if);
+            for);
+          newline;
+          (for i: c + 2 repeat '*'-> put for);
+          '^' -> put
+       #);      
+     peek:
+       (#
+       do indent.skipBlanks; 
+       exit ch
+       #);
+     
+     indent: @
+       (# init: (# do 0 -> push ;(* true -> atStartOfLine*) #);
+          skipBlanks:
+            (# i: @ integer; inOut: @integer;
+            do 0 -> i;
+               (if ch = 0 then nextch if); 
+               L: (if (ch = 32) then 
+                      i + 1 -> i;
+                      nextCh; 
+                      restart L 
+                  if);
+               (if ch <= 13 then (* newline *)
+                   nextCh;
+                   true -> atStartOfLine;
+                   restart skipBlanks
+                else 
+                   (if atStartOfLine then
+                       L:
+                         (if true 
+                          // i = iStack[top] then
+                             0 -> inOut;
+                             maxInt -> inOut
+                          // i < iStack[top] then
+                             (for j: top - 1 repeat
+                                  (if i = iStack[top - j] then
+                                      - j -> InOut;
+                                      top - j -> top;
+                                      leave L
+                                  if)
+                             for);
+                             '\n**** No macth: ' ->puttext; i -> putint;
+                             newline;
+                          // i > iStack[top] then
+                             i -> push;
+                             1 -> InOut
+                         if);
+                       false -> atStartOfLine;
+                   if);
+                   (* newline;
+                    (if atStartOfLine then 
+                    'T:'->puttext
+                    else
+                    'F:'->puttext
+                    if);
+                    i -> putint; ':'->put;
+                    (for i: top repeat istack[i] -> putint; ','->put for);
+                    newline*)
+               if)
+            exit inOut 
+            #);
+          atStartOfLine: @ boolean;
+
+          iStack: [4] @ integer; top: @integer;
+          push:
+            (# v: @integer enter V 
+            do (if (top + 1 -> top) > iStack.range then
+                   iStack.range -> iStack.extend
+               if);
+               V -> iStack[top]
+            #)
+       #);
+     readName:
+       (# c: @char;
+          isConst: @boolean;
+       enter c
+       do ch -> ascii.isDigit -> isConst;
+          &text[] -> sym[];
+          (if c > 0 then c -> sym.put if);
+          L: (if (ch->ascii.isLetter) or (ch-> ascii.isDigit) 
+                 or (ch = '_') or (ch = '$') then
+                 ch -> sym.put;
+                 nextCh;
+                 restart L;
+             if);
+          (if true 
+           // 'do' -> sym.equalNCS then symbols.doSy -> symb
+           // 'leave' -> sym.equalNCS then symbols.leaveSy -> symb
+           // 'restart' -> sym.equalNCS then symbols.restartSy -> symb              
+           // 'with' -> sym.equalNCS then symbols.with -> symb
+           // 'inner' -> sym.equalNCS then symbols.innerSy -> symb
+           // 'and' -> sym.equalNCS then symbols.andd -> symb
+           // 'or' -> sym.equalNCS then symbols.orr -> symb
+           // 'xor' -> sym.equalNCS then symbols.xorr -> symb
+           // 'not' -> sym.equalNCS then symbols.nott -> symb
+           // 'div' -> sym.equalNCS then symbols.idiv -> symb
+           // 'mod' -> sym.equalNCS then symbols.modd -> symb
+           // 'this' -> sym.equalNCS then symbols.thisObj -> symb
+           else
+              (if false and (ch = '[') then
+                  nextCh;
+                  '[' -> sym.put;
+                  symbols.leftSquare -> symb;
+               else
+                  (if isConst then
+                      symbols.const -> symb
+                   else
+                      symbols.idf -> symb
+                  if)
+              if)
+          if)          
+       #);
+     
+     readText:
+       (# symb: @integer
+       do &text[] -> sym[];
+          nextCh;
+          L:
+            (if ch
+             // '\'' then
+                (* end  of  text *)
+             // '\\' then
+                ch -> sym.put;
+                nextCh;
+                ch -> sym.put;
+                nextCh;
+                restart L                
+             else
+                ch -> sym.put;
+                nextCh;
+                restart L
+            if);
+          (if sym.length = 1 then
+              symbols.charSy -> symb
+           else 
+              symbols.textSy -> symb
+          if)
+       exit symb
+       #);
+     
+     skipComment: @
+       (# put:
+            (# ch: @char
+            enter ch
+            do ch -> comment.put;
+            #);
+          get: 
+            (# T: ^text 
+            do (if comment.length > 0 then 
+                   comment.copy -> T[];
+                   comment.clear
+               if) 
+            exit T[] 
+            #);
+          comment: @text;
+       do comment.clear;
+          Loop:
+            (#
+            do nextCh; ch -> put;
+               (if ch <> ascii.newline then                     
+                   restart Loop
+               if);
+            #);
+       #);                            
+     
+     special: @
+       (# init:
+            (#
+            do true -> chars['!'];
+               true -> chars['#'];
+               true -> chars['$'];
+               true -> chars['%'];
+               true -> chars['&'];
+               true -> chars['?'];
+               true -> chars['*'];
+               true -> chars['+'];
+               true -> chars['-'];
+               true -> chars['/'];
+               true -> chars['<'];
+               true -> chars['='];
+               true -> chars['>'];
+               true -> chars['<'];
+               true -> chars['\\'];
+            #);
+          in: booleanValue
+            (# ch: @char
+            enter ch
+            do chars[ch] -> value 
+            #);
+          read:
+            (# c: @char
+            enter c
+            do &text[] -> sym[];
+               (if c > 0 then c -> sym.put if);
+               L:
+                 (if (ch -> in) then
+                     ch -> sym.put;
+                     nextCh;
+                     restart L
+                 if);
+               symbols.special -> symb;
+               (*'\nSpecial: ' -> puttext; sym[] -> putline*)
+            #);
+          chars: [256] @boolean
+       #);
+     
+     in: ^stream;
+     symb,oldPos: @integer;
+     sym: ^text;
+     ch: @ char;
+     
+     symbols: @ 
+       (# print: 
+            (# sy: @integer
+            enter sy
+            do sy -> astext -> puttext
+            #);
+          asText:
+            (# sy: @integer; T: @text
+            enter sy
+            do '<<' -> T; sy -> T.putint; '>>' -> T.puttext;
+               (if sy
+                // 0 then '<zero>' -> T                   
+                // begin then '{' -> T
+                                // end then '}' -> T
+                // leftBrack then '(' -> T
+                // rightBrack then ')' -> T
+                // object then '@' -> T
+                // colon then ':' -> T
+                // doSy then 'do' -> T
+                // comma then ',' -> T 
+                // ref then '^' -> T
+                // semiColon then ';' -> T
+
+                // dot then '.' -> T
+                // objModule then '/' -> T
+                // value then '->' -> T
+                // objref then '[]' -> T
+                // leftSquare then '[' -> T          
+                // enterSy then 'enter' -> T
+                // exitSy then 'exit' -> T
+                // leaveSy then 'leave' -> T
+                // restartSy then 'restart' -> T
+                // with then 'with' -> T
+                // new then '&' -> T
+                // rightSquare then ']' -> T          
+                // const then 'const' -> T
+                // idf then 'name' -> T
+                // special then 'special' -> T
+                // fatComma then 'fatComma' -> T
+                // prim then '%' -> T
+                // innerSy then 'inner' -> T          
+                // charSy then'char' -> T
+                // textSy then 'text' -> T
+                // alternative then '//' -> T
+                // thisObj then 'this' -> T
+                // comBegin then '(' -> T; '*' -> T.put; (* avoid confusing beta-indent *)
+                // eq then '=' -> T
+                // lt then '<' -> T                   
+                // le then '<= ' -> T
+                // gt then '>' -> T
+                // ge then '>=' -> T
+                // ne then '<>' -> T
+                // add then '+' -> T
+                // sub then '-' -> T
+                // mult then '*' -> T
+                // orr then 'or' -> T
+                // xorr then 'xor' -> T          
+                // rdiv then '/' -> T
+                // idiv then 'div' -> T
+                // modd then 'mod' -> T
+                // andd then 'and' -> T       
+                // nott then 'not' -> T
+                // illegalCh then '?' -> T
+                // eos then  '-eos-' -> T                 
+                else
+                   sy -> T.putint
+               if)
+            exit T[]
+            #);
+
+          begin: (#exit 1 #);
+          end: (#exit 2 #);
+          leftBrack: (#exit 3 #);
+          rightBrack: (#exit 4#);
+          object: (#exit 5#);
+          colon: (#exit 6#);
+          doSy: (#exit 7#);
+          comma: (#exit 8#);
+          ref: (#exit 9#);
+          semiColon: (#exit 10 #);
+          
+          fatComma: (# exit 11 #);
+          
+          dot: (#exit 16 #);
+          objModule: (#exit 67 (* 17 - double use here see rdiv *) #);
+          value: (#exit 18#);
+          objref: (#exit 19#);
+          leftSquare: (#exit 20 #);
+          
+          enterSy: (#exit 21#);
+          exitSy: (#exit 22#);
+          leaveSy: (#exit 23#);
+          restartSy: (#exit 24#);
+          with: (# exit 25 #);
+          new: (# exit 26 #);
+          rightSquare: (# exit 27 #);
+          
+          special: (#exit 31 #);
+          const: (#exit 32 #);
+          idf: (#exit 33 #);
+          prim: (#exit 34 #);          
+          innerSy: (# exit 35 #);
+          
+          charSy: (# exit 36 #);
+          textSy: (# exit 37 #);
+          alternative: (# exit 38 #);
+          thisObj: (# exit 39 #);
+          comBegin: (# exit 40 #);
+
+          eq: (#exit 50#);
+          lt: (#exit 51#);
+          le: (#exit 52#);
+          gt: (#exit 53#);
+          ge: (#exit 54#);
+          ne: (#exit 55#);          
+
+          add: (#exit 61#);
+          sub: (#exit 62#);
+
+          orr: (#exit 63#);
+          xorr: (#exit 64 #);
+          
+          mult: (#exit 66 #);
+          rdiv: (#exit 67 #);
+          idiv: (#exit 68 #);
+          modd: (#exit 69#);
+          andd: (#exit 70#);
+          nott: (# exit 71 #);
+          
+          component: (#exit 73 #);
+          strucVar: (#exit 74 #);
+          nonTbegin: (# exit 75 #);
+          nonTend: (# exit 76 #);
+          adr: (#exit 77 #);
+          frag: (# exit 78 #);
+          ptnModule: (# exit 79 #);
+          illegalCh: (# exit 81 #);
+          eos: (# exit 82 #)
+       #);
+     tokenBuf: @
+       (# B: [5] @ integer; 
+          Sy: [5] ^text;
+          L,R: @ integer;
+          add:
+            (# T: @integer
+            enter(T,sym[])
+            do (if (R + 1 -> R) > B.range then 
+                   B.range -> B.extend;
+                   Sy.range -> Sy.extend
+               if);
+               T -> B[R];
+               sym[] -> Sy[R][]
+            #);
+          get:
+            (# T: @integer; sym: ^Text
+            do B[L + 1 -> L] -> T;
+               Sy[L][] -> sym[]
+            exit(T,sym[])
+            #);
+          
+          isEmpty: booleanValue(#do (if L = R then 0 -> L -> R; true -> value if) #)
+       #);
+     peekNext:
+       (* read and return next token
+        * put token in tokenBuf
+        * keep current value of sym[]
+        * peeked token sym[] should also be buffered
+        *)
+       (# T: @integer; 
+          currentSymb: @integer;
+          currentSymT: ^text;
+          inOut: @integer;
+          n: @integer
+       enter n
+       do symb -> currentSymb;
+          sym[] -> currentSymT[];
+          (for i: n repeat 
+               (if indent.skipBlanks -> inOut
+                // 0 then
+                   next;
+                // 1 then 
+                   symbols.begin -> symb;
+                // maxInt then 
+                   symbols.semicolon -> symb;
+                else
+                   '\n**** lex.peekNext: unexpected indentation: ' -> puttext ;
+                   inOut -> putint; newline;
+                   (if inOut < 0 then
+                       (for i: - inOut repeat (symbols.end,'') -> tokenBuf.add for);
+                       (symbols.semicolon,'') -> tokenBuf.add;
+                       tokenBuf.get -> (symb,sym[]);
+                   if)
+               if);
+               (symb,sym[]) -> tokenBuf.add; 
+          for);
+          symb -> T;
+          currentSymb -> symb;
+          currentSymT[] -> sym[]
+       exit T
+       #);
+     next:
+       (#          
+       do nextCh.pos -> oldPos;  
+          &text[] -> sym[]; (* just for debugging purposes - to ensure that sym is empty
+                             * if lexem is not idf, const, text or special
+                             *)
+          L:
+            (if ch
+             // '{' then
+                    symbols.begin -> symb;
+                    nextCh
+                  // '}' then
+                symbols.end -> symb;
+                nextCh
+             // '(' then 
+                symbols.leftBrack -> symb;
+                nextCh;
+             // ')' then symbols.rightBrack -> symb; nextCh;
+             // ':' then 
+                nextCh;
+                (if ch = '=' then
+                    ':' -> special.read
+                 else
+                    symbols.colon -> symb
+                if)
+             // ',' then symbols.comma -> symb; nextCh
+             // '@' then 
+                symbols.object -> symb;
+                nextCh;
+             // '^' then symbols.ref -> symb; nextCh
+             // ';' then symbols.semiColon -> symb; nextCh
+             // '.' then symbols.dot -> symb; nextCh
+             // '-' then
+                nextCh;
+                (if ch 
+                 // '>' then 
+                    symbols.value -> symb; nextCh
+                 // '-' then                                    
+                    nextCh;
+                    Skipcomment;
+                    indent.skipBlanks;
+                    restart L
+                 else 
+                    '-' -> special.read
+                if)
+             // '<' then
+                nextCh;
+                symbols.lt -> symb
+             // '[' then
+                nextCh;
+                (if ch 
+                 // ']' then
+                    symbols.objref -> symb; nextCh
+                 else
+                    symbols.leftSquare -> symb
+                if)
+             // ']' then 
+                nextCh;
+                symbols.rightSquare -> symb   
+             // '&' then symbols.new -> symb; nextCh
+             // '%' then
+                nextCh;
+                (if (ch -> ascii.isLetter) then
+                    '%' -> readName;
+                    symbols.fatComma -> symb;
+                 else
+                    '%' -> special.read
+                if);
+             // '\'' then readText -> symb; nextCh   
+             // 255 then symbols.eos -> symb
+             else
+                (if (ch -> ascii.isLetter) or ( ch-> ascii.isDigit) or (ch = '_') then
+                    ReadName
+                 else
+                    (if (ch -> special.in) then
+                        special.read
+                     else
+                        '\nIllegal ch: ' -> puttext; ch -> putint; ' ' -> put; 
+                        ch -> put; newline;
+                        symbols.illegalCh -> symb;
+                        nextCh
+            if)if)if);
+          
+          (*
+           '\nlex: ' -> puttext; symb -> putint; 
+           (if symb = symbols.idf then ' ' -> put; sym[] -> puttext if);
+           *)
+       #);
+     inOut: @integer
+  do (if not tokenBuf.isEmpty then 
+         tokenBuf.get -> (symb,sym[])
+      else
+         indent.skipBlanks -> inOut;
+         (*'<'->put; inout -> putint; '>'->put;*)
+         (if inOut 
+          // 1 then
+             symbols.begin -> symb;
+             0 -> inOut;
+             leave lexer
+          // maxInt then
+             symbols.semicolon -> symb;
+             0 -> inOut;
+             leave lexer
+          else         
+             (if inOut < 0 then
+                 (for i: - inOut repeat (symbols.end,'') -> tokenBuf.add for);
+                 (symbols.semicolon,'') -> tokenBuf.add;
+                 tokenBuf.get -> (symb,sym[]);
+                 leave lexer
+              else
+                 next
+             if)
+         if)
+     if)
+  #)

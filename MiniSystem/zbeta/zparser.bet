@@ -1,0 +1,622 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'zlexer';
+INCLUDE 'zAbstractSyntaxTree';
+
+---lib:attributes---
+parser: AbstractSyntaxTree
+  (# pModule:
+       (# symb: ^text;
+          sig: ^Signature;
+          M: ^Module
+       do (if lex.symb = lex.symbols.idf then
+              lex.sym[] -> Signature -> sig[];
+              lex;
+              (if lex.symb = lex.symbols.colon then
+                  lex; 
+                  (if lex.symb = lex.symbols.object then 
+                      lex;
+                      sig[] -> pStaticObject -> Module -> M[]
+                   else
+                      1 -> SyntaxError
+                  if)
+               else
+                  1 -> SyntaxError
+              if)
+           else
+              1 -> SyntaxError
+          if);
+       exit M[]
+       #);
+     pStaticObject:
+       (# sig: ^Signature;
+          OG: ^ObjectGeneration;
+          SO: ^StaticObject
+       enter sig[]
+       do pObjectGeneration -> OG[];
+          (sig[],OG[]) -> StaticObject -> SO[]
+       exit SO[]
+       #);
+     pDynamicObject:
+       (# sig: ^Signature;
+          PI: ^PatternId;
+          dObj: ^DynamicObject
+       enter sig[]
+       do pPatternId -> PI[];
+          (sig[],PI[]) -> DynamicObject -> dObj[]
+       exit dObj[]
+       #);
+          
+     pObjectGeneration:
+       (* <ObjectInvocation>
+        * <ObjectInvocation> <MainPart>
+        *)
+       (# IV: ^Invocation;
+          IS: ^Items;          
+          OG: ^ObjectGeneration;;
+       do pInvocation -> IV[];
+          pMainPart -> IS[];
+          (IV[],IS[]) -> ObjectGeneration -> OG[]
+       exit OG[]
+       #);
+     pMainPart:
+       (# IS: ^Items; props: ^Properties
+       do (if lex.symb = lex.symbols.begin then 
+              lex;
+
+              pItems -> IS[];
+             
+              (if lex.symb = lex.symbols.end then
+                  lex;
+               else
+                  2 -> SyntaxError
+              if)
+           else
+              Items -> IS[];
+              true -> IS.isEmpty
+          if)
+       exit IS[]
+       #);
+     pProperties:
+       (# Props: ^Properties; E: ^Exp1; prop: ^Property
+       do (*'A'->put; lex.symb -> lex.symbols.print;*)
+          Properties -> Props[];
+          L:
+            (#
+            do 
+               (if lex.symb 
+                // lex.symbols.idf then
+                   lex.sym[] -> name -> E[]
+                // lex.symbols.const then 
+                   lex.sym[] -> Const1 -> E[]
+               if);
+               Property -> prop[];
+               E[] -> prop.P[] -> prop.append;
+               prop[] -> props.append;
+               lex;
+               Loop:
+                 (if lex.symb 
+                  // lex.symbols.comma then
+                     lex;
+                     restart L
+                  // lex.symbols.leftSquare then 
+                     lex;
+                     pProperties -> prop.arg[] -> prop.append;
+                     restart Loop
+                  // lex.symbols.rightSquare then 
+                     lex;
+                 if)
+            #)
+       exit Props[]
+       #);
+     pItems:
+       (# I: ^Items
+       do Items -> I[];
+          (if lex.symb = lex.symbols.leftSquare then
+              lex;
+              pProperties -> I.props[]; (* append dont work since not an item
+                                         * Should be!*)
+              (if lex.symb = lex.symbols.semicolon then
+                  lex
+              if)
+          if);
+          Loop:
+            (#
+            do (if lex.symb 
+                // lex.symbols.idf then
+                   (* Here we do lookahead of 1-3 symbols to determine
+                    * if the next item is a DECLARATION or an EXPRESSION
+                    *)
+                   (if 1 -> lex.peekNext 
+                    // lex.symbols.value 
+                    // lex.symbols.colon then
+                       pDecl -> I.append; (* unary decl *)
+                       (*lex.symb -> lex.symbols.print*)
+                    // lex.symbols.leftBrack then 
+                       (* DECL foo(v: @integer, ...): ...
+                        * Exp: foo(e1,e2,e2)
+                        *)
+                       (if (2 -> lex.peekNext) = lex.symbols.colon then
+                           pDecl -> I.append;
+                        else
+                           pObjectGeneration -> I.append;
+                       if)
+                    else 
+                       (*lex.symb -> lex.symbols.print;*)
+                       pObjectGeneration -> I.append;
+                   if);
+                // lex.symbols.special then
+                   (* More lookahead *)
+                   (if (2 -> lex.peekNext) = lex.symbols.colon then
+                       pDecl -> I.append
+                    else
+                       pObjectGeneration -> I.append
+                   if)
+                // lex.symbols.fatComma then
+                   (* More lookahead *)
+                   (if (2 -> lex.peekNext) = lex.symbols.colon then
+                       pDecl -> I.append
+                    else
+                       pObjectGeneration -> I.append
+                   if);
+               if);
+               (if lex.symb = lex.symbols.semicolon then
+                   lex; 
+                   restart Loop
+               if)
+            #)
+       exit I[]
+       #);
+     pDecl:
+       (# I: ^Item; sig: ^Signature
+       do Item-> I[];
+          (if lex.symb 
+           // lex.symbols.idf then
+              lex.sym[] -> Signature -> sig[];
+              sig[] -> I.sig[] -> I.append;
+              lex;
+              (if lex.symb = lex.symbols.value then
+                  lex;
+                  pValue -> sig.val[] -> sig.append
+              if);
+              (if lex.symb 
+               // lex.symbols.colon then
+                  (* unary method or pattern *)
+                  lex;
+                  sig[] -> pSpec -> I[]
+               // lex.symbols.leftBrack then 
+                  lex;
+                  sig[] -> pFunctionalPtn -> I[]
+               else
+                  syntaxError
+              if)
+           // lex.symbols.special then 
+              lex.sym[] -> Signature -> sig[];
+              lex;
+              sig[] -> pBinaryPtn -> I[];
+           // lex.symbols.fatComma then
+              lex.sym[] -> Signature -> sig[];
+              lex;
+              sig[] -> pKeywordPtn -> I[];
+           else
+              SyntaxError
+          if)
+       exit I[]
+       #);
+     pSpec:
+       (* Incomplete
+        * x : @integer
+        * R: ^Foo
+        * P:{ ... }
+        * V:< 
+        *)        
+       (# sig: ^Signature; D: ^Decl
+       enter sig[]
+       do (if lex.symb 
+           // lex.symbols.object then
+              lex; 
+              sig[] -> pStaticObject -> D[]
+           // lex.symbols.ref then
+              lex;
+              sig[] -> pDynamicObject -> D[]
+           else
+              sig[] -> pUnaryPtn -> D[]
+          if)
+       exit D[]
+       #);
+     pUnaryPtn:
+       (# sig: ^Signature; OD: ^ObjectDesc; D: ^Decl
+       enter sig[]
+       do pObjectDesc -> OD[];
+          (sig[],OD[]) -> UnaryPattern -> D[]
+       exit D[]
+       #);
+     pBinaryPtn:
+       (# sig: ^Signature; 
+          BP: ^BinaryPattern;
+          OD: ^ObjectDesc; 
+       enter sig[]
+       do pArgument -> sig.append;
+          (if lex.symb = lex.symbols.value then
+              lex;
+              pValue -> sig.val[] -> sig.append
+          if);
+          (if lex.symb = lex.symbols.colon then
+              lex;
+              pObjectDesc -> OD[];
+              (sig[],OD[]) -> BinaryPattern -> BP[]
+           else
+              SyntaxError
+          if)
+        exit BP[]
+        #);
+     pFunctionalPtn:
+       (# sig: ^Signature;
+          OD: ^ObjectDesc; 
+          FD: ^FunctionalPattern
+       enter sig[]
+       do pArguments
+          (#
+          do D[] -> sig.append
+          #);
+          (if lex.symb = lex.symbols.rightBrack then
+              lex;
+              (if lex.symb = lex.symbols.value then
+                  lex;
+                  pValue -> sig.val[] -> sig.append
+              if);
+              (if lex.symb = lex.symbols.colon then
+                  lex;
+                  pObjectDesc -> OD[];
+                  (sig[],OD[]) -> FunctionalPattern -> FD[];
+               else
+                  syntaxError
+              if)
+           else
+              syntaxError
+          if)
+       exit FD[]
+       #); 
+     pKeywordPtn:
+       (# sig: ^Signature;
+          OD: ^ObjectDesc;
+          KP: ^KeywordPattern
+       enter sig[]
+       do pArguments
+          (#
+          do D[] -> sig.append
+          #);
+          sig.setId;
+          (if lex.symb = lex.symbols.value then
+              lex;
+              pValue -> sig.val[] -> sig.append
+          if);
+          (if lex.symb = lex.symbols.colon then
+              lex;
+              pObjectDesc -> OD[];
+              (sig[],OD[]) -> KeywordPattern -> KP[];
+           else
+              syntaxError
+          if)
+       exit KP[]
+       #);
+     pArgument:
+       (# D: ^Decl
+       do pDecl -> D[]; (* Perhaps not all decl's should be allowed *)
+       exit D[]
+       #);
+     pArguments:
+       (# D: ^Node
+       do Loop:
+            (#
+            do pArgument -> D[]; 
+               inner pArguments;
+               (if lex.symb 
+                // lex.symbols.fatComma then
+                   lex.sym[] -> Lexem -> D[];
+                   lex;
+                   inner pArguments;
+                   restart Loop
+                // lex.symbols.comma then
+                   lex;
+                   restart Loop
+               if)
+            #)
+       #);
+     pValue:
+       (# V: ^Value
+       do Value -> V[];
+          (if lex.symb = lex.symbols.leftBrack then
+              lex; 
+              Loop:
+                (#
+                do pDecl -> V.append;
+                   (if lex.symb 
+                    // lex.symbols.comma then
+                       lex;
+                       restart Loop
+                    // lex.symbols.rightBrack then
+                       lex
+                   if)
+                #)
+           else
+              pDecl -> V.append
+          if)
+       exit V[]
+       #);
+     pObjectDesc:
+       (# super: ^PatternId;
+          IS: ^Items;
+          OD: ^ObjectDesc
+       do pPatternId -> super[];
+          pMainPart -> IS[];
+          (super[],IS[]) -> ObjectDesc -> OD[]
+       exit OD[]
+       #);
+     pPatternId:
+       (# IV: ^Invocation; symb: @integer; sym: ^text; isText: @boolean;
+          PI: ^PatternId
+       do pInvocation -> IV[];
+          IV[] -> PatternId -> PI[]; 
+          (if symb
+           // lex.symbols.idf then
+              sym[] -> PI.id[]
+           // lex.symbols.fatComma then
+              sym[] -> PI.id[]
+           else
+              
+          if)
+       exit PI[]
+       #);
+     pInvocation:
+       (# IV: ^Invocation
+       do Invocation -> IV[]; 
+          Loop:
+            (#
+            do pExp -> IV.append;
+               'A' -> put; IV.doPT -> putline;
+               (if lex.symb = lex.symbols.dot then
+                   lex;
+                   restart Loop
+               if)
+            #)
+       exit IV[]
+       #);
+     pExp:
+       (* R.foo
+        * f(e1,e2,e3)
+        * a + b
+        * %if E0 %then  E1 %else E2
+        *)
+       (# sym,sym2: ^Text;
+          E: ^Exp; 
+       do 'pI: ' -> puttext; lex.symb -> lex.symbols.print;
+          (if lex.symb 
+           // lex.symbols.const then
+              lex;
+              lex.sym[] -> Const -> E[]
+           // lex.symbols.textSy 
+           // lex.symbols.charSy then 
+              lex;
+              lex.sym[] -> Textt -> E[]
+           // lex.symbols.idf then 
+              lex.sym[] -> sym[];
+              lex;
+              (if lex.symb 
+               // lex.symbols.special then
+                  lex.sym[] -> sym2[];
+                  lex;
+                  (sym[],sym2[]) -> pBinary -> E[]
+               // lex.symbols.leftBrack then
+                  lex;
+                  sym[] -> pFunction  -> E[]
+               else (*unary *)
+                  sym[] -> Lexem -> Unary -> E[];
+              if)
+           // lex.symbols.special then
+              (* binary to this: + E *)
+              lex.sym[] -> sym[];
+              lex;
+              ('',sym[]) -> pBinary -> E[]
+           // lex.symbols.fatComma then 
+              lex.sym[] -> sym[];
+              lex;             
+              lex.sym[] -> puttext;
+              sym[] -> pKeyword -> E[]
+           // lex.symbols.leftBrack then
+              lex.sym[] -> sym[];
+              lex;
+              pBracketedExp -> E[]
+           else '???'->putline;
+              Exp -> E[];              
+              (*lex.symb -> lex.symbols.print; *)
+          if);
+       exit E[]
+       #);
+     pReceiver:
+       (# rec: ^Receiver; symb: @integer; sym: ^text
+       do Receiver -> rec[];
+          Loop:
+            (#
+            do (if lex.symb 
+                // lex.symbols.idf then
+                   lex.symb -> symb;
+                   lex.sym[] -> sym[];
+                   lex; 
+                   (*lex.symb -> lex.symbols.print;*)
+                   (if lex.symb 
+                    // lex.symbols.dot then
+                       sym[] -> Name -> rec.append;
+                       lex;
+                       restart Loop
+                    // lex.symbols.Special then
+                       sym[] -> Name -> rec.append;
+                       true -> rec.isBinary;
+                       lex.symb -> symb;
+                       lex.sym[] -> sym[];
+                       lex
+                   if)
+                // lex.symbols.special
+                // lex.symbols.fatComma then
+                   lex.symb -> symb;
+                   lex.sym[] -> sym[];
+                   lex;
+                // lex.symbols.textSy // lex.symbols.charSy then
+                   lex.symb -> symb;
+                   lex.sym[] -> sym[];
+                   lex; 
+                   '\n*** Parsing text: not implemented'->putline;
+                // lex.symbols.const then
+                   lex.symb -> symb;
+                   lex.sym[] -> sym[];
+                   lex; 
+                   '\n*** Parsing const: not implemented'->putline;
+               if)
+            #)
+       exit(rec[],symb,sym[])
+       #);            
+     pFunction:
+       (# sym: ^text;
+          F: ^Function
+       enter sym[]
+       do sym[] -> Function -> F[];          
+          loop:
+            (if true then
+                pInvocation -> F.append;
+                (*lex.symb -> lex.symbols.print;*)
+                (if lex.symb 
+                 // lex.symbols.comma then
+                    lex;
+                    restart loop
+                 // lex.symbols.rightBrack then
+                    lex
+                 else
+                    6 -> SyntaxError
+                if)
+            if)
+       exit F[]
+       #);
+     pBinary:
+       (# rec: ^Exp; op: ^Lexem; IV: ^Invocation; B: ^Binary
+       enter(Lexem -> Unary -> rec[],Lexem -> op[])
+       do(* 'B'->put; op.doPP -> putline;*)
+          pInvocation -> IV[];
+          (rec[],op[],IV[]) -> Binary -> B[];
+          (*'t'->put; lex.symb-> lex.symbols.print; *)
+       exit B[]
+       #);
+     pKeyword:
+       (# sym,id: ^Text; (* sym = fatComma = %put *)
+          K: ^KeyWord
+       enter(sym[])
+       do '\npKeyword: ' -> puttext; sym[] -> putline;
+          KeyWord -> K[];
+          sym[] -> id[]; 
+          sym.copy -> Lexem -> K.append;          
+          Loop:
+            (#
+            do pInvocation -> K.append; 
+               (*'7' -> put; lex.symb->lex.symbols.print;*)
+               (if lex.symb = lex.symbols.fatComma then 
+                   lex.sym[] -> Lexem -> K.append;
+                   lex.sym[] -> id.append;
+                   lex;
+                   restart Loop
+               if)
+            #);
+          id[] -> K.id[];(* -> Lexem -> K.append;*)
+       exit K[]
+       #);
+     pBracketedExp:
+       (# E: ^exp
+       do pExp -> E[];
+          (if lex.symb = lex.symbols.rightBrack then
+              lex
+           else
+              SyntaxError
+          if)
+       exit E[]
+          #);
+     SyntaxError:
+       (# n: @integer
+       enter n
+       do '\nSyntax error: '-> puttext; n -> putint; 
+          ' ' -> put; lex.symb -> lex.symbols.print;
+          newline;
+          3 -> lex.printlines;
+          (failureTrace (*dumpStack*), 'Syntax error')  -> stop
+        #);
+     genTokenStream:
+       (# ind: @integer
+       do Loop:
+           (if true then 
+               lex;
+               (*lex.symb -> putint; ' ' -> put;*)
+               (if lex.symb 
+                // lex.symbols.begin then
+                   newline;
+                   (for i: (ind + 2 -> ind) repeat ' ' -> put for);
+                   lex.symb -> lex.symbols.print; 
+                // lex.symbols.semicolon then
+                   lex.symb -> lex.symbols.print; 
+                   newline;
+                   (for i: ind repeat ' ' -> put for)
+                // lex.symbols.end then
+                   newline;
+                   (for i: ind repeat ' ' -> put for);
+                   lex.symb -> lex.symbols.print; 
+                   ind - 2 -> ind;
+                   newline;
+                   (for i: ind repeat ' ' -> put for);
+                // lex.symbols.idf 
+                // lex.symbols.special 
+                // lex.symbols.fatComma then
+                   lex.sym[] -> puttext
+                else
+                   lex.symb -> lex.symbols.print; 
+               if);
+               ' ' -> put;
+               (if lex.symb <> lex.symbols.eos then restart Loop if)
+           if)
+       #);
+     lex: @lexer;
+     in: ^Stream;
+     doParse: @boolean;
+     M: ^Module
+  enter in[]
+  do in[]-> lex.init;
+     (if doParse then
+         lex;
+         pModule -> M[];
+         newline;
+         (* M.doPP -> putline;*)
+         M.doPT -> putline
+      else
+         genTokenStream
+     if);
+     inner
+  #)
+---program:descriptor---
+(# compile: @parser;
+
+   runC,isXbeta: @boolean;
+   FN: ^text;
+   F: @file
+do 'zbeta compiler: ' -> puttext;
+   2 -> arguments -> FN[];
+   (if ('-x' -> FN.equalNCS) then      
+       ' ' -> put;
+       3 -> arguments -> FN[]
+    else
+       true -> compile.doParse
+   if);
+   FN[] -> fixExtension_xbeta -> FN[] -> putline;
+   (if true then
+       FN[] -> F.name
+    else
+       'Accounts.xbeta' -> F.name;
+       'test.xbeta' -> F.name;
+   if);
+   F.openRead;
+   compile.lex.init;
+   F[] -> compile; 
+#)

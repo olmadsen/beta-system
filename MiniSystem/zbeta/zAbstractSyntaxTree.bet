@@ -1,0 +1,520 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '../xbeta/Tree';
+---lib:attributes---
+AbstractSyntaxTree: Tree
+  (#  Module:< node
+       (# SO: ^StaticObject;
+          PT:: 
+            (# 
+            do (0,length) -> block
+               (#
+               do (0,break) -> SO.PT 
+               #)
+            #);
+          length:: (# do SO.length -> value #);
+          PP:: (# do 'Module' -> lx.append #);
+       enter SO[] -> append
+       #);
+     Items:< node 
+       (# PT:: 
+            (# 
+            do (if props[] <> none then 
+                   props.PT;
+                   (pos,break) -> mkbreak
+               if);
+               scanSons
+               (# 
+               do (pos,break) -> current.PT; 
+                  (if not isLast then
+                      (pos,break) -> mkbreak
+                  if)
+               #)
+            #);
+          PP:: (# do 'Items' -> lx.append #);
+          isSimple,
+          isPrim,
+          isEmpty: @boolean;
+          props: ^Properties
+       #);
+     Item: node 
+       (# sig: ^Signature;
+          isDecl:< BooleanValue;
+          isSimple:< BooleanValue(# do inner #);
+          desc:<
+            (# elm:< node; D: ^objectTemplate
+            do inner
+            exit D[]
+            #);
+       do inner 
+       #);
+     Properties:< node
+       (# PT::
+            (#
+            do '['->lx.put;
+               scanSons
+               (#
+               do current.pt; (if not isLast then ','->lx.put if) 
+               #);
+               ']'->lx.put;
+            #);
+          isSimple,isPrim: @boolean
+       do
+       #);
+     Property:< node
+       (# PT:: 
+            (# 
+            do P.pt; (if arg[] <> none then arg.PT if) 
+            #);
+          P: ^Exp1;
+          arg: ^Properties
+       enter append
+       #);
+     Decl: Item
+       (# PT::< 
+            (# 
+            do (*'@'->lx.put; off -> lx.putint; ' '-> lx.put;*)
+               inner 
+            #);
+          sig: ^Signature;
+          off: @integer;
+          isDecl:: TrueValue;
+          SearchSig:
+            (# CS: ^text; ATd: ^Decl
+            enter CS[]
+            do (* '\nAttribute:SearchSig: '->puttext; CS[] -> puttext; 
+                *                '\n in: '->puttext; sig.dopT -> putline;
+                *                ' of: ' -> puttext; dopt->putline;
+                *                ' father: ' -> puttext; dopt->putline;
+                *)
+               CS[] -> sig.searchSig -> ATd[]
+            exit ATd[]
+            #);
+          load:< (# do inner #);
+          store:< (# do inner #);
+          activate:< (# do inner #);
+       #);
+     Signature:< node
+       (* In xbeta, Signature have subpatterns UnarySignature, etc 
+        * Consider including arguments in the Signature
+        *)
+       (# PT:: 
+            (# 
+            do scanSons
+               (#do (pos,break) -> current.PT; 
+                  (if not isLast then ' ' -> lx.put if)
+               #);
+               (*(if val[] <> none then val.PT if)*)
+            #);
+          PP::(# do 'Signature'-> lx.append #);
+          S: ^Lexem; (* Arguments, and fatCommas are just appended *)
+          val: ^Value;
+          id: ^text;
+          isKeyWord: @boolean;
+          setId:
+            (# 
+            do ''-> id[];
+               scanSons
+               (# B: @boolean; L: ^Lexem
+               do (if not B then 
+                      current[] -> L[];
+                      L.T[] -> id.append;
+                  if);
+                  not B -> B
+               #);
+               true -> isKeyword
+            #);
+          SearchSig:
+            (# CS: ^text; ATd: ^Decl; isArg: @boolean
+            enter CS[]
+            do (*'\Signature:SearchSig: '->puttext; CS[] -> puttext;
+               ':'->put; id[] -> putline;*)
+               Loop:
+                 scanSons
+                 (# D: ^Decl
+                 do (if isArg then
+                        (if isLast and (val[] <> none) then leave Loop if);
+                        (*current.doPT -> putline;*)
+                        current[] -> D[];
+                        (if CS[] -> D.sig.id.equalNCS then 
+                            D[] -> atD[];
+                            leave Loop
+                        if);
+                        (if isKeyWord then false -> isArg if)
+                     else
+                        true -> isArg
+                    if)
+                 #);
+               Loop:
+               (if val[] <> none then
+                   val.scanSons
+                   (# D: ^Decl
+                   do current[] -> D[];
+                      (if CS[] -> D.sig.id.equalNCS then 
+                            D[] -> atD[];
+                            leave Loop
+                        if);
+                   #)
+               if)
+            exit ATd[]
+            #); 
+       enter id[] -> Lexem -> S[] -> append
+       #);     
+     Value:< node
+       (* A list of Decl's *)
+       (# PT::
+            (#
+            do (if son[] <> none then 
+                   ' -> ' -> lx.append;
+                   scanSons
+                   (# 
+                   do current.PT; 
+                      (if not isLast then 
+                          ','-> lx.put;
+                          ' '-> lx.put
+                      if) 
+                   #)
+               if)
+            #);
+          PP:: (# do 'Value' -> lx.append #)
+       #);
+     StaticObject:< Decl
+       (# OG: ^ObjectGeneration;
+          PT:: 
+            (# 
+            do (pos,break) -> sig.PT;
+               ':' -> lx.put;
+               ' ' -> lx.put; '@' -> lx.put; ' ' -> lx.put; 
+               (pos,break) -> OG.PT 
+            #);
+          length:: (# do 3 + OG.length -> value #);
+          PP:: (# do 'StaticObject'-> lx.append #);
+          isSimple:: (# do OG.isSimple -> value #)
+       enter(sig[] -> append,OG[] -> append)
+       #);
+     DynamicObject:< Decl
+       (# PI: ^PatternId;
+          PT:: 
+            (# 
+            do (pos,break) -> sig.PT;
+               ':' -> lx.put;
+               ' ' -> lx.put; '^' -> lx.put; ' ' -> lx.put; 
+               (pos,break) -> PI.PT 
+            #);
+          length:: (# do 3 + PI.length -> value #);
+          PP:: (# do 'StaticObject'-> lx.append #)
+       enter(sig[] -> append,PI[] -> append)
+       #);     
+     Pattern: Decl
+       (# PT:: 
+            (# 
+            do (pos,break) -> sig.PT; ':' -> lx.put; ' ' -> lx.put;
+               (*(pos+4,true) -> mkBreak;*)
+               (pos+4,true) -> OD.PT
+            #);
+          setUpOrigin::
+            (#
+            do origin[] -> sig.setUpOrigin;
+               origin[] -> OD.setupOrigin
+            #);
+          check:: 
+            (# 
+            do (*'\n>>Pattern: ' -> puttext; sig.id[] -> puttext; ':'->put;
+               sig.doPT -> puttext; *)
+               (if true
+                // 'integer' -> sig.id.equalNCS 
+                // 'char' -> sig.id.equalNCS then
+                   (*':Simple:'->putline;*)
+                   (*true -> OD.IS.isSimple;*)
+                else
+                  (* newline*) 
+               if);
+               (* (if scope[] = none then
+                *     '\nPattern:check:scope is none!'->putline;
+                * if);
+                *)
+               (*scope[] -> sig.check;*)
+               OD[] -> sig.check;
+               scope[] -> OD.check ;
+            #);
+          desc::
+            (# elm:: ObjectTemplate
+            do OD[] -> D[]
+            #);
+          isSimple:: (# do 'isSimple:ptn:'->puttext; OD.isSimple -> value #);
+          OD: ^ObjectDesc
+       #);
+     UnaryPattern:< Pattern
+       (# PP:: (# do 'UnaryPtn:' -> lx.append; sig.id[] -> lx.append #);
+       enter (sig[]->append,OD[]->append)
+       #);
+     BinaryPattern:< Pattern
+       (# PP:: (#do 'BinaryPtn:'-> lx.append; sig.id[]-> lx.append #);
+       enter(sig[]->append,OD[]->append)
+       #);
+     FunctionalPattern:< Pattern
+       (# PP:: (# do 'FunctionalPtn:' -> lx.append; sig.id[] -> lx.append #);
+       enter(sig[] -> append,OD[]->append)
+       #);
+     KeywordPattern:< Pattern
+       (# PP:: 
+            (# 
+            do 'KeywordPattern:' -> lx.append;  
+               sig.id[] -> lx.append
+            #);
+       enter(sig[] -> append, OD[]->append)
+       #);
+     ObjectTemplate: Item
+       (# IS: ^Items;
+          localSearch:
+            (# CS: ^ Text; ATd: ^Decl
+            enter CS[]
+            do (if IS[] <> none then 
+                   search:
+                     IS.scanSons
+                     (# I: ^Item; AT: ^Decl
+                     do current[] -> I[];
+                        (if I.isDecl then
+                            I[] -> AT[]; 
+                            (* 'Try: ' -> puttext; AT.id[] -> putline;*)
+                            (if (CS[] -> AT.sig.id.equalNCS) then
+                                (* 'Found in: ' -> puttext;
+                                 doPT -> putline;*)
+                                AT[] -> ATd[];
+                                Leave search
+                                (*else
+                                 'No match:'->puttext; AT.id[] -> putline*)
+                        if)if)
+               #)if)
+            exit ATd[]
+            #);      
+          searchSuperAndSig:<
+            (# CS: ^ Text; ATd: ^Decl
+            enter CS[]
+            do inner
+            exit ATd[]
+            #);    
+          search:
+            (# CS: ^ Text; org: ^ObjectTemplate; ATd: ^Decl
+            enter CS[]
+            do(* 'OT:Search:'->puttext; CS[] -> putline;*)
+               (if (cs[] -> localSearch -> ATd[]) = none then
+                   (if (CS[] -> SearchSuperAndSig -> ATd[]) = none then
+                       (if (origin[] -> org[]) <> none then
+                           CS[] -> org.search -> ATd[]
+               if)if)if)
+            exit ATd[]
+            #);
+           genClass:< 
+            (# N: ^text; sig: ^Signature
+            enter(N[],sig[])
+            do inner 
+            #);
+          descNo: @integer;
+       #);
+     ObjectGeneration:< ObjectTemplate
+       (# PT:: 
+            (# 
+            do IV.PT;
+               (if not IS.isEmpty then 
+                   (pos+4,true) -> mkBreak;
+                   (pos+4,true) -> IS.PT;
+               if)
+            #);
+          PP:: (# do 'ObjectGeneration' -> lx.append #);
+          searchSuperAndSig::
+            (#
+            do (*'OG:SearchSuperAndSig:'->putline;*)
+               (if IV.(*inv.exp.*)ATd[] <> none then
+                   (*E.inv.doPt -> putline;*)
+                   CS[] -> (IV.(*inv.exp.*)ATd.desc).localSearch -> ATd[]
+               if)
+            #); 
+          isSimple::
+            (#
+            do 'isSimple:'->puttext; doPT -> puttext; ':' -> put;
+               (if IS.isEmpty then
+                   'IS.isEmpty:'->puttext;
+                   IV.ATd.isSimple -> value; 
+                else
+                   IS.issimple -> value
+               if);
+               (if value then 'isSimple'->putline else 'Not simple'->putline if)
+            #);          
+          IV: ^Invocation (* super IV = R as in R.foo{ ... }*)
+       enter(IV[] -> append,IS[] -> append)
+       #);
+     PatternId:< Node
+       (# PT:: (# do IV.PT; (if id[] <> none then id[] -> lx.append if) #);
+          PP:: (#do 'PatternId'->lx.append #);
+          desc:
+            (# D: ^ObjectTemplate
+            do ATd.desc -> D[]
+            exit D[]
+            #);
+          IV: ^Invocation;
+          id: ^text;
+          ATd: ^Decl;
+       enter IV[] -> append
+       #);
+     ObjectDesc:< ObjectTemplate
+       (# PP:: (# do 'ObjectDesc' -> lx.append #);
+          PT:: 
+            (#
+            do superPI.PT;
+               (pos,true) -> mkBreak;
+               (pos,break) -> IS.PT 
+            #);
+          searchSuperAndSig::
+            (# P: ^pattern
+            do (*'OG:SearchSuperAndSig:'->puttext; *)
+               (if father[] <> none then
+                   (*father.doPT -> puttext;*)
+                   (if father## <= pattern## then
+                       CS[] -> (father[] -> P[]).searchSig -> ATd[]
+                    else
+                       '\n!!! searchSuperAndSig: father is not sub of pattern'->putline
+                   if);
+                   (if (ATd[] = none) and (superPI.ATd[] <> none) then
+                       (* search super *)
+                       CS[] -> (superPI.ATd.desc).localSearch -> ATd[]
+                   if)
+               if)
+            #);
+          isSimple:: (# do 'OD:'->puttext; IS.isSimple -> value #);
+          superPI: ^PatternId;
+       enter(superPI[] -> append,IS[] -> append)
+       #);
+     
+     Invocation:< node
+       (* <Exp> '.' <Exp> '.' ... *)
+       (# PP::(#do 'Invocation' -> lx.append #);
+          PT:: 
+            (#
+            do scanSons
+               (#
+               do current.PT; 
+                  (if not isLast then
+                      '.' -> lx.put      
+                  if)
+            #)#);
+          ATd: ^Decl
+       #);
+     Exp: item (* check this !*)
+       (# 
+          ATd: ^Decl;
+          isAssign: @boolean
+       #);
+     Receiver:< node
+       (# PP:: (# do 'Receiver' -> lx.append #);
+          PT:: 
+            (# do scanSons
+               (#do current.PT; 
+                  (if not isBinary then '.' -> lx.put 
+                   else
+                      (if isLast then ' ' -> lx.put if)
+                  if)
+                  #)
+               #);
+          isBinary: @Boolean
+       #);
+     Unary:< Exp
+       (# PT:: (# do M.PT #);
+          PP:: (# do 'Unary' -> lx.append #);
+          M: ^Lexem
+       enter M[] -> append
+       #);
+     Binary:< Exp
+       (# PP:: (# do 'Binary' -> lx.append #);
+          PT::
+            (#
+            do rec.PT; ' ' -> lx.put;
+               operator.PT; ' '-> lx.put;
+               argument.PT
+            #);
+          rec: ^Exp;
+          operator: ^Lexem;
+          argument: ^Invocation
+       enter(rec[]->append, operator[]->append, argument[]->append)
+       #);
+     Function:< Exp
+       (# PP:: (# do 'Function' -> lx.append #);
+          PT:: 
+            (# 
+            do scanSons
+               (#
+               do current.PT; 
+                  (if not isLast then ' ' -> lx.put if)
+            #)#);
+          F: ^Lexem
+       enter(lexem -> F[] -> append)
+       #);
+     KeyWord:< Exp
+       (# PP:: (# do 'KeyWord' -> lx.append #);
+          PT:: 
+            (# first: @boolean
+            do (* first element in sons is receiver - may be empty *)
+               true -> first;
+               scanSons
+               (#
+               do current.PT;
+                  (if not isLast (* and not first*) then ' ' -> lx.put if);
+                  false -> first
+               #)
+            #);
+          id: ^Text
+       #);
+     
+     Exp1: node
+       (# check::
+            (# elm:: ObjectTemplate
+            do (*'Search: ' -> puttext; L.T[] -> putline;
+                * 'Variable: ' -> puttext; scope.dopt ->putline;
+                *)
+               (if scope[] <> none then (* ad hoc *)
+                   (if (L.T[] -> scope.search -> ATd[]) <> none then
+                       '*** Found var: '->puttext; L.T[] -> putline
+                    else
+                       '*** Did NOT find var: '->puttext; L.T[] -> putline;
+                       Decl -> ATd[]
+                   if)
+                else
+                   'Exp1:check: scope is none'->putline
+               if)
+            #);
+          ATd: ^Decl;
+          L: ^Lexem
+       enter Lexem -> L[] -> append
+       #);
+     Name:< Exp1
+       (# PT:: (# do L.T[] -> lx.append #);
+          PP:: (# do L.T[] -> lx.append #);
+       #);
+     Textt:< Exp
+       (# PT::< (# do '\'' -> lx.put;  T.T[] -> lx.append; '\'' -> lx.put #);
+          PP:: (# do T.T[] -> lx.append #);
+          T: ^Lexem
+       enter Lexem -> T[] -> append
+       #);
+     Const:< Exp
+       (# PT:: (# do C.T[] -> lx.append #);
+          PP:: (# do C.T[] -> lx.append #);
+          C: ^Lexem  
+       enter Lexem -> C[] -> append
+       #);
+     Textt1:< Exp1
+       (# PT::< (# do '\'' -> lx.put;  L.T[] -> lx.append; '\'' -> lx.put #);
+          PP:: (# do L.T[] -> lx.append #);
+       #);
+     Const1:< Exp1
+       (# PT:: (# do L.T[] -> lx.append #);
+          PP:: (# do L.T[] -> lx.append #);
+       #);     
+     Lexem:< node
+       (# PT:: (# do T[] -> lx.append #);
+          PP:: (# do T[] -> lx.append #);          
+          T: ^text
+       enter T[]
+       #)     
+  do
+     inner
+  #)
