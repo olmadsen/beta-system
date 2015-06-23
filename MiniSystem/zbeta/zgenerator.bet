@@ -143,8 +143,11 @@ generator: checker
                    lex.symbols.add -> cd.op 
                 else
                    (sig.id[],OD.descno,true) -> cd.alloc;
-                   cd.rpop; (* depend on the return type *)
-                   (*('x','S') -> OD.doCall; *)
+                   (*cd.rpop;*) (* depend on the return type *)
+                   (* and perhaps a difference
+                    *    R: @foo -- no rpop
+                    *    foo;    -- if foo on rstack it should be popped
+                    *)
                if)
             #);
           store::
@@ -182,10 +185,10 @@ generator: checker
        #);
      Invocation::
        (* E1.E2.E3
-        *    pushThis
+        *    E1.pushThis
         *    E1.loadAdr
         *    E2.loadAdr
-        *    E3.exe
+        *    E3.execute
         * R.foo
         * R.foo{...}
         * X:= y + 12
@@ -193,33 +196,18 @@ generator: checker
        (# gen:: 
             (# first: @boolean
             do 'Invocation:gen: '->puttext;
-               true -> isReceiver -> first;
-              (if true then
-                  scanSons
-                  (# E: ^Exp
-                  do current[] -> E[];
-                     (if first then E.pushThis if);
-                     (if not isLast then 
-                         E.loadAdr 
-                      else
-                         E.execute
-                     if);
-                     false -> first
-                  #)
-               else scanSons
-                  (# I: @integer;
-                  do 
-                     'I' ->put; I+1 -> I -> putint; ':'->put;
-                     not isLast -> isReceiver;
-                     (if first and isReceiver then
-                         cd.pushThis
-                     if);
-                     (if isReceiver then '!'->put if); current.dopt->putline;
-                     (isReceiver,off) -> current.gen ;
-                     false -> first
-                     (*false -> isReceiver;*)
-                  #)
-              if)
+               true -> first;
+               scanSons
+               (# E: ^Exp
+               do current[] -> E[];
+                  (if first then E.pushThis if);
+                  (if not isLast then 
+                      E.loadAdr 
+                   else
+                      E.execute
+                  if);
+                  false -> first
+               #)
             #);
           loadOrigin:
             (# 
@@ -233,51 +221,12 @@ generator: checker
         *  A pattern Foo declared as Foo: Bar{ ... }
         * ATd = operator.Decl
         *)
-       (# gen::
-            (# inv: ^invocation
-            do ('Unary: ',M.T[]) -> mkCom;
-               'Unary: ' -> puttext; doPT -> puttext; ' ' -> put; 
-               (if ATd.isSimple then 'isSimple: ' -> puttext if);
-               (if isReceiver then
-                   'isReceiver: ' -> puttext
-                else
-                   'is not Receiver: ' -> puttext
-               if);
-               ATd.doPT -> putline;               
-               (if isReceiver then 
-                   ATd.loadAdr
-                else
-                   ATd.load 
-               if);
-               ATd.off -> off
-            #);
-          pushThis:: (#do cd.pushThis #);
+       (# pushThis:: (#do cd.pushThis #);
           loadAdr:: (# do ATd.loadAdr #);
           execute:: (# do ATd.load #);
        #);
      Binary::
-       (# gen::
-            (#
-            do ('Binary: ',doPT) -> MkCom;
-               rec.ATd.loadAdr;
-               (if '+' -> operator.T.equal then 
-                   ('$x',rec.ATD.off) -> cd.pushg 
-               if);
-               (true,0) -> argument.gen;
-               (if isAssign then 
-                   ('var',rec.ATd.off) -> cd.storeg
-                else
-                   'Binary:gen:ATd: '->puttext;
-                   (if ATd[] = none then 
-                       'none' -> putline
-                    else
-                       ATd.doPT -> putline;
-                       (* ATd.loadAdr*)
-                       ATd.load
-                   if);
-               if)
-            #);
-          pushThis:: (#do cd.pushThis #);
+       (# pushThis:: (#do cd.pushThis #);
           loadAdr:: (# do execute #);
           execute::
             (#
@@ -289,20 +238,16 @@ generator: checker
                (if isAssign then 
                    ('var',rec.ATd.off) -> cd.storeg
                 else
-                   'Binary:execute:ATd: '->puttext;
                    (if ATd[] = none then 
                        'none' -> putline
                     else
-                       ATd.doPT -> putline;
-                       (* ATd.loadAdr*)
                        ATd.load
                    if);
                if)
             #)
        #);
      Const::
-       (# gen:: (#  do C.T.setpos; C.T.getInt -> cd.pushConst #);
-          execute:: (# do C.T.setpos; C.T.getInt -> cd.pushConst #);
+       (# execute:: (# do C.T.setpos; C.T.getInt -> cd.pushConst #);
        #);
      ObjTmpStack: @
        (# item: 
