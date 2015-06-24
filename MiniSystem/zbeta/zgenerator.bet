@@ -122,33 +122,41 @@ generator: checker
                #);
                'D' -> cd.rtn;
                (vsize,rsize,1) -> CD.endClass     
+            #);
+          ifPrim: BooleanValue
+             (#
+             do (if isPrim then
+                    true -> value;
+                    inner
+                if)
+             #);
+          ifPrimExePrim: ifPrim
+            (#
+           do props.getProp
+               (# whenPrim:: 
+                    (# 
+                    do 'more prim: '->puttext; primNo -> putint; newline;
+                       ('put',primNo) ->  cd.CallPrim
+                    #)
+               #);
             #)
        #);
      UnaryPattern::
        (# gen:: (# do (sig.id[],sig[],OD[]) -> objTmpStack.add #);
           loadAdr::
             (#
-            do 'Pattern:loadAdr: '->puttext; doPT -> putline;
-               (if '+' -> sig.id.equal then 
-                   lex.symbols.add -> cd.op 
-                else
-                   ('Call',doPT) -> cd.com2
-               if)
+            do (* 'Pattern:loadAdr: '->puttext; doPT -> putline;*)
             #);
           load::
             (#
             do 'Pattern:load: '->puttext; doPT -> putline;
                ('Pattern:load: ',doPT) -> cd.com2;
-               (if '+' -> sig.id.equal then 
-                   lex.symbols.add -> cd.op 
-                else
-                   (sig.id[],OD.descno,true) -> cd.alloc;
-                   (*cd.rpop;*) (* depend on the return type *)
-                   (* and perhaps a difference
-                    *    R: @foo -- no rpop
-                    *    foo;    -- if foo on rstack it should be popped
-                    *)
-               if)
+               (sig.id[],OD.descno,true) -> cd.alloc;
+               (*cd.rpop;*) (* depend on the return type *)
+               (* and perhaps a difference
+                *    R: @foo -- no rpop
+                *    foo;    -- if foo on rstack it should be popped
+                *)
             #);
           store::
             (#
@@ -160,17 +168,13 @@ generator: checker
           loadAdr::
             (#
             do 'Pattern:loadAdr: '->puttext; doPT -> putline;
-               (if '+' -> sig.id.equal then 
-                   lex.symbols.add -> cd.op 
-                else
-                   ('Call',doPT) -> cd.com2
-               if)
             #);
           load::
             (#
             do 'Pattern:load: '->puttext; doPT -> putline;
                ('Pattern:load: ',doPT) -> cd.com2;
                (if '+' -> sig.id.equal then 
+                   (* if primitive then ... *)
                    lex.symbols.add -> cd.op 
                 else
                    (sig.id[],OD.descno,true) -> cd.alloc;
@@ -182,6 +186,20 @@ generator: checker
             (#
             do 'Pattern:store: '->puttext; doPT -> putline;
             #); 
+       #);
+     FunctionalPattern::
+       (# gen:: (# do (sig.id[],sig[],OD[]) -> objTmpStack.add #);
+          pushThis::
+            (#
+            do (if not OD.IS.ifPrim then cd.pushThis if)
+            #);
+          loadAdr:: (# #);
+          load:: 
+            (# 
+            do (if not OD.IS.ifPrimExeprim then 
+                   (sig.id[],OD.descno,true) -> cd.alloc 
+               if)
+            #);
        #);
      Invocation::
        (* E1.E2.E3
@@ -221,7 +239,7 @@ generator: checker
         *  A pattern Foo declared as Foo: Bar{ ... }
         * ATd = operator.Decl
         *)
-       (# pushThis:: (#do cd.pushThis #);
+       (# pushThis:: (#do cd.pushThis #); (* Perhaps loadOrigin?*)
           loadAdr:: (# do ATd.loadAdr #);
           execute:: (# do ATd.load #);
        #);
@@ -246,6 +264,27 @@ generator: checker
                if)
             #)
        #);
+     Function::
+       (# pushThis:: (#do ATd.pushThis #);
+          loadAdr:: (# do execute #);
+          execute::
+            (# first: @boolean
+            do ATd.loadAdr;
+               true -> first;               
+               scanSons
+               (#
+               do (if not first then
+                      current.gen
+                  if);
+                  false -> first
+               #);
+               (if ATd[] = none then 
+                   'none' -> putline
+                else
+                   ATd.load
+               if)
+            #)          
+       #);
      Const::
        (# execute:: (# do L.T.setpos; L.T.getInt -> cd.pushConst #);
        #);
@@ -258,8 +297,10 @@ generator: checker
           add:
             (# N: ^text; sig: ^Signature; OT: ^ObjectTemplate;
             enter(N[],sig[],OT[])
-            do (if (top+1-> top) > OTL.range then OTL.range -> OTL.extend if);
-               (N[],sig[],OT[]) -> item -> OTL[top][]
+            do (if not OT.IS.isSimple and not OT.IS.isPrim then
+                   (if (top+1-> top) > OTL.range then OTL.range -> OTL.extend if);
+                   (N[],sig[],OT[]) -> item -> OTL[top][]
+               if)
             #);          
           next:
             (# inx: @integer
