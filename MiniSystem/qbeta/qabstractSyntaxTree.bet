@@ -1,5 +1,6 @@
 ORIGIN '~beta/basiclib/betaenv';
 INCLUDE '../xbeta/Tree';
+INCLUDE '../miniCompiler/directoryComponents'
 ---lib:attributes---
 AbstractSyntaxTree: Tree
   (#  Module:< node
@@ -13,7 +14,91 @@ AbstractSyntaxTree: Tree
             #);
           length:: (# do SO.length -> value #);
           PP:: (# do 'Module' -> lx.append #);
+          handleDirModules:
+            (# main: ^Module
+            do (if true then
+                   'HandleDirModules: '->puttext; 
+                   SO.sig.doPt -> puttext; newline; 
+               if);
+               0 -> dcTop;
+               (if (dirCh->(path.append).put) -> locateWorld.CWD.equal then
+                   this(Module)[] -> main[]
+               if);
+               
+               findModuleItems;
+               
+               scanDir 
+               (#
+               do currentModule.SO.sig.id[] -> path.push;
+                  (if true then
+                      'EQ:'->putline; path.append-> putline; 
+                      locateWorld.CWD[] -> putline; 
+                  if);
+                  &currentModule.handleDirModules;
+                  path.pop
+               #);
+            exit main[]
+            #);
+          findModuleItems:
+            (# 
+            do 'FindDir: find directories in:\n   ' -> puttext; 
+                path.append -> putline; '  ' -> puttext;
+               (path.append,false) -> getBETAdirectories
+               (#
+               do scan
+                  (#
+                  do (if not currentIsFile then
+                         current[] -> puttext; ' ' -> put;
+                         current[] -> addDirModuleN;
+                     if)
+                  #)
+               #);
+               newline;
+            #);
+          
+          dirModuleN: [4] ^text; dcTop: @integer;
+          addDirModuleN:
+            (# dir: ^text
+            enter dir[]
+            do (if (dcTop + 1 -> dcTop) > dirModuleN.range then 
+                   dirModuleN.range -> dirModuleN.extend;
+                   dirModule.range -> dirModule.extend
+               if);
+               dir[] -> dirModuleN[dcTop][]
+            #);
+          (* Perhaps save ModuleItemDecl instead?
+           * Perhaps factor appendModule out of scanDir
+           *)
+          dirModule: [4] ^ModuleItem;
+          scanDir:
+            (# currentModule: ^Module;
+               N: ^text; (* module on path to ...*)
+            do (*'ScanDir:'->putline; dctop->putint; newline;*)
+               (for i: dcTop repeat
+                    (*dirModuleN[i][] -> N[] -> putline;*)
+                    (* See also Checker:ModuleItem:doCheck *)
+                    dirModuleN[i][] -> N[] -> ModuleItem -> dirModule[i][];
+                    (N[],dirModule[i][]) -> mkModuleItemDecl -> appendModule; 
+                    dirModule[i].md[] ->  currentModule[];
+                    (if currentModule[] = none then 'currentModule none' -> putline if);
+                    true -> dirModule[i].isParsed; (* eliminate *)
+                    INNER;
+               for);
+            #);
+          addModuleItems: 
+            (#
+            do (for i: dcTop repeat
+                    (dirModuleN[i][],dirModule[i][]) -> mkModuleItemDecl -> appendModule
+               for)
+            #);
+          appendModule:< (# dcl: ^Decl enter dcl[] do dcl.doPT; inner #);
        enter SO[] -> append
+       #);
+     ModuleItem:< Decl
+       (# PP:: (# do 'ModuleItem' -> lx[] #);
+          isParsed: @boolean;
+          md: ^Module
+       enter Lexem -> append
        #);
      Items:< node 
        (# PT:: 
@@ -614,7 +699,102 @@ AbstractSyntaxTree: Tree
           PP:: (# do T[] -> lx.append #);          
           T: ^text
        enter T[]
-       #)     
+       #);
+     path: @
+       (# P: [8] ^text;
+          top: @integer;
+          init:< (# do 0 -> top #);
+          push:
+            (# dir: ^text
+            enter dir[]
+            do (if (top + 1 -> top) > P.range then P.range -> P.extend if);
+               dir[] -> P[top][];
+            #);
+          pop: (# do top - 1 -> top #);
+          append:
+            (# pth: @text
+            do (for i: top repeat 
+                    P[i][] -> pth.append;
+                    (if i < top then dirCh -> pth.put if)
+               for)
+            exit pth[]
+            #)
+       #);
+     
+     locateWorld: @
+       (# entries: [8] ^text; top,worldPos: @integer;          
+          init:< (# do 0 -> top -> worldPos #);
+          deComp:
+            (# last,worldPosInCWD: @integer
+            do (* CWD = .../beta/.../MiniSystem/.../BETAworld/.../XXX *)               
+               dirCh -> CWD.put;
+               CWD.setPos;
+               CWD.scanAll
+               (# pos: @integer; N: ^text
+               do pos + 1 -> pos; 
+                  (if ch // '/' // dirCh then 
+                      (if (top + 1 -> top) > entries.range then
+                          entries.range -> entries.extend 
+                      if);
+                      (if pos > 1 then 
+                          (last+1,pos-1) -> CWD.sub -> N[] -> entries[top][];
+                          (if 'BETAworld' -> N.equalNCS then
+                              top -> worldPos;
+                              pos -> worldPosInCWD;
+                          if)
+                      if);
+                      pos -> last;
+                  if)
+               #);
+               (*  (last+1,CWD.length) -> CWD.sub -> entries[top+1][];*)
+               (if true then
+                   'Entries: ' -> putline;
+                   (for i: top repeat entries[i][] -> putline for);
+               if);
+               (if worldPos = 0 then '\n*** BETAworld not found' -> putline if); 
+               (1,worldPosInCWD - 1) -> CWD.sub -> topPath[];
+               topPath.copy -> path.push;
+               dirCh -> topPath.put;
+               topPath.copy -> pathToBetaWorld[];
+               (if true then
+                   'pathToWorld: ' -> puttext; topPath[] -> putline;
+               if);
+               'BETAworld.xbeta' -> topPath.append;
+               'Module: ' -> puttext; (last+1,CWD.length) -> CWD.sub -> putline;
+               'topPath: ' -> puttext;  topPath[] -> putline;
+            #);
+          CWD: ^Text;
+          pathToBetaWorld,
+          topPath: ^text;
+          fullPath: @boolean; FN: ^text
+       enter(fullpath,FN[])
+       do init;
+          (if fullPath then (* from miniEnv *)
+           else
+              getCurrentDir -> CWD[];
+              'CWD: ' -> puttext; CWD[] -> putline;
+              deComp;
+          if)
+       exit topPath[]
+       #);
+     mkModuleItemDecl:
+       (# N: ^text;
+          MI: ^ModuleItem;
+          dcl: ^Decl;
+         (* NDs: ^NameDecls;
+          ND: ^NameDecl;
+          NL: ^Lexem;*)
+       enter(N[],MI[])
+       do (*&Decl[] -> dcl[]; 
+          &NameDecls[] -> NDs[] -> dcl.NS[] -> dcl.append;
+          &NameDecl[] -> ND[] -> NDs.append;
+          &Lexem[] -> NL[] -> ND.N[] -> ND.append;
+          N[] -> NL.item[];
+          MI[] -> dcl.IT[] -> dcl.append;
+          dcl[] -> MI.father[];
+          ND[] -> MI.md.theDecl[];*)
+       exit dcl[]
+       #);
   do
      inner
   #)
