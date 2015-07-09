@@ -42,7 +42,7 @@ generator: checker
              *)
             (# 
             do (if not OG.IV.isBasic then 
-                   ('StaticObject:loadADr: ',dopt) -> cd.com2;
+                   ('StaticObject:loadADr: ',sig.dopt) -> cd.com2;
                    (sig.id[],this(StaticObject).off) -> cd.rpushg
                if)
             #);
@@ -135,16 +135,15 @@ generator: checker
        (# genClass:
             (# N: ^text; sig: ^Signature; descNo: @integer; T: @text
             enter(N[],sig[],descNo)
-            do     
-               (N[], descNo, false, 1,1) -> cd.class;
+            do (N[], descNo, false, 1,1) -> cd.class;
                (* super *)
                ('origin',originOff) -> cd.rstore; 
                (if sig[] <> none then sig.storeParameters if);
+               
                scanSons
                (# I: ^Item
                do current[] -> I[];
                   (if I.isDecl then 
-                      current.dopt -> CD.comment; 
                       current.gen; 
                   if) 
                #);
@@ -152,7 +151,6 @@ generator: checker
                (# I: ^Item
                do current[] -> I[];
                   (if not I.isDecl then 
-                      current.dopt -> CD.comment;
                       current.gen
                   if) 
                #);
@@ -180,7 +178,7 @@ generator: checker
             #);
           load::
             (#
-            do ('Pattern:load: ',doPT) -> cd.com2;
+            do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
                (sig.id[],OD.IS.descno,true) -> cd.alloc;
                (*cd.rpop;*) (* depend on the return type *)
                (* and perhaps a difference
@@ -197,11 +195,11 @@ generator: checker
        (# gen:: (# do (sig.id[],sig[],OD[]) -> objTmpStack.add #);
           loadAdr::
             (#
-            do 'BinaryPattern:loadAdr: '->puttext; doPT -> putline;
+            do 'BinaryPattern:loadAdr: '->puttext; sig.doPT -> putline;
             #);
           load::
             (#
-            do ('Pattern:load: ',doPT) -> cd.com2;
+            do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
                (sig.id[],OD.IS.descno,true) -> cd.alloc;
                cd.rpop; (* depend on the return type *)
             #);
@@ -220,7 +218,11 @@ generator: checker
        (# gen:: (# do (sig.id[],sig[],OD[]) -> objTmpStack.add #);
           pushThis:: (# do cd.pushThis #);
           loadAdr:: (# #);
-          load:: (# do (sig.id[],OD.IS.descno,true) -> cd.alloc #);
+          load:: 
+            (# 
+            do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
+               (sig.id[],OD.IS.descno,true) -> cd.alloc 
+            #);
        #);
      BasicFunctionalPattern::
        (# load:: (# do ('put',OD.IS.props.basicProp.primNo) -> cd.Callprim #);
@@ -255,6 +257,9 @@ generator: checker
         * R.foo
         * R.foo{...}
         * X:= y + 12
+        * R ++ E  -- problem E1 = R ++ E , i.e. first = true 
+        * perhaps same problem for keyWord
+        * We must reconsider parsing/AST and/or gen below
         *)
        (# gen:: 
             (# first: @boolean
@@ -283,13 +288,35 @@ generator: checker
         *  A pattern Foo declared as Foo: Bar{ ... }
         * ATd = operator.Decl
         *)
-       (# pushThis:: (#do cd.pushThis #); (* Perhaps loadOrigin?*)
-          loadAdr:: (# do ATd.loadAdr #);
+       (# pushThis:: 
+            (# T: @text; org: ^Items
+            do cd.pushThis; 
+               'Unary:GoOrigin: ' -> T; on -> T.putint; T[] -> cd.comment;
+               (if on > 0 then 
+                   origin[]-> org[];
+                   ('org',org.originOff) -> cd.rpushg 
+               if);               
+            #); (* Perhaps loadOrigin?*)
+          loadAdr:: 
+            (# T: @text;
+            do 'GoOrigin: ' -> T; on -> T.putint; T[] -> cd.comment;
+               ATd.loadAdr 
+            #);
           execute:: (# do ATd.load #);
        #);
      Binary::
-       (# pushThis:: (#do rec.ATd.pushThis #);
-          loadAdr:: (# do 'Binary:loadAdr:'->puttext; dopt -> putline; execute #);
+       (# pushThis:: 
+            (#
+            do ('Binary:pushThis: ',doPT) -> MkCom;
+               rec.ATd.pushThis 
+            #);
+          loadAdr:: 
+            (# 
+            do ('Binary:loadAdr:', dopt) -> MkCom;
+               ATd.doPT -> cd.comment;
+               ATd.loadAdr;
+               (* execute *)
+            #);
           execute::
             (#
             do (if isAssign then 
@@ -306,10 +333,10 @@ generator: checker
        #);
      Function::
        (# pushThis:: (#do ATd.pushThis #);
-          loadAdr:: (# do execute #);
+          loadAdr:: (# do ATd.loadAdr; (*execute*) #);
           execute::
             (# first: @boolean
-            do ATd.loadAdr;
+            do (*ATd.loadAdr;*)
                true -> first;               
                scanSons
                (#
