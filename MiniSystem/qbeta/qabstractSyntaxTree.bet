@@ -15,7 +15,70 @@ AbstractSyntaxTree: Tree
           length:: (# do SO.length -> value #);
           PP:: (# do 'Module' -> lx.append #);
           handleDirModules:
-            (# main: ^Module
+            (# pDirModule:<
+                 (# moduleDir: ^text; (* name of direcory with BETA module *)
+                    md: ^Module
+                 enter moduleDir[]
+                 do moduleDir[] -> path.push;
+                    inner;
+                    path.pop
+                 exit md[]
+                 #);
+               findModuleItems:
+                 (# 
+                 do 'FindDir: find directories in:\n   ' -> puttext; 
+                    path.append -> putline; '  ' -> puttext;
+                    (path.append,false) -> getBETAdirectories
+                    (#
+                    do scan
+                       (#
+                       do (if not currentIsFile then
+                              current[] -> puttext; ' ' -> put;
+                              current[] -> addDirModuleN;
+                          if)
+                       #)
+                    #);
+                    newline;
+                 #);
+               
+               dirModuleN: [4] ^text; dcTop: @integer;
+               addDirModuleN:
+                 (# dir: ^text
+                 enter dir[]
+                 do (if (dcTop + 1 -> dcTop) > dirModuleN.range then 
+                        dirModuleN.range -> dirModuleN.extend;
+                        dirModule.range -> dirModule.extend
+                    if);
+                    dir[] -> dirModuleN[dcTop][]
+                 #);
+               (* Perhaps save ModuleItemDecl instead?
+                * Perhaps factor appendModule out of scanDir
+                *)
+               dirModule: [4] ^ModuleItem;
+               scanDir:
+                 (# currentModule: ^Module;
+                    N: ^text; (* module on path to ...*)
+                 do (*'ScanDir:'->putline; dctop->putint; newline;*)
+                    (for i: dcTop repeat
+                         (*dirModuleN[i][] -> N[] -> putline;*)
+                         (* See also Checker:ModuleItem:doCheck *)
+                         dirModuleN[i][] -> N[] -> pDirModule -> currentModule[];
+                         (N[],currentModule[]) -> ModuleItem -> dirModule[i][];
+                         (N[],dirModule[i][]) -> mkModuleItemDecl -> appendModule; 
+                         (*dirModule[i].md[] ->  currentModule[];*)
+                         (if currentModule[] = none then 'currentModule none' -> putline if);
+                         true -> dirModule[i].isParsed; (* eliminate *)
+                         INNER;
+                    for);
+                 #);
+               addModuleItems: 
+                 (#
+                 do (for i: dcTop repeat
+                         (dirModuleN[i][],dirModule[i][]) 
+                           -> mkModuleItemDecl -> appendModule
+                    for)
+                 #);
+               main: ^Module;
             do (if true then
                    'HandleDirModules: '->puttext; 
                    SO.sig.doPt -> puttext; newline; 
@@ -36,69 +99,27 @@ AbstractSyntaxTree: Tree
                   if);
                   &currentModule.handleDirModules;
                   path.pop
-               #);
+               #)
             exit main[]
             #);
-          findModuleItems:
-            (# 
-            do 'FindDir: find directories in:\n   ' -> puttext; 
-                path.append -> putline; '  ' -> puttext;
-               (path.append,false) -> getBETAdirectories
-               (#
-               do scan
-                  (#
-                  do (if not currentIsFile then
-                         current[] -> puttext; ' ' -> put;
-                         current[] -> addDirModuleN;
-                     if)
-                  #)
-               #);
-               newline;
+
+          appendModule:< 
+            (# dcl: ^Decl 
+            enter dcl[] 
+            do 'AppendModule: ' -> putline;
+               dcl.doPT -> putline; 
+               dcl[] -> SO.OG.IS.append
             #);
-          
-          dirModuleN: [4] ^text; dcTop: @integer;
-          addDirModuleN:
-            (# dir: ^text
-            enter dir[]
-            do (if (dcTop + 1 -> dcTop) > dirModuleN.range then 
-                   dirModuleN.range -> dirModuleN.extend;
-                   dirModule.range -> dirModule.extend
-               if);
-               dir[] -> dirModuleN[dcTop][]
-            #);
-          (* Perhaps save ModuleItemDecl instead?
-           * Perhaps factor appendModule out of scanDir
-           *)
-          dirModule: [4] ^ModuleItem;
-          scanDir:
-            (# currentModule: ^Module;
-               N: ^text; (* module on path to ...*)
-            do (*'ScanDir:'->putline; dctop->putint; newline;*)
-               (for i: dcTop repeat
-                    (*dirModuleN[i][] -> N[] -> putline;*)
-                    (* See also Checker:ModuleItem:doCheck *)
-                    dirModuleN[i][] -> N[] -> ModuleItem -> dirModule[i][];
-                    (N[],dirModule[i][]) -> mkModuleItemDecl -> appendModule; 
-                    dirModule[i].md[] ->  currentModule[];
-                    (if currentModule[] = none then 'currentModule none' -> putline if);
-                    true -> dirModule[i].isParsed; (* eliminate *)
-                    INNER;
-               for);
-            #);
-          addModuleItems: 
-            (#
-            do (for i: dcTop repeat
-                    (dirModuleN[i][],dirModule[i][]) -> mkModuleItemDecl -> appendModule
-               for)
-            #);
-          appendModule:< (# dcl: ^Decl enter dcl[] do dcl.doPT; inner #);
        enter SO[] -> append
        #);
      ModuleItem:< Decl
        (# PP:: (# do 'ModuleItem' -> lx[] #);
+          PT:: 
+            (# 
+            do (pos,break) -> MD.PT #);
           isParsed: @boolean;
-          md: ^Module
-       enter Lexem -> append
+          MD: ^Module; (*SO: ^StaticObject - perhaps just StaticObject?*)
+       enter(Lexem -> append,MD[]->append)
        #);
      Items:< node 
        (# PT:: 
@@ -780,20 +801,28 @@ AbstractSyntaxTree: Tree
      mkModuleItemDecl:
        (# N: ^text;
           MI: ^ModuleItem;
-          dcl: ^Decl;
-         (* NDs: ^NameDecls;
+          sig: ^Signature;
+          (*dcl: ^Decl;
+           NDs: ^NameDecls;
           ND: ^NameDecl;
           NL: ^Lexem;*)
        enter(N[],MI[])
        do (*&Decl[] -> dcl[]; 
-          &NameDecls[] -> NDs[] -> dcl.NS[] -> dcl.append;
-          &NameDecl[] -> ND[] -> NDs.append;
-          &Lexem[] -> NL[] -> ND.N[] -> ND.append;
-          N[] -> NL.item[];
-          MI[] -> dcl.IT[] -> dcl.append;
-          dcl[] -> MI.father[];
-          ND[] -> MI.md.theDecl[];*)
-       exit dcl[]
+           &NameDecls[] -> NDs[] -> dcl.NS[] -> dcl.append;
+           &NameDecl[] -> ND[] -> NDs.append;
+           &Lexem[] -> NL[] -> ND.N[] -> ND.append;
+           N[] -> NL.item[];
+           MI[] -> dcl.IT[] -> dcl.append;
+           dcl[] -> MI.father[];
+           ND[] -> MI.md.theDecl[];*)
+          N[] -> Signature -> sig[] -> MI.sig[] -> MI.append;
+           
+          (*MI.MD.sig[] -> MI.sig[]; (* clumsy*)
+          MI[] -> MI.MD.father[];
+          'mkModuleItemDecl: ' -> putline; 
+          MI.doPT -> putline;
+
+       exit (*dcl[]*) MI[]
        #);
   do
      inner
