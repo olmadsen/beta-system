@@ -29,7 +29,7 @@ generator: checker
                        cd.pushThis;
                        OG.IS.descNo -> T.putint;
                        ('staticObject: alloc: ',T[]) -> cd.com2; 
-                       OG.gen;
+                       true -> OG.gen;
                        (*cd.rswap;*)
                        cd.pushThis;
                        (sig.id[],this(StaticObject).off) -> cd.rstoreg;
@@ -56,7 +56,11 @@ generator: checker
           load::
             (* called when not receiver - i.e. value to be pushed *)
             (#
-            do (sig.id[],off) -> cd.pushg
+            do (if OG.IV.isBasic then 
+                   (sig.id[],off) -> cd.pushg
+                else
+                   (sig.id[],off) -> cd.rpushg
+               if)
             #);
           store::
              (* Called from Signature::StoreParameters
@@ -69,6 +73,12 @@ generator: checker
                    (sig.id[],off) -> cd.rstore
                if)
             #);
+          swapr::
+            (#
+            do (if not OG.IV.isBasic then
+                   CD.rswap
+               if)
+            #)
        #);
      DynamicObject::
        (# gen:: (# do #);
@@ -84,6 +94,7 @@ generator: checker
                (sig.id[],this(DynamicObject).off) -> cd.rpushg
             #);
           store:: (# do (sig.id[],off) -> cd.rstore #);
+          swapr:: (# do cd.rswap #)
        #);
      Signature::
        (# 
@@ -117,7 +128,7 @@ generator: checker
                (*IS.inv.ATd.doPT -> putline*)
                (if IS.isEmpty then
                    (* check this - called when R.foo *)
-                   IV.gen
+                   isStaticObj -> IV.gen
                 else
                    (* called when R.foo{ } *)
                    IV.loadOrigin;
@@ -204,7 +215,10 @@ generator: checker
             (#
             do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
                (sig.id[],OD.IS.descno,true) -> cd.alloc;
-               (*cd.rpop;*) (* depend on the return type *)
+               (if not isStaticObj then
+                   cd.rpop;
+                   (* reconsider if return values *)
+               if);
                (* and perhaps a difference
                 *    R: @foo -- no rpop
                 *    foo;    -- if foo on rstack it should be popped
@@ -225,7 +239,9 @@ generator: checker
             (#
             do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
                (sig.id[],OD.IS.descno,true) -> cd.alloc;
-               cd.rpop; (* depend on the return type *)
+               (if not isStaticObj then
+                   cd.rpop; (* depend on the return type *)
+               if)
             #);
           store::
             (#
@@ -245,7 +261,11 @@ generator: checker
           load:: 
             (# 
             do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
-               (sig.id[],OD.IS.descno,true) -> cd.alloc 
+               (sig.id[],OD.IS.descno,true) -> cd.alloc;
+               (if not isStaticObj then
+                   cd.rpop;
+                   (* reconsider if return values *)
+               if);
             #);
        #);
      BasicFunctionalPattern::
@@ -255,14 +275,18 @@ generator: checker
        (# gen:: (# do (sig.id[],sig[],OD[]) -> objTmpStack.add #);
           pushThis:: (# do cd.pushThis #);
           loadAdr:: (# #);
-          load:: (# do (sig.id[],OD.IS.descno,true) -> cd.alloc #);          
+          load:: 
+            (# 
+            do (if not isStaticObj then
+                   (sig.id[],OD.IS.descno,true) -> cd.alloc 
+               if)
+            #);          
        #);
      BasicKeyWordPattern::
        (# load:: 
             (# exitLab: @labelHandler.label
             do (if OD.IS.props.basicProp.primNo
                 // 100 then
-
                    exitLab.new;
                    1111 -> cd.pushConst;                   
                    exitlab -> cd.jmpFalse;
@@ -295,7 +319,7 @@ generator: checker
                   (if not isLast then 
                       E.loadAdr 
                    else
-                      rec[] -> E.execute
+                      (rec[],isStaticObj) -> E.execute
                   if);
                   E[] -> rec[];
                   false -> first
@@ -325,7 +349,7 @@ generator: checker
             do 'GoOrigin: ' -> T; on -> T.putint; T[] -> cd.comment;
                ATd.loadAdr 
             #);
-          execute:: (# do ATd.load #);
+          execute:: (# do isStaticObj -> ATd.load #);
        #);
      Binary::
        (# pushThis:: 
@@ -347,10 +371,10 @@ generator: checker
                    ('var',rec.ATd.off) -> cd.storeg
                 else
                    (if rec.ATd.isBasic then 
-                       rec.ATd.load
+                       isStaticObj -> rec.ATd.load
                    if);
                    argument.gen;
-                   ATd.load
+                   isStaticObj -> ATd.load
                if)
             #)
        #);
@@ -362,16 +386,24 @@ generator: checker
             do (*ATd.loadAdr;*)
                true -> first;               
                scanSons
-               (#
-               do (if not first then
-                      current.gen
+               (# E: ^Exp; I: ^Invocation; OG: ^ObjectGeneration
+               do (if not first then 
+                      current.gen;
+                      (if current## <= objectGeneration## then 
+                          current[] -> OG[];
+                          OG.IV.swapr
+                       else
+                          '\n!!! Function: NOT OGV: ' -> puttext; 
+                          current.dopt -> putline;
+                          current.PP -> putline
+                      if)
                   if);
                   false -> first
                #);
                (if ATd[] = none then 
                    'none' -> putline
                 else
-                   ATd.load
+                   isStaticObj -> ATd.load
                if)
             #)          
        #);
@@ -387,7 +419,7 @@ generator: checker
                   if);
                   not isArg -> isArg
                #);
-               ATd.load
+               isStaticObj -> ATd.load
             #);
        #);
      Const::
