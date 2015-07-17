@@ -179,37 +179,48 @@ generator: checker
        (# genClass:
             (# N: ^text; sig: ^Signature; descNo: @integer; T: @text
             enter(N[],sig[],descNo)
-            do (N[], descNo, false, 1,1) -> cd.class;
-               (* super *)
+            do (N[], descNo, false, (topSuper).descNo,originOff) -> cd.class;
+
                (if superDesc[] <> none then
-                   (N[],superDesc.descNo) -> cd.exeAlloc;
-                   cd.rpop;
+                   (*(N[],superDesc.descNo) -> cd.exeAlloc;
+                    * cd.rpop;
+                    *)
                    (N[],superDesc.descNo)  -> cd.super; 
                    
                    superDesc.descNo -> cd.vdtTableCopy;
                    (if superDesc.innerInx > 0 then
-                       (superDesc.innerInx,descno) -> cd.vdtTable
+                       (superDesc.innerInx,descno) -> cd.vdtTable;
+                       true -> hasSuperAndInner
                    if);                   
                 else
                    ('origin',originOff) -> cd.rstore; 
                if);
+
+               
+               (if superDesc[] <> none then 
+                   (topSuper).descNo -> cd.topSuper;
+               if);
+               
+               (* Perhaps after markEnterE? *)
+               
                (if sig[] <> none then sig.storeParameters if);
                
-               false -> cd.actions;
-               
+               (* code for allocation part *)
+               cd.markEnterE;               
                scanSons
                (# I: ^Item
                do current[] -> I[];
-                  (if I.isDecl then 
-                      current.gen; 
-                  if) 
+                  (if I.isDecl then current.gen if) 
                #);
+               (if innerInx > 0 then innerInx -> cd.innerA if);               
+               (if superDesc[] <> none  then cd.rtnInner if);
+               
+               (* Code for action part *)
+               false -> cd.actions;
                scanSons
                (# I: ^Item
                do current[] -> I[];
-                  (if not I.isDecl then 
-                      current.gen
-                  if) 
+                  (if not I.isDecl then current.gen if) 
                #);
                (* push return value 
                 * - for staticObject: R: @Foo
@@ -222,7 +233,11 @@ generator: checker
                 else
                    (* puhsThis?*)
                if);
-               'D' -> cd.rtn;
+               (if superDesc[] <> none then
+                   cd.rtnInner
+                else
+                   'D' -> cd.rtn;
+               if);
                (vsize,rsize,1) -> CD.endClass     
             #);
           goOrigin:
@@ -232,7 +247,8 @@ generator: checker
                    ('origin',originOff) -> cd.rpushg;
                    on - 1 -> (origin[]->org[]).goOrigin
                if)
-            #);               
+            #); 
+          hasSuperAndInner: @Boolean
        #);
      UnaryPattern::
        (# gen:: (# do (sig.id[],sig[],OD[]) -> objTmpStack.add #);
