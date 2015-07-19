@@ -17,7 +17,7 @@ generator: checker
        (# gen::
             (#
             do (if MD.isIncluded then
-                   ('ModsuleItem:gen',sig.dopt) -> cd.com2;
+                   ('ModuleItem:gen',sig.dopt) -> cd.com2;
                    MD.SO.gen
                 else
                    'Module not included: ' -> puttext; sig.doPT -> putline
@@ -149,6 +149,15 @@ generator: checker
                    isStaticObj -> IV.gen
                 else
                    (* called when R.foo{ } *)
+                   (if IV.hasVirtualArgs then
+                       'ObjectGeneration: ' -> putline;
+                       IV.doPT -> putline;
+                       'descNo: ' -> puttext; IS.descNo -> putint; newline;
+                       'SuperDesc: ' -> puttext; IS.superDesc.doPT -> putline;
+                       'Super.descNo: ' -> puttext;
+                       IS.superDesc.descNo -> putint; newline;
+                       IS.superDesc.doPT -> putline
+                   if);
                    IV.loadOrigin; (* empty *)
                    cd.pushThis; (* this seems just a hack!*)
                    (if singularName[] <> none then
@@ -170,7 +179,8 @@ generator: checker
      PatternId::
        (# gen::
             (#
-            do IV.gen
+            do 'PatternId:gen: ' -> puttext; dopt ->putline;
+               IV.gen
             #)
        #);
      ObjectDesc::
@@ -185,66 +195,77 @@ generator: checker
        (# genClass:
             (# N: ^text; sig: ^Signature; descNo: @integer; T: @text
             enter(N[],sig[],descNo)
-            do (N[], descNo, false, (topSuper).descNo,originOff) -> cd.class;
-
-               (if superDesc[] <> none then
-                   (*(N[],superDesc.descNo) -> cd.exeAlloc;
-                    * cd.rpop;
-                    *)
-                   (N[],superDesc.descNo)  -> cd.super; 
+            do 'GenClass: ' -> puttext; N[] -> putline;
+               (if (superDesc[] <> none) and not superDesc.done then
+                   'HasSuper: ' -> puttext;
+                   (# ptn: ^Pattern
+                   do superDesc.father.father -> ptn[];
+                      (ptn.sig.id[],ptn.sig[],superdesc.descNo) -> superDesc.genClass
+                   #)
+               if);
+               (if not done then
+                   true -> done;
+                   (N[], descNo, false, (topSuper).descNo,originOff) -> cd.class;
                    
-                   superDesc.descNo -> cd.vdtTableCopy;
-                   (if superDesc.innerInx > 0 then
-                       (superDesc.innerInx,descno) -> cd.vdtTable;
-                       true -> hasSuperAndInner
-                   if);                   
-                else
-                   ('origin',originOff) -> cd.rstore; 
-               if);
-
-               
-               (if superDesc[] <> none then 
-                   (topSuper).descNo -> cd.topSuper;
-               if);
-               
-               (* Perhaps after markEnterE? *)
-               
-               (if sig[] <> none then sig.storeParameters if);
-               
-               (* code for allocation part *)
-               cd.markEnterE;               
-               scanSons
-               (# I: ^Item
-               do current[] -> I[];
-                  (if I.isDecl then current.gen if) 
-               #);
-               (if innerInx > 0 then innerInx -> cd.innerA if);               
-               (if superDesc[] <> none  then cd.rtnInner if);
-               
-               (* Code for action part *)
-               false -> cd.actions;
-               scanSons
-               (# I: ^Item
-               do current[] -> I[];
-                  (if not I.isDecl then current.gen if) 
-               #);
-               (* push return value 
-                * - for staticObject: R: @Foo
-                *   Foo should return (this(Foo)
-                *   perhaps default?
-                * - otherwise push variables in -> 
-                *)
-               (if sig[] <> none then 
-                   sig.pushReturnValues 
-                else
-                   (* puhsThis?*)
-               if);
-               (if superDesc[] <> none then
-                   cd.rtnInner
-                else
-                   'D' -> cd.rtn;
-               if);
-               (vsize,rsize,1) -> CD.endClass     
+                   (if superDesc[] <> none then
+                       (*(N[],superDesc.descNo) -> cd.exeAlloc;
+                        * cd.rpop;
+                        *)
+                       (N[],superDesc.descNo)  -> cd.super; 
+                       
+                       superDesc.descNo -> cd.vdtTableCopy;
+                       (if superDesc.innerInx > 0 then
+                           (superDesc.innerInx,descno) -> cd.vdtTable;
+                           true -> hasSuperAndInner
+                       if);                   
+                    else
+                       ('origin',originOff) -> cd.rstore; 
+                   if);
+                   
+                   
+                   (if superDesc[] <> none then 
+                       (topSuper).descNo -> cd.topSuper;
+                   if);
+                   
+                   (* Perhaps after markEnterE? *)
+                   
+                   (if sig[] <> none then sig.storeParameters if);
+                   
+                   (* code for allocation part *)
+                   cd.markEnterE;               
+                   scanSons
+                   (# I: ^Item
+                   do current[] -> I[];
+                      (if I.isDecl then current.gen if) 
+                   #);
+                   (if innerInx > 0 then innerInx -> cd.innerA if);               
+                   (if superDesc[] <> none  then cd.rtnInner if);
+                   
+                   (* Code for action part *)
+                   false -> cd.actions;
+                   scanSons
+                   (# I: ^Item
+                   do current[] -> I[];
+                      (if not I.isDecl then current.gen if) 
+                   #);
+                   (* push return value 
+                    * - for staticObject: R: @Foo
+                    *   Foo should return (this(Foo)
+                    *   perhaps default?
+                    * - otherwise push variables in -> 
+                    *)
+                   (if sig[] <> none then 
+                       sig.pushReturnValues 
+                    else
+                       (* puhsThis?*)
+                   if);
+                   (if superDesc[] <> none then
+                       cd.rtnInner
+                    else
+                       'D' -> cd.rtn;
+                   if);
+                   (vsize,rsize,1) -> CD.endClass     
+               if)
             #);
           goOrigin:
             (# on: @integer; org: ^Items
@@ -420,19 +441,31 @@ generator: checker
                if)
             #);    
           load2::
-            (# hasVirtualArgs: @boolean;
-               OG: ^ObjectGeneration
+            (# args: [6]^ObjectGeneration; top: @integer;
+               hasVirtualArgs: @boolean
             do 'KWP:load2: ' -> puttext; sig.dopt -> putline;
-               L:
-                 sig.args.scanSons
-                 (# I: ^Item; isArg: @boolean
-                 do (if isArg then
-                        current[] -> I[]; I.doPt -> putline;
-                        (if (I.isVirtual -> hasVirtualArgs) then
-                            leave L
-                    if)if);
-                    not isArg -> isArg
-                 #);
+               E.scanSons
+               (# isArg: @boolean
+               do (if isArg then
+                      'Actual arg: ' -> puttext;
+                      current.doPT -> putline;
+                      (if (top+1 -> top) > args.range then 
+                          args.range -> args.extend 
+                      if);
+                      current[] -> args[top][]
+                  if);
+                  not isArg -> isArg                  
+               #);
+               sig.args.scanArgs
+               (# I: ^Item; 
+               do 
+                  current[] -> I[]; I.doPt -> putline;
+                  (if I.isVirtual then
+                      true -> hasVirtualArgs
+                   else
+                      current.gen
+                  if);
+               #);
                (if hasVirtualArgs then 
                    '\n>>> Has Virtual arguments'->putline;
                   (* father.father[] -> OG[];
@@ -443,13 +476,7 @@ generator: checker
                        (sig.id[],OD.IS.descno,true) -> cd.alloc 
                    if)
                if);
-               E.scanSons
-               (# isArg: @boolean
-               do (if isArg then
-                      current.doPT -> putline
-                  if);
-                  not isArg -> isArg                  
-               #)
+
             #)
        #);
      BasicKeyWordPattern::
@@ -521,7 +548,8 @@ generator: checker
             #);
           loadOrigin:
             (# 
-            do 'Invocation:loadOrigin' -> cd.comment
+            do 'Invocation:loadOrigin' -> cd.comment;
+               gen
             #);
        #);
      Unary::
@@ -649,14 +677,36 @@ generator: checker
             (# inx: @integer
             do Loop:
                  (#
-                 do inx +1 -> inx;
+                 do inx + 1 -> inx;
                     (if inx <= top then
+                        inx -> ginx;
                         (OTL[inx].N[],OTL[inx].sig[]) -> OTL[inx].OT.genClass;
                         restart Loop
                     if);
                  #)
-            #);               
-          OTL: [10] ^Item;top: @integer;
+            #); 
+          ginx: @integer; (* clumsy *)
+          genOD:
+            (# OD: ^Items; i: @integer
+            enter OD[]
+            do ginx -> i;
+               Loop:
+                 (# 
+                 do i + 1 -> i;
+                    (if i <= top then
+                        (if OD[] = OTL[i][] then
+                            'Match'->putline;
+                            (OTL[i].N[],OTL[i].sig[]) -> OTL[i].OT.genClass;
+                         else
+                            restart Loop
+                        if)
+                     else
+                        '\n!!! ObjTmpStack:genOD:No match' -> puttext;
+                          OD.doPT -> putline
+                 if)#)
+            #);
+               
+          OTL: [10] ^Item; top: @integer;
        #);
      labelHandler: @
        (# labCount: @integer;
