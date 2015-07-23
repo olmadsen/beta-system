@@ -24,7 +24,7 @@ checker: Parser
      Items::<
        (# PT::
             (#
-            do (if true then
+            do (if false then
                    '(' -> lx.put;
                    originOff -> lx.putint; ',' -> lx.put;
                    vsize -> lx.putint; ',' -> lx.put;
@@ -90,7 +90,7 @@ checker: Parser
             exit topDesc[]
             #);
           localSearch:
-            (# CS: ^ Text; ATd: ^Decl
+            (# CS: ^ Text; ATd: ^Decl; pn: @integer
             enter CS[]
             do search:
                  (#
@@ -116,23 +116,25 @@ checker: Parser
                     (*'Try signature'->putline;*)
                     (if (CS[] -> OT.searchSig2 -> ATd[]) = none then
                         (if superDesc[] <> none then
-                            CS[] -> superDesc.localSearch -> ATd[]
+                            CS[] -> superDesc.localSearch -> (ATd[],pn);
+                            pn + 1 -> pn
                          (*else
-                            'Super is none'->putline*)
+                            'Super is none'->putline;*)
                         if)
                      (*else
                         'Found in signature: ' -> puttext; CS[] -> puttext;
                         ' decl: ' -> puttext; ATd.doPT -> putline*)
                     if)
                  #)
-            exit ATd[]
+            exit(ATd[],pn)
             #); 
           
           search:
-            (# CS: ^ Text; org: ^Items; ATd: ^Decl; on: @integer
+            (# CS: ^ Text; org: ^Items; ATd: ^Decl; on,pn: @integer
             enter CS[]
             do (*'OT:Search:'->puttext; CS[] -> putline;*)
-               (if (CS[] -> localSearch -> ATd[]) = none then
+               CS[] -> localSearch -> (ATd[],pn);
+               (if ATd[] = none then
                    (if ATd[] = none then
                        (if incl[] = none then 
                            '!!!!!Items:search:incl=none-search for: '->puttext;
@@ -142,10 +144,10 @@ checker: Parser
                        if);
                        (if ATd[] = none then
                            (if (origin[] -> org[]) <> none then
-                               CS[] -> org.search -> (ATd[],on);
+                               CS[] -> org.search -> (ATd[],on,pn);
                                on + 1 -> on
                if)if)if)if)
-            exit(ATd[],on)
+            exit(ATd[],on,pn)
             #);
           superApl: ^Apl;
           superDesc: ^Items;
@@ -175,7 +177,7 @@ checker: Parser
             (# CS: ^Text; ATd: ^Decl
             enter CS[]
             do scanSons
-               (# IV: ^Invocation; MI: ^ModuleItem
+               (# IV: ^Invocation; MI: ^ModuleItem; pn: @integer
                do (if traceSearch then
                       '***** Include:search: ' -> puttext; 
                       current.doPT -> putline;
@@ -183,7 +185,7 @@ checker: Parser
                   current[] -> IV[];
                   (if IV.ATd[] = none then 'IV.ATd=none'->putline if);
                   (if IV.ATd.desc = none then 'IV.ATd.desc=none'->putline if);
-                  CS[] -> (IV.ATd.desc).localSearch -> ATd[];
+                  CS[] -> (IV.ATd.desc).localSearch -> (ATd[],pn);
                   (if ATd[] <> none then
                       (*'Found: ' -> puttext; CS[] -> puttext;
                        ' in %include: ' -> puttext; IV.doPT -> putline;*)
@@ -314,23 +316,30 @@ checker: Parser
      FinalPattern::<
        (# Check::
             (# elm:: Items;
-               setImplicitSuper::
+               setImplSuper::
                  (# VP: ^VirtualPattern (* not always the case *)
-                 do 'FinalPattern:check: '->puttext;sig.doPT -> putline;
-                    sig.id[] -> scope.superDesc.localSearch -> vDcl[];
+                 do 'FinalPattern:check:setImplSuper '->puttext; sig.doPT -> putline;
+                    sig.id[] -> scope.superDesc.localSearch -> (vDcl[],pn);
+                    pn + 1 -> pn;
                     (if vDcl[] <> none then
-                        'Found vDcl: ' -> puttext; vDcl.sig.dopt -> puttext;;
-                        true -> isImplicitSuper;
+                        'Found vDcl: ' -> puttext; vDcl.sig.dopt -> puttext;
+                        (* OBS! in V:: A { } isImplSuper should not be true
+                         * Only for  V:: { }
+                         *)
                         vDcl[] -> VP[];
-                        VP.OD.superPI.on -> on;
-                        (if VP.OD.IS.isEmpty then
-                            true -> isSingularImplicitSuper;
-                            'VP:empty: ' -> puttext; VP.sig.dopt -> puttext;
+                        (if OD.superPI.IV.isEmpty then
+                            true -> isImplSuper;
+                            ' isImplSuper=T '-> puttext;                            
+                        if);
+                        (if not VP.OD.IS.isEmpty then                              
+                            true -> isSingularImplSuper;
+                            ' isSingularImplSuper=T ' -> puttext; VP.sig.dopt -> puttext;
                         if);
                         Vdcl.off -> off;
-                        ' on: ' -> puttext; on -> putint; newline;
-                        (*  'Found vDecl: Off: ' -> puttext; 
-                         off -> putint; ' ' -> put; vDcl.sig.doPT -> putline*)
+                        ' on:' -> puttext; on -> putint; 
+                        ' pn:' -> puttext; pn -> putint; 
+                        ' off:' -> puttext; off -> putint; ' ' -> put; 
+                        vDcl.sig.doPT -> putline
                      else
                         '\n!!!! No virtual declaration in super for: ' -> puttext;
                         sig.doPT -> putline;
@@ -434,7 +443,7 @@ checker: Parser
                 ': Variable: ' -> puttext; scope.dopt ->putline;*)
                
                (if scope[] <> none then (* ad hoc *)
-                   M.T[] -> scope.search -> (ATd[],on);
+                   M.T[] -> scope.search -> (ATd[],on,pn);
                    (if ATd[] <> none then
                        (M.T[],on,ATd[]) -> found;
                        scope[] -> ATd.isInner;
@@ -462,7 +471,7 @@ checker: Parser
             do (* 'Binary: '-> puttext; operator.T[] -> putline;*)
                (if scope[] <> none then (* ad hoc *)
                    (*scope[] -> rec.check -> scope[];*)
-                   operator.T[] -> scope.search -> (ATd[],on);
+                   operator.T[] -> scope.search -> (ATd[],on,pn);
                    (if ATd[] <> none then
                        (operator.T[],on,ATd[]) -> found
                     else
@@ -486,7 +495,7 @@ checker: Parser
           check::
             (# elm:: Items
             do (if scope[] <> none then
-                   F.T[]-> scope.search -> (ATd[],on);
+                   F.T[]-> scope.search -> (ATd[],on,pn);
                    (if ATd[] <> none then
                        (F.T[],on,ATd[]) -> found
                     else
@@ -505,7 +514,7 @@ checker: Parser
           check::
             (# elm:: Items
             do (if scope[] <> none then
-                   id[]-> scope.search -> (ATd[],on);
+                   id[]-> scope.search -> (ATd[],on,pn);
                    (if ATd[] <> none then
                        (id[],on,ATd[]) -> found
                     else
