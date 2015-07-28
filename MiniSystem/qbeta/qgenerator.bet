@@ -26,6 +26,7 @@ generator: checker
                        'Module not included: ' -> puttext; sig.doPT -> putline
                if)if)
             #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: (# do cd.pushThis #);
           loadAdr::
             (# 
@@ -55,6 +56,7 @@ generator: checker
                    if)
                if)
             #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: 
             (# 
             do cd.pushThis;
@@ -96,7 +98,12 @@ generator: checker
             do  (if OG.IV.isBasic then 
                     '\n!!! StaticObj:LoadOff called for simple: ' -> puttext;
                     dopt -> putline;
-                   (sig.id[],off) -> cd.pushg
+                    (* May happen for V := 117 where := is assignment - no offset
+                     * shall be pushed for V since V is assigned afterwards
+                     * For R ++ 117 offset for R should be pushed since it
+                     * is origin
+                     *)
+                   (*(sig.id[],off) -> cd.pushg*)
                 else
                    (sig.id[],off) -> cd.rpushg
                if)
@@ -121,6 +128,7 @@ generator: checker
        #);
      DynamicObject::
        (# gen:: (# do #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: (# do cd.pushThis #);
           loadAdr:: 
             (# 
@@ -385,6 +393,7 @@ generator: checker
        #);
      UnaryPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: 
             (# 
             do cd.pushThis;
@@ -436,6 +445,7 @@ generator: checker
                    (off,OD.IS.descNo) -> cd.vdtTable
                if)
             #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: 
             (# 
             do cd.pushThis;
@@ -469,6 +479,7 @@ generator: checker
             do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add;
                (off,OD.IS.descNo) -> cd.vdtTable
             #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: 
             (# 
             do cd.pushThis;
@@ -525,6 +536,7 @@ generator: checker
        #);
      FunctionalPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: (# do cd.pushThis #);
           loadAdr:: (# #);
           load:: 
@@ -542,6 +554,7 @@ generator: checker
        #);
      KeyWordPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add #);
+          pushThis2:: (# do cd.pushThis #);
           pushThis:: (# do cd.pushThis #);
           loadAdr:: 
             (# args: [6]^ObjectGeneration; top: @integer;
@@ -678,9 +691,23 @@ generator: checker
        (# gen:: 
             (* Should call loadOrigin and then execute *)
             (# first: @boolean; rec,E: ^Exp;
-            do (if false then
+            do (if true then
                    (* not testet *)
-                   cd.pushThis; (* what if empty?*)
+                   (if true then
+                       L:
+                         scanSons 
+                         (#
+                         do current[] -> E[];
+                            E.pushThis2;
+                            leave L
+                         #);
+                    else
+                       cd.pushThis; (* what if empty? 
+                                     * Problem for a constant like 117 
+                                     * We cannot just call E.pushThis for first
+                                     * since pushThis for eg Unary also goOrigin
+                                     *)
+                   if);
                    loadOrigin -> (rec[],E[]);
                    (rec[],isStaticObj) -> E.execute
                 else
@@ -707,8 +734,10 @@ generator: checker
                (# 
                do current[] -> E[];
                   (if isFirst then E.loadOrigin if); 
-                  (if not isLast then E.pushOff if);
-                  E[] -> rec[]
+                  (if not isLast then 
+                      E.pushOff;
+                      E[] -> rec[]
+                  if);
                #)
             exit(rec[],E[])
             #);
@@ -720,7 +749,8 @@ generator: checker
         *  A pattern Foo declared as Foo: Bar{ ... }
         *  ATd = operator.Decl
         *)
-       (# pushThis:: 
+       (# pushThis2:: (# do ATd.pushthis2 #);
+          pushThis:: 
             (# T: @text; org: ^Items
             do (if true then
                    (origin[],on) -> ATd.pushThis;
@@ -740,7 +770,9 @@ generator: checker
             #);
           loadOrigin::
             (# org: ^Items
-            do on -> (origin[]->org[]).goOrigin;               
+            do (if ATd## <> BasicUnaryPattern## then
+                    on -> (origin[]->org[]).goOrigin; 
+                if)
             #);
           pushOff:: (# do ATd.pushOff #);
           execute:: 
@@ -752,7 +784,8 @@ generator: checker
             #);
        #);
      Binary::
-       (# pushThis:: 
+       (# pushThis2:: (# do ATd.pushThis2 #);
+          pushThis:: 
             (# org: ^Items
             do ('Binary:pushThis: ',doPT) -> MkCom;
                (if true then
@@ -789,7 +822,8 @@ generator: checker
             #)
        #);
      Function::
-       (# pushThis:: 
+       (# pushThis2:: (# do ATd.pushThis2 #);
+          pushThis:: 
             (# org: ^Items
             do ('Function:pushThis: ',doPT) -> MkCom;
                (if true then
@@ -805,7 +839,9 @@ generator: checker
           loadAdr:: (# do ATd.loadAdr #);
           loadOrigin::
             (# org: ^Items
-            do on -> (origin[]->org[]).goOrigin;               
+            do (if ATD.isPrim = 0 then 
+                   on -> (origin[]->org[]).goOrigin;   
+               if)
             #);
           loadArgs:: 
             (# first: @boolean
@@ -839,7 +875,8 @@ generator: checker
             #)          
        #);
      KeyWord::
-       (# pushThis:: 
+       (# pushThis2:: (# do ATd.pushThis2 #);
+          pushThis:: 
             (# org: ^Items
             do 'KeyWord:pushThis: ' -> puttext; dopt ->putline;
                (if true then
@@ -860,7 +897,9 @@ generator: checker
             #);
           loadOrigin::
             (# org: ^Items
-            do on -> (origin[]->org[]).goOrigin;               
+            do (if ATD.isPrim = 0 then 
+                   on -> (origin[]->org[]).goOrigin
+               if)
             #);
           loadArgs::
             (# isArg: @boolean
