@@ -51,6 +51,16 @@ generator: checker
                if)
             #);
           pushThis:: (# do cd.pushThis #);
+          load2::
+            (* called when not receiver - i.e. value to be pushed *)
+            (#
+            do (if OG.IV.isBasic then 
+                   (sig.id[],off) -> cd.pushg
+                else
+                   (sig.id[],off) -> cd.rpushg
+               if);
+               true -> done
+            #);
           load::
             (* called when not receiver - i.e. value to be pushed *)
             (#
@@ -76,8 +86,7 @@ generator: checker
                if)
             #);
           store::
-             (* Called from Signature::StoreParameters
-             *)
+             (* Called from Signature::StoreParameters *)
             (#
             do (* 'StaticObject:store: '->putline;*)
                (if OG.IV.isBasic then 
@@ -96,6 +105,12 @@ generator: checker
      DynamicObject::
        (# gen:: (# do #);
           pushThis:: (# do cd.pushThis #);
+          load2:: 
+            (# 
+            do 'DynObj:load' -> cd.comment;
+               (sig.id[],this(DynamicObject).off) -> cd.rpushg;
+               true -> done
+            #);
           load:: 
             (# 
             do 'DynObj:load' -> cd.comment;
@@ -355,9 +370,19 @@ generator: checker
      UnaryPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add #);
           pushThis:: (# do cd.pushThis #);
+          load2::
+            (#
+            do ('UnaryPattern:load2: ',sig.doPT) -> cd.com2; 
+               (sig.id[],OD.IS.descno,true) -> cd.alloc;
+               (if not isStaticObj then
+                   cd.rpop;
+                   (* reconsider if return values *)
+               if);
+               true -> done
+            #);
           load::
             (#
-            do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
+            do ('UnaryPattern:load2: ',sig.doPT) -> cd.com2; 
                (sig.id[],OD.IS.descno,true) -> cd.alloc;
                (if not isStaticObj then
                    cd.rpop;
@@ -394,6 +419,16 @@ generator: checker
                if)
             #);
           pushThis:: (# do cd.pushThis #);
+          load2::
+            (#
+            do ('VirtualPtn:load: ',sig.doPT) -> cd.com2; 
+               (sig.id[],off) -> cd.sendVirtual;
+               (if not isStaticObj then
+                   cd.rpop;
+                   (* reconsider if return values *)
+               if);
+               true -> done
+            #);
           load::
             (#
             do ('VirtualPtn:load: ',sig.doPT) -> cd.com2; 
@@ -415,6 +450,17 @@ generator: checker
                (off,OD.IS.descNo) -> cd.vdtTable
             #);
           pushThis:: (# do cd.pushThis #);
+          load2::
+            (#
+            do (*'Load Final: ' -> puttext; doPt -> putline;*)
+               ('FinalPtn:load: ',sig.doPT) -> cd.com2; 
+               (sig.id[],off) -> cd.sendVirtual;
+               (if not isStaticObj then
+                   cd.rpop;
+                   (* reconsider if return values *)
+               if);
+               true -> done
+            #);
           load::
             (#
             do (*'Load Final: ' -> puttext; doPt -> putline;*)
@@ -429,10 +475,18 @@ generator: checker
             (#
             do 'FinalPattern:store: '->puttext; doPT -> putline;
             #);          
-       #);
-          
+       #);          
      BinaryPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add #);
+          load2::
+            (#
+            do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
+               (sig.id[],OD.IS.descno,true) -> cd.alloc;
+               (if not isStaticObj then
+                   cd.rpop; (* depend on the return type *)
+               if);
+               true -> done
+            #);
           load::
             (#
             do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
@@ -451,10 +505,25 @@ generator: checker
             (# 
             do OD.IS.props.basicProp.primno -> cd.op 
             #);
+          load2:: 
+            (# 
+            do OD.IS.props.basicProp.primno -> cd.op;
+               true -> done
+            #);          
        #);
      FunctionalPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add #);
           pushThis:: (# do cd.pushThis #);
+          load2:: 
+            (# 
+            do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
+               (sig.id[],OD.IS.descno,true) -> cd.alloc;
+               (if not isStaticObj then
+                   cd.rpop;
+                   (* reconsider if return values *)
+               if);
+               true -> done
+            #);
           load:: 
             (# 
             do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
@@ -466,7 +535,8 @@ generator: checker
             #);
        #);
      BasicFunctionalPattern::
-       (# load:: (# do ('put',OD.IS.props.basicProp.primNo) -> cd.Callprim #);
+       (# load2:: (# do ('put',OD.IS.props.basicProp.primNo) -> cd.Callprim; true -> done #);
+          load:: (# do ('put',OD.IS.props.basicProp.primNo) -> cd.Callprim #);
        #);
      KeyWordPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.superPI.IV[]) -> objTmpStack.add #);
@@ -542,30 +612,18 @@ generator: checker
                #);
                (if hasVirtualArgs then 
                    '\n>>> Has Virtual arguments'->putline;
-                  (* father.father[] -> OG[];
+                   (* father.father[] -> OG[];
                     ('KeyWord',none,OG[],OG.IV[]) -> ObjTmpStack.add*)
                 else
                    (if not isStaticObj then
-
                        (sig.id[],OD.IS.descno,true) -> cd.alloc 
                    if)
                if);
-
+               true -> done
             #)
        #);
      BasicKeyWordPattern::
-       (# load:: 
-            (# exitLab: @labelHandler.label
-            do (if OD.IS.props.basicProp.primNo
-                // ifthen_prim then
-                   exitLab.new;
-                   1111 -> cd.pushConst;                   
-                   exitlab -> cd.jmpFalse;
-                   2222 -> cd.pushConst;
-                   exitLab -> cd.defLab
-               if)
-            #);
-          load2::
+       (# load2::
             (# exitLab: @labelHandler.label
             do (if OD.IS.props.basicProp.primNo
                 // ifthen_prim then
@@ -585,9 +643,9 @@ generator: checker
                           'load2:%if%then: too many arguments' -> putline;
                           E.doPt -> putline
                       if)
-                   #);
-                   true -> done;
+                   #);                 
                if);
+               true -> done;
             #)
        #);            
      Invocation::
@@ -654,7 +712,8 @@ generator: checker
           execute:: 
             (# 
             do (if ((this(Exp)[],isStaticObj) -> ATd.load2) then
-                else
+                else 'Unary:WRONG' -> putline;
+                   doP -> putline;
                    isStaticObj -> ATd.load
                if)
             #);
@@ -669,14 +728,14 @@ generator: checker
           execute::
             (#
             do (if isAssign then 
-                   argument.gen;
+                   loadArgs; (*argument.gen;*)
                    ('var',rec.ATd.off) -> cd.storeg
                 else
                    (if rec.ATd.isBasic then 
-                       isStaticObj -> rec.ATd.load
+                       (this(Exp)[],isStaticObj) -> rec.ATd.load2
                    if);
                    loadArgs;
-                   isStaticObj -> ATd.load
+                   (this(Exp)[],isStaticObj) -> ATd.load2
                if)
             #)
        #);
@@ -711,9 +770,9 @@ generator: checker
             (# first: @boolean
             do true -> first;               
                loadArgs;
-               (if ATd[] = none then 
-                   'none' -> putline
-                else
+               (if ((this(Exp)[],isStaticObj) -> ATd.load2) then
+                else 'Function:WRONG: ' -> puttext;
+                   doP -> putline;
                    isStaticObj -> ATd.load
                if)
             #)          
