@@ -2,6 +2,7 @@ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qchecker';
 INCLUDE '../miniCompiler/objectcode'
 ---lib:attributes---
+isI: (# exit true #);
 generator: checker
   (# traceModules: (# exit false #);
      MkCom: 
@@ -157,7 +158,11 @@ generator: checker
                        'Singular#' -> name[];
                        IS.descNo -> name.putint;
                    if);
-                   (name[],IS.descno,true) -> cd.alloc;
+                   (if isI then 
+                       (name[],IS.descno) -> cd.invoke;
+                    else
+                       (name[],IS.descno,true) -> cd.alloc;
+                   if);
                    (if not isStaticObj  then cd.rpop if);
                    (name[],none,this(ObjectTemplate)[],super[]) -> ObjTmpStack.add
                if)
@@ -179,19 +184,18 @@ generator: checker
             (# N: ^text; sig: ^Signature; descNo: @integer; super: ^Invocation;
                T: @text; ptn: ^Pattern;
                vSuperDesc: ^Items;
-           
+
             enter(N[],sig[],descNo,Super[])
             do (*'GenClass: ' -> puttext; N[] -> putline;*)
                (if (superDesc[] <> none) then
                    superDesc.father.father -> ptn[];
                    (if not superDesc.done then
-                   (* 'HasSuper: ' -> puttext; *)
-                   (* super is always a pattern - I think!*)
-                   (# 
-                   do 
-                      (ptn.sig.id[],ptn.sig[],superdesc.descNo,ptn.OD.super[]) 
-                        -> superDesc.genClass
-                   #)
+                       (* 'HasSuper: ' -> puttext; *)
+                       (* super is always a pattern - I think!*)
+                       (# 
+                       do (ptn.sig.id[],ptn.sig[],superdesc.descNo,ptn.OD.super[]) 
+                            -> superDesc.genClass
+                       #)
                if)if);
                (if not done then
                    true -> done;
@@ -200,6 +204,84 @@ generator: checker
                     * thisObj.top = thisStack.top = origin 
                     * Possible arguments on callerStack
                     *)
+                   (if isI then
+                       (* store parameters + origin *)
+                       (if sig[] <> none then sig.storeParameters if);
+                       ('origin',originOff) -> cd.rstore;
+                       
+                       (if superDesc[] <> none then
+                           (ptn.sig.id[],superDesc.descNo)  -> cd.super; 
+                           superDesc.descNo -> cd.vdtTableCopy;
+                           (if superDesc.innerInx > 0 then
+                               (superDesc.innerInx,descno) -> cd.vdtTable;
+                               true -> hasSuperAndInner
+                           if);
+                           (* push super arguments *)
+                           'super.gen: push arguments' -> cd.comment;
+                           super.scanSons 
+                           (# E: ^Exp do current[] -> E[]; E.loadArgs #);
+                           
+                           (*push super origin *)
+                           (if not superApl.isThisBlockLevel or
+                               (superApl.isImplSuper 
+                               and not superApl.isSingularImplSuper)
+                           then
+                               (* '\n*** Load super origin: on: ' -> puttext;
+                                super.on -> putint; ' pn:' -> puttext; 
+                                superApl.pn ->putint;
+                                ' Super: ' -> puttext; super.dopt -> putline;
+                                'This: ' -> putLine;
+                                doP -> putline;     *)                      
+                               (if superApl.isImplSuper and not superApl.isSingularImplSuper then
+                                   (* ' implicit non Singular super: pn:' -> puttext; 
+                                    superApl.pn -> putint;
+                                    ' on:' -> puttext; superApl.on -> putint; 
+                                    ' superAPL.ATd.on:' -> puttext; *)
+                                   superApl.ATd[] -> ptn[];
+                                   (*ptn.OD.super.on -> putint; 
+                                    ' this: ' -> putLine;
+                                    doP -> putline;*)
+                                   origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
+                                   (for i: superApl.pn repeat
+                                        vSuperDesc.superDesc[] -> vSuperDesc[]
+                                   for);
+                                   (*'vSuperDesc: ' -> putline;
+                                    (0,true) -> vSuperDesc.doP -> putline;*)
+                                   cd.pushThis;
+                                   ('origin',originOff) -> cd.rpushg; 
+                                   ptn.OD.super.on -> vSuperDesc.goOrigin
+                                else
+                                   (*'Not Implicit:' -> puttext; *)
+                                   (* foo: bar ...   -- bar at another block level
+                                    *                -- go origin bar.ON
+                                    * foo: R.bar ... -- push adr of R
+                                    *)
+                                   (if superApl.length 
+                                    // 0 then 
+                                       'ERROR! Should be implicit' -> putline
+                                    // 1 then (*'Single' -> putline;*)
+                                       cd.pushThis;
+                                       superApl.on + 1 -> goOrigin;
+                                    else
+                                       (*'remote' -> putline;*)
+                                       (* R.S.foo { ... }
+                                        * cd.pushThis 
+                                        * R.on + 1 -> encDesc.goOrigin - as for single
+                                        * add S.off
+                                        *)
+                                       cd.pushThis;
+                                       ('origin',originOff) -> cd.rpushg;
+                                       super.loadOrigin
+                                   if)
+                               if)
+                            else
+                               cd.pushThis;
+                               ('origin',originOff) -> cd.rpushg;
+                           if);
+                           superDesc.descNo -> cd.topSuper;
+                           cd.markEnterE;  
+                       if)   
+                    else
                    (if superDesc[] <> none then
                        (ptn.sig.id[],superDesc.descNo)  -> cd.super; 
                        superDesc.descNo -> cd.vdtTableCopy;
@@ -243,15 +325,14 @@ generator: checker
                                 * foo: R.bar ... -- push adr of R
                                 *)
                                (if superApl.length 
-                                // 0 then 'ERROR! Should be implicit' -> putline
+                                // 0 then 
+                                   'ERROR! Should be implicit' -> putline
                                 // 1 then (*'Single' -> putline;*)
-                                   (*super.loadOrigin*)
                                    cd.pushThis;
                                    superApl.on + 1 -> goOrigin;
                                 else
                                    (*'remote' -> putline;*)
                                    (* R.S.foo { ... }
-                                    * 
                                     * cd.pushThis 
                                     * R.on + 1 -> encDesc.goOrigin - as for single
                                     * add S.off
@@ -267,19 +348,16 @@ generator: checker
                        ('origin',originOff) -> cd.rstore;
                        (* origin popped from thisObj=thisStack *)
                    if);
-                   
+
                    cd.setThisStack;
                    (if sig[] <> none then sig.storeParameters if);
-                   (*cd.setThisStack;*)
                    'super.gen: push arguments' -> cd.comment;
                    super.scanSons 
                    (# E: ^Exp do current[] -> E[]; E.loadArgs #);
                    cd.mvStack;
                    
                    (if superDesc[] <> none then 
-                       (* used to be (topSuper).descNo *)
-                       (*cd.mvStack;*)
-                       superDesc.descNo -> cd.topSuper;
+                       superDesc.descNo -> cd.topSuper
                    if);
                    
                    (* code for allocation part *)
@@ -293,6 +371,7 @@ generator: checker
                               D.gen
                           if)
                    #)if);
+                   if);
                    scanSons
                    (# I: ^Item
                    do current[] -> I[];
@@ -348,7 +427,11 @@ generator: checker
           load::
             (#
             do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
-               (sig.id[],OD.IS.descno,true) -> cd.alloc;
+                (if isI then 
+                    (sig.id[],OD.IS.descno) -> cd.invoke;
+                 else
+                    (sig.id[],OD.IS.descno,true) -> cd.alloc;
+                if);
                (if not isStaticObj then
                    cd.rpop;
                    (* reconsider if return values *)
@@ -424,7 +507,11 @@ generator: checker
           load::
             (#
             do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
-               (sig.id[],OD.IS.descno,true) -> cd.alloc;
+               (if isI then 
+                   (sig.id[],OD.IS.descno) -> cd.invoke;
+                else
+                   (sig.id[],OD.IS.descno,true) -> cd.alloc;
+               if);
                (if not isStaticObj then
                    cd.rpop; (* depend on the return type *)
                if);               
@@ -446,7 +533,11 @@ generator: checker
           load:: 
             (# 
             do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
-               (sig.id[],OD.IS.descno,true) -> cd.alloc;
+                (if isI then 
+                    (sig.id[],OD.IS.descno) -> cd.invoke;
+                 else
+                    (sig.id[],OD.IS.descno,true) -> cd.alloc;
+                if);
                (if not isStaticObj then
                    cd.rpop;
                    (* reconsider if return values *)
@@ -562,7 +653,11 @@ generator: checker
                     ('KeyWord',none,OG[],OG.super[]) -> ObjTmpStack.add*)
                 else
                    (if not isStaticObj then
-                       (sig.id[],OD.IS.descno,true) -> cd.alloc 
+                        (if isI then 
+                            (sig.id[],OD.IS.descno) -> cd.invoke;
+                         else
+                            (sig.id[],OD.IS.descno,true) -> cd.alloc 
+                        if)
                    if)
                if)               
             #)
@@ -877,8 +972,12 @@ generator: checker
               'TopModule: ' -> puttext;
               markIncludes.topModule.SO.sig.doPT -> putLine;
               'Main: ' -> puttext; main.doPt -> putline
+          if);
+           (if isI then 
+               ('BETAworld',(markIncludes.topModule.desc).descno) -> cd.invoke;
+            else
+               ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
            if);
-          ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
           cd.stop; (* We should generate stop here and not in betaVM *)
           (0,0,0) -> CD.endClass;
           
