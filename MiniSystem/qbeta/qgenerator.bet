@@ -39,7 +39,7 @@ generator: checker
                        (*cd.pushThis;*)
                        OG.IS.descNo -> T.putint;
                        ('staticObject: alloc: ',T[]) -> cd.com2; 
-                       true -> OG.gen;
+                       (true,0) -> OG.gen;
                        (*cd.rswap;*)
                        cd.pushThis;
                        (sig.id[],this(StaticObject).off) -> cd.rstoreg;
@@ -139,7 +139,7 @@ generator: checker
                (*IS.inv.ATd.doPT -> putline*)
                (if IS.isEmpty and not super.hasVirtualArgs or super.isBasic then
                    (* check this - called when R.foo *)
-                   isStaticObj -> super.gen
+                   (isStaticObj,superAdj) -> super.gen
                 else
                    (* called when R.foo{ } *)
                    (if super.hasVirtualArgs then
@@ -209,7 +209,11 @@ generator: checker
                        (if sig[] <> none then sig.storeParameters if);
                        ('origin',originOff) -> cd.rstore;
                        
-                       (if superDesc[] <> none then
+                       (if (superDesc[] <> none) and not superDesc.isBasic then
+                           (if superDesc.isBasic then
+                               'SuperDesc:isBasic: ' -> putline;
+                               superDesc.doP -> putline
+                           if);
                            (ptn.sig.id[],superDesc.descNo)  -> cd.super; 
                            superDesc.descNo -> cd.vdtTableCopy;
                            (if superDesc.innerInx > 0 then
@@ -217,14 +221,64 @@ generator: checker
                                true -> hasSuperAndInner
                            if);
                            (* push super arguments *)
-                           'super.gen: push arguments' -> cd.comment;
-                           super.scanSons 
-                           (# E: ^Exp do current[] -> E[]; E.loadArgs #);
+                           
+                           (if superApl.isImplSuper then
+                               'Implicit super: ' -> puttext; doP -> putline;
+                               (if superApl.isSingularImplSuper then
+                                   cd.pushThis;
+                                   ('iOrigin',originOff) -> cd.rpushg
+                                else
+                                   'Non singular Implict super: '->puttext;
+                                   doP -> putline;
+                                   superApl.ATd[] -> ptn[];
+                                   origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
+                                   (for i: superApl.pn repeat
+                                        vSuperDesc.superDesc[] -> vSuperDesc[]
+                                   for);
+                                   (*'vSuperDesc: ' -> putline; 
+                                    * (0,true) -> vSuperDesc.doP -> putline;*)
+                                   cd.pushThis;
+                                   ('origin',originOff) -> cd.rpushg; 
+                                   ptn.OD.super.on -> vSuperDesc.goOrigin
+                               if)                                   
+                            else
+                               'super.gen: push arguments' -> cd.comment;
+                               'super.gen: push arguments: ' -> puttext;
+                               super.doP -> putline;
+                               (# E,rec: ^Exp;
+                                  loadOrigin:
+                                    (# superAdj: @integer; E,rec: ^Exp
+                                    enter superAdj
+                                    do super.scanSons
+                                       (#
+                                       do current[] -> E[];
+                                          (if isFirst then 
+                                              superAdj -> E.loadOrigin 
+                                          if);
+                                          (if true or not isLast then
+                                              E.pushOff;
+                                              E[] -> rec[]
+                                          if);
+                                       #);
+                                    exit(rec[],E[])
+                                    #)
+                               do L:
+                                    super.scanSons 
+                                    (# E: ^Exp;
+                                    do current[] -> E[];
+                                       'arg: ' -> puttext; E.doP -> putline;
+                                       E.pushThis;
+                                       leave L
+                                    #);
+                                  originOff -> loadOrigin -> (rec[],E[]);
+                                  originOff -> E.loadArgs 
+                               #);
+                           if);
                            
                            (*push super origin *)
-                           (if not superApl.isThisBlockLevel or
+                           (if false and ( not superApl.isThisBlockLevel or
                                (superApl.isImplSuper 
-                               and not superApl.isSingularImplSuper)
+                               and not superApl.isSingularImplSuper))
                                then
                                (* '\n*** Load super origin: on: ' -> puttext;
                                 super.on -> putint; ' pn:' -> puttext; 
@@ -259,8 +313,8 @@ generator: checker
                                     // 0 then 
                                        'ERROR! Should be implicit' -> putline
                                     // 1 then (*'Single' -> putline;*)
-                                       cd.pushThis;
-                                       superApl.on + 1 -> goOrigin;
+                                       (*cd.pushThis;
+                                       superApl.on + 1 -> goOrigin;*)
                                     else
                                        (*'remote' -> putline;*)
                                        (* R.S.foo { ... }
@@ -268,14 +322,14 @@ generator: checker
                                         * R.on + 1 -> encDesc.goOrigin - as for single
                                         * add S.off
                                         *)
-                                       cd.pushThis;
+                                     (*  cd.pushThis;
                                        ('origin',originOff) -> cd.rpushg;
-                                       super.loadOrigin
+                                       super.loadOrigin*)
                                    if)
                                if)
                             else
-                               cd.pushThis;
-                               ('origin',originOff) -> cd.rpushg;
+                           (*    cd.pushThis;
+                               ('origin',originOff) -> cd.rpushg;*)
                            if);
                            superDesc.descNo -> cd.topSuper;
                            cd.markEnterE;  
@@ -377,7 +431,9 @@ generator: checker
                       (if I.isDecl then current.gen if) 
                    #);
                    (if innerInx > 0 then innerInx -> cd.innerA if);
-                   (if superDesc[] <> none  then cd.rtnInner if);
+                   (if (superDesc[] <> none) and not superDesc.isBasic  then
+                       cd.rtnInner 
+                   if);
                    
                    (* Code for action part *)
                    false -> cd.actions;
@@ -401,7 +457,7 @@ generator: checker
                        (* puhsThis?*)
                    if);
                    leaveLab -> cd.defLab;
-                   (if superDesc[] <> none then
+                   (if (superDesc[] <> none) and not superDesc.isBasic then
                        cd.rtnInner
                     else
                        'D' -> cd.rtn;
@@ -579,7 +635,7 @@ generator: checker
                       
                       (D.off,(args[i].desc).descno,(OG.desc).descNo) -> cd.vdtTableAt
                    else
-                      args[i].gen
+                      (false,superAdj) -> args[i].gen
                   if);
                #);               
             #);
@@ -701,7 +757,7 @@ generator: checker
         * We must reconsider parsing/AST and/or gen below
         *)
        (# gen:: 
-            (# first: @boolean; rec,E: ^Exp;
+            (# rec,E: ^Exp;
             do L:
                  scanSons 
                  (#
@@ -713,7 +769,7 @@ generator: checker
                      *)
                     leave L
                  #);
-               loadOrigin -> (rec[],E[]);
+               superAdj -> loadOrigin -> (rec[],E[]);
                (rec[],isStaticObj) -> E.execute
             #);
           loadOrigin:
@@ -723,7 +779,7 @@ generator: checker
             do scanSons
                (# 
                do current[] -> E[];
-                  (if isFirst then E.loadOrigin if); 
+                  (if isFirst then superAdj -> E.loadOrigin if); 
                   (if not isLast then 
                       E.pushOff;
                       E[] -> rec[]
@@ -731,6 +787,13 @@ generator: checker
                #)
             exit(rec[],E[])
             #);
+       #);
+     adjustOrigin:
+       (# originOff: @integer
+       enter originOff
+       do (if originOff > 0 then
+              ('origin',originOff) -> cd.rpushg
+          if)
        #);
      Unary::
        (* May be 
@@ -743,6 +806,7 @@ generator: checker
           loadOrigin::
             (# org: ^Items
             do (if ATd## <> BasicUnaryPattern## then
+                   superAdj -> AdjustOrigin;
                    on -> (origin[]->org[]).goOrigin; 
                if)
             #);
@@ -756,7 +820,8 @@ generator: checker
        (# pushThis:: (# do ATd.pushThis #);
           loadOrigin::
             (# org: ^Items
-            do on -> (origin[]->org[]).goOrigin;               
+            do superAdj -> AdjustOrigin;
+               on -> (origin[]->org[]).goOrigin;               
             #);
           loadArgs:: (# do args.scanSons(# do current.gen #) #);
           execute::
@@ -778,14 +843,17 @@ generator: checker
           loadOrigin::
             (# org: ^Items
             do (if ATD.isPrim = 0 then 
+                   superAdj -> AdjustOrigin;
                    on -> (origin[]->org[]).goOrigin;   
                if)
             #);
           loadArgs:: 
             (# 
-            do args.scanArgs
+            do 'Function:loadArgs: ' -> puttext; superAdj -> putint; 
+               ' ' -> put; doP -> putline;
+               args.scanArgs
                (# OG: ^ObjectGenerator
-               do current.gen;
+               do (false(*?*),superAdj) -> current.gen;
                   (if current## <= ObjectGenerator## then 
                       current[] -> OG[];
                       OG.super.swapr
@@ -797,9 +865,8 @@ generator: checker
                #);
             #);
           execute::
-            (# first: @boolean
-            do true -> first;               
-               loadArgs;
+            (# 
+            do loadArgs;
                (this(Exp)[],isStaticObj) -> ATd.load
             #)          
        #);
@@ -807,8 +874,9 @@ generator: checker
        (# pushThis:: (# do ATd.pushThis #);
           loadOrigin::
             (# org: ^Items
-            do (if ATD.isPrim = 0 then 
-                   on -> (origin[]->org[]).goOrigin
+            do (if (ATD.isPrim = 0) (*or (ATd.isPrim = ifThen_prim)*) then 
+                   superAdj -> AdjustOrigin;
+                   on  -> (origin[]->org[]).goOrigin
                if)
             #);
           loadArgs::
@@ -826,7 +894,7 @@ generator: checker
                    'hasVirtualArgs'->putline;
                if);
                (if true then
-                   this(Exp)[] -> ATd.loadArgs
+                   (this(Exp)[],superAdj) -> ATd.loadArgs
                 else
                    args.scanArgs(# do current.gen #)
                if)
