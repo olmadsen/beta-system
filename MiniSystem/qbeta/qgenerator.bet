@@ -2,7 +2,6 @@ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qchecker';
 INCLUDE '../miniCompiler/objectcode'
 ---lib:attributes---
-isI: (# exit true #);
 generator: checker
   (# traceModules: (# exit false #);
      MkCom: 
@@ -158,11 +157,8 @@ generator: checker
                        'Singular#' -> name[];
                        IS.descNo -> name.putint;
                    if);
-                   (if isI then 
-                       (name[],IS.descno) -> cd.invoke;
-                    else
-                       (name[],IS.descno,true) -> cd.alloc;
-                   if);
+                   (name[],IS.descno) -> cd.invoke;
+
                    (if not isStaticObj  then cd.rpop if);
                    (name[],none,this(ObjectTemplate)[],super[]) -> ObjTmpStack.add
                if)
@@ -200,231 +196,84 @@ generator: checker
                (if not done then
                    true -> done;
                    (N[],descNo,false, (topSuper).descNo,originOff) -> cd.class;
-                   (* thisObj = thisStack = the new instance of this class 
-                    * thisObj.top = thisStack.top = origin 
+                   (* thisObj = the new instance of this class 
+                    * thisStack = caller
                     * Possible arguments on callerStack
                     *)
-                   (if isI then
-                       (* store parameters + origin *)
-                       (if sig[] <> none then sig.storeParameters if);
-                       ('origin',originOff) -> cd.rstore;
-                       
-                       (if (superDesc[] <> none) and not superDesc.isBasic then
-                           (if superDesc.isBasic then
-                               'SuperDesc:isBasic: ' -> putline;
-                               superDesc.doP -> putline
-                           if);
-                           (ptn.sig.id[],superDesc.descNo)  -> cd.super; 
-                           superDesc.descNo -> cd.vdtTableCopy;
-                           (if superDesc.innerInx > 0 then
-                               (superDesc.innerInx,descno) -> cd.vdtTable;
-                               true -> hasSuperAndInner
-                           if);
-                           (* push super arguments *)
-                           
-                           (if superApl.isImplSuper then
-                               'Implicit super: ' -> puttext; doP -> putline;
-                               (if superApl.isSingularImplSuper then
-                                   cd.pushThis;
-                                   ('iOrigin',originOff) -> cd.rpushg
-                                else
-                                   'Non singular Implict super: '->puttext;
-                                   doP -> putline;
-                                   superApl.ATd[] -> ptn[];
-                                   origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
-                                   (for i: superApl.pn repeat
-                                        vSuperDesc.superDesc[] -> vSuperDesc[]
-                                   for);
-                                   (*'vSuperDesc: ' -> putline; 
-                                    * (0,true) -> vSuperDesc.doP -> putline;*)
-                                   cd.pushThis;
-                                   ('origin',originOff) -> cd.rpushg; 
-                                   ptn.OD.super.on -> vSuperDesc.goOrigin
-                               if)                                   
-                            else
-                               'super.gen: push arguments' -> cd.comment;
-                               'super.gen: push arguments: ' -> puttext;
-                               super.doP -> putline;
-                               (# E,rec: ^Exp;
-                                  loadOrigin:
-                                    (# superAdj: @integer; E,rec: ^Exp
-                                    enter superAdj
-                                    do super.scanSons
-                                       (#
-                                       do current[] -> E[];
-                                          (if isFirst then 
-                                              superAdj -> E.loadOrigin 
-                                          if);
-                                          (if true or not isLast then
-                                              E.pushOff;
-                                              E[] -> rec[]
-                                          if);
-                                       #);
-                                    exit(rec[],E[])
-                                    #)
-                               do L:
-                                    super.scanSons 
-                                    (# E: ^Exp;
-                                    do current[] -> E[];
-                                       'arg: ' -> puttext; E.doP -> putline;
-                                       E.pushThis;
-                                       leave L
-                                    #);
-                                  originOff -> loadOrigin -> (rec[],E[]);
-                                  originOff -> E.loadArgs 
-                               #);
-                           if);
-                           
-                           (*push super origin *)
-                           (if false and ( not superApl.isThisBlockLevel or
-                               (superApl.isImplSuper 
-                               and not superApl.isSingularImplSuper))
-                               then
-                               (* '\n*** Load super origin: on: ' -> puttext;
-                                super.on -> putint; ' pn:' -> puttext; 
-                                superApl.pn ->putint;
-                                ' Super: ' -> puttext; super.dopt -> putline;
-                                'This: ' -> putLine;
-                                doP -> putline;     *)                      
-                               (if superApl.isImplSuper and not superApl.isSingularImplSuper then
-                                   (* ' implicit non Singular super: pn:' -> puttext; 
-                                    superApl.pn -> putint;
-                                    ' on:' -> puttext; superApl.on -> putint; 
-                                    ' superAPL.ATd.on:' -> puttext; *)
-                                   superApl.ATd[] -> ptn[];
-                                   (*ptn.OD.super.on -> putint; ' this: ' -> putLine;
-                                    doP -> putline;*)
-                                   origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
-                                   (for i: superApl.pn repeat
-                                        vSuperDesc.superDesc[] -> vSuperDesc[]
-                                   for);
-                                   (*'vSuperDesc: ' -> putline; 
-                                    * (0,true) -> vSuperDesc.doP -> putline;*)
-                                   cd.pushThis;
-                                   ('origin',originOff) -> cd.rpushg; 
-                                   ptn.OD.super.on -> vSuperDesc.goOrigin
-                                else
-                                   (*'Not Implicit:' -> puttext; *)
-                                   (* foo: bar ...   -- bar at another block level
-                                    *                -- go origin bar.ON
-                                    * foo: R.bar ... -- push adr of R
-                                    *)
-                                   (if superApl.length 
-                                    // 0 then 
-                                       'ERROR! Should be implicit' -> putline
-                                    // 1 then (*'Single' -> putline;*)
-                                       (*cd.pushThis;
-                                       superApl.on + 1 -> goOrigin;*)
-                                    else
-                                       (*'remote' -> putline;*)
-                                       (* R.S.foo { ... }
-                                        * cd.pushThis 
-                                        * R.on + 1 -> encDesc.goOrigin - as for single
-                                        * add S.off
-                                        *)
-                                     (*  cd.pushThis;
-                                       ('origin',originOff) -> cd.rpushg;
-                                       super.loadOrigin*)
-                                   if)
-                               if)
-                            else
-                           (*    cd.pushThis;
-                               ('origin',originOff) -> cd.rpushg;*)
-                           if);
-                           superDesc.descNo -> cd.topSuper;
-                           cd.markEnterE;  
-                       if)   
-                    else
-                       (if superDesc[] <> none then
-                           (ptn.sig.id[],superDesc.descNo)  -> cd.super; 
-                           superDesc.descNo -> cd.vdtTableCopy;
-                           (if superDesc.innerInx > 0 then
-                               (superDesc.innerInx,descno) -> cd.vdtTable;
-                               true -> hasSuperAndInner
-                           if);   
-                           (if not superApl.isThisBlockLevel or
-                               (superApl.isImplSuper and not superApl.isSingularImplSuper)
-                               then
-                               (* '\n*** Load super origin: on: ' -> puttext;
-                                super.on -> putint; ' pn:' -> puttext; 
-                                superApl.pn ->putint;
-                                ' Super: ' -> puttext; super.dopt -> putline;
-                                'This: ' -> putLine;
-                                doP -> putline;     *)                      
-                               ('origin',originOff) -> cd.rstore; 
-                               (* origin popped from thisObj=thisStack *)
-                               (if superApl.isImplSuper and not superApl.isSingularImplSuper then
-                                   (* ' implicit non Singular super: pn:' -> puttext; 
-                                    superApl.pn -> putint;
-                                    ' on:' -> puttext; superApl.on -> putint; 
-                                    ' superAPL.ATd.on:' -> puttext; *)
-                                   superApl.ATd[] -> ptn[];
-                                   (*ptn.OD.super.on -> putint; 
-                                    ' this: ' -> putLine;
-                                    doP -> putline;*)
-                                   origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
-                                   (for i: superApl.pn repeat
-                                        vSuperDesc.superDesc[] -> vSuperDesc[]
-                                   for);
-                                   (*'vSuperDesc: ' -> putline;
-                                    (0,true) -> vSuperDesc.doP -> putline;*)
-                                   cd.pushThis;
-                                   ('origin',originOff) -> cd.rpushg; 
-                                   ptn.OD.super.on -> vSuperDesc.goOrigin
-                                else
-                                   (*'Not Implicit:' -> puttext; *)
-                                   (* foo: bar ...   -- bar at another block level
-                                    *                -- go origin bar.ON
-                                    * foo: R.bar ... -- push adr of R
-                                    *)
-                                   (if superApl.length 
-                                    // 0 then 
-                                       'ERROR! Should be implicit' -> putline
-                                    // 1 then (*'Single' -> putline;*)
-                                       cd.pushThis;
-                                       superApl.on + 1 -> goOrigin;
-                                    else
-                                       (*'remote' -> putline;*)
-                                       (* R.S.foo { ... }
-                                        * cd.pushThis 
-                                        * R.on + 1 -> encDesc.goOrigin - as for single
-                                        * add S.off
-                                        *)
-                                       cd.pushThis;
-                                       ('origin',originOff) -> cd.rpushg;
-                                       super.loadOrigin
-                                   if)
-                               if)
-                               (* origin of super pushed on thisObj = this Stack *)
-                           if);                           
-                        else
-                           ('origin',originOff) -> cd.rstore;
-                           (* origin popped from thisObj=thisStack *)
-                       if);
 
-                       cd.setThisStack;
-                       (if sig[] <> none then sig.storeParameters if);
-                       'super.gen: push arguments' -> cd.comment;
-                       super.scanSons 
-                       (# E: ^Exp do current[] -> E[]; E.loadArgs #);
-                       cd.mvStack;
-                       
-                       (if superDesc[] <> none then 
-                           superDesc.descNo -> cd.topSuper
+                   (* store parameters + origin *)
+                   (if sig[] <> none then sig.storeParameters if);
+                   ('origin',originOff) -> cd.rstore;
+                   
+                   (if (superDesc[] <> none) and not superDesc.isBasic then
+                       (if superDesc.isBasic then
+                           'SuperDesc:isBasic: ' -> putline;
+                           superDesc.doP -> putline
                        if);
+                       (ptn.sig.id[],superDesc.descNo)  -> cd.super; 
+                       superDesc.descNo -> cd.vdtTableCopy;
+                       (if superDesc.innerInx > 0 then
+                           (superDesc.innerInx,descno) -> cd.vdtTable;
+                           true -> hasSuperAndInner
+                       if);
+                       (* push super arguments *)
                        
-                       (* code for allocation part *)
+                       (if superApl.isImplSuper then
+                           'Implicit super: ' -> puttext; doP -> putline;
+                           (if superApl.isSingularImplSuper then
+                               cd.pushThis;
+                               ('iOrigin',originOff) -> cd.rpushg
+                            else
+                               'Non singular Implict super: '->puttext;
+                               doP -> putline;
+                               superApl.ATd[] -> ptn[];
+                               origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
+                               (for i: superApl.pn repeat
+                                    vSuperDesc.superDesc[] -> vSuperDesc[]
+                               for);
+                               (*'vSuperDesc: ' -> putline; 
+                                * (0,true) -> vSuperDesc.doP -> putline;*)
+                               cd.pushThis;
+                               ('origin',originOff) -> cd.rpushg; 
+                               ptn.OD.super.on -> vSuperDesc.goOrigin
+                           if)                                   
+                        else
+                           'super.gen: push arguments' -> cd.comment;
+                           'super.gen: push arguments: ' -> puttext;
+                           super.doP -> putline;
+                           (# E,rec: ^Exp;
+                              loadOrigin:
+                                (# superAdj: @integer; E,rec: ^Exp
+                                enter superAdj
+                                do super.scanSons
+                                   (#
+                                   do current[] -> E[];
+                                      (if isFirst then 
+                                          superAdj -> E.loadOrigin 
+                                      if);
+                                      (if true or not isLast then
+                                          E.pushOff;
+                                          E[] -> rec[]
+                                      if);
+                                   #);
+                                exit(rec[],E[])
+                                #)
+                           do L:
+                                super.scanSons 
+                                (# E: ^Exp;
+                                do current[] -> E[];
+                                   'arg: ' -> puttext; E.doP -> putline;
+                                   E.pushThis;
+                                   leave L
+                                #);
+                              originOff -> loadOrigin -> (rec[],E[]);
+                              originOff -> E.loadArgs 
+                           #);
+                       if);
+                       superDesc.descNo -> cd.topSuper;
                        cd.markEnterE;  
-                       (if (sig[] <> none) and (sig.args[] <> none) then
-                           sig.args.scanArgs
-                           (# D: ^Decl;
-                           do current[] -> D[];
-                              (*'Sig: ' -> puttext; D.doPT -> putline;*)
-                              (if D.isVirtual then
-                                  D.gen
-                              if)
-                       #)if);
-                   if);
+                   if);   
+
                    scanSons
                    (# I: ^Item
                    do current[] -> I[];
@@ -482,11 +331,7 @@ generator: checker
           load::
             (#
             do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
-               (if isI then 
-                   (sig.id[],OD.IS.descno) -> cd.invoke;
-                else
-                   (sig.id[],OD.IS.descno,true) -> cd.alloc;
-               if);
+               (sig.id[],OD.IS.descno) -> cd.invoke;
                (if not isStaticObj then
                    cd.rpop;
                    (* reconsider if return values *)
@@ -562,11 +407,7 @@ generator: checker
           load::
             (#
             do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
-               (if isI then 
-                   (sig.id[],OD.IS.descno) -> cd.invoke;
-                else
-                   (sig.id[],OD.IS.descno,true) -> cd.alloc;
-               if);
+               (sig.id[],OD.IS.descno) -> cd.invoke;
                (if not isStaticObj then
                    cd.rpop; (* depend on the return type *)
                if);               
@@ -588,11 +429,7 @@ generator: checker
           load:: 
             (# 
             do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
-               (if isI then 
-                   (sig.id[],OD.IS.descno) -> cd.invoke;
-                else
-                   (sig.id[],OD.IS.descno,true) -> cd.alloc;
-               if);
+               (sig.id[],OD.IS.descno) -> cd.invoke;
                (if not isStaticObj then
                    cd.rpop;
                    (* reconsider if return values *)
@@ -708,11 +545,7 @@ generator: checker
                     ('KeyWord',none,OG[],OG.super[]) -> ObjTmpStack.add*)
                 else
                    (if not isStaticObj then
-                       (if isI then 
-                           (sig.id[],OD.IS.descno) -> cd.invoke;
-                        else
-                           (sig.id[],OD.IS.descno,true) -> cd.alloc 
-                       if)
+                       (sig.id[],OD.IS.descno) -> cd.invoke;
                    if)
                if)               
             #)
@@ -1040,11 +873,7 @@ generator: checker
               markIncludes.topModule.SO.sig.doPT -> putLine;
               'Main: ' -> puttext; main.doPt -> putline
           if);
-          (if isI then 
-              ('BETAworld',(markIncludes.topModule.desc).descno) -> cd.invoke;
-           else
-              ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
-          if);
+          ('BETAworld',(markIncludes.topModule.desc).descno) -> cd.invoke;
           cd.stop; (* We should generate stop here and not in betaVM *)
           (0,0,0) -> CD.endClass;
           
