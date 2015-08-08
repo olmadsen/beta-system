@@ -82,6 +82,14 @@ generator: checker
                    (sig.id[],off) -> cd.rstoreg
                if)
             #);
+          popReturn::
+            (#
+            do (if OG.super.isBasic then 
+                   cd.vpop
+                else
+                   cd.rpop
+               if)
+            #)
        #);
      DynamicObject::
        (# gen:: (# do #);
@@ -91,7 +99,8 @@ generator: checker
             do 'DynObj:load' -> cd.comment;
                (sig.id[],this(DynamicObject).off) -> cd.rpushg               
             #);
-          store:: (# do (sig.id[],off) -> cd.rstoreg #);
+          store:: (# do cd.rswap; (sig.id[],off) -> cd.rstoreg #);
+          popReturn:: (# do cd.rpop #)            
        #);
      Signature::
        (# 
@@ -119,8 +128,19 @@ generator: checker
                       D.load
                    #)
                 else
-                  (* cd.setThisStack;
-                   cd.pushThis;*)
+                   cd.setThisStack;
+                   cd.pushThis;
+               if)
+            #);
+          popReturn:
+            (# 
+            do (if val[] <> none then
+                   val.scanSons
+                   (# D: ^Decl
+                   do (current[] -> D[]).popReturn
+                   #)
+                else
+                   cd.rpop
                if)
             #)
        #);
@@ -153,6 +173,7 @@ generator: checker
                    (name[],IS.descno) -> cd.invoke;
 
                    (if not isStaticObj  then cd.rpop if);
+                   
                    (name[],none,this(ObjectGenerator)[],super[]) -> ObjTmpStack.add
                if)
             #);
@@ -265,10 +286,13 @@ generator: checker
                        superDesc.descNo -> cd.topSuper;
                        cd.markEnterE;  
                    if);   
+                   (if (superDesc[] <> none) and not superDesc.isBasic  then
+                    else cd.mvStack
+                   if);
                    scanSons
                    (# I: ^Item
                    do current[] -> I[];
-                      (if I.isDecl then current.gen if) 
+                      (if I.isDecl then (false,0) -> current.gen if) 
                    #);
                    (if innerInx > 0 then innerInx -> cd.innerA if);
                    (if (superDesc[] <> none) and not superDesc.isBasic  then
@@ -283,22 +307,26 @@ generator: checker
                    scanSons
                    (# I: ^Item
                    do current[] -> I[];
-                      (if not I.isDecl then current.gen if) 
+                      (if not I.isDecl then (false,0) -> current.gen if) 
                    #);
+                   leaveLab -> cd.defLab;
+                   (* we must push return values *)
                    (* push return value 
                     * - for staticObject: R: @Foo
                     *   Foo should return (this(Foo)
                     *   perhaps default?
                     * - otherwise push variables in -> 
                     *)
-                   (if sig[] <> none then 
-                       sig.pushReturnValues 
+                   (if (superDesc[] <> none) and not superDesc.isBasic then
                     else
-                       (* ad hoc *)
-                       (*cd.setThisStack;
-                       cd.pushThis*)
-                   if);
-                   leaveLab -> cd.defLab;
+                       (if sig[] <> none then 
+                           sig.pushReturnValues 
+                        else
+                           (* ad hoc *)
+                           cd.setThisStack;
+                           cd.pushThis
+                   if)if);
+
                    (if (superDesc[] <> none) and not superDesc.isBasic then
                        cd.rtnInner
                     else
@@ -326,7 +354,7 @@ generator: checker
             do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
                (sig.id[],OD.IS.descno) -> cd.invoke;
                (if not isStaticObj then
-                   cd.rpop;
+                   sig.popReturn
                    (* reconsider if return values *)
                if)               
             #);
@@ -364,7 +392,7 @@ generator: checker
             do ('VirtualPtn:load: ',sig.doPT) -> cd.com2; 
                (sig.id[],off) -> cd.sendVirtual;
                (if not isStaticObj then
-                   cd.rpop;
+                   sig.popReturn
                    (* reconsider if return values *)
                if);               
             #);
@@ -386,7 +414,7 @@ generator: checker
                ('FinalPtn:load: ',sig.doPT) -> cd.com2; 
                (sig.id[],off) -> cd.sendVirtual;
                (if not isStaticObj then
-                   cd.rpop;
+                   sig.popReturn
                    (* reconsider if return values *)
                if);               
             #);
@@ -402,7 +430,7 @@ generator: checker
             do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
                (sig.id[],OD.IS.descno) -> cd.invoke;
                (if not isStaticObj then
-                   cd.rpop; (* depend on the return type *)
+                   sig.popReturn
                if);               
             #);
           store::
@@ -424,8 +452,7 @@ generator: checker
             do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
                (sig.id[],OD.IS.descno) -> cd.invoke;
                (if not isStaticObj then
-                   cd.rpop;
-                   (* reconsider if return values *)
+                   sig.popReturn
                if);               
             #);
        #);
@@ -535,7 +562,7 @@ generator: checker
                 else
                    (sig.id[],OD.IS.descno) -> cd.invoke;
                    (if not isStaticObj then
-                       cd.rpop
+                       sig.popReturn
                    if)
                if)               
             #)
@@ -552,7 +579,7 @@ generator: checker
                       (if N
                        // 1 // 3 then
                        // 2 then 
-                          current.gen;
+                          (true,0) -> current.gen;
                           exitlab -> cd.jmpFalse;
                        // 4 then
                           current.gen;
@@ -581,10 +608,7 @@ generator: checker
         *)
        (# gen:: 
             (# rec,E: ^Exp;
-            do 'Invocation:'->puttext;
-               scansons(# do current.doP -> putline #);
-               newline;
-               L:
+            do L:
                  scanSons 
                  (#
                  do current[] -> E[];
@@ -649,7 +673,7 @@ generator: checker
             do superAdj -> AdjustOrigin;
                on -> (origin[]->org[]).goOrigin;               
             #);
-          loadArgs:: (# do args.scanSons(# do current.gen #) #);
+          loadArgs:: (# do args.scanSons(# do (true,0) -> current.gen #) #);
           execute::
             (#
             do (if isAssign then 
