@@ -36,9 +36,9 @@ generator: checker
                    (if origin[] <> none then 
                        OG.IS.descNo -> T.putint;
                        ('staticObject: alloc: ',T[]) -> cd.com2; 
-                       (true,0) -> OG.gen;
-                       cd.pushThis;
-                       (sig.id[],this(StaticObject).off) -> cd.rstoreg;
+                       (false,0,this(StaticObject).off) -> OG.gen;
+                       (*cd.pushThis;
+                       (sig.id[],this(StaticObject).off) -> cd.rstoreg;*)
                     else 
                        (* A module object *)
                        (if not OG.IS.isEmpty then
@@ -54,6 +54,7 @@ generator: checker
             do (if OG.super.isBasic then 
                    (sig.id[],off) -> cd.pushg
                 else
+                   'StaticObj:load' -> cd.comment;
                    (sig.id[],off) -> cd.rpushg
                if)               
             #);
@@ -146,13 +147,18 @@ generator: checker
        #);
      ObjectGenerator::
        (# gen::
-            (# name: ^text
+            (# name,T: ^text
             do (*('OG: ',OI.inv.compoundSymb[]) -> MkCom;*)
                (*IS.inv.ATd.doPT -> putline*)
+               'OG:staticOff: '-> T[]; staticOff -> T.putint; 
                (if IS.isEmpty and not super.hasVirtualArgs or super.isBasic then
                    (* check this - called when R.foo *)
-                   (useReturnValue,superAdj) -> super.gen
+                   ':empty' -> T.append;
+                   T[] -> cd.comment;
+                   (useReturnValue,superAdj,staticOff) -> super.gen
                 else
+                   ':singular' -> T.append;
+                   T[] -> cd.comment;                   
                    (* called when R.foo{ } *)
                    (* (if super.hasVirtualArgs then
                        'ObjectGenerator:gen:hasVirtualArgs: ' -> putline;
@@ -170,7 +176,8 @@ generator: checker
                        'Singular#' -> name[];
                        IS.descNo -> name.putint;
                    if);
-                   (name[],IS.descno) -> cd.invoke;
+                   
+                   (name[],IS.descno,staticOff) -> cd.invoke;
 
                    (if not useReturnValue  then cd.rpop if);
                    
@@ -292,7 +299,7 @@ generator: checker
                    scanSons
                    (# I: ^Item
                    do current[] -> I[];
-                      (if I.isDecl then (false,0) -> current.gen if) 
+                      (if I.isDecl then (false,0,0) -> current.gen if) 
                    #);
                    (if innerInx > 0 then innerInx -> cd.innerA if);
                    (if (superDesc[] <> none) and not superDesc.isBasic  then
@@ -307,7 +314,7 @@ generator: checker
                    scanSons
                    (# I: ^Item
                    do current[] -> I[];
-                      (if not I.isDecl then (false,0) -> current.gen if) 
+                      (if not I.isDecl then (false,0,0) -> current.gen if) 
                    #);
                    leaveLab -> cd.defLab;
                    (* we must push return values *)
@@ -352,7 +359,7 @@ generator: checker
           load::
             (#
             do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
-               (sig.id[],OD.IS.descno) -> cd.invoke;
+               (sig.id[],OD.IS.descno,staticOff) -> cd.invoke;
                (if not useReturnValue then
                    sig.popReturn
                    (* reconsider if return values *)
@@ -374,6 +381,10 @@ generator: checker
                 // suspend_prim then
                    'Suspend' -> putline;
                    cd.suspendd
+                // resume_prim then
+                   'Resume' -> putline;
+                   ('Resume','D') -> cd.call;
+                   cd.rpop
                if);
             #)
        #);
@@ -431,7 +442,7 @@ generator: checker
           load::
             (#
             do ('BinaryPattern:load: ',sig.doPT) -> cd.com2;
-               (sig.id[],OD.IS.descno) -> cd.invoke;
+               (sig.id[],OD.IS.descno,staticOff) -> cd.invoke;
                (if not useReturnValue then
                    sig.popReturn
                if);               
@@ -453,7 +464,7 @@ generator: checker
           load:: 
             (# 
             do ('FunctionalPattern:load: ',sig.doPT) -> cd.com2;
-               (sig.id[],OD.IS.descno) -> cd.invoke;
+               (sig.id[],OD.IS.descno,staticOff) -> cd.invoke;
                (if not useReturnValue then
                    sig.popReturn
                if);               
@@ -495,7 +506,7 @@ generator: checker
                       
                       (D.off,(args[i].desc).descno,(OG.desc).descNo) -> cd.vdtTableAt
                    else
-                      (false,superAdj) -> args[i].gen
+                      (false,superAdj,0) -> args[i].gen
                   if);
                #);               
             #);
@@ -563,7 +574,7 @@ generator: checker
                    (* father.father[] -> OG[];
                     ('KeyWord',none,OG[],OG.super[]) -> ObjTmpStack.add*)
                 else
-                   (sig.id[],OD.IS.descno) -> cd.invoke;
+                   (sig.id[],OD.IS.descno,staticOff) -> cd.invoke;
                    (if not useReturnValue then
                        sig.popReturn
                    if)
@@ -582,7 +593,7 @@ generator: checker
                       (if N
                        // 1 // 3 then
                        // 2 then 
-                          (true,0) -> current.gen;
+                          (true,0,staticOff) -> current.gen;
                           exitlab -> cd.jmpFalse;
                        // 4 then
                           current.gen;
@@ -610,7 +621,7 @@ generator: checker
         * We must reconsider parsing/AST and/or gen below
         *)
        (# gen:: 
-            (# rec,E: ^Exp;
+            (# rec,E: ^Exp; T: ^Text
             do L:
                  scanSons 
                  (#
@@ -623,7 +634,8 @@ generator: checker
                     leave L
                  #);
                superAdj -> loadOrigin -> (rec[],E[]);
-               (rec[],useReturnValue) -> E.execute
+               'Inv: ' -> T[]; staticOff -> T.putint; T[] -> cd.comment;
+               (rec[],useReturnValue,staticOff) -> E.execute
             #);
           loadOrigin:
             (# superAdj: @integer;
@@ -666,7 +678,7 @@ generator: checker
           pushOff:: (# do ATd.pushOff #);
           execute:: 
             (# 
-            do (this(Exp)[],useReturnValue) -> ATd.load
+            do (this(Exp)[],useReturnValue,staticOff) -> ATd.load
             #);
        #);
      Binary::
@@ -676,7 +688,7 @@ generator: checker
             do superAdj -> AdjustOrigin;
                on -> (origin[]->org[]).goOrigin;               
             #);
-          loadArgs:: (# do args.scanSons(# do (true,0) -> current.gen #) #);
+          loadArgs:: (# do args.scanSons(# do (true,0,0) -> current.gen #) #);
           execute::
             (#
             do (if isAssign then 
@@ -688,10 +700,10 @@ generator: checker
                    if)
                 else
                    (if rec.ATd.isBasic then 
-                       (this(Exp)[],useReturnValue) -> rec.ATd.load
+                       (this(Exp)[],useReturnValue,staticOff) -> rec.ATd.load
                    if);
                    loadArgs;
-                   (this(Exp)[],useReturnValue) -> ATd.load
+                   (this(Exp)[],useReturnValue,staticOff) -> ATd.load
                if)
             #)
        #);
@@ -710,13 +722,13 @@ generator: checker
                ' ' -> put; doP -> putline;*)
                args.scanArgs
                (# OG: ^ObjectGenerator
-               do (false(*?*),superAdj) -> current.gen;
+               do (false(*?*),superAdj,0) -> current.gen;
                #);
             #);
           execute::
             (# 
             do loadArgs;
-               (this(Exp)[],useReturnValue) -> ATd.load
+               (this(Exp)[],useReturnValue,staticOff) -> ATd.load
             #)          
        #);
      KeyWord::
@@ -790,7 +802,7 @@ generator: checker
                 // leave_Prim then 
                    (*'Leave: ' -> puttext;*) leave_Prim -> doBreak
                 else
-                   (this(Exp)[],useReturnValue) -> ATd.load
+                   (this(Exp)[],useReturnValue,staticOff) -> ATd.load
                if)
             #);
        #);
@@ -927,7 +939,7 @@ generator: checker
               markIncludes.topModule.SO.sig.doPT -> putLine;
               'Main: ' -> puttext; main.doPt -> putline
           if);
-          ('BETAworld',(markIncludes.topModule.desc).descno) -> cd.invoke;
+          ('BETAworld',(markIncludes.topModule.desc).descno,0) -> cd.invoke;
           cd.stop; (* We should generate stop here and not in betaVM *)
           (0,0,0) -> CD.endClass;
           
