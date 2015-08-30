@@ -1596,12 +1596,15 @@ DWORD WINAPI interpreter(LPVOID B){;
 	rPush(thisStack,X);
 	break;
       case swap:
-	printf("****Byte code swap i snot implemented\n");
+	printf("****Byte code swap is not implemented\n");
 	break;
       case _rswap:
 	//for (i=0; i <= thisStack->rtop; i++) { printf("%i ",thisStack->rstack[i]);};
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
+#ifdef TRACE
+        fprintf(trace,"rswap %s %s\n",nameOf(X),nameOf(Y));
+#endif
 	rPush(thisStack,X);
 	rPush(thisStack,Y);
 	//for (i=0; i <= thisStack->rtop; i++) { printf("%i ",thisStack->rstack[i]);};
