@@ -10,7 +10,7 @@
 
 #include <string.h>
 
-//#define TRACE
+#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -48,6 +48,8 @@
    BCstart: size of BC
    : bytecodes ...
 */
+bool isXbeta;
+
 enum{
   imageSize_index = 8,
     textDescNo_index = 12,
@@ -180,7 +182,12 @@ enum {
   xrpushg = 83,
   xrstoreg = 84,
   swap = 85,
-  _rswap = 86
+  _rswap = 86,
+  setThisStack = 87,
+  topSuper = 88,
+  innera = 89,
+  invoke = 90,
+  invokev = 91
 };
 
 void runTimeError(char *msg){
@@ -476,6 +483,12 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case mvStack:
 	fprintf(trace,"mvStack");
 	break;
+      case setThisStack:
+	fprintf(trace,"setThisStack");
+	break;
+      case topSuper:
+	fprintf(trace,"topSuper %i",op2());
+        break;
       case call:
 	arg1 = (char) op1();
 	fprintf(trace,"call %c ",arg1);
@@ -487,6 +500,11 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg1 = op2();
 	arg2 = op1();
 	fprintf(trace,"alloc %i %i",arg1,arg2);
+	break;
+      case invoke:
+	arg1 = op2();
+	arg2 = op2();
+	fprintf(trace,"invoke %i %i",arg1,arg2);
 	break;
       case doExit:
 	fprintf(trace,"doExit");
@@ -525,6 +543,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case innerx:
 	fprintf(trace,"innerx %i",op1());
+	break;
+      case innera:
+	fprintf(trace,"innera %i",op1());
 	break;
       case rtnInner:
 	fprintf(trace,"returnInner");
@@ -969,7 +990,7 @@ void *interpreter(void *B);
 DWORD WINAPI interpreter(LPVOID B);
 #endif
 
-Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
+Event *init_interpreter(ObjDesc descs_a, int mainDescNo, bool isXB) {
   FILE *trace;
   Block *thisBlock;
 
@@ -978,6 +999,8 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
     thisBlock->thisObj = thisBlock->thisModule;
     thisBlock->thisStack = thisBlock->thisModule;
   };
+
+  isXbeta = isXB;
 
   threadStubDescNo = mainDescNo + 2;
 
@@ -1129,6 +1152,36 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 #ifdef event
     mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,currentDescNo,glsc,false);
+#endif
+  };
+
+  Event *invokeObj(int descNo,int staticOff,int vInxSize,int rInxSize){
+#ifdef TRACE
+    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
+#endif
+    callee = allocTemplate(newId(),descNo,false,vInxSize,rInxSize);
+#ifdef TRACE
+    fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
+#endif
+    if (staticOff > 0) thisObj->rfields[staticOff] = callee;
+    template *Y;
+    Y = thisObj;
+    rPush(callee,thisObj);
+    rPush(callee,thisStack);
+    //rPush(callee,origin);
+    cSaveReturn(thisObj,currentDescNo,glsc);
+    currentDescNo = descNo;
+    //thisStack = callee;
+    //thisObj = thisStack;
+    thisObj = callee;
+    bc = (ObjDesc) myCode(thisObj);
+    glsc = getAllocE(thisObj->desc);
+#ifdef TRACE
+    fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
+	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,(int)bc);
+#endif
+#ifdef event
+    mkAllocEvent(alloc_event,Y,thisObj,origin,false,currentDescNo,glsc,false);
 #endif
   };
 
@@ -1569,7 +1622,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	glsc = cRestoreReturn(thisObj);
 	currentDescNo = cRestoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
-	rPush(thisStack,X);
+        if (! isXbeta)rPush(thisStack,X);
 #ifdef TRACE
 	fprintf(trace,"TO %s(%i,%i,%s)",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 	dumpStack(trace,thisStack);
@@ -1591,6 +1644,24 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"]\n");
 #endif
 	break;
+      case setThisStack:
+#ifdef TRACE
+	fprintf(trace,"setThisStack\n");
+#endif
+	thisStack = thisObj->rstack[thisObj->rtop];
+        break;
+      case topSuper:
+	arg1 = op2();
+#ifdef TRACE
+	fprintf(trace,"topSuper %i\n",arg1);
+#endif
+	currentDescNo = arg1;
+	bc = codeFromDescNo(arg1);
+	glsc = getAllocE(getDesc(arg1));
+	//bc = (ObjDesc) getByteCode(getDesc(arg1));
+	//glsc = getAllocE(getDesc(arg1));               
+	fprintf(trace,"bc: %i glsc: %i\n",bc,glsc);
+	break;
       case call:
 	/*return*/ doCall(false);
 	break;
@@ -1609,6 +1680,14 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"alloc %i %i ",arg1,arg2);
 #endif
 	/*return*/ allocObj(rPop(thisStack),arg1,arg2,0,0);
+	break;
+      case invoke:
+	arg1 = op2();
+	arg2 = op2();
+#ifdef TRACE
+	fprintf(trace,"invoke %i %i ",arg1,arg2);
+#endif
+        invokeObj(arg1,arg2,0,0);
 	break;
       case doExit:
 #ifdef TRACE
@@ -1815,14 +1894,33 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  glsc = getDoE(getDesc(arg2));
 	}
 	break;
+      case innera:
+	arg1 = op1();
+#ifdef TRACE
+	fprintf(trace,"innera %i",arg1);
+#endif
+	arg2 = vdtTable(trace,thisObj,arg1); // descNo
+
+	if (arg2 > 0) {
+	  cSaveReturn(thisObj,currentDescNo,glsc);
+	  currentDescNo = arg2;
+	  bc = codeFromDescNo(arg2);
+	  glsc = getEnterE(getDesc(arg2));
+          fprintf(trace,"innera bc: %i glsc: %i",bc,glsc);
+	}
+#ifdef TRACE
+	fprintf(trace,"\n");
+#endif
+	break;
       case rtnInner:
 #ifdef TRACE
-	fprintf(trace,"returnInner\n");
+	fprintf(trace,"returnInner");
 #endif
 	glsc = cRestoreReturn(thisObj);
 	dscNo = cRestoreReturn(thisObj);
 	currentDescNo = dscNo;
 	bc = codeFromDescNo(dscNo);
+        fprintf(trace," descNo: %i bc: %i glsc: %i\n",dscNo,bc,glsc);
 	break;
       case innerExit:
 	arg1 = op1();
@@ -2182,6 +2280,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc]);
+	printf("glsc: %i, op: %i",glsc,bc[glsc]);
 	runTimeError("Illegal byte code");
 	break;
       }
