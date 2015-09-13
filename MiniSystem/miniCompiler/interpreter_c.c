@@ -1782,15 +1782,17 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  case 14: // cmpAndSwap 
 	    arg1 = vPop(thisStack); // offset 
 	    arg2 = vPop(thisStack); // new value
+	    //printf("off: %i new: %i\n",arg1,arg2);
 	    X = rPop(thisStack);
+	    //printf("Obj: %s\n",nameOf(X));
 	    arg3 = X->vfields[arg1];
 	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
 	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
 	    //printf("[");
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
 	    //printf("]");
-	    //printf("cmpAndSwap new: %i old: %i %s adr: %i\n"
-	    //	    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
+	    //printf("cmpAndSwap off: %i new: %i old: %i %s adr: %i\n"
+	    //	    ,arg1,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
 #ifdef TRACE
 	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i"
 		    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
