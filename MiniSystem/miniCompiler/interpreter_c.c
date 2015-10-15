@@ -184,7 +184,7 @@ enum {
   swap = 85,
   _rswap = 86,
   setThisStack = 87,
-  topSuper = 88,
+  toSuper = 88,
   innera = 89,
   invoke = 90,
   invokev = 91
@@ -486,8 +486,8 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case setThisStack:
 	fprintf(trace,"setThisStack");
 	break;
-      case topSuper:
-	fprintf(trace,"topSuper %i",op2());
+      case toSuper:
+	fprintf(trace,"toSuper %i",op2());
         break;
       case call:
 	arg1 = (char) op1();
@@ -1653,10 +1653,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	thisStack = thisObj->rstack[thisObj->rtop];
         break;
-      case topSuper:
+      case toSuper:
 	arg1 = op2();
 #ifdef TRACE
-	fprintf(trace,"topSuper %i\n",arg1);
+	fprintf(trace,"toSuper %i\n",arg1);
 #endif
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
