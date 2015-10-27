@@ -187,7 +187,9 @@ enum {
   toSuper = 88,
   innera = 89,
   invoke = 90,
-  invokev = 91
+  invokev = 91,
+  innerP = 92,
+  rpopThisObj = 93
 };
 
 void runTimeError(char *msg){
@@ -486,6 +488,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case setThisStack:
 	fprintf(trace,"setThisStack");
 	break;
+      case rpopThisObj:
+	fprintf(trace,"rpopThisObj");
+	break;
       case toSuper:
 	fprintf(trace,"toSuper %i",op2());
         break;
@@ -543,6 +548,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case innerx:
 	fprintf(trace,"innerx %i",op1());
+	break;
+      case innerP:
+	fprintf(trace,"innerP %i",op1());
 	break;
       case innera:
 	fprintf(trace,"innera %i",op1());
@@ -1653,6 +1661,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	thisStack = thisObj->rstack[thisObj->rtop];
         break;
+      case rpopThisObj:
+	printf("\n\n***** rpopThisObj not implemented \n\n");
       case toSuper:
 	arg1 = op2();
 #ifdef TRACE
@@ -1899,6 +1909,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  glsc = getDoE(getDesc(arg2));
 	}
 	break;
+      case innerP:
+	printf("\n\n***** InnerP not implemented\n");
+        break;
       case innera:
 	arg1 = op1();
 #ifdef TRACE
