@@ -1771,7 +1771,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    B->currentDescNo = threadStubDescNo;
 	    B->top = Y;
 #ifdef TRACE
-	    printf("currentDescNo: %i %i %i threadNo: %i\n"
+	    printf("\ncurrentDescNo: %i %i %i threadNo: %i\n"
 		   ,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
 #endif
 	    B->glsc = 0;
@@ -2291,7 +2291,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       case stop: 
 #ifdef TRACE
-	fprintf(trace,"stop: %i\n",threadNo);
+	fprintf(trace,"\nstop: %i\n",threadNo);
 #endif
 	running = false;
 	//threadNo = threadNo - 1;
@@ -2304,7 +2304,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       }
     };
   fclose(trace);
-  printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
+  printf("\nStop: %i \n",threadNo); if (hasThreads) printf("TRUE\n");
   if (threadNo > 0) {
     int j;
 #ifdef linux
