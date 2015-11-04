@@ -258,8 +258,10 @@ ObjDesc descs;
 unsigned char * stringTable;
 
 // NB! The byte order is inconsistent - sometimes big somtimes little endian
-int getInt2(int inx) {
-  return descs[inx] * 256 + descs[inx + 1];
+unsigned int getInt2(int inx) {
+  //return descs[inx] * 256 + descs[inx + 1];
+  printf("L: %i R: %i\n",descs[inx],descs[inx + 1]);
+  return (descs[inx] << 8) | descs[inx + 1];
 };
 
 int getInt4(int inx){
@@ -299,8 +301,13 @@ char *getString(int inx){
 
 ObjDesc getDesc(int descNo) {
   // returns start address of desctiptor descNo
-  int inx = getInt2(noOfObjDesc_index + 4 + (descNo - 1) * 2);
-  //fprintf(trace,"descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
+  int ix = noOfObjDesc_index + 4 + (descNo - 1) * 4;
+  int inx = getInt4(noOfObjDesc_index + 4 + (descNo - 1) * 4);
+  //if (descNo < 10) {
+  //  printf("descNo: %i %i %i %i %i %i\n", descNo,inx,descs[ix+3],descs[ix+2],descs[ix+1],descs[ix+0]);
+
+  //}
+  //printf("descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
   if (inx > 0) {
     return descs + inx; }
   else 
@@ -701,6 +708,7 @@ int rSize(ObjDesc desc){
 void dumpDesc(FILE *trace, int xdescNo) {
   ObjDesc desc;  
   if ((desc = getDesc(xdescNo)) > 0 ) {
+    //fprintf(trace,"desc: %i ",desc);
     fprintf(trace,"\nClass ");
     //int i;
     //for (i=0; i <10; i++) fprintf(trace,"%i ",desc[i]);
@@ -713,7 +721,12 @@ void dumpDesc(FILE *trace, int xdescNo) {
     fprintf(trace,"%s",getString(desc_getInt2(desc,0)));
     fprintf(trace," descNo:%i vSize:%i rSize:%i originOff:%i\n"
 	    ,descNo(desc),VS,RS,desc_getInt2(desc,originOff_index));
-    if (VS >= 16) runTimeError("vSize too big");
+    if (VS >= 16) {
+      fprintf(trace,"\n\n");
+      close(trace);
+      runTimeError("vSize too big");
+    }
+
     if (RS >= 32) runTimeError("rSize too big");
     dumpCode(trace,desc);
   }
@@ -1011,7 +1024,6 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo, bool isXB) {
   isXbeta = isXB;
 
   threadStubDescNo = mainDescNo + 2;
-
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
   descs = descs_a; // this is necessary for getImageSize() below
@@ -1030,7 +1042,6 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo, bool isXB) {
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
-
   allocMain(mainDescNo);
   thisBlock->bc = getByteCode(getDesc(mainDescNo));
   thisBlock->currentDescNo = mainDescNo;
@@ -1662,7 +1673,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	thisStack = thisObj->rstack[thisObj->rtop];
         break;
       case rpopThisObj:
+	fprintf(trace,"rpopThisObj\n");
+	thisObj = rPop(thisObj);
 	printf("\n\n***** rpopThisObj not implemented \n\n");
+        break;
       case toSuper:
 	arg1 = op2();
 #ifdef TRACE
