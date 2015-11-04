@@ -259,9 +259,7 @@ unsigned char * stringTable;
 
 // NB! The byte order is inconsistent - sometimes big somtimes little endian
 unsigned int getInt2(int inx) {
-  //return descs[inx] * 256 + descs[inx + 1];
-  printf("L: %i R: %i\n",descs[inx],descs[inx + 1]);
-  return (descs[inx] << 8) | descs[inx + 1];
+  return descs[inx] * 256 + descs[inx + 1];
 };
 
 int getInt4(int inx){
