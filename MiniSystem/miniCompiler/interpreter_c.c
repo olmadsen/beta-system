@@ -1673,7 +1673,6 @@ DWORD WINAPI interpreter(LPVOID B){;
       case rpopThisObj:
 	fprintf(trace,"rpopThisObj\n");
 	thisObj = rPop(thisObj);
-	printf("\n\n***** rpopThisObj not implemented \n\n");
         break;
       case toSuper:
 	arg1 = op2();
@@ -1922,7 +1921,26 @@ DWORD WINAPI interpreter(LPVOID B){;
 	}
 	break;
       case innerP:
-	printf("\n\n***** InnerP not implemented\n");
+	arg1 = op1();
+        X = rPop(thisStack);
+        rPush(X,thisObj);
+        thisObj = X;
+#ifdef TRACE
+	fprintf(trace,"innerP %i",arg1);
+#endif
+	arg2 = vdtTable(trace,X,arg1); // descNo
+#ifdef TRACE
+	fprintf(trace,"\n");
+#endif
+	if (arg2 > 0) {
+	  cSaveReturn(thisObj,currentDescNo,glsc);
+	  currentDescNo = arg2;
+	  bc = codeFromDescNo(arg2);
+	  glsc = getDoE(getDesc(arg2));
+	}
+	break;
+
+
         break;
       case innera:
 	arg1 = op1();
