@@ -975,9 +975,12 @@ int descNoOf(template * obj){
 
 void dumpStack(FILE *trace,template *Z){
   int i;
-  fprintf(trace,"\[");
+  fprintf(trace,"r\[");
   for (i=0; i < Z->rtop; i++)
     fprintf(trace,"%s ",nameOf(Z->rstack[i + 1]));
+  fprintf(trace,"]v\[");
+  for (i=0; i < Z->vtop; i++)
+    fprintf(trace,"%i ",Z->vstack[i + 1]);  
   fprintf(trace,"]\n");
 }
 void dumpSwapped(FILE *trace,template *X, template *Y,template *Z){
@@ -1390,6 +1393,11 @@ DWORD WINAPI interpreter(LPVOID B){;
     rPush(thisStack,callee);
   };
 
+  void StacksToOut()
+    { fprintf(trace,"thisObj= %s ",nameOf(thisObj));
+      fprintf(trace,"thisStack= %s ",nameOf(thisStack));
+
+    }
   int opCode,arg1,arg2,arg3,dscNo,V;
   int dinx,isRindexed,rangee,i;
   bool running = true;
@@ -1677,14 +1685,14 @@ DWORD WINAPI interpreter(LPVOID B){;
       case toSuper:
 	arg1 = op2();
 #ifdef TRACE
-	fprintf(trace,"toSuper %i\n",arg1);
+	fprintf(trace,"toSuper %i",arg1);
 #endif
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
 	glsc = getAllocE(getDesc(arg1));
 	//bc = (ObjDesc) getByteCode(getDesc(arg1));
 	//glsc = getAllocE(getDesc(arg1));               
-	fprintf(trace,"bc: %i glsc: %i\n",bc,glsc);
+	fprintf(trace," bc: %i glsc: %i\n",bc,glsc);
 	break;
       case call:
 	/*return*/ doCall(false);
