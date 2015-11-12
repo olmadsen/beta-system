@@ -1781,7 +1781,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    X = allocTemplate(newId(),threadStubDescNo,true,0,0);
 	    rPush(X,Y);
 #ifdef TRACE
-	    fprintf(trace,"%s\n",nameOf(X));
+	    fprintf(trace,"%s top:%s\n",nameOf(X),nameOf(Y));
 #endif
 	    B->thisModule = X;
 	    B->thisObj = X;
@@ -1845,7 +1845,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    break;
 	  case 17: 
 #ifdef TRACE
-	   fprintf(trace,"thisCore %s %s\n",nameOf(thisBlock->thisObj),nameOf(thisBlock->top));
+	    fprintf(trace,"thisCore %s %s\n",nameOf(thisBlock->thisObj),nameOf(thisBlock->top));
 #endif
 	    rPush(thisStack,thisBlock->top);
 	    break;
