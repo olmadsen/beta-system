@@ -1621,7 +1621,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	rPush(thisStack,X);
 	break;
       case swap:
-	printf("****Byte code swap is not implemented\n");
+        arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
+	vPush(thisStack,arg1);
+	vPush(thisStack,arg2);
 	break;
       case _rswap:
 	//for (i=0; i <= thisStack->rtop; i++) { printf("%i ",thisStack->rstack[i]);};
