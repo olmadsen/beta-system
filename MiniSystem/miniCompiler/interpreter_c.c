@@ -1623,6 +1623,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case swap:
         arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+	fprintf(trace,"swap top-1: %i top: %i\n",arg2,arg1);
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg2);
 	break;
