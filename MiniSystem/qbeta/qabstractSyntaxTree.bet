@@ -33,11 +33,18 @@ AbstractSyntaxTree: Tree
             #);
           length:: (# do SO.length -> value #);
           PP:: (# do 'Module' -> lx.append #);
+                         
+          (* Bindings from tree *)
+          moduleName:: (# do 'Module' -> N[]; 'Module:name: '-> putline;  #);
+          getEntries:: (# do SO.getEntries -> (names[],entries[]) #);
+          entity:: (# do SO.entity -> E[] #);
+          
           desc:<
             (# D: ^Items
             do inner
             exit D[]
             #);
+          skind:: (# do ': /' -> S[] #);
           handleDirModules:
             (# pDirModule:<
                  (# moduleDir: ^text; (* name of direcory with BETA module *)
@@ -126,7 +133,8 @@ AbstractSyntaxTree: Tree
                   #) -> m[];
                   (if m[] <> none then m[] -> main[] if);
                   path.pop
-               #)
+               #);
+
             exit main[]
             #);
               
@@ -175,8 +183,11 @@ AbstractSyntaxTree: Tree
      ModuleItem:< Decl
        (# PP:: (# do 'ModuleItem' -> lx.append #);
           PT:: (#do (pos,break) -> MD.PT #);
+          getEntries:: (# do md.getEntries -> (names[],entries[]) #);
+          Entity:: (# do md.entity -> E[]#);
           isParsed: @boolean;
           MD: ^Module; (*SO: ^StaticObject - perhaps just StaticObject?*)
+          skind:: (# do MD.skind -> S[] #);
        enter(Name -> append,MD[]->append)
        #);
      Items:< Scope 
@@ -198,6 +209,22 @@ AbstractSyntaxTree: Tree
             #);
           PP:: (# do 'Items' -> lx.append #);
           display:: (# do 'Items:'->putline #);
+          scanDecls:
+            (# currentDcl: ^decl;
+            do scanSons
+               (# I: ^Item
+               do current[] -> I[];
+                  (if I.isDecl then
+                      I[] -> currentDcl[];
+                      inner scanDecls
+                  if);
+               #);
+               
+            #);          
+          getEntries:: 
+            (# 
+            do scanDecls(# do (currentDcl.sig.id[],currentDcl[]) -> add #)
+            #);
           ifBasic: BooleanValue
             (#
             do (if props[] <> none then
@@ -238,6 +265,7 @@ AbstractSyntaxTree: Tree
             do inner
             exit D[]
             #);
+          sort:: (# do this(Item)[] -> S[] #);
        do inner 
        #);
      Properties:< Node
@@ -581,7 +609,10 @@ AbstractSyntaxTree: Tree
             #);
           length:: (# do 3 + OG.length -> value #);
           PP:: (# do 'StaticObject'-> lx.append #);
-          isBasic:: (#do OG.isBasic -> value #)
+          getEntries:: (# do OG.getEntries -> (names[],entries[]) #);
+          entity:: (# do OG[] -> E[] #);
+          isBasic:: (#do OG.isBasic -> value #);
+          skind:: (# do ': @' -> S[] #);
        enter(sig[] -> append,OG[] -> append)
        #);
      DynamicObject:< Decl
@@ -594,7 +625,8 @@ AbstractSyntaxTree: Tree
                (pos,break) -> PI.PT 
             #);
           length:: (# do 3 + PI.length -> value #);
-          PP:: (# do 'StaticObject'-> lx.append #)
+          PP:: (# do 'StaticObject'-> lx.append #);
+          skind:: (# do ': ^' -> S[] #);
        enter(sig[] -> append,PI[] -> append)
        #);     
      Pattern: Decl
@@ -637,6 +669,7 @@ AbstractSyntaxTree: Tree
             #);
           isBasic:: (# do OD.IS.isBasic -> value #);
           isCore:: (#do OD.IS.isCore -> value #);
+          skind:: (# do ': ' -> S[] #);
           OD: ^ObjectGenerator
        #);
      UnaryPattern:< Pattern
@@ -713,6 +746,8 @@ AbstractSyntaxTree: Tree
                    IS.isBasic -> value
                if);
             #); 
+          getEntries:: (# do IS.getEntries -> (names[],entries[]) #);
+          entity:: (# do IS[] -> E[] #);
           desc:: 
             (# 
             do (if IS.isEmpty and not hasVirtualArgs then 
@@ -925,27 +960,6 @@ AbstractSyntaxTree: Tree
      objectDecl,integerDecl,charDecl,StringDecl,errorDecl
      ,thisDecl,thisCoreDecl,coreDecl: ^Decl;
      
-     Xpath: @
-       (# P: [8] ^text;
-          top: @integer;
-          init:< (# do 0 -> top #);
-          push:
-            (# dir: ^text
-            enter dir[]
-            do (if (top + 1 -> top) > P.range then P.range -> P.extend if);
-               dir[] -> P[top][];
-            #);
-          pop: (# do top - 1 -> top #);
-          append:
-            (# pth: @text
-            do (for i: top repeat 
-                    P[i][] -> pth.append;
-                    (if i < top then dirCh -> pth.put if)
-               for)
-            exit pth[]
-            #)
-       #);
-     
      locateWorld: @
        (# trace: (# exit false #);
           entries: [8] ^text; top,worldPos: @integer;          
@@ -997,6 +1011,34 @@ AbstractSyntaxTree: Tree
        enter(fullpath,FN[])
        do init;
           (if fullPath then (* from miniEnv *)
+              '\nFrom minienv: ' -> puttext;
+              FN[] -> putline;
+              FN.copy -> CWD[];
+              (if false then
+                  'locateWorld: ' ->puttext; CWD[] -> putline;
+                  'dirC: "'->puttext; dirCh -> put; '"' -> put; newline;
+              if);
+              (# pos,lastDir: @integer 
+              do (*CWD.setPos;*)
+                 CWD.scanAll
+                 (# 
+                 do pos + 1 -> pos; 
+                    (if ch // '/' //  dirCh then pos -> lastDir if)
+                 #);
+                 (* lastdir -> putint; newline;*)
+                 (lastDir,CWD.length) -> CWD.delete;
+                 (*CWd[] -> putline;*)
+                 deComp;
+
+                 (* deComp defines topPath = ' ...../BETAworld/BETAworld.bet',
+                  * since we need to 
+                  * compile from BETAworld when using compile foo.bet
+                  * Here we need to compile just the module/module
+                  * being executed from miniEnv
+                  * We thus overwrite topPath as done below
+                  *)
+                 (*  FN[] -> topPath[]*)
+              #)
            else
               getCurrentDir -> CWD[];
               (*'CWD: ' -> puttext; CWD[] -> putline;*)
