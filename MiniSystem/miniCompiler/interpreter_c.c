@@ -190,7 +190,8 @@ enum {
   invokev = 91,
   innerP = 92,
   rpopThisObj = 93,
-  rtnEventQ = 94
+  rtnEventQ = 94,
+  doEventQ = 95
 };
 
 void runTimeError(char *msg){
@@ -548,6 +549,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case rtnEventQ:
 	fprintf(trace,"rtnEventQ %i ",op1());
+	break;
+      case doEventQ:
+	fprintf(trace,"doEventQ %i ",op1());
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld ");
@@ -1899,7 +1903,6 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 #ifdef EVENT
 	mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
-	mkEvent(do_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc,false);
 #endif
 	break;
       case rtnEventQ:
@@ -1909,6 +1912,14 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 #ifdef EVENT
 	mkEvent(rtn_event,rTopElm(thisObj),thisObj,myCorigin(thisObj),false,currentDescNo,glsc);
+#endif        
+        break;
+      case doEventQ:
+#ifdef TRACE
+	fprintf(trace,"doEventQ %s\n",nameOf(thisObj));
+#endif
+#ifdef EVENT
+	mkEvent(do_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc,false);
 #endif        
         break;
       case saveBETAworld:
