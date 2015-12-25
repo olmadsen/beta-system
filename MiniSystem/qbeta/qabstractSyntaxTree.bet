@@ -42,6 +42,39 @@ AbstractSyntaxTree: Tree
                      if)
                  if)
             #);
+          mapBCposToCharRange:
+            (# bcp,B,E: @integer
+            enter bcp
+            do '\nMapBCposToCharRange: ' -> puttext; bcp -> putint; newline;
+            exit(B,E)
+            #);
+          doMapBCposToCharRange::
+            (# bPos1,ePos1: @integer; trace: (# exit true #)
+            do'\ndoMapBCposToCharRange: ' -> puttext; lsc -> putint; newline;
+               (if trace then
+                   'Map: ' ->putline; doPT -> puttext; ' ' -> put;
+                   lsc -> putint; ' in: '->puttext;
+                   beginBCP -> putint; ','->put; endBCP -> putint; newline;
+                if);
+               
+                (if (beginBCP < lsc) and (lsc <= endBCP) then
+                   (if trace then
+                       'Inside: ' -> puttext;
+                   if);
+                   beginPos -> B; endPos -> E;
+                   (if trace then B -> putint; ','->put; E -> putint; newline if);
+                   L:
+                      scanSons
+                      (#
+                      do (if true (*not current.isObjDesc*) then (* do not go into singular*)
+                             lsc -> current.mapBCposToCharRange -> (bPos1,ePos1);
+                             (if bPos1 > 0 then 
+                                 bPos1 -> B; ePos1 -> E;
+                                 leave L 
+                         if)if)
+                      #)
+               if)
+            #);
           theModule::<
             (#
             do inner;
@@ -221,6 +254,7 @@ AbstractSyntaxTree: Tree
                    imports.mark 
                if);
             #); 
+          objDescEQ:: (# do DN -> SO.objDescEQ -> value #);
           isAdded,isIncluded: @boolean;
        enter SO[] -> append
        #);
@@ -234,6 +268,7 @@ AbstractSyntaxTree: Tree
                    (pos,break) -> MD.PT 
                if)
             #);
+          length:: (# do MD.length -> value #);
           getEntries:: (# do md.getEntries -> (names[],entries[]) #);
           Entity:: (# do md.entity -> E[]#);
           kind:: (# do (if true then md.kind -> ch else '/' -> ch if)#);
@@ -241,27 +276,34 @@ AbstractSyntaxTree: Tree
           isaModule:: (# do &iModule[] -> M[]; md[] -> M.M[] #);
           isParsed: @boolean;
           myDesc:: (# do MD.desc -> OD[] #);
+          objDescEQ:: (# do DN -> MD.objDescEQ -> value #);
           
           MD: ^Module; (*SO: ^StaticObject - perhaps just StaticObject?*)
-
        enter(Name -> append,MD[]->append)
        #);
      Items:< Scope 
        (# PT::< 
             (# 
-            do (if props[] <> none then 
-                   props.PT;
-                   (pos,break) -> mkbreak
-               if);
-               inner;
-               scanSons
-               (# 
-               do (if not isFirst or (incl[] <> none) and (incl.son[] <> none) then
-                      (pos,break) -> current.PT; 
-                      (if not isLast then
-                          (pos,break) -> mkbreak
-                  if)if)
-               #)
+            do (pos,length) -> block
+               (#
+               do (if props[] <> none then 
+                      (pos,break) -> props.PT;
+                      (pos,break) -> mkbreak
+                  if);
+                  inner PT;
+                  scanSons
+                  (# 
+                  do (if not isFirst or (incl[] <> none) and (incl.son[] <> none) then
+                         (pos,break) -> current.PT; 
+                         (if not isLast then
+                             (pos,break) -> mkbreak
+                     if)if)
+               #)#)
+            #);
+          length::
+            (#
+            do (if props[] <> none then props.length -> value if);
+               scanSons(# do current.length + value -> value #)
             #);
           PP:: (# do 'Items' -> lx.append #);
           display:: (# do 'Items:'->putline #);
@@ -380,10 +422,12 @@ AbstractSyntaxTree: Tree
             do '['->lx.put;
                scanSons
                (#
-               do current.pt; (if not isLast then ','->lx.put if) 
+               do (pos,break) -> current.PT; 
+                  (if not isLast then ','->lx.put if) 
                #);
                ']'->lx.put;
             #);
+          length:: (# do scanSons(#do current.length + value -> value #)#);
           scanProps:
             (# currentProp: ^Property
             do scanSons
@@ -417,7 +461,12 @@ AbstractSyntaxTree: Tree
      Property:< Node
        (# PT:: 
             (# 
-            do P.pt; (if arg[] <> none then arg.PT if) 
+            do (pos,break) -> P.PT; 
+               (if arg[] <> none then (pos,break) -> arg.PT if) 
+            #);
+          length:: 
+            (# 
+            do P.length -> value; (if arg[] <> none then arg.length + value -> value if) 
             #);
           P: ^Lexem;
           arg: ^Properties;
@@ -443,7 +492,14 @@ AbstractSyntaxTree: Tree
        (# PT:: 
             (# 
             do '%include ' -> lx.append;
-               scanSons(#do current.PT; (if not isLast then ',' -> lx.put if)#)
+               scanSons
+               (#do (pos,break) -> current.PT; 
+                  (if not isLast then ',' -> lx.put if)#)
+            #);
+          length:: 
+            (#
+            do 9 -> value;
+               scanSons(# do current.length + 1 + value -> value #)
             #);
           PP:: (# do 'include' -> lx.append #);
           encModule:
@@ -551,6 +607,7 @@ AbstractSyntaxTree: Tree
                #);
                (*(if val[] <> none then val.PT if)*)
             #);
+          length:: (# do scanSons(#do current.length + value -> value #)#);
           PP::(# do 'Signature'-> lx.append #);
           display:: (# do 'Signature:'->putline #);
           xS: ^Lexem; (* Arguments, and fatCommas are just appended *)
@@ -655,6 +712,7 @@ AbstractSyntaxTree: Tree
                    scanSons(# do (pos,break) -> current.PT #);
                if)
             #);
+          length:: (# do scanSons(# do current.length + 1 -> value #)#);
           PP:: (# do 'Arguments' -> lx.append #);
           isBinary,isKeyWord,isFunction: @boolean;
           scanArgs:
@@ -699,13 +757,18 @@ AbstractSyntaxTree: Tree
                    ' -> ' -> lx.append;
                    scanSons
                    (# 
-                   do current.PT; 
+                   do (pos,break) -> current.PT; 
                       (if not isLast then 
                           ','-> lx.put;
                           ' '-> lx.put
                       if) 
                    #)
                if)
+            #);
+          length:: 
+            (# 
+            do 4 -> value;
+               scanSons(# do current.length + value -> value #)
             #);
           PP:: (# do 'Value' -> lx.append #)
        #);
@@ -718,7 +781,7 @@ AbstractSyntaxTree: Tree
                ' ' -> lx.put; '@' -> lx.put; ' ' -> lx.put; 
                (pos,break) -> OG.PT 
             #);
-          length:: (# do 3 + OG.length -> value #);
+          length:: (# do sig.length + 4 + OG.length -> value #);
           PP:: (# do 'StaticObject'-> lx.append #);
           getEntries:: (# do OG.getEntries -> (names[],entries[]) #);
           entity:: (# do OG[] -> E[] #);
@@ -746,8 +809,9 @@ AbstractSyntaxTree: Tree
             do (pos,break) -> sig.PT; 
                inner;
                ' ' -> lx.put;
-               (pos,true) -> OD.PT
+               (pos,break) -> OD.PT
             #);
+          length:: (# do sig.length + 3 + OD.length -> value #);
           setUpOrigin::
             (#
             do origin[] -> sig.setUpOrigin;
@@ -782,6 +846,7 @@ AbstractSyntaxTree: Tree
           isCore:: (#do OD.IS.isCore -> value #);
           entity:: (#do OD.entity -> E[] #);
           skind:: (# do ': ' -> S[] #);
+          objDescEQ:: (# do DN -> OD.objDescEQ -> value #);
           OD: ^ObjectGenerator
        #);
      UnaryPattern:< Pattern
@@ -843,13 +908,23 @@ AbstractSyntaxTree: Tree
      ObjectGenerator:< item
        (# PP:: (# do 'ObjectGenerator' -> lx.append #);
           PT:: 
-            (# 
+            (# ind: @integer
             do (pos,break) -> super.PT;
+               (if (lx.length > 0) or (super.length > 0) then 
+                   (* lx.length = 0 -> do not indent first line 
+                    * unless super.length > 0
+                    *)
+                   4 -> ind 
+               if);
                (if not IS.isEmpty then 
-                   (pos+4,true) -> mkBreak;
-                   (pos+4,true) -> IS.PT;
+                   (pos + ind,true) -> mkBreak;
+                   (pos + ind, length) -> block
+                   (#
+                   do (pos,true) -> IS.PT;
+                   #);
                if)
             #);
+          length :: (# do super.length + IS.length -> value #);
           isBasic: booleanValue
             (#
             do (if IS.isEmpty then
@@ -882,7 +957,8 @@ AbstractSyntaxTree: Tree
        enter(super[] -> append,IS[] -> append)
        #);
      PatternId:< Apl
-       (# PT:: (# do IV.PT; (if id[] <> none then id[] -> lx.append if) #);
+       (# PT:: (# do (pos,break) -> IV.PT; (if id[] <> none then id[] -> lx.append if) #);
+          length:: (# do IV.length -> value #);
           PP:: (#do 'PatternId'->lx.append #);
           desc:
             (# D: ^Items
@@ -907,6 +983,7 @@ AbstractSyntaxTree: Tree
                   if);
                   (pos,break) -> current.PT; 
             #)#);
+          length:: (# do scanSons(#do current.length + value -> value #)#);
           isBasic: booleanValue
             (#
             do scanSons
@@ -950,7 +1027,7 @@ AbstractSyntaxTree: Tree
           ATd: ^Decl;
           isEmpty: @boolean;
           on,pn: @integer;
-          length: @integer; (* length of this invocation 
+          lgth: @integer; (* length of this invocation 
                              * foo  , length = 1
                              * R.foo, length = 2
                              * A + B, length = 2
@@ -965,7 +1042,7 @@ AbstractSyntaxTree: Tree
             do (if false and ((length > 1) or isImplSuper) then
                    '\n*** isThisBlockLevel: ON:' -> puttext; on -> putInt;
                    ' PN:' -> puttext; pn -> putint;
-                   ' length = ' -> puttext; length -> putint; 
+                   ' length = ' -> puttext; lgth -> putint; 
                    (if isImplSuper then 
                        ' implSuper=T' -> puttext 
                    if);
@@ -975,7 +1052,7 @@ AbstractSyntaxTree: Tree
                    ' thisSuper:\n' -> puttext;
                    doPT -> putline;
                if);
-               (length <= 1) and (on = 0) -> value
+               (lgth <= 1) and (on = 0) -> value
             #);
           adjustON::
             (#
@@ -1034,8 +1111,8 @@ AbstractSyntaxTree: Tree
        #);
      Unary:< Exp
        (# PP:: (# do 'Unary' -> lx.append #);
-          PT:: (# do M.PT; args.PT #);
-          
+          PT:: (# do (pos,break) -> M.PT; (pos,break) -> args.PT #);
+          length:: (# do M.length + args.length -> value #);
           M: ^Name
        enter(M[] -> append,args[] -> append)
        #);
@@ -1043,9 +1120,10 @@ AbstractSyntaxTree: Tree
        (# PP:: (# do 'Binary' -> lx.append #);
           PT::
             (#
-            do operator.PT; ' '-> lx.put;
-               args.pt
+            do (pos,break) -> operator.PT; ' '-> lx.put;
+               (pos,break) -> args.pt
             #);
+          length:: (# do operator.length + 1 + args.length -> value #);
           dot:: (# do ' ' -> T[] #);
           operator: ^Name;
           (*argument: ^ObjectGenerator*)
@@ -1053,7 +1131,8 @@ AbstractSyntaxTree: Tree
        #);
      Function:< Exp
        (# PP:: (# do 'Function' -> lx.append #);
-          PT::(#do scanSons(#do current.PT#) #);
+          PT::(#do scanSons(#do (pos,break) -> current.PT #) #);
+          length:: (# do scanSons(# do current.length + value -> value #)#);
           F: ^Name
        enter(Name -> F[] -> append,args[] -> append)
        #);
@@ -1068,12 +1147,14 @@ AbstractSyntaxTree: Tree
                   (if not isLast then ' ' -> lx.put if);
                #)
             #);
+          length:: (# do scanSons(# do current.length + value -> value #)#);
           id: ^Text
        enter(id[],args[] -> append)
        #);
      BracketedExp:< Exp
        (# PP:: (# do 'BracketedExp' -> lx.append #);
-          PT:: (# do '(' -> lx.put; E.PT; ')' -> lx.put #);
+          PT:: (# do '(' -> lx.put; (pos,break) -> E.PT; ')' -> lx.put #);
+          length:: (# do 2 + E.length -> value #);
           E: ^Exp
        enter E[] -> append
        #);
@@ -1083,18 +1164,22 @@ AbstractSyntaxTree: Tree
        #);
      Name:< Lexem
        (# PT:: (# do T[] -> lx.append #);
+          length:: (#do  T.length -> value #);
           PP:: (# do 'name:' -> lx.append; T[] -> lx.append #);
        #);
      Const:< Lexem
        (# PT:: (# do T[] -> lx.append #);
           PP:: (# do T[] -> lx.append #);
+          length:: (#do  T.length -> value #);          
        #);
      CharObj:< Lexem
        (# PT::  (# do '\'' -> lx.put;  T[] -> lx.append; '\'' -> lx.put #);
+          length:: (#do  T.length + 2 -> value #);
           PP:: (# do T[] -> lx.append #);
        #);     
      StringObj:< Lexem
        (# PT::< (# do '"' -> lx.put;  T[] -> lx.append; '"' -> lx.put #);
+          length:: (#do  T.length + 2 -> value #);
           PP:: (# do T[] -> lx.append #);
        #);
      
