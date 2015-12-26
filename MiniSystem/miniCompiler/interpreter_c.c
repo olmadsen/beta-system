@@ -191,7 +191,8 @@ enum {
   innerP = 92,
   rpopThisObj = 93,
   rtnEventQ = 94,
-  doEventQ = 95
+  doEventQ = 95,
+  allocEventQ = 96
 };
 
 void runTimeError(char *msg){
@@ -392,7 +393,7 @@ void dumpString(FILE *trace, int inx) { //fprintf(trace,"dumpString %i\n",inx);
 
 void dumpCode(FILE *trace, ObjDesc desc){
   ObjDesc bc;
-  int opCode,arg1,arg2,bcTop,glsc;
+  int opCode,arg1,arg2,arg3,bcTop,glsc;
   int op1(){
     int V = bc[glsc]; 
     glsc = glsc + 1;
@@ -441,13 +442,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case xpush:
 	fprintf(trace,"xpush %i",op1());
 	break;
-       case xrpush:
+      case xrpush:
 	fprintf(trace,"xrpush %i",op1());
 	break;
-     case xpushg:
+      case xpushg:
 	fprintf(trace,"xpushg %i",op1());
 	break;
-     case xrpushg:
+      case xrpushg:
 	fprintf(trace,"xrpushg %i",op1());
 	break;
       case store:
@@ -516,7 +517,8 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case invoke:
 	arg1 = op2();
 	arg2 = op2();
-	fprintf(trace,"invoke %i %i",arg1,arg2);
+	arg3 = op1();
+	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
 	break;
       case doExit:
 	fprintf(trace,"doExit");
@@ -1728,8 +1730,9 @@ DWORD WINAPI interpreter(LPVOID B){;
       case invoke:
 	arg1 = op2();
 	arg2 = op2();
+        arg3 = op1();
 #ifdef TRACE
-	fprintf(trace,"invoke %i %i ",arg1,arg2);
+	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
 #endif
         invokeObj(arg1,arg2,0,0);
 	break;
@@ -1895,6 +1898,15 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	rPush(thisStack,0);
 	break;
+      case allocEventQ:
+	arg1 = op1();
+#ifdef TRACE
+	fprintf(trace,"allocEventQ %i\n",arg1);
+#endif
+#ifdef EVENT
+	mkAllocEvent(alloc_event,rTopElm(thisObj,1),thisObj,myCorigin(thisObj),false,currentDescNo,glsc,false);
+#endif
+	break;
       case rtnEvent:
 	arg1 = op1();
 	X = rPop(thisObj);
@@ -1911,7 +1923,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"rtnEventQ %i %s\n",arg1,nameOf(thisObj));
 #endif
 #ifdef EVENT
-	mkEvent(rtn_event,rTopElm(thisObj),thisObj,myCorigin(thisObj),false,currentDescNo,glsc);
+	mkEvent(rtn_event,rTopElm(thisObj,0),thisObj,myCorigin(thisObj),false,currentDescNo,glsc);
 #endif        
         break;
       case doEventQ:
@@ -2365,7 +2377,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc]);
-	printf("glsc: %i, op: %i",glsc,bc[glsc]);
+	printf("glsc: %i, op: %i",glsc,bc[glsc - 1]);
 	runTimeError("Illegal byte code");
 	break;
       }
