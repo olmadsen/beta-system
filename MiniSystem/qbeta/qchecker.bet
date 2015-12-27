@@ -4,7 +4,7 @@ INCLUDE 'qprimitives';
 ---lib:attributes---
 checker: Parser
   (# traceSearch: @ boolean;
-     
+     traceCheckQual: (# exit false #);
      Module::<
        (# setUpOrigin:: (# do origin[] -> SO.setUpOrigin #);
           check::
@@ -412,6 +412,20 @@ checker: Parser
                      #)
                  if)
             #); 
+          checkActualArgs:
+            (# actualArgs: ^Arguments
+            enter actualArgs[]
+            do (if args[] <> none then
+                   actualArgs[] -> args.checkActualArgs
+                else
+                   (if traceCheckQual then
+                       'Signature:checkActualArgs: args is none: ' -> puttext;
+                       this(Signature).doPT -> putline;
+                       ' actuals: ' -> puttext;
+                       actualArgs.doPT -> putline
+                   if)
+               if)
+            #)
        #);
      Arguments::<
        (# setUpOrigin:: 
@@ -444,6 +458,24 @@ checker: Parser
             do scanSons(#do (basicScope[],basicScope[],true) -> current.check #)
             #);
           alloc:: (# do scanSons(#do IT[] -> current.alloc #)#);
+          checkActualArgs:
+            (# args: ^Arguments; A: [6] ^Decl; inx,top: @ integer
+            enter args[]
+            do (if traceCheckQual then
+                   '\nCheck: ' -> puttext; args.doPT -> putline;
+                   '  against: ' -> puttext; this(Arguments).doPT -> putline;
+               if);
+               scanSons
+               (# 
+               do (if (top + 1 -> top) > A.range then A.range -> A.extend if);
+                  current[] -> A[top][] 
+               #);
+               args.scanSons
+               (# 
+               do inx + 1 -> inx; 
+                  current[] -> A[inx].checkQual 
+               #);
+            #);
        #);
      Value::<
        (# setUpOrigin::(# do scanSons(# do origin[] -> current.setupOrigin #)#);
@@ -484,6 +516,14 @@ checker: Parser
                    OG.IS[] -> D[]
                if);
             #);
+          getQual:: (# do OG[] -> qual[] #);
+          checkQual::
+            (#
+            do (if traceCheckQual then
+                  'StaticObject: checkQual: ' -> puttext; doPT -> puttext;
+                   ' actual: ' -> puttext; OG.doPT -> putline
+               if)
+            #);
           hasCode:: 
             (* perhaps not suffcient!
              *   S: @T -- hasCode if T hasCode
@@ -519,6 +559,22 @@ checker: Parser
                (if PI.ATd[] <> none then
                    PI.desc -> D[]
                if);
+            #);
+          getQual:: (# do (PI.IV[],Items) -> ObjectGenerator -> qual[] #);
+          checkQual::
+            (# lQual: ^ObjectGenerator;
+            do (if traceCheckQual then
+                   'DynamicObject: checkQual: ' -> puttext; doPP -> puttext;
+                   ' actual: ' -> puttext; OG.doPP -> putline
+               if);
+               OG.getQual -> lQual[];
+               (if traceCheckQual then
+                   'lQual: ' -> puttext;
+                   (if lQual[] <> none then
+                       lQual.doPT -> putline
+                    else
+                       'is none' -> putline
+               if)if)
             #);
        #);
      (*Pattern: - see qAbstractSyntaxTree *)
@@ -651,6 +707,15 @@ checker: Parser
                if)
             #);
           hasCode:: (# do true -> value #);
+          getQual:
+            (# qual: ^ObjectGenerator
+            do (if IS.isEmpty then
+                   super.getQual -> qual[]
+                else
+                   this(ObjectGenerator)[] -> qual[]
+               if)
+            exit qual[]
+            #);
           getNameForOff::
             (#do (attOff,descNo,isRef,isIndexed) -> IS.getNameForOff -> NM[] #);
           getDescNo:: (# do IS.descNo -> dNo #);
@@ -705,7 +770,14 @@ checker: Parser
                   if)
                #)
             #);
-          alloc:: (# do scanSons(# do IT[] -> current.alloc #)#)
+          alloc:: (# do scanSons(# do IT[] -> current.alloc #)#);
+          getQual:
+            (# qual: ^ObjectGenerator; E: ^Exp;
+            do 
+               scanSons(# do current[] -> E[] #);
+               E.ATd.getQual -> qual[]
+            exit qual[]
+            #);
        #);
      Unary::<
        (# setUpOrigin:: 
@@ -812,7 +884,8 @@ checker: Parser
                 else
                    'function:check:scope none ' -> putline    
                if);
-               (argScope[],argScope[],true) -> args.check
+               (argScope[],argScope[],true) -> args.check;
+               args[] -> ATd.sig.checkActualArgs
             #);
           alloc:: (#do scanSons(#do IT[] -> current.alloc #)#);
        #);
