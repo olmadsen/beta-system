@@ -4,6 +4,15 @@ INCLUDE 'qchecker';
 semchecker: checker
   (# StaticObject::<
        (# getQual:: (# do OG[] -> qual[] #);
+          getQual2:: (# do OG.getQual -> qual[] #);
+          checkQual2::
+            (#
+            do (if false and  traceCheckQual then
+                   '\n>>> StaticObject: checkQual2:\nleft: ' -> puttext; 
+                   lOG.doPT -> puttext;
+                   '\nright: ' -> puttext; OG.doPT -> putline
+               if);
+            #);
           checkQual::
             (# lQual,rQual: ^ObjectGenerator; (* PatternId *)
                error:
@@ -59,6 +68,64 @@ semchecker: checker
             do (PI.IV[],Items) -> ObjectGenerator -> qual[] 
                (* PI[] -> qual[] *)
             #);
+          getQual2:: 
+            (# 
+            do (if traceCheckQual then
+                   'DynamicObject:getQual2: '->puttext; doPT -> putline;
+               if);
+               PI.IV.getQual2 -> qual[];
+               (if traceCheckQual then
+                   'DynamicObject:getQual2 = '->puttext; qual.doPT -> putline;
+               if);
+            #);
+          CheckQual2::
+            (# lQual,rQual: ^ObjectGenerator
+            do (if traceCheckQual then
+                   '\n>>> DynamicObject:checkQual2:' -> putline;
+                   ('Left',lOG[]) -> display;
+                   ('Right',this(DynamicObject)[]) -> display
+               if);
+               (if lOG[] <> none then 
+                   lOG.getQual2 -> lQual[] (* none if string " ..." *)
+                else
+                   '>>> lOG none' -> putline
+               if);
+               getQual2 -> rQual[];
+               ('lQual',lQual[]) -> display;
+               ('rQual',rQual[]) -> display;
+               (if (lQual[] <> none) and (lQual.primNo = none_prim) then
+                else
+                   (* fork(C1), where C1: ^Core fork(S: ^Object)
+                    * lQual = S, rQual = C1 *)
+                   (*(if lQual[] <> none then 
+                       'lqual: ' -> puttext; lQual.doPT -> putline else 'none'->putline 
+                   if);
+                   'rQual: '->puttext;
+                   rQual.doPT -> putline;*)
+                   (if lQual[] -> rQual.inSuper then
+                    else
+                       (if (lQual[] <> none) and (rQual[] -> lQual.inSuper) then
+                           lOG[] -> QuaCheck
+                           (# 
+                           do 'It must be checked at run-time that "'
+                                -> puttext;
+                              lOG.doPT -> puttext;
+                              '"\n     is a subpattern of "' -> puttext;
+                              doPT -> puttext; '"' -> put; newline
+                           #)
+                        else
+                           (if reportSemErr then
+                               lOG[] -> semanticError
+                               (#
+                               do 'The reference expression:\t"' -> puttext;
+                                  lOG.doPT -> puttext;
+                                  '"\n     cannot be assigned to:\t"' -> puttext;
+                                  doPT -> puttext; '"' -> put; newline
+                               #);
+                               (*'\n**** reference assignment NOT OK'->putline*)
+               if)if)if)if)
+            #);
+          
           Checkqual::
             (* thisDynamicObject)= R: ^PI
              * Test R := lOG
@@ -172,6 +239,14 @@ semchecker: checker
                if);
                (if val[] <> none then val.getQual -> qual[] if)
             #);
+          getQual2:: 
+            (# 
+            do (if traceCheckQual then
+                   'Signature:getQual: "\n' -> puttext; dopt->puttext;
+                   '"' -> put; newline
+               if);
+               (if val[] <> none then val.getQual2 -> qual[] if)
+            #);
        #);
      Arguments::<
        (# checkActualArgs:
@@ -189,7 +264,7 @@ semchecker: checker
                args.scanSons
                (# 
                do inx + 1 -> inx; 
-                  current[] -> A[inx].checkQual 
+                  current[] -> A[inx].checkQual2 
                #);
             #);
        #);
@@ -208,9 +283,35 @@ semchecker: checker
                if)if);
             exit qual[]
             #);
+          getQual2:
+            (# D: ^Decl; qual: ^ObjectGenerator 
+            do scanSons(# do current[] -> D[] #);
+               (* only works for one return value/decl *)
+               D.getQual2 -> qual[];
+               (if traceCheckQual then
+                   'Value: ' -> puttext;
+                   D.doPT -> putline;
+                   (if qual[] <> none then 
+                       qual.doPT -> putline;
+                    else 'none '->putline
+               if)if);
+            exit qual[]
+            #)
        #);
      ObjectGenerator::<
-       (# getQual:
+       (# getQual2:
+            (# qual: ^ObjectGenerator 
+            do (if IS.isEmpty then
+                   (* super (Invocation) may be object or pattern *)
+                   super.getQual2 -> qual[]
+                   (* qual = E3.ATd.getQual *)
+                else
+                   (* is Singular *)
+                   this(ObjectGenerator)[] -> qual[]
+               if)
+            exit qual[]
+            #); 
+          getQual:
             (* this(OG) = (OG (invocation (E1 E2 E3)) (Items ...)) 
              * Cases:
              *    1. StaticObject:  E1.E2.E3 where E3: @T
@@ -229,9 +330,49 @@ semchecker: checker
                if)
             exit qual[]
             #);
+          inSuper: BooleanValue
+            (# lQ: ^ObjectGenerator
+            enter lQ[]
+            do (*'inSuper: lQ: ' -> putline;
+               (if lQ[] <> none then
+                   lQ.doPT -> putline;
+               if);
+               'rQ: '->putline;
+               doPT -> putline;*)
+               L:
+                 (if lQ[] = this(ObjectGenerator)[] then
+                     true -> value 
+                  else
+                     (if (lQ[] <> none) then
+                         (if (lQ.primNo = object_prim) then
+                             (*'Got object_prim'->putline*)
+                          else
+                             (*(if lQ[] <> none then lQ.doPT -> putline if);*)
+                             
+                             lQ.super.getQual2 -> lQ[];
+                             (*lQ.doPP -> putline;*)
+                             (if lQ[] <> none then
+                                 (*'Super: ' -> puttext; lQ.primNo -> putint; newline;*)
+                                 restart L
+                              else
+                                 objectDecl.getQual2 -> lQ[];
+                                 restart L;
+                                 (*'super:getQual2 none'->putline*)
+                             if);
+
+                     if)if)
+                 if)
+            #)
        #);
      Invocation::<
-       (# getQual:
+       (# getQual2:
+            (# qual: ^ObjectGenerator; E: ^Exp; 
+            do scanSons(# do current[] -> E[] #);
+               ('Invocation:getQual',E[]) -> display;
+               E.getQual2 -> qual[]
+            exit qual[]
+            #);               
+          getQual:
             (# qual: ^ObjectGenerator  (* PatternId *); E: ^Exp;
             do 
                scanSons(# do current[] -> E[] #);
@@ -269,7 +410,7 @@ semchecker: checker
                                  receiver.doPT -> puttext; '"' -> put; newline
                               #)
                           if);
-                          current[] -> receiver.ATd.checkQual 
+                          current[] -> receiver.ATd.checkQual2 
                        #);
                    if)
                if)
@@ -282,7 +423,11 @@ semchecker: checker
             #);
        #);
      KeyWord::<
-       (# getQual::
+       (# getQual2::
+            (#
+            do getQual -> qual[]
+            #);
+          getQual::
             (#
             do (if ATd.primNo = this_Prim then
                    (* move to Apl:getQual*)
