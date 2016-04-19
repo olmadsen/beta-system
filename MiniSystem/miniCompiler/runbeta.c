@@ -13,7 +13,7 @@ void main(int argc, char *argv[])
       printf("Cannot open file\n");
     }
   size =ftell(F);
-  printf("Runbeta: %i %s %i\n",argc,argv[1],size);
+  printf("Runbeta: %i %s %i\n",argc,argv[1],(int)size);
   fseek(F, 0, SEEK_SET);  //same as rewind(f);
   printf("Rewind\n");
   bc = malloc(size);
