@@ -6,7 +6,7 @@ void main(int argc, char *argv[])
   bool isXB = 0;
   FILE *F;
   long size ;
-  char *name = "binstore";
+  char *name = argv[1];
   F = fopen(name, "rb");
   if( fseek(F, 0, SEEK_END) ){
       fclose(F);
