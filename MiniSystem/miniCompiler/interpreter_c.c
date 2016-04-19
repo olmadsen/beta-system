@@ -1706,7 +1706,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	glsc = getAllocE(getDesc(arg1));
 	//bc = (ObjDesc) getByteCode(getDesc(arg1));
 	//glsc = getAllocE(getDesc(arg1));               
-	fprintf(trace," bc: %i glsc: %i\n",bc,glsc);
+	fprintf(trace," bc: %i glsc: %i\n",(int)bc,glsc);
 	break;
       case call:
 	/*return*/ doCall(false);
@@ -2003,7 +2003,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  currentDescNo = arg2;
 	  bc = codeFromDescNo(arg2);
 	  glsc = getEnterE(getDesc(arg2));
-          fprintf(trace,"innera bc: %i glsc: %i",bc,glsc);
+          fprintf(trace,"innera bc: %i glsc: %i",(int)bc,glsc);
 	}
 #ifdef TRACE
 	fprintf(trace,"\n");
@@ -2017,7 +2017,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	dscNo = cRestoreReturn(thisObj);
 	currentDescNo = dscNo;
 	bc = codeFromDescNo(dscNo);
-        fprintf(trace," descNo: %i bc: %i glsc: %i\n",dscNo,bc,glsc);
+        fprintf(trace," descNo: %i bc: %i glsc: %i\n",dscNo,(int)bc,glsc);
 	break;
       case innerExit:
 	arg1 = op1();
