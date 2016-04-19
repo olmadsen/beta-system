@@ -226,6 +226,7 @@ void *heapAlloc(int size) {
     ZZ = ZZ + 1;
     if (ZZ > 1) runTimeError("Two or more in malloc");
     obj = malloc(size);
+    if (obj == NULL) printf("Malloc failure\n");
     ZZ = ZZ - 1;
 #ifdef linux 
     ret = pthread_mutex_unlock( &mutex1 );
@@ -1031,7 +1032,6 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo, bool isXB) {
     thisBlock->thisObj = thisBlock->thisModule;
     thisBlock->thisStack = thisBlock->thisModule;
   };
-
   isXbeta = isXB;
 
   threadStubDescNo = mainDescNo + 2;
