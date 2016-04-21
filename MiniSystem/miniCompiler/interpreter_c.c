@@ -1039,8 +1039,7 @@ Event *init_interpreter(ObjDesc descs_a, bool isXB) {
     thisBlock->thisStack = thisBlock->thisModule;
   };
   isXbeta = isXB;
-
-  threadStubDescNo = mainDescNo + 2;
+  
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
   descs = descs_a; // this is necessary for getImageSize() below
@@ -1051,6 +1050,7 @@ Event *init_interpreter(ObjDesc descs_a, bool isXB) {
 #endif
   int imageSize = getImageSize();
   mainDescNo = getMainDescInx();  
+  threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   descs = heapAlloc(imageSize);
   memcpy(descs,descs_a,imageSize); 
@@ -1799,9 +1799,13 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    fprintf(trace,"fork ");
 #endif
 	    Y = rPop(thisStack);
-	    Block *B = (Block *)heapAlloc(sizeof(Block));	    
+	    fprintf(trace,"fork A ");
+	    Block *B = (Block *)heapAlloc(sizeof(Block));
+	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	    
 	    X = allocTemplate(newId(),threadStubDescNo,true,0,0);
+	    fprintf(trace,"fork C");
 	    rPush(X,Y);
+	    fprintf(trace,"fork D");
 #ifdef TRACE
 	    fprintf(trace,"%s top:%s\n",nameOf(X),nameOf(Y));
 #endif
