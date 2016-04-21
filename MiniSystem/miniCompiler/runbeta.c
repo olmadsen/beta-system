@@ -28,7 +28,7 @@ void main(int argc, char *argv[])
   /*for (i = 0; i < 25; i++){
     printf("%u: %u\n",i,bc[i]);
     }*/
-  init_interpreter((ObjDesc)bc,1283,isXB);
+  init_interpreter((ObjDesc)bc,isXB);
   bool first = true;
   getEvent(first); 
   // for (i=0; i <1000000; i++ ){

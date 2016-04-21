@@ -1028,7 +1028,7 @@ void *interpreter(void *B);
 DWORD WINAPI interpreter(LPVOID B);
 #endif
 
-Event *init_interpreter(ObjDesc descs_a, int XmainDescNo, bool isXB) {
+Event *init_interpreter(ObjDesc descs_a, bool isXB) {
   int mainDescNo;
   FILE *trace;
   Block *thisBlock;
@@ -1056,7 +1056,7 @@ Event *init_interpreter(ObjDesc descs_a, int XmainDescNo, bool isXB) {
   memcpy(descs,descs_a,imageSize); 
   thisBlock->bc = descs;
 
-  fprintf(trace,"C interpreter: mainDescNo: %i %i imageSize: %i\n",mainDescNo,XmainDescNo,imageSize);
+  fprintf(trace,"C interpreter: mainDescNo: %i imageSize: %i\n",mainDescNo,imageSize);
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
