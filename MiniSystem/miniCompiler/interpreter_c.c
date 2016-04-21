@@ -18,11 +18,12 @@
 /* Format of ObjDescs
    0: -xBeta--
    8: image size
-   12: textDescNo
-   16: strucRefDescNo
-   20: indexOfStringtable
-   24: no of Object descriptors
-   26: ObjDesc1
+   12: mainDescNo
+   16: textDescNo
+   20: strucRefDescNo
+   24: indexOfStringtable
+   28: no of Object descriptors
+   32: ObjDesc1
    ...: ...
     
    Format of ObjDesc:
@@ -52,11 +53,12 @@ bool isXbeta;
 
 enum{
   imageSize_index = 8,
-    textDescNo_index = 12,
-    strucRefDescNo_index = 16,
-    stringTable_index = 20,
-    noOfObjDesc_index = 24,
-    };
+  mainDescInx_index = 12,
+  textDescNo_index = 16,
+  strucRefDescNo_index = 20,
+  stringTable_index = 24,
+  noOfObjDesc_index = 28,
+};
 
 enum {
   name_index = 0,
@@ -284,6 +286,9 @@ int getImageSize(){
   return getInt4(imageSize_index);
 }
 
+int getMainDescInx(){
+  return getInt4(mainDescInx_index);
+}
 int getTextDescNo(){
   return getInt4(textDescNo_index);
 };
@@ -1023,7 +1028,8 @@ void *interpreter(void *B);
 DWORD WINAPI interpreter(LPVOID B);
 #endif
 
-Event *init_interpreter(ObjDesc descs_a, int mainDescNo, bool isXB) {
+Event *init_interpreter(ObjDesc descs_a, int XmainDescNo, bool isXB) {
+  int mainDescNo;
   FILE *trace;
   Block *thisBlock;
 
@@ -1044,12 +1050,13 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo, bool isXB) {
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
   int imageSize = getImageSize();
+  mainDescNo = getMainDescInx();  
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   descs = heapAlloc(imageSize);
   memcpy(descs,descs_a,imageSize); 
   thisBlock->bc = descs;
 
-  fprintf(trace,"C interpreter: mainDescNo: %i imageSize: %i\n",mainDescNo,imageSize);
+  fprintf(trace,"C interpreter: mainDescNo: %i %i imageSize: %i\n",mainDescNo,XmainDescNo,imageSize);
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
