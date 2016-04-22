@@ -1039,7 +1039,7 @@ Event *init_interpreter(ObjDesc descs_a, bool isXB) {
     thisBlock->thisStack = thisBlock->thisModule;
   };
   isXbeta = isXB;
-  
+  printf("isXB %i %i\n",isXbeta,isXB);
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
   descs = descs_a; // this is necessary for getImageSize() below
