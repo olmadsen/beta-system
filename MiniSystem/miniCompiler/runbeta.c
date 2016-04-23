@@ -1,16 +1,32 @@
 #include <stdio.h>
 #include "interpreter_c.c"
+char * fixExtension(char* fn) {
+  // fn = foo
+  // fn = foo.
+  // fn = foo..
+  // fn = foo..bc
+  int len = strlen(fn);
+  printf("FN: %i %s\n",len,fn); 
+
+  return fn;
+}
 void main(int argc, char *argv[])
-{ if (sizeof(argv) < 2) {
+{ printf("argc: %i\n",argc);
+  if (argc < 2) {
     printf("Usage: runbeta file\n");
     return;
   }
+  char * fileName = fixExtension(argv[1]);
 
   FILE* F = fopen(argv[1], "rb");
-  if( fseek(F, 0, SEEK_END) ){
-      fclose(F);
-      printf("Cannot open file\n");
-    }
+  if (F == NULL) {
+    printf("No such file: '%s'\n",argv[1]);
+    return;
+  }
+  if (fseek(F, 0, SEEK_END)) {
+    fclose(F);
+    printf("Cannot open file\n");
+  }
   int size = ftell(F);
   printf("Runbeta: %i %s %i\n",argc,argv[1],(int)size);
   fseek(F, 0, SEEK_SET);  //same as rewind(f);
@@ -18,8 +34,11 @@ void main(int argc, char *argv[])
   unsigned char* bc = (char*)malloc(size * sizeof(char));
   if (bc == NULL) printf("Malloc error\n");
   int V = fread(bc, 1, size, F);
-  if (V != size) printf("File read error: %i %i\n", (int)size,V);
   fclose(F); 
+  if (V != size){
+    printf("File read error: %i %i\n", (int)size,V);
+    return;
+  }
   
   bool isXB = 0;
   init_interpreter((ObjDesc)bc,isXB);
