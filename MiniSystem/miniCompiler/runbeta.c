@@ -5,10 +5,47 @@ char * fixExtension(char* fn) {
   // fn = foo.
   // fn = foo..
   // fn = foo..bc
+  char* fnx; 
   int len = strlen(fn);
-  printf("FN: %i %s\n",len,fn); 
-
-  return fn;
+  int pos = 0; 
+  int i;
+  if (len > 4) {
+    if ((fn[len - 4] == '.') 
+	&& (fn[len - 3] == '.')
+	&& (fn[len - 2] == 'b')
+	&& (fn[len - 1] == 'c')) {
+      fnx = fn;
+      // fn = foo..bc
+      return fnx;
+    }}
+  if (len > 3) {
+    if ( (fn[len - 3] == '.')
+	 && (fn[len - 2] == 'b')
+	 && (fn[len - 1] == 'c')) {
+      pos = len - 3;
+      // fn = foo.bc
+    }}
+  if (pos == 0) {
+      printf("FN: %i %s\n",len,fn); 
+      // strip possible '.' in 'foo.' or 'foo..'
+      pos = len;
+      for (i = 1; i <= 2; i++) {
+	printf("i : %i ch: %c\n",i,fn[i]);
+	if (fn[len - i] == '.') { pos = pos - 1; } else { break;}
+      }
+      printf("len: %i pos: %i\n",len,pos);
+    }
+  // fn[0:pos - 1] = 'foo'
+  // add extension '..bc'
+  fnx = malloc(sizeof(char) * (pos + 4));
+  for (i = 0; i < pos; i++) fnx[i] = fn[i];
+  fnx[pos + 0] = '.';
+  fnx[pos + 1] = '.';
+  fnx[pos + 2] = 'b';
+  fnx[pos + 3] = 'c';
+  // fnx = foo..bc
+  printf("fnx: %s\n",fnx);
+  return fnx;
 }
 void main(int argc, char *argv[])
 { printf("argc: %i\n",argc);
@@ -16,11 +53,11 @@ void main(int argc, char *argv[])
     printf("Usage: runbeta file\n");
     return;
   }
-  char * fileName = fixExtension(argv[1]);
+  char * fn = fixExtension(argv[1]);
 
-  FILE* F = fopen(argv[1], "rb");
+  FILE* F = fopen(fn, "rb");
   if (F == NULL) {
-    printf("No such file: '%s'\n",argv[1]);
+    printf("No such file: '%s'\n",fn);
     return;
   }
   if (fseek(F, 0, SEEK_END)) {
@@ -28,7 +65,7 @@ void main(int argc, char *argv[])
     printf("Cannot open file\n");
   }
   int size = ftell(F);
-  printf("Runbeta: %i %s %i\n",argc,argv[1],(int)size);
+  printf("Runbeta: %i %s %i\n",argc,fn,(int)size);
   fseek(F, 0, SEEK_SET);  //same as rewind(f);
 
   unsigned char* bc = (char*)malloc(size * sizeof(char));
