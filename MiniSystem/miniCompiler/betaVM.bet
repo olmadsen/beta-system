@@ -559,6 +559,39 @@ betaVM:
                for);   
             exit X[]
             #);
+          XmkTextObject:
+            (# X: ^ObjDesc.template;
+               length: @integer; 
+               ch: @char
+            enter length
+            do 
+               (if descs.OD[descs.textDescNo][] = none then
+                   'descs.OD[descs.textDescNo][] = none'->putline
+               if);
+               (length+1,1,0) 
+                 -> descs.OD[descs.textDescNo].template 
+                 -> X[] 
+                 -> thisStack.rpush;
+               newId -> X.id;
+               descs.textDescNo -> X.myDescInx;
+               true -> X.isObj;
+               (if world[] = none then
+                   'world[] = none '->putline
+               if);
+               (if world.rfields[3][] = none then
+                   'world.rfields[3][] = none' -> putline
+               if);
+               world.rfields[3][] -> X.rfields[1][]; (* seems to be a hack 
+                                                      * 3 = LIB = origin *)
+               length -> X.vfields[1]; (* pos *)
+               (*length + 100 -> X.vfields[2];  range *)
+               (for i: length  repeat
+                    inner;
+                    ch -> X.vfields[i + 1];
+               for);   
+               ('mkTextObject',true,out[]) -> X.dump               
+            exit X[]
+            #);          
           mkStrucRefObj:
             (# origin,X: ^ObjDesc.template; 
                inx: @integer;
@@ -692,6 +725,52 @@ betaVM:
                      -> allocEvent
                if);               
             #);
+          AllocQ_Indexed:
+            (# callee,Y: ^objDesc.template;
+               origin: ^objDesc.template;
+               descInx,isObj,dinx,rangee,isRindexed: @integer
+            enter(origin[],descInx,isObj,dinx,rangee,isRindexed)
+            do (*(if isRindexed  = 1 then 'isRindexed' -> putline if);
+                rangee -> putint; ' ' -> put;
+                dinx -> putint; ' ' -> put;
+                descinx -> putint; newline;
+                *)
+               
+               (rangee,dinx,isRindexed) -> descs.OD[descInx].template -> callee[];
+               
+               descs.OD[descInx].OSDvisibility -> callee.OSDvisibility;
+               descInx -> callee.myDescInx;
+               newId -> callee.id;
+               
+               (*'\nAlloc: ' -> puttext; thisObj.myDescInx -> putint;
+                ' lsc: ' -> puttext; glsc -> putint; newline;*)
+               (if true then
+                   callee[] -> thisStack.rPush;
+                   ('AllocQ_indexed:',true,out[]) -> callee.dump;
+                else
+                   (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                   descs.OD[descInx].bc[] -> thisCode[];
+                   thisObj[] -> Y[] -> callee.rPush; (* return *)
+                   thisStack[] -> callee.rPush;
+                   (if not isXbeta then
+                       origin[] -> callee.rpush;  (* origin *)
+                   if);
+                   descs.OD[descInx].BC.allocE -> glsc;
+                   callee[] -> (* thisStack[] ->*) thisObj[];
+                   (if not isXbeta then
+                       thisObj[] -> thisStack[]
+                   if);
+                   (if isObj = 1 then 
+                       true -> thisObj.isObj;
+                       true -> asObjEnabled
+                   if);
+                   (if not isXbeta then
+                       (Y[],thisObj[],origin[],descInx,glsc,isObj=1,true)
+                         -> allocEvent
+                   if);
+               if)
+            #);
+          
           asObjEnabled: @boolean;
           
           allocFromStrucRefObj:
@@ -1130,6 +1209,7 @@ betaVM:
                         (*'\nxpushg: off: ' -> puttext; off -> putint;
                          ' inx: ' -> puttext; inx -> putint; newline;*)
                         (R[],off + inx,value) -> VtoOut;
+                        ('xpushg:',true,out[]) -> R.dump;
                         (thisObj[],R[],true,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent  
                         
@@ -1252,6 +1332,7 @@ betaVM:
                         thisStack.vpop -> inx;
                         (thisStack.vpop -> value,off + inx) -> R.assign;
                         (X[],off + inx,value) -> VtoOut;
+                        ('xstoreg:',true,out[]) -> R.dump;
                         (thisObj[],thisStack[],true,R[],off,true,inx,thisCode.descInx,glsc,value) -> vStoreEvent
                         
                        // codes.xrstoreg then
@@ -1305,13 +1386,22 @@ betaVM:
                         'allocIndexed' -> exel; op2 -> descInx; op1 -> isObj;
                         (if not isXbeta then
                             thisStack.rpop -> X[]; (* origin *)
+                         else (* a superflous thisObj is pushed by compiler
+                               * should be eliminated
+                               *)
+                            thisStack.rpop -> X[]; (* origin *)
                         if);
                         thisStack.vpop -> dinx;
                         thisStack.vpop -> isRindexed;
                         thisStack.vpop -> rangee;
                         (if true then
-                            (X[],descInx,isObj,dinx,rangee,isRindexed) 
-                              -> AllocIndexed;
+                            (if isXbeta then
+                                (X[],descInx,isObj,dinx,rangee,isRindexed) 
+                                  -> AllocQ_Indexed
+                             else
+                                (X[],descInx,isObj,dinx,rangee,isRindexed) 
+                                  -> AllocIndexed
+                            if)
                          else
                             (* (if isRindexed  = 1 then 'isRindexed' -> putline if );
                              rangee -> putint; ' ' -> put;
@@ -1704,24 +1794,33 @@ betaVM:
                      // codes.pushText then
                         'pushText' -> exe; 
                         op1 -> inx; 
-                        (thisObj.myObjDesc).literals[inx] 
-                          -> mkTextObject
-                        (# i: @integer
-                        do i + 1 -> i; 
-                           (thisObj.myObjDesc).literals[inx+i] -> ch
-                        #) -> X[];
-                        (* OBS! we use the Text-object as origin of itself;
-                         * this is wrong, origin should be the LIB-object
-                         *)
-                        (* generate allocEvent for &text 
-                         * allocEvent calls myLsc, 
-                         * which assume that glsc is on the lscStack
-                         *)
-                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                        (thisObj[],X[],X[],thisCode.descInx,glsc,true,false) -> allocEvent;
-                        allocLevel - 1 -> allocLevel;
-                        thisObj.restoreReturn -> (descInx,glsc);
-                        (thisObj[],X[],X[],thisCode.descInx,glsc) -> rtnEvent
+                        (if isXbeta then
+                            (thisObj.myObjDesc).literals[inx] 
+                              -> XmkTextObject
+                            (# i: @integer
+                            do i + 1 -> i; 
+                               (thisObj.myObjDesc).literals[inx+i] -> ch
+                            #) -> X[]
+                         else
+                            (thisObj.myObjDesc).literals[inx] 
+                              -> mkTextObject
+                            (# i: @integer
+                            do i + 1 -> i; 
+                               (thisObj.myObjDesc).literals[inx+i] -> ch
+                            #) -> X[];
+                            (* OBS! we use the Text-object as origin of itself;
+                             * this is wrong, origin should be the LIB-object
+                             *)
+                            (* generate allocEvent for &text 
+                             * allocEvent calls myLsc, 
+                             * which assume that glsc is on the lscStack
+                             *)
+                            (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                            (thisObj[],X[],X[],thisCode.descInx,glsc,true,false) -> allocEvent;
+                            allocLevel - 1 -> allocLevel;
+                            thisObj.restoreReturn -> (descInx,glsc);
+                            (thisObj[],X[],X[],thisCode.descInx,glsc) -> rtnEvent
+                        if)
                      // codes.plus then
                         '+'-> exe; 
                         thisStack.vpop + thisStack.vpop -> thisStack.vpush;
@@ -1843,7 +1942,10 @@ betaVM:
                         if)
                      // codes.gt then
                         '>' -> exe;
-                        (if thisStack.vpop < thisStack.vpop then 
+                        thisStack.vpop -> top1;
+                        thisstack.vpop -> top2;
+                        top2 -> out.putint; '>' -> out.put; top1 -> out.putint;
+                        (if top2 > top1 then 
                             1 -> thisStack.vpush
                          else
                             0 -> thisStack.vpush
