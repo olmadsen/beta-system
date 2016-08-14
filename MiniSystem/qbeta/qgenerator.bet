@@ -447,16 +447,19 @@ generator: semchecker
                                ptn.OD.super.on -> vSuperDesc.goOrigin
                            if)                                   
                         else
-                           'super.gen: push arguments' -> cd.comment;
-                           (*'super.gen: push arguments: ' -> puttext;
-                            super.doP -> putline;*)
+                           ('super:gen:pushArguments',super.doPT) -> cd.com2;
+                           (* This has to be revised:
+                            * Is close to super.gen, but sup.gen executes super
+                            * and super shall not be executed here
+                            *)
                            (# E,rec: ^Exp;
                               loadOrigin:
                                 (# superAdj: @integer; E,rec: ^Exp
                                 enter superAdj
-                                do super.scanSons
+                                do S.scanSons
                                    (#
                                    do current[] -> E[];
+                                      ('loadOrigin:',E.doPT) -> cd.com2;
                                       (if isFirst then 
                                           superAdj -> E.loadOrigin 
                                       if);
@@ -466,12 +469,26 @@ generator: semchecker
                                       if);
                                    #);
                                 exit(rec[],E[])
-                                #)
-                           do L:
-                                super.scanSons 
+                                #);
+                              S: ^Invocation; BE: ^BracketedExp
+                           do L: super.scanSons
+                                (* this is ugly - but necessary since we
+                                 * cannot juts call super.gen
+                                 *)
+                                (#
+                                do (if current## = BracketedExp## then
+                                       current[] -> BE[];
+                                       BE.IV[] -> S[];
+                                    else
+                                       super[] -> S[]
+                                   if);
+                                   leave L
+                                #);
+                              L:
+                                S.scanSons 
                                 (# E: ^Exp;
                                 do current[] -> E[];
-                                   (*'arg: ' -> puttext; E.doP -> putline;*)
+                                   ('arg:',E.doP) -> cd.com2;
                                    E.pushThis;
                                    leave L
                                 #);
@@ -1110,6 +1127,7 @@ generator: semchecker
                     // leave_Prim then 
                        (*'Leave: ' -> puttext;*) leave_Prim -> doBreak
                     // this_prim then
+                       ('ObjectInvocation:execute',doPT) -> cd.com2;
                     else               
                        (if (rec[] <> none) 
                            and (rec.ATD## <= DataItem##)
@@ -1296,10 +1314,39 @@ generator: semchecker
             #);
        #);
      BracketedExp::
-       (# pushThis:: (# do E.pushThis #);
-          loadOrigin:: (# do superAdj -> E.loadOrigin #);
-          loadArgs:: (# do superAdj -> E.loadArgs #);
-          execute:: (# do (rec[],useReturnValue,staticOff) -> E.execute #);
+       (* a := b + (c * d)
+        *     execute c * d
+        * (foo).x
+        *    loadOrigin foo
+        * (foo(e1,e2)).x
+        *    execute foo(e1,e29?
+        * (%this P).suspend
+        *     loadOrigin?
+        *)
+       (# gen:: 
+            (# 
+            do ('BE:gen:',doPT) -> cd.com2;
+               (*(useReturnValue,superAdj,staticOff) -> IV.gen *)
+            #);
+          loadOrigin:: 
+            (# 
+            do ('BE:loadOrigin:',doPT) -> cd.com2;
+               superAdj -> IV.loadOrigin 
+            #);
+          pushThis:: 
+            (# 
+            do ('BE:pushThis',doPT) -> cd.com2; (* IV.pushThis* ) 
+            #);
+          loadArgs:: 
+            (# 
+            do ('BE:loadArgs!',doPT) -> cd.com2; (* superAdj -> IV.loadArgs *) 
+            #);
+          execute:: 
+            (#
+            do ('BE:execute',doPT) -> cd.com2;
+               (*(rec[],useReturnValue,staticOff) -> IV.execute *)
+               (useReturnValue,0,staticOff) -> IV.gen
+            #);
        #);
      Const::
        (# gen:: (# do execute #);
