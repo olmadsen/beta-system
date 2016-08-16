@@ -1243,8 +1243,9 @@ DWORD WINAPI interpreter(LPVOID B){;
  
 void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
-    fprintf(trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+    fprintf(trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif    
+    printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
       // allocObj(origin,descNo,isObj,rangee,0);
       callee = allocTemplate(newId(),descNo,isObj,0,rangee);
