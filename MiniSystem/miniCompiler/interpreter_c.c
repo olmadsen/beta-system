@@ -698,6 +698,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case stop: 
 	fprintf(trace,"stop ");
 	break;
+      case allocEventQ:
+	fprintf(trace,"allocEventQ %i",op1());
+        break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc - 1]);
 	break;
@@ -1150,7 +1153,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   ObjDesc bc = thisBlock->bc;
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
-  template *thisModule,*thisObj,*thisStack, *callee;
+  template *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
 
   int op1(){
     int V = bc[glsc]; 
@@ -1237,6 +1240,25 @@ DWORD WINAPI interpreter(LPVOID B){;
     };
     thisObj->vfields[dinx] = rangee; 
   };
+ 
+void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+#ifdef TRACE
+    fprintf(trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+#endif    
+    if (isRindexed == 0) {
+      // allocObj(origin,descNo,isObj,rangee,0);
+      callee = allocTemplate(newId(),descNo,isObj,0,rangee);
+    } else {
+      if (rangee > 132) {
+	printf("\n\n**** Ref-rep range: %i\n",rangee);
+	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
+      };
+      // allocObj(origin,descNo,isObj,0,rangee);
+      callee = allocTemplate(newId(),descNo,isObj,rangee,0);
+    };
+    thisObj->vfields[dinx] = rangee; 
+    rPush(thisStack,callee);
+  };
 
   void allocStrucRefObj(template *origin,int inx, bool isVirtual){
 #ifdef TRACE
@@ -1273,6 +1295,26 @@ DWORD WINAPI interpreter(LPVOID B){;
     }
     // fprintf(trace," %i %i %i %i \n"
     //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
+  }
+  
+  void XallocTextObj(int litInx){
+    // literals[litInx] = length
+    template *origin = 0; // FIX - in beta impl., the text object is used as its own origin
+    int dinx,rangee,i;
+    dinx = 1; // start of repetition
+    rangee = getLiteral(thisObj,litInx);
+    template *X = thisObj;
+    
+    allocQIndexedObj(origin,getTextDescNo(),1,dinx,rangee,0);
+    callee->rfields[1] = world->rfields[3]; // a bloody hack
+    callee->vfields[1] = rangee; // pos = rangee
+    for (i = 0; i < rangee; i++) {
+      char ch = getLiteral(X, litInx + i + 1);
+      callee->vfields[dinx + 1 + i] = ch;
+      // fprintf(trace, "Lit %c",ch);
+    }
+    //printf(" %i %i %i %i \n"
+    //,callee->vfields[0],callee->vfields[1],callee->vfields[2],callee->vfields[3]);
   }
 
   Event *doCall(bool withEnablingSuspend){
@@ -1521,6 +1563,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
 	arg3 = X->vfields[arg1 + arg2]; // need range check - and do we adjust for range?
+	//printf("xpushg %s[%i+%i] %i = %i\n",nameOf(X),arg1,arg2,arg3,X->vfields[3]);
 #ifdef TRACE
 	fprintf(trace,"xpushg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
 #endif
@@ -1949,6 +1992,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"saveBETAworld\n");
 #endif
 	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
+	world = X;
 	break;
       case doSuper:
 	arg1 = op2();
@@ -2083,7 +2127,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	fprintf(trace,"pushText %i ",arg1);
 #endif
-	allocTextObj(arg1);
+        if (isXbeta) XallocTextObj(arg1); else { allocTextObj(arg1);};
 	break;
       case exeAlloc:
 	arg1 = op2();
