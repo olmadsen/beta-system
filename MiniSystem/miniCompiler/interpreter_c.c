@@ -1326,6 +1326,20 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
     //,callee->vfields[0],callee->vfields[1],callee->vfields[2],callee->vfields[3]);
   }
 
+  void  ConvertIndexedAsString() {
+    template *X; int length;
+    X = rPop(thisStack);
+    length = X->vfields[1];
+    // printf("\n*** ConvertIndexedAsString %i\n", length);
+    //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
+    allocQIndexedObj(0,getTextDescNo(),1,1,length,0);
+    callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
+    callee->vfields[1] = length; 
+    int i;
+    for (i = 0; i <= length; i++) callee->vfields[i] = X->vfields[i];
+    X->rfields[1] = world->rfields[3]; // origin - hack 
+  }
+
   Event *doCall(bool withEnablingSuspend){
     int arg1;
     template *Y;
@@ -1927,6 +1941,9 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
 #endif
 	    rPush(thisStack,thisBlock->top);
 	    break;
+	  case 118: // asString
+	    ConvertIndexedAsString();
+            break;
 	  default:
 	    printf("\n\n*** prim: missing case %i\n",arg1);
 	    runTimeError("prim: missing case");
@@ -2364,7 +2381,12 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
 	dinx = vPop(thisStack);
 	isRindexed = vPop(thisStack);
 	rangee = vPop(thisStack);
-	allocIndexedObj(X,arg1,arg2,dinx,rangee,isRindexed);
+	if (isXbeta) {
+	  allocQIndexedObj(X,arg1,arg2,dinx,rangee,isRindexed);
+	}
+	  else {
+	    allocIndexedObj(X,arg1,arg2,dinx,rangee,isRindexed);
+	  }
 	break;
       case mkStrucRef: 
 	arg1 = vPop(thisStack);
