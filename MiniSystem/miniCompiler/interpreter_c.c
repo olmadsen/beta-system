@@ -352,7 +352,7 @@ typedef struct Block {
   ObjDesc bc;  
   int glsc;
   int currentDescNo;
-  template *thisModule,*thisObj,*thisStack,*top;
+  template *thisModule,*thisObj,*thisStack,*top, *world;
   int threadId;
   char *traceFile;
 } Block;
@@ -1245,19 +1245,27 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
 #ifdef TRACE
     fprintf(trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif    
-    printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+    // printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
+      // printf("is not Rindexed\n");
       // allocObj(origin,descNo,isObj,rangee,0);
-      callee = allocTemplate(newId(),descNo,isObj,0,rangee);
+      callee = allocTemplate(newId(),descNo,isObj,rangee,0);
     } else {
       if (rangee > 132) {
-	printf("\n\n**** Ref-rep range: %i\n",rangee);
+	//printf("\n\n**** Ref-rep range: %i\n",rangee);
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
       // allocObj(origin,descNo,isObj,0,rangee);
-      callee = allocTemplate(newId(),descNo,isObj,rangee,0);
+      //printf("isRindexed\n");
+      callee = allocTemplate(newId(),descNo,isObj,0,rangee);
     };
-    thisObj->vfields[dinx] = rangee; 
+    //printf("After allox\n");
+
+    callee->vfields[dinx] = rangee; 
+    // int i=0;
+    // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
+    // printf(" dinx = %i %i\n", dinx, rangee);
+
     rPush(thisStack,callee);
   };
 
@@ -1307,7 +1315,7 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
     template *X = thisObj;
     
     allocQIndexedObj(origin,getTextDescNo(),1,dinx,rangee,0);
-    callee->rfields[1] = world->rfields[3]; // a bloody hack
+    callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = rangee; // pos = rangee
     for (i = 0; i < rangee; i++) {
       char ch = getLiteral(X, litInx + i + 1);
@@ -1858,6 +1866,7 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
 	    B->bc = myCode(X);
 	    B->currentDescNo = threadStubDescNo;
 	    B->top = Y;
+	    B->world = world;
 #ifdef TRACE
 	    printf("\ncurrentDescNo: %i %i %i threadNo: %i\n"
 		   ,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
@@ -1993,7 +2002,7 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
 	fprintf(trace,"saveBETAworld\n");
 #endif
 	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
-	world = X;
+	thisBlock->world = world = X;
 	break;
       case doSuper:
 	arg1 = op2();
