@@ -71,7 +71,7 @@ generator: semchecker
                        cd.pushThis;
                        (sig.id[],this(DataItem).off) -> cd.storeg
                    if);
-                // OG.primNo = String_prim then
+                // (OG.primNo = String_prim) and isConst then
                    (true,0,this(DataItem).off) -> OG.gen;
                    cd.pushThis;
                    (sig.id[],this(DataItem).off) -> cd.rstoreg
@@ -211,6 +211,9 @@ generator: semchecker
                    T[] -> cd.comment;
                    (useReturnValue,superAdj,staticOff) -> super.gen
                 else
+                   (* This also includes pattner invoccations with virtual arguments
+                    * like %if .. %then% ... %else ...
+                    *)
                    ':singular' -> T.append;
                    T[] -> cd.comment;                   
                    (* called when R.foo{ } *)
@@ -238,6 +241,10 @@ generator: semchecker
                    (if primNo = indexed_prim then
                        '\n*** InvokeIndexed'->putline
                    if);
+                   ('OG:invoke:singular',doPT) -> cd.com2;
+                   (* missing load args ?
+                    * See genclass wich may load the argumenst
+                    *)
                    (name[],IS.descno,staticOff,true) -> cd.invoke;
 
                    (if not useReturnValue  then cd.rpop if);
@@ -468,6 +475,13 @@ generator: semchecker
      UnaryPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add #);
           pushThis:: (# do cd.pushThis #);
+          loadArgs::
+            (#
+            do E.args.scanArgs
+               (#
+               do (true,superAdj,0) -> current.gen 
+               #)
+            #);
           load::
             (#
             do ('UnaryPattern:load: ',sig.doPT) -> cd.com2; 
@@ -488,6 +502,13 @@ generator: semchecker
             do (if OD.primNo = string_prim then
                    (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add
                if)
+            #);
+          loadArgs::
+            (#
+            do E.args.scanArgs
+               (#
+               do (true,superAdj,0) -> current.gen 
+               #)
             #);
           load::
             (# org: ^Items
@@ -636,7 +657,14 @@ generator: semchecker
                    ('Resume','D') -> cd.call;
                if)
             #);
-          pushThis:: (# do (if primNo = indexed_prim then cd.pushThis if) #);          
+          pushThis:: (# do (if primNo = indexed_prim then cd.pushThis if) #);
+          loadArgs::
+            (#
+            do E.args.scanArgs
+               (#
+               do (true,superAdj,0) -> current.gen 
+               #)
+            #);
           load:: 
             (# 
             do (if OD.primNo
@@ -678,12 +706,14 @@ generator: semchecker
           pushThis:: (# do cd.pushThis #);
           loadArgs::
             (# args: [6]^ObjectGenerator; top: @integer;
-            do E.args.scanArgs
+            do ('KWP:loadArgs:',doPT) -> cd.com2;
+               E.args.scanArgs
                (#
                do (if (top+1 -> top) > args.range then 
                       args.range -> args.extend 
                   if);
                   current[] -> args[top][];
+                  ('KWP:Arg:',current.doPT) -> cd.com2;
                #);
                sig.args.scanArgs
                (# D: ^Decl; i: @integer; OG: ^ObjectGenerator; name: ^text;
@@ -874,8 +904,9 @@ generator: semchecker
                  #);
                ('Invocation:gen:A',doPT) -> cd.com2;
                superAdj -> loadOrigin -> (rec[],E[]);
-               ('Invocation:gen:B',doPT) -> cd.com2;
-               (rec[],useReturnValue,staticOff) -> E.execute;
+               'Invocation:gen:B:' -> T[]; superAdj -> T.putint; ':' -> T.put;
+               (T[],doPT) -> cd.com2;
+               (rec[],useReturnValue,staticOff,superAdj) -> E.execute;
                cd.bcPos -> endBCP
             #);
           loadOrigin:
@@ -906,7 +937,8 @@ generator: semchecker
      adjustOrigin:
        (# originOff: @integer
        enter originOff
-       do (if originOff > 0 then
+       do 'AdjustOrigin' -> cd.comment;
+          (if originOff > 0 then
               ('origin',originOff) -> cd.rpushg
           if)
        #);
@@ -924,6 +956,7 @@ generator: semchecker
                (if ATD.primNo
                 // 0 
                 // indexed_prim 
+                // string_prim
                 // stringGet_prim // indexedGet_prim then 
                    superAdj -> AdjustOrigin;
                    on -> (origin[]->org[]).goOrigin; 
@@ -938,7 +971,8 @@ generator: semchecker
           pushOff:: (# do next[] -> ATd.pushOff #);
           loadArgs:: 
             (# 
-            do (if type ## = KeyWord## then
+            do (if (*(true and not isAssign) or*) (type ## = KeyWord##) then
+                   ('OI:loadArgs:',doPT) -> cd.com2;
                    (this(Exp)[],superAdj) -> ATd.loadArgs
                 else
                    args.scanSons(# do (true,superAdj,0) -> current.gen #) 
@@ -985,7 +1019,7 @@ generator: semchecker
                  #);
                T: @text
             do (if isAssign then
-                   loadArgs;
+                  superAdj -> loadArgs;
                    rec.ATd.store;
                 else 
                    (if ATd.primNo
@@ -1003,7 +1037,8 @@ generator: semchecker
                         * Perhaps with myCore := thisCore?
                         *)
                        ('ObjectInvocation:execute:thisCore:',doPT) -> cd.com2;
-                    else               
+                    else 
+                       ('OI:execute:', dopt) -> cd.com2;
                        (if (rec[] <> none) 
                            and (rec.ATD## <= DataItem##)
                            and (rec.ATd.getQual).isSimpleValue 
@@ -1014,7 +1049,9 @@ generator: semchecker
                            (this(Exp)[],useReturnValue,staticOff) -> rec.ATd.load
                        if);
                        'OI:exe:before:loadArgs'->cd.comment;
-                       (if type## <> Keyword## then loadArgs if);
+                       (if type## <> Keyword## then 
+                           superAdj -> loadArgs
+                       if);
                        'OI:exe:after:loadArgs'->cd.comment;
                        (this(Exp)[],useReturnValue,staticOff) -> ATd.load;
                        'OI:exe:after:load'->cd.comment;
@@ -1053,7 +1090,7 @@ generator: semchecker
           execute:: 
             (#
             do ('BE:execute',doPT) -> cd.com2;
-               (*(rec[],useReturnValue,staticOff) -> IV.execute *)
+               (*(rec[],useReturnValue,staticOff,superAdj) -> IV.execute *)
                (useReturnValue,0,staticOff) -> IV.gen
             #);
        #);
