@@ -35,7 +35,7 @@ parser: AbstractSyntaxTree
           sig: ^Signature;
           M: ^Module
        do (if lex.symb = lex.symbols.idf then
-              (lex.sym[],false) -> Signature -> sig[];
+              (lex.sym[],none,false) -> Signature -> sig[];
               lex;
               (if lex.symb = lex.symbols.colon then
                   lex; 
@@ -210,12 +210,12 @@ parser: AbstractSyntaxTree
             #)
        exit I[]
        #);
-     pDecl:
+     XpDecl:
        (# D: ^Decl; sig: ^Signature
        do 
           (if lex.symb 
            // lex.symbols.idf then
-              (lex.sym[],false) -> Signature -> sig[];
+              (lex.sym[],none,false) -> Signature -> sig[];
               lex;
               (if lex.symb = lex.symbols.value then
                   lex;
@@ -242,11 +242,11 @@ parser: AbstractSyntaxTree
                   syntaxError
               if)
            // lex.symbols.special then 
-              (lex.sym[],false) -> Signature -> sig[];
+              (lex.sym[],none,false) -> Signature -> sig[];
               lex;
               sig[] -> pBinaryPtn -> D[];
            // lex.symbols.keyword then
-              (lex.sym[],true) -> Signature -> sig[];
+              (lex.sym[],none,true) -> Signature -> sig[];
               lex;
               sig[] -> pKeywordPtn -> D[];
            else
@@ -269,6 +269,115 @@ parser: AbstractSyntaxTree
           if)if)
        exit D[]
        #);
+     pDecl:
+       (# D: ^Decl; sig: ^Signature; OD: ^ObjectGenerator; ptnKind: @integer;
+          P: ^Pattern
+       do (*lex.symb -> lex.symbols.print; ' ' -> put; lex.sym[] -> putline;*)
+          pSignature -> sig[];
+          (if lex.symb
+           // lex.symbols.colon then
+              (* plainPtn or data-item *)
+              lex;
+              (if lex.symb 
+               // lex.symbols.constRef then 
+                  lex;
+                  (true,sig[]) -> pDataItem -> D[];
+                  leave pDecl
+               // lex.symbols.varRef then
+                  lex;
+                  (false,sig[]) -> pDataItem -> D[];
+                  leave pDecl
+               else
+                  plainPtn -> ptnKind
+              if);
+           // lex.symbols.virtual then
+              lex; 
+              virtualPtn -> ptnKind               
+           // lex.symbols.further then
+              lex; 
+              furtherPtn-> ptnKind
+           // lex.symbols.final then
+              lex; 
+              FinalPtn -> ptnKind
+           else
+              syntaxError
+          if);
+          pObjectGenerator -> OD[];
+          (sig[],OD[]) -> Pattern -> P[] -> D[]; 
+          ptnKind -> P.ptnKind;
+          OD.IS.ifBasic -> P.isBasicPtn;
+          (if D.primNo            
+           // object_prim then D[] -> objectDecl[]
+           // none_prim then D[] -> noneDecl[]
+           // integer_prim then D[] -> integerDecl[]
+           // char_prim then D[] -> charDecl[]
+           // string_prim then D[] -> stringDecl[]
+           // boolean_prim then D[] -> booleanDecl[]
+           // error_prim then D[] -> errorDecl[]
+           // this_prim then D[] -> thisDecl[]
+           // thisCore_prim then D[] -> thisCoreDecl[]
+           // Resume_prim then D[] -> resumeDecl[];
+           // ifThen_prim then D[] -> ifThenDecl[]
+           else
+              (if D.isCore 
+               // core_prim then D[] -> coreDecl[]                            
+          if)if)          
+       exit D[]
+       #);
+     pSignature:
+       (* foo:
+        * fool(a: ?integer, ...):
+        * %put x: ?integer ... :
+        * ++ V: ?integer: 
+        *)
+       (# sym: ^text; sig: ^Signature; args: ^Arguments       
+       do (if lex.symb              
+           // lex.symbols.idf then 
+              lex.sym[] -> sym[];
+              lex;
+              (if lex.symb = lex.symbols.leftBrack then
+                  lex;
+                  Arguments -> args[]; true -> args.isFunction;
+                  pArguments
+                  (#
+                  do D[] -> args.append
+                  #);
+                  (if lex.symb = lex.symbols.rightBrack then
+                      lex;
+                   else
+                      syntaxError
+                  if);
+                  (sym[],args[],false) -> FunctionSigGen -> sig[];
+               else 
+                  (* UnarySignature *)
+                  (sym[],args[],false) -> UnarySigGen -> sig[]
+              if)
+           // lex.symbols.keyword then
+              lex.sym[] -> sym[];
+              lex;
+              Arguments -> args[]; 
+              sym[] -> name -> args.append;
+              pArguments
+              (#
+              do D[] -> args.append
+              #); 
+              (sym[],args[],true) -> KeyWordSigGen -> sig[];
+              sig.setId
+           // lex.symbols.special then
+              (* binary *)
+              lex.sym[] -> sym[];
+              lex;
+              Arguments -> args[]; true -> args.isBinary;
+              pArgument -> args.append;
+              (sym[],args[],false) -> BinarySigGen -> sig[]
+          if);
+          (if lex.symb = lex.symbols.value then
+              lex;
+              pValue -> sig.val[] -> sig.append
+          if);
+          (*'Sig: ' -> puttext; sig.doPT -> putline;*)
+       exit sig[]
+       #);     
      pSpec:
        (* Incomplete
         * x : @integer

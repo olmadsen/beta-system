@@ -623,7 +623,7 @@ AbstractSyntaxTree: Tree
      Decl: Item
        (# PT::< 
             (# 
-            do (*'('->lx.put; off -> lx.putint; ')'-> lx.put;*)
+            do '('->lx.put; off -> lx.putint; ')'-> lx.put;
                inner 
             #);
           sig: ^Signature;
@@ -709,40 +709,60 @@ AbstractSyntaxTree: Tree
        (* In xbeta, Signature have subpatterns UnarySignature, etc *)
        (# PT:: 
             (# 
-            do scanSons
-               (#do (pos,break) -> current.PT; 
-                  (if not isLast then ' ' -> lx.put if)
-               #);
-               (*(if val[] <> none then val.PT if)*)
+            do (if type[] <> none then
+                   (pos,break) -> type.PT;
+                   (if val[] <> none then val.PT if)
+                else
+                   scanSons
+                   (#do (pos,break) -> current.PT; 
+                      (if not isLast then ' ' -> lx.put if)
+                   #);
+                      (*(if val[] <> none then val.PT if)*)
+               if)
             #);
-          length:: (# do scanSons(#do current.length + value -> value #)#);
+          length:: 
+            (# 
+            do (if type[] <> none then
+                   type.length -> value;
+                   (if args[] <> none then value + args.length -> value if);
+                   (if val[] <> none then val.length +value -> value if);
+                else
+                   scanSons(#do current.length + value -> value #)
+               if)
+            #);
           Label:: (# do 'Signature' -> lab[] #);
           PP::(# do Label -> lx.append #);
-          type: ^SigType;
-          SigType: Node (# #);
-          Unary: SigType
-            (#
-            #);
-          Binary: SigType
-            (#
-            #);
-          Function: SigType
-            (#
-            #);
-          KeyWord: SigType
-            (#
-            #);
           display:: (# do 'Signature:'->putline #);
-          xS: ^Lexem; (* Arguments, and fatCommas are just appended *)
+          type: ^SigType;
+          SigType: Node (# id: ^text enter id[] do id[] -> name -> append #);
+          Unary:< SigType
+            (# Label:: (# do 'UnaryPtn' -> lab[] #);
+               PT:: (# do id[] -> lx.puttext #);
+            #);
+          Binary:< SigType
+            (# label :: (# do 'Binary' -> lab[] #);
+               PT:: (# do id[] -> lx.puttext; ' ' -> lx.put; args.PT #);
+            #);
+          Function:< SigType
+            (# label:: (# do 'Function' -> lx[] #);
+               PT:: (# do id[] -> lx.puttext; args.PT #)
+            #);
+          KeyWord:< SigType
+            (# label :: (# do 'KeyWord' -> lab[] #);
+               PT:: (#do args.PT #);
+            #);
           args: ^Arguments;
           val: ^Value;
-          id: ^text;
+          id: ^text; (* should be a NAme *)
           isKeyWord: @boolean;
           init:
             (# 
-            enter(id[],isKeyWord)
+            enter(id[],args[],isKeyWord)
             do (if not isKeyWord then
-                   id[] -> Name -> Append
+                   id[] -> Name -> Append;
+                   (if args[] <> none then args[] -> append if)
+                else 
+                   true -> args.isKeyword
                 if);
             #);
           setId:
@@ -756,7 +776,6 @@ AbstractSyntaxTree: Tree
                   if);
                   not B -> B
                #);
-               true -> args.isKeyWord
             #);
           hasVirtualArgs: BooleanValue
             (#
@@ -816,6 +835,17 @@ AbstractSyntaxTree: Tree
            * Perhaps compiler error!?
            *)
        #);     
+     Sig_Generator:
+       (# id: ^Text; args: ^Arguments; isKeyword: @boolean; sig: ^Signature
+       enter(id[],args[],isKeyWord)
+       do (id[],args[],isKeyWord) -> Signature -> sig[];
+          inner;
+       exit sig[]
+       #);
+     UnarySigGen: Sig_Generator(# do id[] -> sig.Unary -> sig.type[] #);
+     FunctionSigGen: Sig_Generator(# do id[] -> sig.Function -> sig.type[] #);
+     KeyWordSigGen: Sig_Generator(# do id[] -> sig.KeyWord -> sig.type[] #);
+     BinarySigGen: Sig_Generator(# do id[] -> sig.Binary -> sig.type[] #);     
      Arguments:< Node
        (# elm:< Item;
           PT:: 
@@ -828,7 +858,7 @@ AbstractSyntaxTree: Tree
                    (# 
                    do (pos,break) -> current.PT; (if not isLast then ' ' -> lx.put if) 
                    #)
-                // isFunction then
+                // isFunction then 
                    '(' -> lx.put;
                     scanSons
                    (# 
@@ -877,6 +907,7 @@ AbstractSyntaxTree: Tree
                     if)
                  #)
             #)
+       enter isKeyword
        #);
      Value:< Node
        (* A list of Decl's *)
@@ -937,16 +968,47 @@ AbstractSyntaxTree: Tree
           isConst: @boolean
        enter(isConst,sig[] -> append,OG[] -> append)
        #);
-     Pattern: Decl
+
+     plainPtn: (# exit 0#);
+     virtualPtn: (# exit 1 #);
+     furtherPtn: (# exit 2 #);
+     finalPtn: (# exit 3 #);
+     Pattern:< Decl
        (# label::< (# do 'pattern' -> lab[]; inner #); 
           PT::< 
             (# 
-            do (pos,break) -> sig.PT; 
+            do (pos,break) -> sig.PT; ':' -> lx.put;
                inner;
                ' ' -> lx.put;
                (pos,break) -> OD.PT
             #);
           length:: (# do sig.length + 3 + OD.length -> value #);
+          ptnKind: @integer;
+          isBasicPtn: @boolean;
+
+          isBasic:: (# do OD.IS.isBasic -> value #);
+          primNo:: 
+            (#
+            do (if OD.IS.props[] <> none then 
+                   OD.IS.props.basicProp.primNo -> value 
+               if)
+            #);
+          isCore:: (#do OD.IS.isCore -> value #);
+          OD: ^ObjectGenerator
+       enter (sig[]->append,OD[]->append)
+       #);
+     xPattern: Decl
+       (# label::< (# do 'pattern' -> lab[]; inner #); 
+          PT::< 
+            (# 
+            do (pos,break) -> sig.PT; ':' -> lx.put;
+               inner;
+               ' ' -> lx.put;
+               (pos,break) -> OD.PT
+            #);
+          length:: (# do sig.length + 3 + OD.length -> value #);
+          ptnKind: @integer;
+          isBasicPtn: @boolean;
           setUpOrigin::
             (#
             do origin[] -> sig.setUpOrigin;
@@ -1025,66 +1087,56 @@ AbstractSyntaxTree: Tree
           objDescEQ:: (# do DN -> OD.objDescEQ -> value #);
           isChecked: @boolean;
           OD: ^ObjectGenerator
+       enter (sig[]->append,OD[]->append)
        #);
-     UnaryPattern:< Pattern
+     UnaryPattern:< xPattern
        (# (*Label:: (# do 'UnaryPtn' -> lab[] #);*)
           PP:: (# do 'UnaryPtn'  -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put #);
-       enter (sig[]->append,OD[]->append)
        #);
-     BasicUnaryPattern:< Pattern
+     BasicUnaryPattern:< xPattern
        (# PP:: (# do 'UnaryPtn:' -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put #);
-       enter (sig[]->append,OD[]->append)
        #);
-     BinaryPattern:< Pattern
+     BinaryPattern:< xPattern
        (# PP:: (#do 'BinaryPtn:'-> lx.append; sig.id[]-> lx.append #);
           PT:: (# do ':' -> lx.put #);
-       enter(sig[]->append,OD[]->append)
        #);
-     BasicBinaryPattern:< Pattern
+     BasicBinaryPattern:< xPattern
        (# PP:: (#do 'BasicBinaryPtn:'-> lx.append; sig.id[]-> lx.append #);
           PT:: (# do ':' -> lx.put #);
-       enter(sig[]->append,OD[]->append)
        #);
-     FunctionalPattern:< Pattern
+     FunctionalPattern:< xPattern
        (# PP:: (# do 'FunctionalPtn:' -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put #);
-       enter(sig[] -> append,OD[]->append)
        #);
-     BasicFunctionalPattern:< Pattern
+     BasicFunctionalPattern:< xPattern
        (# PP:: (# do 'BasicFunctionalPtn:' -> lx.append; sig.id[] -> lx.append #);
           label:: (#do  'BasicFunctionalPtn' -> lab[] #);
           PT:: (# do ':' -> lx.put #);
-       enter(sig[] -> append,OD[]->append)
        #);     
-     KeywordPattern:< Pattern
+     KeywordPattern:< xPattern
        (# PP:: (# do 'KeywordPattern:' -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put #);
-       enter(sig[] -> append, OD[]->append)
        #);
-     BasicKeywordPattern:< Pattern
+     BasicKeywordPattern:< xPattern
        (# PP:: (#do 'BasicKeywordPattern:' -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put #);
-       enter(sig[] -> append, OD[]->append)
        #);     
-     VirtualPattern:< Pattern
+     VirtualPattern:< xPattern
        (# isVirtual:: TrueValue;
           PP:: (# do 'VirtualPattern:' -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put; '<' -> lx.put #);
-       enter(sig[] -> append, OD[]->append)
        #);
-     FurtherPattern:< Pattern
+     FurtherPattern:< xPattern
        (# isVirtual:: TrueValue;
           PP:: (# do 'FurtherPattern:' -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put; ':' -> lx.put; '<' -> lx.put #);
-       enter(sig[] -> append, OD[]->append)
        #); 
-     FinalPattern:< Pattern
+     FinalPattern:< xPattern
        (# isVirtual:: TrueValue;
           PP:: (# do 'FinalPattern:' -> lx.append; sig.id[] -> lx.append #);
           PT:: (# do ':' -> lx.put; ':' -> lx.put #);
-       enter(sig[] -> append, OD[]->append)
        #);  
      ObjectGenerator:< item
        (# label:: (# do 'ObjectGenerator' -> lab[] #); 
@@ -1209,10 +1261,21 @@ AbstractSyntaxTree: Tree
                #);
             #);
           desc: 
-            (# D: ^Items
+            (# D: ^Items; 
             do (if ATd[] = none then
-                   'Invocation:desc:ATd is none: ' -> puttext; 
-                   father.father.dopt -> putline
+                   (if isAssign then
+                       'isAssign'->putline
+                   if);
+                   (if primNo = ifthen_prim then
+                       'ifthen'->putline;
+                       ifThenDecl.desc -> D[]
+                    else
+                       'Invocation:desc:ATd is none: ' -> puttext; 
+                       primNo -> putint; newline;
+                       doPT -> putline; '---'->putline;
+                       doPP -> putline; '---'->putline;
+                       father.father.doPT -> putline
+                   if)
                 else
                    ATd.desc -> D[]
                if)
@@ -1241,6 +1304,7 @@ AbstractSyntaxTree: Tree
             #);
           ATd: ^Decl;
           isEmpty: @boolean;
+          isAssign: @boolean;
           on,pn: @integer;
           lgth: @integer; (* length of this invocation 
                              * foo  , length = 1
@@ -1319,7 +1383,7 @@ AbstractSyntaxTree: Tree
        #);
      Exp: Apl
        (# args: ^Arguments;
-          isAssign: @boolean;
+
           dot:< (# T: ^text do '.' -> T[]; inner exit T[] #);
           (*isBasic:< BooleanValue(# do inner #);*)
           isBasic: BooleanValue
@@ -1444,7 +1508,7 @@ AbstractSyntaxTree: Tree
        #);
      
      objectDecl,noneDecl,integerDecl,charDecl,booleanDecl,StringDecl,errorDecl
-     ,thisDecl,thisCoreDecl,coreDecl,resumeDecl: ^Decl;
+     ,thisDecl,thisCoreDecl,coreDecl,resumeDecl,ifThenDecl: ^Decl;
      
      locateWorld: @
        (# trace: (# exit false #);

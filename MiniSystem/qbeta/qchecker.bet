@@ -55,7 +55,7 @@ checker: Parser
           checkItems:
             (# basicScope: ^Items; hasVirtualArgs: @boolean
             enter(basicScope[],superApl[],hasVirtualArgs)
-            do (if not isEmpty or hasVirtualArgs then 
+            do (if not isEmpty or hasVirtualArgs then
                    (none,basicScope[],basicScope[],true) -> check 
                if)
             #);
@@ -87,10 +87,10 @@ checker: Parser
                        (*newline;*)
                     #)
                  #);
-            do (*'CheckItems: ' -> puttext; doP->putline;*)
+            do (*'CheckItems: ' -> puttext; doPT->putline;*)
                this(items)[] -> basicScope[];
 
-               (if superApl.ATd[] <> none then 
+               (if superApl.ATd[] <> none then
                    (* Has super <
                     * We must ensure that Super has been checked
                     * or is being checked!
@@ -108,7 +108,7 @@ checker: Parser
                     else
                        superApl.dop->putline
                    if)*)
-                else (*':no super'->putline;*)
+                else
                    objectDecl.desc -> superDesc[];
                    (if superDesc[] = this(items)[] then
                        none -> superDesc[]
@@ -377,12 +377,42 @@ checker: Parser
             #);
           check::
             (# 
-            do scanSons(#do (none,basicScope[],basicScope[],true) -> current.check#);
-               (if args[] <> none then
-                   (none,basicScope[],basicScope[],true) -> args.check
+            do (if true then 
+                   (if type[] <> none then
+                       (none,basicScope[],basicScope[],true) -> type.check;
+                   if);
+                   (if args[] <> none then
+                       (none,basicScope[],basicScope[],true) -> args.check
+                   if);
+                   (if val[] <> none then
+                       (none,basicScope[],basicScope[],true) -> val.check
+                   if)
+                else
+                   scanSons
+                   (#
+                   do (none,basicScope[],basicScope[],true) -> current.check
+                   #);
+                   (if args[] <> none then
+                       (none,basicScope[],basicScope[],true) -> args.check
+                   if)
                if)
             #); 
-          alloc:: (# do scanSons(#do IT[] -> current.alloc #)#);
+          alloc:: 
+            (# 
+            do (if true then 
+                   (if type[] <> none then
+                       IT[] -> type.alloc;
+                   if);
+                   (if args[] <> none then
+                       IT[] -> args.alloc
+                   if);
+                   (if val[] <> none then
+                       IT[] -> val.alloc
+                   if)
+                else
+                   scanSons(#do IT[] -> current.alloc #)
+               if)
+            #);
           search::
             (# org: ^Scope
             do (if traceSearch then
@@ -512,7 +542,146 @@ checker: Parser
             do (*OG.hasCode -> value *)
             #);
        #);
-     (*Pattern: - see qAbstractSyntaxTree *)
+     Pattern::<
+       (# setUpOrigin::
+            (#
+            do origin[] -> sig.setUpOrigin;
+               sig[] -> OD.sig[];
+               origin[] -> OD.setupOrigin;
+            #);
+          isPatternDecl:: TrueValue;
+          isVirtual:: (#do ptnKind <> PlainPtn -> value #);
+               
+          check::< 
+            (# elm:: Items;
+               setImplSuper:
+                 (* Perhaps a misleading name
+                  * We always search the vDcl/fDcl in super in order
+                  * to get off for the virtual
+                  * Then we test if super for this FinalPtn is implicit
+                  *)
+                 (# VP: ^Pattern; (* not always the case ??*)
+                    vDcl: ^Decl; 
+                    pn: @integer
+                 do (*'FinalPtn:check:setImplSuper:'->puttext;sig.doPT -> putline;*)
+                    (if ptnKind // FinalPtn //furtherPtn then
+                        (sig.id[],false) -> basicScope.superDesc.localSearch -> (vDcl[],pn);
+                        (if vDcl[] <> none then
+                            (*'Found vDcl: ' -> puttext; vDcl.sig.dopt -> puttext;*)
+                            (* OBS! in V:: A { } isImplSuper should not be true
+                             * Only for  V:: { }
+                             *)
+                            vDcl[] -> VP[] -> OD.super.ATd[];
+                            (* ' pn:' -> puttext; pn -> putint; 
+                             ' off:' -> puttext; off -> putint; ' ' -> put; *)
+                            (if OD.super.isEmpty then
+                                pn + 1 -> OD.super.pn;
+                                true -> OD.super.isImplSuper;
+                                (* ' isImplSuper=T '-> puttext;*)
+                            if);
+                            (if not VP.OD.IS.isEmpty then
+                                true -> OD.super.isSingularImplSuper;
+                                (* ' isSingularImplSuper=T ' -> puttext; *)
+                            if);
+                            (*vDcl.sig.doPT -> putline*)
+                         else
+                            '\n!!! No virtual declaration in super for: ' -> puttext;
+                        sig.doPT -> putline;
+                    if)if)
+                 #)
+            do (*'\nCheck ptn: ' -> puttext; sig.id[] -> putline;*)
+               setImplSuper;
+               (* Must check sig before OD;
+                * Items in OD may refer Decl's in sig
+                * Allocation of storage for sig must be in OD.IS
+                * Scope for Decl's in sig must be basicScope
+                *)
+               (none,OD.IS[],OD.IS[],true) -> sig.check; 
+               (none,basicScope[],basicScope[],true) -> OD.check;
+               inner;
+               true -> isChecked
+            #);
+          isInner::
+            (* Perhaps ad hoc!? -- from old code: inner
+             * check BKWptn: %inner P
+             *)
+            (# A: ^ObjectGenerator; org: ^Items
+            do (if OD.primNo = inner_prim then
+                   basicScope[] -> org[];
+                   args.scanArgs
+                   (# A: ^ObjectGenerator
+                   do current[] -> A[];
+                      A.super.on - 1 
+                        -> (args.origin[]->org[]).toOrigin -> org[]; 
+                   #);
+                   org.noOfInner + 1 -> org.noOfinner;
+                   (if org.noOfInner = 1 then 
+                       org.dsize + 1 
+                         -> org.dsize 
+                         -> org.innerInx 
+                   if);
+               if)
+            #);     
+          alloc::< 
+            (# 
+            do IT[] -> OD.alloc;
+               (if ptnKind 
+                // virtualPtn then
+                   IT.dsize + 1-> IT.dsize -> off   
+                // furtherPtn // finalPtn then
+                   OD.super.ATd.off -> off
+               if);
+               inner 
+            #);
+          desc::<
+            (# elm:: items
+            do (if OD.IS.isEmpty then
+                   (* V: < A, V::< B, or V:: C *)
+                   OD.super.desc -> D[]
+                else
+                   OD.IS[] -> D[]
+               if);
+               inner
+            #);
+          isRecursive: @boolean;
+          getQual::
+            (# 
+            do (if false and not isChecked then 
+                   '\n>>> Pattern: ' -> puttext; sig.doPT -> puttext;
+                   ' is not checked'->putline;
+               if);
+               (if isRecursive then
+                   OD[] -> qual[];
+                   false -> isRecursive;
+                   leave getQual
+               if);
+               inner;
+               (if traceCheckQual then
+                   'Pattern getQual: "' -> putline; sig.doPT -> puttext; 
+                   '"' ->put; newline;
+               if);
+               true -> isRecursive;
+               sig.getQual -> qual[];
+               false -> isRecursive;
+               (if qual[] = none then
+                   OD[] -> qual[];
+               if);
+               (if traceCheckQual then
+                   'Pattern: "\n' -> puttext; 
+                   (if qual[] <> none then 
+                       qual.doPT -> puttext
+                    else 'none'->puttext
+                   if);
+                   '"' -> put; newline
+               if)
+            #);
+          entity:: (#do OD.entity -> E[] #);
+          skind:: (# do ': ' -> S[] #);
+          getEntries:: (# do OD.getEntries -> (names[],entries[]) #);
+          objDescEQ:: (# do DN -> OD.objDescEQ -> value #);
+          isChecked: @boolean;
+       #);
+     
      BasicUnaryPattern::<
        (# isInner::
             (* Perhaps ad hoc!? *)
@@ -608,15 +777,13 @@ checker: Parser
             #); 
           check::
             (#
-            do (*'Check: ' -> puttext; doPT -> putline;*)
-
-               (if super.ATd[] = none then (* else implict super that has been setUp*)
-                   (if sig[] = none then 
+            do (if super.ATd[] = none then (* else implict super that has been setUp*)
+                   (if sig[] = none then
                        (none,basicScope[],basicScope[],true) -> super.check;
                     else
                        (none,basicScope[],sig[],true) -> super.check;
                    if);                   
-               if);               
+               if);      
                (if not IS.isEmpty or (super.hasVirtualArgs and not super.isBasic) then
                    this(ObjectGenerator)[] -> newDesc -> IS.descNo;
                if);
@@ -625,8 +792,9 @@ checker: Parser
                    ':virtualArgs'->putline
                 else
                    ':no vargs'->putline
-               if);*)
-               (origin[],super[],super.hasVirtualArgs) -> IS.checkItems
+                if);*)
+               (origin[],super[],super.hasVirtualArgs) -> IS.checkItems;
+               
             #);
           isSimpleValue: BooleanValue
             (* ObjectGeneration in (the rightside)

@@ -203,6 +203,9 @@ generator: semchecker
                 'beginBCP: '->T1[];
                 cd.bcPos -> T1.putint;
                 T1[] -> cd.comment;*)
+               'OG:gen:'->cd.comment;
+               super.doPT -> cd.comment;
+               IS.doPT -> cd.comment;
                (if IS.isEmpty 
                    and not super.hasVirtualArgs 
                    or (super.isBasic and IS.isEmpty) then
@@ -211,7 +214,7 @@ generator: semchecker
                    T[] -> cd.comment;
                    (useReturnValue,superAdj,staticOff) -> super.gen
                 else
-                   (* This also includes pattner invoccations with virtual arguments
+                   (* This also includes pattern invocations with virtual arguments
                     * like %if .. %then% ... %else ...
                     *)
                    ':singular' -> T.append;
@@ -274,7 +277,8 @@ generator: semchecker
                vSuperDesc: ^Items;
                nd: ^Node
             enter(N[],sig[],descNo,Super[])
-            do (if (superDesc[] <> none) then
+            do (*'GenClass: ' -> puttext; doPT -> putline;*)
+               (if (superDesc[] <> none) then
                    superDesc.father.father -> nd[];
                    (*'Super: ' -> puttext; nd.doPP->putline;*)
                    nd[] -> ptn[];
@@ -471,6 +475,280 @@ generator: semchecker
                  if)#);
             #)
             
+       #);
+     Pattern::
+       (#  gen:: 
+            (# 
+            do (if OD.primNo
+                // 0 // string_prim // indexed_prim then
+                   (if ptnKind 
+                    // plainPtn then
+                       (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add 
+                    // virtualPtn then
+                       (if OD.IS.isEmpty then
+                           (off,(OD.super.desc).descNo) -> cd.vdtTable
+                        else
+                           (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add;
+                           (off,OD.IS.descNo) -> cd.vdtTable
+                       if)                            
+                    // furtherPtn // finalPtn then
+                       (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add;
+                       (off,OD.IS.descNo) -> cd.vdtTable
+                   if)
+                // resume_prim then
+                   ('Resume','D') -> cd.call;                   
+               if)
+            #);
+          pushThis:: 
+            (# T: @text
+            do ('Pattern:pushThis',sig.dopt) -> cd.com2;
+               (*OD.primNo -> T.putint; T[] -> cd.comment;*)
+               (if OD.primNo
+                // 0 
+                // indexedGet_prim (* not tested*)
+                // indexedGet_prim (* ditto *)
+                // stringGet_prim 
+                // indexed_prim then
+                   cd.pushThis 
+                else (* ugly *)
+                   (if ptnKind // virtualPtn // furtherPtn // FinalPtn then
+                       cd.pushThis 
+                   if)
+               if)
+            #);
+          loadArgs::
+            (# args: [6]^ObjectGenerator; top: @integer;
+            do (if false then
+                   E.args.scanArgs
+                   (#
+                   do (true,superAdj,0) -> current.gen 
+                   #)
+                else
+                   E.args.scanArgs
+                   (#
+                   do (if (top+1 -> top) > args.range then 
+                          args.range -> args.extend 
+                      if);
+                      current[] -> args[top][];
+                   #);
+                   sig.args.scanArgs
+                   (# D: ^Decl; i: @integer; 
+                      OG: ^ObjectGenerator; name: ^text;
+                   do i + 1 -> i; 
+                      current[] -> D[]; 
+                      '>>>a'->putline;
+                      (if D.isVirtual then
+                          '>>>b'->putline;
+                          D.sig.id.copy -> name[];
+                          '#SB#' -> name.append;
+                          '>>>c'->putline;
+                          (args[i].desc).descno -> name.putint;
+                          '>>>a'->putline;
+                          (name[],none,args[i][],args[i].super[]) 
+                            -> ObjTmpStack.add;
+                          E.father.father[] -> OG[]; (* need OG.descNo for VDT *)
+                          'loadArgs:virt:'->puttext; sig.dopt -> putline;
+                          (D.off,(args[i].desc).descno,(OG.desc).descNo) 
+                            -> cd.vdtTableAt
+                       else
+                          'loadArgs:plain:'->puttext; sig.dopt -> putline;
+                          (true,superAdj,0) -> args[i].gen
+                      if);
+                   #);                   
+               if)
+            #);
+          load::
+            (# org: ^Items; exitLab: @labelHandler.label;
+               args: [6]^ObjectGenerator; top: @integer;
+               hasVirtualArgs: @boolean
+            do ('Pattern:load: ',sig.doPT) -> cd.com2; 
+
+               (if OD.primNo
+                // ifthen_prim then 'BKP:'->cd.comment; doPT -> cd.comment;
+                   exitLab.new;                   
+                   E.args.scanSons
+                   (# N: @integer
+                   do N + 1 -> N;
+                      (if N
+                       // 1 // 3 then
+                       // 2 then 
+                          (true,0,staticOff) -> current.gen;
+                          exitlab -> cd.jmpFalse;
+                       // 4 then
+                          current.gen;
+                          exitLab -> cd.defLab;
+                       else
+                          'load:%if%then: too many arguments' -> putline;
+                          E.doPt -> putline
+                      if)
+                   #);   
+                // this_prim then
+                   (* Must check that argument is the name of an enclosing 
+                    * object or the name of the superpattern of an enclosing
+                    * object 
+                    *)
+                   E.args.scanArgs
+                   (# A: ^ObjectGenerator; org: ^Items
+                   do current[] -> A[]; 
+                      cd.pushThis;
+                      A.super.on - 1 -> (E.origin[]->org[]).goOrigin; 
+                   #);
+                // inner_prim then
+                   (if E.args.length > 0 then
+                       E.args.scanArgs
+                       (# A: ^ObjectGenerator; org: ^Items
+                       do current[] -> A[]; 
+                          cd.pushThis;
+                          A.super.on - 1 -> (E.origin[]->org[]).goOrigin -> org[]; 
+                          org.innerInx -> cd.innerP; 
+                          cd.rpopThisObj
+                       #)
+                    else
+                       E.origin[] -> org[];
+                       org.innerInx -> cd.innerx; 
+                   if)
+                // indexedPut_prim then
+                   (* scan args and push index and element *)
+                   E.args.scanSons(#do (true,0,staticOff) -> current.gen #);
+                   '%put%at!' -> cd.comment;
+                   ('inx',1) -> cd.xstoreg
+                // indexedGet_prim // stringGet_prim then
+                    E.args.scanSons(#do (true,0,staticOff) -> current.gen #);
+                   '%get' -> cd.comment;
+                   ('inx',1) -> cd.xpushg
+                // none_prim then 
+                   cd.pushNone
+                // suspend_prim then
+                   cd.suspendd
+                // resume_prim then
+                   ('Resume','D') -> cd.call;
+                   cd.rpop
+                // disable_prim then
+                   ('disable',disable_prim) -> cd.callPrim
+                // enable_prim then  
+                   ('enable',enable_prim) -> cd.callPrim   
+                // put_prim then 
+                   ('put',OD.primNo) -> cd.Callprim
+                // attach_prim then
+                   ('attach',OD.primNo) -> cd.callPrim;
+                   cd.rPop;
+                // cmpAndSwap_prim then
+                   (# I: ^Invocation
+                   do E.father -> I[];
+                      L:
+                        I.scanSons
+                        (# R: ^Exp
+                        do current[] -> R[];
+                           cd.swap;
+                           ('cmpAndSwap',OD.primNo ) -> cd.callPrim;
+                           leave L
+                        #)
+                   #)
+                // fork_prim then
+                   ('fork',OD.primNo ) -> cd.callPrim
+                // sleep_prim then
+                   ('sleep',OD.primNo ) -> cd.callPrim;
+                // indexed_prim then
+                   (*100 -> cd.pushConst; -- range - pushed as argument *)
+                   0 -> cd.pushConst;   (* isRindexed *)
+                   OD.IS.rsize -> cd.pushConst; (* dinx *)
+                   ('StaticRep',OD.IS.descNo,false (*OD.isRindexed*),true) 
+                     -> cd.allocIndexed;
+                   cd.pushThis;
+                   ('indexed',staticOff) -> cd.rstoreg              
+                else
+                   (if (sig.type ## = Sig.Binary##) and (OD.primNo > 0) then
+                       OD.primNo -> cd.op
+                    else
+                       (if true and (sig.type## = sig.KeyWord##) then
+                           (* 'KWP:load: ' -> puttext; sig.dopt -> putline;*)
+                           E.args.scanArgs
+                           (# 
+                           do (*'Actual arg: ' -> puttext; current.doP -> putline;*)
+                              (if (top+1 -> top) > args.range then 
+                                  args.range -> args.extend 
+                              if);
+                              current[] -> args[top][]
+                           #);
+                           sig.args.scanArgs
+                           (# D: ^Decl; i: @integer
+                           do i + 1 -> i;
+                              current[] -> D[]; (*D.doP -> putline;*)
+                              (if D.isVirtual then
+                                  true -> hasVirtualArgs
+                               else
+                                  args[i].gen
+                              if);
+                           #);
+                           (if hasVirtualArgs then 
+                               '\n>>> Has Virtual arguments'->putline;
+                               (* father.father[] -> OG[];
+                                ('KeyWord',none,OG[],OG.super[]) -> ObjTmpStack.add*)
+                            else
+                               (sig.id[],OD.IS.descno,staticOff,false) -> cd.invoke;
+                               (if not useReturnValue then
+                                   sig.popReturn
+                               if)
+                           if)
+                       else            
+                       (if ptnKind
+                        // virtualPtn // furtherPtn // finalPtn then
+                           (sig.id[],off) -> cd.sendVirtual;
+                        else
+                           (*'Invoke: '-> puttext; sig.doPT->puttext;
+                           ' ' -> put; OD.primNo -> putint;
+                           (if isBasicPtn then ' isBasic' -> putline else newline if);*)
+                           (if not isBasicPtn then
+                               (sig.id[],OD.IS.descno,staticOff,not OD.IS.doHasCode) 
+                                 -> cd.invoke;
+                           if)
+                       if);
+                       (if not useReturnValue then
+                           sig.popReturn
+                       (* reconsider if return values *)
+               if)if)if)if)
+            #);
+          loadAdr::
+            (# args: [6]^ObjectGenerator; top: @integer;
+            do (*'KeyWordPattern:loadAdr: ' -> puttext; sig.doPT -> putline;*)
+               E.scanSons
+               (# isArg: @boolean
+               do (if isArg then
+                      (*'Actual arg: ' -> puttext; current.doPT -> putline;*)
+                      (if (top+1 -> top) > args.range then 
+                          args.range -> args.extend 
+                      if);
+                      current[] -> args[top][]
+                  if);
+                  not isArg -> isArg                  
+               #);
+               sig.args.scanArgs
+               (# D: ^Decl; i: @integer; OG: ^ObjectGenerator; name: ^text
+               do i + 1 -> i;
+                  current[] -> D[]; 
+                  (*D.doPt -> putline;
+                   args[i].dopt -> putline;*)
+                  (if D.isVirtual then
+                      'SingularBinding#' -> name[];
+                      (args[i].desc).descno -> name.putint;
+                      (* (args[i].desc).doPT -> putline;
+                       (args[i].desc).descno -> putint;newline;*)
+                      E.father.father[] -> OG[]; 
+                      (* 'Binding: ' -> putline; args[i].doPT -> putline;*)
+                      (name[],none,args[i][],args[i].super[]) -> ObjTmpStack.add;
+                      
+                      (*(OG.desc).descNo -> putint; newline;*)
+                      'LoadAdr:'->puttext;
+                      (D.off,(args[i].desc).descno,(OG.desc).descNo) -> cd.vdtTableAt
+                   else
+                      args[i].gen
+                  if);
+               #);
+            #);
+          store::
+            (#
+            do 'Pattern:store: '->puttext; doPT -> putline;
+            #);   
        #);
      UnaryPattern::
        (# gen:: (# do (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add #);
@@ -816,7 +1094,7 @@ generator: semchecker
                if)                   
             #);
           load::
-            (# exitLab: @labelHandler.label
+            (#  exitLab: @labelHandler.label
             do (if OD.primNo
                 // ifthen_prim then 'BKP:'->cd.comment; doPT -> cd.comment;
                    exitLab.new;                   
@@ -1049,7 +1327,7 @@ generator: semchecker
                            (this(Exp)[],useReturnValue,staticOff) -> rec.ATd.load
                        if);
                        'OI:exe:before:loadArgs'->cd.comment;
-                       (if type## <> Keyword## then 
+                       (if (*true or*) (type## <> Keyword##) then 
                            superAdj -> loadArgs
                        if);
                        'OI:exe:after:loadArgs'->cd.comment;
