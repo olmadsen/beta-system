@@ -32,6 +32,7 @@ generator: semchecker
           load:: (# do '\nModuleItem:load'->putline #);
           store:: (# do '\nModuleItem:store'->putline #);
           pushOff:: (# do MD.SO.pushOff #);
+          activate:: (# do MD.SO.activate #);
           popReturn:: (# do '\nModuleItem:popReturn'->putline #);
           findNextImp:: (# do bcp -> md.findNextImp -> impx[] #);          
        #);
@@ -102,6 +103,33 @@ generator: semchecker
             (# gdb:: (#do sig.id[] -> lx.puttext #)
             do (if OG.isSimpleValue then 
                    (sig.id[],off) -> cd.pushg
+                else
+                   (sig.id[],off) -> cd.rpushg
+               if)
+            #);
+          activate::
+            (# gdb:: 
+                 (# 
+                 do doPT -> lx.puttext; 
+                    (if next[] <> none then 
+                        ' next: ' -> lx.puttext; next.doPT -> lx.puttext
+                    if)
+                 #)
+            do (if OG.isSimpleValue and (next.ATd.primNo <> cmpAndSwap_prim) then
+                   (none,next[],useReturnValue,staticOff) -> load
+               if);
+               (if OG.isSimpleValue then 
+                   (if next[] <> none then
+                       (if next.ATd.primNo = cmpAndSwap_prim then 
+                           off -> cd.pushConst
+                       if)
+                   if);
+                   (* May happen for V := 117 where := is assignment 
+                    * - no offset
+                    * shall be pushed for V since V is assigned afterwards
+                    * For R ++ 117 offset for R should be pushed since it
+                    * is origin
+                    *)
                 else
                    (sig.id[],off) -> cd.rpushg
                if)
@@ -484,6 +512,13 @@ generator: semchecker
                    (none,rec[],true(*useReturnValue*),staticOff) -> load 
                if)
             #);
+          activate::
+            (#
+            do (if od.primNo = 0 then 
+                   (rec[],superAdj) -> loadArgs; 
+                   (none,rec[],true(*useReturnValue*),staticOff) -> load 
+               if)
+            #);
           load::
             (# gdb:: (# do sig.doPT -> lx.puttext #);
                org: ^Items; exitLab: @labelHandler.label;
@@ -656,19 +691,24 @@ generator: semchecker
                           'next not assign: ' -> T[]; (next).doP -> T.puttext;
                           ' :E: ' -> T.puttext; E.doPT -> T.puttext; 
                           T[] -> cd.comment;
-                          next -> Ex[];
-                          (rec[],useReturnValue,staticOff,superAdj,Ex[]) 
-                            -> E.pushOff; (* Often calls execute *)
-                          (* !!! In e1.e2.e3 we call loadASreceiver for e1 and e2
-                           * before only for e2 - perhaps since we may have 
-                           * a + b * c - should be called for both a and b
-                           *)
-                          (Ex[],useReturnValue,staticOff) -> rec.ATd.loadAsReceiver
-                          (*NOTE: we call E.pushOff, where E = rec, and which calls
-                           *                 ATd.pushOff
-                           *              rec.ATD.loadAsReceiver
-                           * so perhaps   E.pushOffOrLoadAsReceiver
-                           *)
+                          (if true then
+                              (rec[],nE[],useReturnValue,staticOff,superAdj) 
+                                -> E.activate
+                           else
+                              next -> Ex[];
+                              (rec[],useReturnValue,staticOff,superAdj,Ex[]) 
+                                -> E.pushOff; (* Often calls execute *)
+                              (* !!! In e1.e2.e3 we call loadASreceiver for e1 and e2
+                               * before only for e2 - perhaps since we may have 
+                               * a + b * c - should be called for both a and b
+                               *)
+                              (Ex[],useReturnValue,staticOff) -> rec.ATd.loadAsReceiver
+                              (*NOTE: we call E.pushOff, where E = rec, and which calls
+                               *                 ATd.pushOff
+                               *              rec.ATD.loadAsReceiver
+                               * so perhaps   E.pushOffOrLoadAsReceiver
+                               *)
+                          if)
                       if)
                   if);
                #);
@@ -735,6 +775,10 @@ generator: semchecker
           pushOff:: 
             (# gdb:: (# do doPT -> lx.puttext #)
             do (rec[],useReturnValue,staticOff,superAdj,next[]) -> ATd.pushOff 
+            #);
+          activate::
+            (# gdb:: (# do 'activate:' -> lx.puttext; doPT -> lx.puttext #)
+            do (rec[],next[],useReturnValue,staticOff,superAdj) -> ATd.activate 
             #);
           loadArgs:: 
             (#
@@ -865,6 +909,10 @@ generator: semchecker
                 (rec[],useReturnValue,staticOff,superAdj,next[]) -> ATd.pushOff
                 *)
             #);
+          activate::
+            (# gdb:: (# do doPT -> lx.puttext #)
+            do
+            #);
           execute:: 
             (# gdb:: (# do doPT -> lx.puttext #);
                rec,E: ^Exp
@@ -881,11 +929,13 @@ generator: semchecker
      Const::
        (# gen:: (# do execute #);
           pushOff:: (# do execute #);
+          activate:: (# do execute #);
           execute:: (# do T.setpos; T.getInt -> cd.pushConst #);
        #);
      CharObj::
        (# gen:: (* Never called? *) (# do execute #);
           pushOff:: (# do execute #);
+          activate:: (# do execute #);
           execute:: 
             (# ch: @char
             do (if T.length = 1 then
