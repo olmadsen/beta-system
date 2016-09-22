@@ -636,15 +636,21 @@ generator: semchecker
                 * rec -> e3.activate
                 *)
                scanSons
-               (# T: ^ Text
+               (# gdb:
+                    (# T: ^text
+                    do 'Invocation:loadOrigin:scan: ' -> T[];
+                       current.doPT -> T.puttext;
+                       T[] -> cd.comment;
+                    #);
+                  T: ^ Text
                do current[] -> E[]; 
+                  gdb;
                   (if isFirst then 
                       E.pushThis;
                       superAdj -> E.loadOrigin 
                   if); 
                   (if not isLast then
                       E[] -> rec[];
-                      current.doP -> cd.comment;
                       (if (next -> nE[]).ATd.primNo <> assign_prim then
                           'next not assign: ' -> T[]; (next).doP -> T.puttext;
                           ' :E: ' -> T.puttext; E.doPT -> T.puttext; 
@@ -804,38 +810,72 @@ generator: semchecker
         *    execute foo(e1,e29?
         * (%this P).suspend
         *     loadOrigin?
+        * (E1)
+        *    (E1).pushThis
+        *    (E1).loadOrigin
+        *    (E1).activate
+        *    rec -> E.execute
+        * (E1).E2
+        *    
+        * (R.S).foo
+        * (R.bar(e1,e2,)).foo  
+        * (ch = 'i') && (S <> none)
+        * Do we always execute exp in (exp) and (exp).foo?
+        * We should thus not just call load origin!?
+        * What about (exp), (R.foo)
+        * Look at gen: for (exp) we call loadOrigin and then execute
+        *   for (exp).foo we call loadOrigin(exp) and then exe on foo
+        *   but exe(exp) is not called
+        *   How do we in loadOrigin ensure that exe(exp) is called when needed?
+        * 
+        * E1.(E2)
+        * E1.(E2).E3
         *)
        (# gen:: 
             (# gdb:: (# do doPT -> lx.puttext #);
             do (* we dont come here *)
                (useReturnValue,superAdj,staticOff) -> IV.gen 
             #);
+          pushThis:: 
+            (* Skip, since loadOrigin below includes pushThis *)  
+            (# gdb:: (# do doPT -> lx.puttext #);
+            do (* IV.pushThis *) 
+            #);
           loadOrigin:: 
-            (# 
+            (# gdb:: (# do doPT -> lx.puttext #)
             do 
                (* OBS! useReturnValue, staticOff must be handled!
                 *)
                (false,0,superAdj)  -> IV.loadOrigin -> (rec[],E[]);
                ('BE:loadOrigin:E:',E.doPT) -> cd.com2;
             #);
-          pushThis:: 
-            (# gdb:: (# do doPT -> lx.puttext #);
-            do (* IV.pushThis*)  
-            #);
           loadArgs:: 
+            (* Skip, since loadOrigin includes loadArgs *)              
             (# gdb:: (# do doPT -> lx.puttext #);
                E: ^Exp
-            do IV.scanSons
+            do (*IV.scanSons
                (#
                do current[] -> E[]
                #);
-               superAdj -> E.loadArgs
+               superAdj -> E.loadArgs*)
             #);
           activate::
-            (# gdb:: (# do doPT -> lx.puttext #)
-            do
+            (* Skip, since loadOrigin includes activate *)
+            (# gdb:: (# do doPT -> lx.puttext #);
+               E,nxt: ^Exp
+            do (*IV.scanSons
+               (#
+               do current[] -> nxt[];
+                  (if not isLast then current[] -> E[] if)
+               #);
+               (if E[] <> none then
+                   (E[],nxt[],useReturnValue,staticOff,superAdj) -> E.activate
+               if)*)
             #);
           execute:: 
+            (* Skip, since loadOrigin -> (rec[],E[]) 
+             * implies E.execute in objectInvocation::gen 
+             *)
             (# gdb:: (# do doPT -> lx.puttext #);
                rec,E: ^Exp
             do (*(rec[],useReturnValue,staticOff,superAdj) -> IV.execute *)
@@ -843,8 +883,7 @@ generator: semchecker
                (#
                do current[] -> E[];
                   (if not isLast then E[] -> rec[] if)
-               #);
-               
+               #);               
                (rec[],useReturnValue,0,staticOff) -> E.execute (*IV.gen*)
             #);
        #);
