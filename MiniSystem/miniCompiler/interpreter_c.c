@@ -51,6 +51,32 @@
 */
 bool isXbeta;
 
+//for Arduino, typdef apparently must be in the beginning od tje file!?
+typedef unsigned char * ObjDesc;
+
+typedef struct Btemplate {
+  ObjDesc desc;
+  int id;
+  bool isObj;
+  int vstack[16];  
+  struct Btemplate *rstack[16];
+  int vtop; int rtop;
+  int lscStack[16];
+  int lscTop;
+  int lsc;
+  struct Btemplate *rfields[64];
+  int vfields[];
+} Btemplate;
+
+typedef struct Block {
+  ObjDesc bc;  
+  int glsc;
+  int currentDescNo;
+  Btemplate *thisModule,*thisObj,*thisStack,*top, *world;
+  int threadId;
+  char *traceFile;
+} Block;
+
 enum{
   imageSize_index = 8,
   mainDescInx_index = 12,
@@ -257,7 +283,7 @@ void releaseHeap(void *S){
   free(S);
 }
 
-typedef unsigned char * ObjDesc;
+
 
 ObjDesc descs;
 
@@ -333,29 +359,6 @@ ObjDesc getByteCode(ObjDesc desc) {
   //  ,desc[BCstart],desc[BCstart+1],desc[BCstart+2],desc[BCstart+3],desc[BCstart+4]);
   return (ObjDesc) desc + BCstart + 2;
 }
-
-typedef struct template {
-  ObjDesc desc;
-  int id;
-  bool isObj;
-  int vstack[16];  
-  struct template *rstack[16];
-  int vtop; int rtop;
-  int lscStack[16];
-  int lscTop;
-  int lsc;
-  struct template *rfields[64];
-  int vfields[];
-} template;
-
-typedef struct Block {
-  ObjDesc bc;  
-  int glsc;
-  int currentDescNo;
-  template *thisModule,*thisObj,*thisStack,*top, *world;
-  int threadId;
-  char *traceFile;
-} Block;
 
 
 int alloE(ObjDesc desc){ 
@@ -740,7 +743,7 @@ void dumpDesc(FILE *trace, int xdescNo) {
 	    ,descNo(desc),VS,RS,desc_getInt2(desc,originOff_index));
     if (VS >= 16) {
       fprintf(trace,"\n\n");
-      close(trace);
+      fclose(trace);
       runTimeError("vSize too big");
     }
 
@@ -765,7 +768,7 @@ void dump_image(FILE * trace) {
 
 typedef struct Event {
   int type;
-  template *caller,*thisObj,*org;
+  Btemplate *caller,*thisObj,*org;
   int isObj;
   int descNo;
   int bcPos;
@@ -773,11 +776,11 @@ typedef struct Event {
 
 int hSize = 0;
 
-template *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
-  int i = sizeof(template) + (16 + vInxSize) * sizeof(int);// + 1000;
+Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
+  int i = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int);// + 1000;
   hSize = hSize + i;
   //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
-  template *obj = (template*)heapAlloc(i);
+  Btemplate *obj = (Btemplate*)heapAlloc(i);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   obj->id = ID;
@@ -792,7 +795,7 @@ template *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize
   return obj;
 }
 
-char * nameOf(template *obj){
+char * nameOf(Btemplate *obj){
   if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
   int i,inx = desc_getInt2(desc,0);
@@ -800,9 +803,9 @@ char * nameOf(template *obj){
 }
 
 int threadStubDescNo; // perhaps a hack?
-void dumpStackX(template *obj);
+void dumpStackX(Btemplate *obj);
 
-void runTimeErrorX(char *msg, template *thisObj, int glsc){
+void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
  
   printf("\n\n*** Run-time error: %s\n\nObject: %s(%i) at: %i\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
 
@@ -812,8 +815,8 @@ void runTimeErrorX(char *msg, template *thisObj, int glsc){
 }
 
 
-void dumpStackX(template *obj){
-  template *X, *Y;
+void dumpStackX(Btemplate *obj){
+  Btemplate *X, *Y;
   if (X != NULL) {
     X = obj->rstack[1];
     Y = obj->rstack[2];
@@ -823,22 +826,22 @@ void dumpStackX(template *obj){
   }
 }
 
-int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
+int topDescNo(Btemplate *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
 
-template *myCorigin(template *obj){ 
+Btemplate *myCorigin(Btemplate *obj){ 
   int inx;
   inx = desc_getInt2(obj->desc,originOff_index);
-  template * origin = 0;
+  Btemplate * origin = 0;
   if (inx > 0) origin = obj->rfields[inx];
   return origin;
 }
 
 
-ObjDesc myCode(template *obj){
+ObjDesc myCode(Btemplate *obj){
   return getByteCode(obj->desc);
 }
 
-ObjDesc mySuperCode(template *obj){
+ObjDesc mySuperCode(Btemplate *obj){
   return(myCode(obj));
 }
 
@@ -857,7 +860,7 @@ int xlabs(int descNo,int labNo){
   return lab;
 }
 
-int vdtTable(FILE *trace,template *obj,int inx){
+int vdtTable(FILE *trace,Btemplate *obj,int inx){
 #ifdef TRACE
   fprintf(trace," vdtTable[%i] = %i "
 	  ,inx,desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4));
@@ -865,23 +868,23 @@ int vdtTable(FILE *trace,template *obj,int inx){
   return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
 }
 
-int getLiteralStart(template *obj){
+int getLiteralStart(Btemplate *obj){
   return desc_getInt4(obj->desc,literal_index);
 };
 
-int getLiteral(template *obj,int inx){
+int getLiteral(Btemplate *obj,int inx){
   int lit = desc_getInt2(obj->desc,getLiteralStart(obj) + (inx-1) *2);
   //fprintf(trace,"getLiteral %i %i \n",inx,lit);
   return lit;
 }
 
-bool getIsObj(template *obj) {return obj->isObj; };
+bool getIsObj(Btemplate *obj) {return obj->isObj; };
 
-int getV(template *obj,int inx){ return obj->vfields[inx];};
+int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 
-template *getR(template *obj,int inx){ return obj->rfields[inx];};
+Btemplate *getR(Btemplate *obj,int inx){ return obj->rfields[inx];};
 
-void vPush(template *thisStack,int V){
+void vPush(Btemplate *thisStack,int V){
   int i;
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) {
     for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
@@ -890,26 +893,26 @@ void vPush(template *thisStack,int V){
   thisStack->vstack[thisStack->vtop] = V;
 }
 
-void rPush(template *stack,template *R){
+void rPush(Btemplate *stack,Btemplate *R){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
   if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeErrorX("stack overflow",stack,-1);
   stack->rstack[stack->rtop] = R;
 }
 
-int vPop(template *thisStack){
+int vPop(Btemplate *thisStack){
   if ((thisStack->vtop = thisStack->vtop - 1) < -1) 
     runTimeErrorX("vstack underflow",thisStack,-1);
   return thisStack->vstack[thisStack->vtop + 1];
 }
 
-template *rPop(template *stack){
-  //template *R = stack->rstack[stack->rtop];
+Btemplate *rPop(Btemplate *stack){
+  //Btemplate *R = stack->rstack[stack->rtop];
   // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
   if ((stack->rtop = stack->rtop - 1) < -1) runTimeErrorX("rStack underflow",stack,-1);
   return stack->rstack[stack->rtop + 1];
 }
 
-void cSaveReturn(template *obj,int descNo, int lsc){
+void cSaveReturn(Btemplate *obj,int descNo, int lsc){
   //fprintf(trace,"\n***cSaveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
   //int i;
   //for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
@@ -920,11 +923,11 @@ void cSaveReturn(template *obj,int descNo, int lsc){
   obj->lscStack[obj->lscTop] = lsc;
 }
 
-int cMyLscTop(template *obj) { return obj->lscTop; };
+int cMyLscTop(Btemplate *obj) { return obj->lscTop; };
 
-int topOfLsc(template *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
+int topOfLsc(Btemplate *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
-int cRestoreReturn(template * obj){
+int cRestoreReturn(Btemplate * obj){
   //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
   if (obj->lscTop < 0) runTimeErrorX("\n**** ERROR:  lscStack underflow\n",obj,-1);
   int V = obj->lscStack[obj->lscTop];
@@ -939,7 +942,7 @@ HANDLE eventReady,eventTaken,eventProcessed;
 
 Event *theEvent = NULL;
 
-void *mkEvent(int type,template *caller,template *thisObj,template *org
+void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 	       ,bool isObj,int currentDescNo,int bcPos){ 
   //printf("\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
   hSize = hSize + sizeof(Event);
@@ -983,16 +986,16 @@ void *mkEvent(int type,template *caller,template *thisObj,template *org
   return E;  
 };
 
-void *mkAllocEvent(int type,template *caller,template *thisObj,template *org
+void *mkAllocEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 		    ,bool isObj,int currentDescNo,int bcPos,bool isIndexed){
   mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
 };
 
-int descNoOf(template * obj){
+int descNoOf(Btemplate * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
 
-void dumpStack(FILE *trace,template *Z){
+void dumpStack(FILE *trace,Btemplate *Z){
   int i;
   fprintf(trace,"r\[");
   for (i=0; i < Z->rtop; i++)
@@ -1002,7 +1005,7 @@ void dumpStack(FILE *trace,template *Z){
     fprintf(trace,"%i ",Z->vstack[i + 1]);  
   fprintf(trace,"]\n");
 }
-void dumpSwapped(FILE *trace,template *X, template *Y,template *Z){
+void dumpSwapped(FILE *trace,Btemplate *X, Btemplate *Y,Btemplate *Z){
   fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s  %s %s["
 	  ,nameOf(X),nameOf(X->rstack[1]),nameOf(X->rstack[2])
 	  ,nameOf(Y),nameOf(Z));
@@ -1012,10 +1015,10 @@ void dumpSwapped(FILE *trace,template *X, template *Y,template *Z){
   fprintf(trace,"]\n");
 }
 
-void rswap(template *obj, template **R, template **S){
+void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
   //fprintf(trace,"***rswap %s %s %i\n",nameOf(*R),nameOf(*S),obj->rtop);
-  template *Rx = obj->rstack[1];
-  template *Sx = obj->rstack[2];
+  Btemplate *Rx = obj->rstack[1];
+  Btemplate *Sx = obj->rstack[2];
   obj->rstack[1] = *R;
   obj->rstack[2] = *S;
   *R = Rx;
@@ -1054,7 +1057,7 @@ Event *init_interpreter(ObjDesc descs_a, bool isXB) {
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)heapAlloc(sizeof(Block));
-  descs = heapAlloc(imageSize);
+  descs = (ObjDesc) heapAlloc(imageSize);
   memcpy(descs,descs_a,imageSize); 
   thisBlock->bc = descs;
 
@@ -1100,7 +1103,7 @@ Event *getEvent(bool first){
   }
 
 #ifdef linux
-    E = mkEvent(stop_event,0,0,0,0,0,0); 
+  E = (Event *)mkEvent(stop_event,0,0,0,0,0,0); 
 #else
   dwWaitResult = WaitForSingleObject(eventReady,INFINITE);
   //printf("\nGot mutex\n");
@@ -1147,13 +1150,13 @@ DWORD WINAPI interpreter(LPVOID B){;
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
   setbuf(trace, NULL);
-  template *enablee = 0;
+  Btemplate *enablee = 0;
   int suspendEnabled = 0;
   int timeToSuspend = 0;
   ObjDesc bc = thisBlock->bc;
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
-  template *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
+  Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
 
   int op1(){
     int V = bc[glsc]; 
@@ -1166,7 +1169,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     return V;
   };
 
-  Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
+  Event *allocObj(Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
 #endif
@@ -1174,7 +1177,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
-    template *Y;
+    Btemplate *Y;
     Y = thisObj;
     rPush(callee,thisObj);
     rPush(callee,thisStack);
@@ -1203,7 +1206,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
     if (staticOff > 0) thisObj->rfields[staticOff] = callee;
-    template *Y;
+    Btemplate *Y;
     Y = thisObj;
     rPush(callee,thisObj);
     rPush(callee,thisStack);
@@ -1224,7 +1227,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
   };
 
-  void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+  void allocIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
     fprintf(trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif
@@ -1241,7 +1244,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     thisObj->vfields[dinx] = rangee; 
   };
  
-void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
     fprintf(trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif    
@@ -1269,18 +1272,18 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
     rPush(thisStack,callee);
   };
 
-  void allocStrucRefObj(template *origin,int inx, bool isVirtual){
+  void allocStrucRefObj(Btemplate *origin,int inx, bool isVirtual){
 #ifdef TRACE
     fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
 #endif
-    template * X = allocTemplate(newId(),getStrucRefDescNo(),0,0,0);
+    Btemplate * X = allocTemplate(newId(),getStrucRefDescNo(),0,0,0);
     if (isVirtual) inx = vdtTable(trace,origin,inx);
     X->vfields[1] = inx;
     X->rfields[2] = origin;
     rPush(thisStack,X);
   };
   
-  void allocFromStrucRefObj(template *obj){
+  void allocFromStrucRefObj(Btemplate *obj){
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
@@ -1289,11 +1292,11 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
   
   void allocTextObj(int litInx){
     // literals[litInx] = length
-    template *origin = 0; // FIX - in beta impl., the text object is used as its own origin
+    Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
     int dinx,rangee,i;
     dinx = 2; // start of repetition
     rangee = getLiteral(thisObj,litInx);
-    template *X = thisObj;
+    Btemplate *X = thisObj;
     
     allocIndexedObj(origin,getTextDescNo(),1,dinx,rangee,0);
     thisObj->vfields[1] = rangee; // pos = rangee
@@ -1308,11 +1311,11 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
   
   void XallocTextObj(int litInx){
     // literals[litInx] = length
-    template *origin = 0; // FIX - in beta impl., the text object is used as its own origin
+    Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
     int dinx,rangee,i;
     dinx = 1; // start of repetition
     rangee = getLiteral(thisObj,litInx);
-    template *X = thisObj;
+    Btemplate *X = thisObj;
     
     allocQIndexedObj(origin,getTextDescNo(),1,dinx,rangee,0);
     callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
@@ -1327,7 +1330,7 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
   }
 
   void  ConvertIndexedAsString() {
-    template *X; int length;
+    Btemplate *X; int length;
     X = rPop(thisStack);
     length = X->vfields[1];
     // printf("\n*** ConvertIndexedAsString %i\n", length);
@@ -1342,7 +1345,7 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
 
   Event *doCall(bool withEnablingSuspend){
     int arg1;
-    template *Y;
+    Btemplate *Y;
     arg1 = (char) op1();
 #ifdef TRACE
     fprintf(trace,"call %c ",arg1);
@@ -1444,7 +1447,7 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
     }
   }
 
-  void doSuspend(template *callee, bool preemptive){
+  void doSuspend(Btemplate *callee, bool preemptive){
 #ifdef TRACE
     fprintf(trace," AT %s FROM %s(%i,%i,%s) "
 	    ,nameOf(callee),nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
@@ -1482,7 +1485,7 @@ void allocQIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ra
   int opCode,arg1,arg2,arg3,dscNo,V;
   int dinx,isRindexed,rangee,i;
   bool running = true;
-  template *X, *Y;
+  Btemplate *X, *Y;
 
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
