@@ -1126,6 +1126,11 @@ Event *getEvent(bool first){
 #endif
   return E;
 }
+int newId(int *ID, int *threadId) { 
+  *ID = *ID + 4; 
+  // printf("\nID:%i %i",*threadId,*ID + *threadId); 
+  return *ID + *threadId;
+}
 
 #if defined(linux)
 void  *interpreter(void *B){;
@@ -1135,11 +1140,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   Block *thisBlock = (Block *)B;
   int threadId = thisBlock->threadId;
   int ID = 1000;
-  int newId() { 
-    ID = ID + 4; 
-    // printf("\nID:%i %i",threadId,ID + threadId); 
-    return ID + threadId;
-  }
+
 #ifdef linux
   pthread_t pthreadArray[MAX_THREADS];
 #else
@@ -1164,7 +1165,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
 #endif
-    callee = allocTemplate(newId(),descNo,isObj,vInxSize,rInxSize);
+    callee = allocTemplate(newId(&ID,&threadId),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
     fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
@@ -1192,7 +1193,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
 #endif
-    callee = allocTemplate(newId(),descNo,false,vInxSize,rInxSize);
+    callee = allocTemplate(newId(&ID,&threadId),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
     fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
@@ -1243,7 +1244,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     if (isRindexed == 0) {
       // printf("is not Rindexed\n");
       // allocObj(origin,descNo,isObj,rangee,0);
-      callee = allocTemplate(newId(),descNo,isObj,rangee,0);
+      callee = allocTemplate(newId(&ID,&threadId),descNo,isObj,rangee,0);
     } else {
       if (rangee > 132) {
 	//printf("\n\n**** Ref-rep range: %i\n",rangee);
@@ -1251,7 +1252,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
       };
       // allocObj(origin,descNo,isObj,0,rangee);
       //printf("isRindexed\n");
-      callee = allocTemplate(newId(),descNo,isObj,0,rangee);
+      callee = allocTemplate(newId(&ID,&threadId),descNo,isObj,0,rangee);
     };
     //printf("After allox\n");
 
@@ -1267,7 +1268,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 #ifdef TRACE
     fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
 #endif
-    Btemplate * X = allocTemplate(newId(),getStrucRefDescNo(),0,0,0);
+    Btemplate * X = allocTemplate(newId(&ID,&threadId),getStrucRefDescNo(),0,0,0);
     if (isVirtual) inx = vdtTable(trace,origin,inx);
     X->vfields[1] = inx;
     X->rfields[2] = origin;
@@ -1861,7 +1862,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    fprintf(trace,"fork A ");
 	    Block *B = (Block *)heapAlloc(sizeof(Block));
 	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	    
-	    X = allocTemplate(newId(),threadStubDescNo,true,0,0);
+	    X = allocTemplate(newId(&ID,&threadId),threadStubDescNo,true,0,0);
 	    fprintf(trace,"fork C");
 	    rPush(X,Y);
 	    fprintf(trace,"fork D");
