@@ -413,6 +413,11 @@ int xop1(ObjDesc bc, int *glsc){
   *glsc = *glsc + 1; 
   return V;
 };
+int xop2(ObjDesc bc, int *glsc){ 
+  int V = bc[*glsc] * 256 + bc[*glsc + 1];
+  *glsc = *glsc + 2;
+  return V;
+};
 
 void dumpCode(FILE *trace, ObjDesc desc){
   ObjDesc bc;
@@ -523,7 +528,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"rpopThisObj");
 	break;
       case toSuper:
-	fprintf(trace,"toSuper %i",op2());
+	fprintf(trace,"toSuper %i",xop2(bc,&glsc));
         break;
       case call:
 	arg1 = (char) xop1(bc,&glsc);
@@ -533,13 +538,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"susp");
 	break;
       case alloc:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 	arg2 = xop1(bc,&glsc);
 	fprintf(trace,"alloc %i %i",arg1,arg2);
 	break;
       case invoke:
-	arg1 = op2();
-	arg2 = op2();
+	arg1 = xop2(bc,&glsc);
+	arg2 = xop2(bc,&glsc);
 	arg3 = xop1(bc,&glsc);
 	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
 	break;
@@ -558,13 +563,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	}
 	break;
       case jmp:	
-	fprintf(trace,"jmp %i",op2());
+	fprintf(trace,"jmp %i",xop2(bc,&glsc));
 	break;
       case jmpFalse:
-	fprintf(trace,"jmpFalse %i",op2());
+	fprintf(trace,"jmpFalse %i",xop2(bc,&glsc));
 	break;
       case jmpGT:
-	fprintf(trace,"jmpGT %i",op2());
+	fprintf(trace,"jmpGT %i",xop2(bc,&glsc));
 	break;
       case pushNone:
 	fprintf(trace,"pushNone");
@@ -582,7 +587,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"saveBETAworld ");
 	break;
       case doSuper:
-	fprintf(trace,"doSuper %i",op2());
+	fprintf(trace,"doSuper %i",xop2(bc,&glsc));
 	break;
       case innerx:
 	fprintf(trace,"innerx %i",xop1(bc,&glsc));
@@ -609,13 +614,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"newVrep");
 	break;
       case jmpTrue:
-	fprintf(trace,"jmpTrue %i",op2());
+	fprintf(trace,"jmpTrue %i",xop2(bc,&glsc));
 	break;
       case pushText:
 	fprintf(trace,"pushText %i",xop1(bc,&glsc));
 	break;
       case exeAlloc:
-	fprintf(trace,"exeAlloc %i",op2());
+	fprintf(trace,"exeAlloc %i",xop2(bc,&glsc));
 	break;
       case rtnc:
 	fprintf(trace,"rtnC");
@@ -690,10 +695,10 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"ne");
 	break;
       case pushc2:
-	fprintf(trace,"pushc2 %i",op2());
+	fprintf(trace,"pushc2 %i",xop2(bc,&glsc));
 	break;
       case allocIndexed:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 	arg2 = xop1(bc,&glsc);
 	fprintf(trace,"allocIndexed %i %i",arg1,arg2);
 	break;
@@ -710,7 +715,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	fprintf(trace,"break %i %i",xop1(bc,&glsc),op2());
+	fprintf(trace,"break %i %i",xop1(bc,&glsc),xop2(bc,&glsc));
 	break;
       case stop: 
 	fprintf(trace,"stop ");
@@ -1778,7 +1783,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	thisObj = rPop(thisObj);
         break;
       case toSuper:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"toSuper %i",arg1);
 #endif
@@ -1801,7 +1806,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	doSuspend(callee,false);
 	break;
       case alloc:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 	arg2 = xop1(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"alloc %i %i ",arg1,arg2);
@@ -1809,8 +1814,8 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	/*return*/ allocObj(rPop(thisStack),arg1,arg2,0,0);
 	break;
       case invoke:
-	arg1 = op2();
-	arg2 = op2();
+	arg1 = xop2(bc,&glsc);
+	arg2 = xop2(bc,&glsc);
         arg3 = xop1(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
@@ -1959,13 +1964,13 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	  }
 	break;
       case jmp:
-	glsc = op2() - 1;
+	glsc = xop2(bc,&glsc) - 1;
 #ifdef TRACE
 	fprintf(trace,"jmp %i\n",glsc);
 #endif
 	break;
       case jmpFalse:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 	arg2 = vPop(thisStack);
 #ifdef TRACE
 	fprintf(trace,"jmpFalse %i %i \n",arg1, arg2);
@@ -1975,7 +1980,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
       case jmpGT:
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
-	arg3 = op2();
+	arg3 = xop2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"jmpGT %i > %i -> %i \n",arg2,arg1,arg3 - 1);
 #endif
@@ -2031,7 +2036,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	thisBlock->world = world = X;
 	break;
       case doSuper:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"doSuper %i\n",arg1);
 #endif
@@ -2151,7 +2156,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	runTimeError("newVrep is not implemented");
 	break;
       case jmpTrue:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 	arg2 = vPop(thisStack);
 #ifdef TRACE
 	fprintf(trace,"jmpTrue %i\n",arg1);
@@ -2166,7 +2171,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
         if (isXbeta) XallocTextObj(arg1); else { allocTextObj(arg1);};
 	break;
       case exeAlloc:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"exeAlloc %i ",arg1);
 	fprintf(trace,"FROM %s(%i,%i) ", nameOf(thisObj),currentDescNo,glsc);
@@ -2374,14 +2379,14 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	vPush(thisStack,-arg1);
 	break;
       case pushc2:
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"pushc2 %i\n",arg1);
 #endif
 	vPush(thisStack,arg1);
 	break;
       case allocIndexed:	
-	arg1 = op2();
+	arg1 = xop2(bc,&glsc);
 	arg2 = xop1(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"allocIndexed %i %i\n",arg1,arg2);
@@ -2439,7 +2444,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	break;
       case _break:
 	arg1 = xop1(bc,&glsc);
-	arg2 = op2();
+	arg2 = xop2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 #endif
