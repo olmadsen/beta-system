@@ -1161,7 +1161,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   int currentDescNo = thisBlock->currentDescNo;
   Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
 
-  Event *allocObj(Btemplate **thisObj,Btemplate **callee
+  Event *allocObj(Btemplate **thisObj,Btemplate **callee, Btemplate **thisStack
 		  ,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(*thisObj),currentDescNo,glsc,(int)bc);
@@ -1172,12 +1172,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
     Btemplate *Y = *thisObj;
     rPush(*callee,*thisObj);
-    rPush(*callee,thisStack);
+    rPush(*callee,*thisStack);
     rPush(*callee,origin);
     cSaveReturn(*thisObj,currentDescNo,glsc);
     currentDescNo = descNo;
-    thisStack = *callee;
-    *thisObj = thisStack;
+    *thisStack = *callee;
+    *thisObj = *thisStack;
     bc = (ObjDesc) myCode(*thisObj);
     glsc = getAllocE((*thisObj)->desc);
 #ifdef TRACE
@@ -1225,13 +1225,13 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
     //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
-      allocObj(&thisObj,&callee,origin,descNo,isObj,rangee,0);
+      allocObj(&thisObj,&callee,&thisStack,origin,descNo,isObj,rangee,0);
     } else {
       if (rangee > 132) {
 	printf("\n\n**** Ref-rep range: %i\n",rangee);
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
-      allocObj(&thisObj,&callee,origin,descNo,isObj,0,rangee);
+      allocObj(&thisObj,&callee,&thisStack,origin,descNo,isObj,0,rangee);
     };
     thisObj->vfields[dinx] = rangee; 
   };
@@ -1279,7 +1279,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-    allocObj(&thisObj,&callee,obj->rfields[2],obj->vfields[1],0,0,0);
+    allocObj(&thisObj,&callee,&thisStack,obj->rfields[2],obj->vfields[1],0,0,0);
   };
   
   void allocTextObj(int litInx){
@@ -1792,7 +1792,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 #ifdef TRACE
 	fprintf(trace,"alloc %i %i ",arg1,arg2);
 #endif
-	/*return*/ allocObj(&thisObj,&callee,rPop(thisStack),arg1,arg2,0,0);
+	/*return*/ allocObj(&thisObj,&callee,&thisStack,rPop(thisStack),arg1,arg2,0,0);
 	break;
       case invoke:
 	arg1 = op2(bc,&glsc);
@@ -2122,7 +2122,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	fprintf(trace,"sendv %i",arg1);
 #endif
 	arg2 = vdtTable(trace,X,arg1); // descNo
-	allocObj(&thisObj,&callee,X,arg2,false,0,0);
+	allocObj(&thisObj,&callee,&thisStack,X,arg2,false,0,0);
 	break;
       case send: 
 #ifdef TRACE
