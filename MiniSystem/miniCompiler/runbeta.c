@@ -65,7 +65,13 @@ void main(int argc, char *argv[])
     printf("Cannot open file\n");
   }
   int size = ftell(F);
-  printf("Runbeta: %i %s %i\n",argc,fn,(int)size);
+  bool isXB = 1;
+  printf("Runbeta: %i %s %i",argc,fn,(int)size);
+  if (isXB ==1) 
+    {printf(" executing xbeta/qbeta\n");}
+  else 
+    {printf(" executing beta\n");};
+
   fseek(F, 0, SEEK_SET);  //same as rewind(f);
 
   unsigned char* bc = (char*)malloc(size * sizeof(char));
@@ -77,7 +83,7 @@ void main(int argc, char *argv[])
     return;
   }
   
-  bool isXB = 0;
+
   init_interpreter((ObjDesc)bc,isXB);
   bool first = true;
   getEvent(first); 
