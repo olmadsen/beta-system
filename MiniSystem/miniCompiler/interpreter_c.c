@@ -1181,13 +1181,15 @@ DWORD WINAPI interpreter(LPVOID B){;
   int threadNo = 0;
   bool hasThreads = false;
 
+#ifdef linux
   // The following calls are supposed to associate each interpreter threah with
   // a specific CPU - have no idea if it works!?
   cpu_set_t mask;
   CPU_ZERO(&mask);
   CPU_SET(threadId,&mask);
+#endif
 
-  printf("*** C interpreter - threadId:%i pthreadId:%u\n",threadId,(int)pthread_self());
+  printf("*** C interpreter - threadId:%i\n",threadId);
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
   setbuf(trace, NULL);
