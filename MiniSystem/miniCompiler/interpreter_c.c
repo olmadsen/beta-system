@@ -1,9 +1,11 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
 #ifdef linux
 #include <pthread.h>
+#include <sched.h>
 #else
 #include <windows.h>
 #endif
@@ -1179,7 +1181,13 @@ DWORD WINAPI interpreter(LPVOID B){;
   int threadNo = 0;
   bool hasThreads = false;
 
-  //printf("\n***C interpreter\n");
+  // The following calls are supposed to associate each interpreter threah with
+  // a specific CPU - have no idea if it works!?
+  cpu_set_t mask;
+  CPU_ZERO(&mask);
+  CPU_SET(threadId,&mask);
+
+  printf("*** C interpreter - threadId:%i pthreadId:%u\n",threadId,(int)pthread_self());
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
   setbuf(trace, NULL);
@@ -1887,8 +1895,8 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    B->top = Y;
 	    B->world = world;
 #ifdef TRACE
-	    printf("\ncurrentDescNo: %i %i %i threadNo: %i\n"
-		   ,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
+	    //printf("\ncurrentDescNo: %i %i %i threadNo: %i\n"
+	    //,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
 #endif
 	    B->glsc = 0;
 	    char *fileName = heapAlloc(12);
@@ -1897,8 +1905,10 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
 #ifdef linux
+	    pthread_attr_t attr;      // not used here - NULL may be
+	    pthread_attr_init(&attr); // for &attr in pthread_create
 	    int iret = 
-	      pthread_create(&pthreadArray[threadNo],NULL,interpreter,(void *)B);
+	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
 #else
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 #endif
@@ -2463,7 +2473,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	break;
       case stop: 
 #ifdef TRACE
-	fprintf(trace,"\nstop: %i\n",threadNo);
+	fprintf(trace,"\nstop - threadId: %i\n",threadId);
 #endif
 	running = false;
 	//threadNo = threadNo - 1;
@@ -2476,7 +2486,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
       }
     };
   fclose(trace);
-  printf("\nStop: %i \n",threadNo); if (hasThreads) printf("TRUE\n");
+  printf("\nStop: threadId: %i \n",threadId); if (hasThreads) printf("TRUE\n");
   if (threadNo > 0) {
     int j;
 #ifdef linux
@@ -2489,7 +2499,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 
     for( j=0; j < threadNo; j++)
       { printf("Close\n");
-      CloseHandle(hThreadArray[j]);
+	CloseHandle(hThreadArray[j]);
       };
 #endif
     printf("After Wait\n");
