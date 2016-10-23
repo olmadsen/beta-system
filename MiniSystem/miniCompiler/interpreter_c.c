@@ -6,6 +6,13 @@
 #ifdef linux
 #include <pthread.h>
 #include <sched.h>
+//#include "mraa.hpp"
+#include "mraa.h"
+#include "mraa/gpio.h"
+#define INPUT  0
+#define OUTPUT 1
+#define LOW 0
+#define HIGH 5
 #else
 #include <windows.h>
 #endif
@@ -230,7 +237,8 @@ enum {
   rpopThisObj = 93,
   rtnEventQ = 94,
   doEventQ = 95,
-  allocEventQ = 96
+  allocEventQ = 96,
+  invokeExternal = 97
 };
 
 void runTimeError(char *msg){
@@ -539,6 +547,10 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg2 = op2(bc,&glsc);
 	arg3 = op1(bc,&glsc);
 	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
+	break;
+      case invokeExternal:
+	arg1 = op1(bc,&glsc);
+	fprintf(trace,"invokeExternal %i",arg1);
 	break;
       case doExit:
 	fprintf(trace,"doExit");
@@ -1184,9 +1196,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef linux
   // The following calls are supposed to associate each interpreter threah with
   // a specific CPU - have no idea if it works!?
-  cpu_set_t mask;
-  CPU_ZERO(&mask);
-  CPU_SET(threadId,&mask);
+  //cpu_set_t mask;
+  //CPU_ZERO(&mask);
+  //CPU_SET(threadId,&mask);
 #endif
 
   printf("*** C interpreter - threadId:%i\n",threadId);
@@ -1823,6 +1835,47 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 #endif
         invokeObj(arg1,arg2,0,0);
 	break;
+      case invokeExternal:
+	arg1 = op1(bc,&glsc);
+        printf("invokeExternal: %i ",arg1);
+	switch (arg1) {
+	  case 1:
+	    arg3 = vPop(thisStack);
+	    arg2 = vPop(thisStack);
+	    printf("pinMode(%i,%i)\n",arg2,arg3);
+#ifdef linux
+	    mraa_gpio_context pin = mraa_gpio_init(13);
+	    if (arg3 == 0) 
+	      {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
+	    else 
+	      {mraa_gpio_dir(pin,MRAA_GPIO_IN);};
+#else
+	    printf("pinMode(%i,%i) not implemented for this platform\n"
+	       ,arg2,arg3);
+#endif
+	    break;
+	  case 2:
+	    arg3 = vPop(thisStack);
+	    arg2 = vPop(thisStack);
+	    printf("digitalWrite(%i,%i)\n",arg2,arg3);
+#ifdef linux
+	    if (arg3 == 0) 
+	      {mraa_gpio_write(pin,LOW);}
+	    else 
+	      {mraa_gpio_write(pin,HIGH);};
+#else
+	    printf("digitalWrite(%i,%i) not implemented for this platform\n"
+	    	   ,arg2,arg3);
+#endif
+	    break;
+	case 3:
+	  arg2 = vPop(thisStack);
+#ifdef linux
+	  sleep(arg2);
+#endif
+	  break;
+	  }
+	break;
       case doExit:
 #ifdef TRACE
 	fprintf(trace,"doExit\n");
@@ -1947,9 +2000,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    fprintf(trace,"sleep %i\n",arg1);
 #endif
 #ifdef linux
-	    usleep(arg1);
+	    usleep(arg1); // apparently in micro seconds
 #else
-	    Sleep(arg1);
+	    Sleep(arg1); // apparently in milli seconds - no diff if arg1/1000!?
 #endif
 	    break;
 	  case 17: 
