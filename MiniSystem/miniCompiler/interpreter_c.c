@@ -7,10 +7,12 @@
 #include <pthread.h>
 #include <sched.h>
 //#include "mraa.hpp"
+#if defined (MRAA)
 #include "mraa.h"
 #include "mraa/gpio.h"
 #define LOW 0
 #define HIGH 5
+#endif
 #else
 #include <windows.h>
 #endif
@@ -1841,7 +1843,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    arg3 = vPop(thisStack);
 	    arg2 = vPop(thisStack);
 	    printf("pinMode(%i,%i)\n",arg2,arg3);
-#ifdef linux
+#if defined (MRAA)
 	    mraa_gpio_context pin = mraa_gpio_init(13);
 	    if (arg3 == 0) 
 	      {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
@@ -1856,7 +1858,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    arg3 = vPop(thisStack);
 	    arg2 = vPop(thisStack);
 	    printf("digitalWrite(%i,%i)\n",arg2,arg3);
-#ifdef linux
+#if defined (MRAA)
 	    if (arg3 == 0) 
 	      {mraa_gpio_write(pin,LOW);}
 	    else 
