@@ -6,8 +6,7 @@
 #ifdef linux
 #include <pthread.h>
 #include <sched.h>
-//#include "mraa.hpp"
-#if defined (MRAA)
+#ifdef linux
 #include "mraa.h"
 #include "mraa/gpio.h"
 #define LOW 0
@@ -1839,33 +1838,33 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	arg1 = op1(bc,&glsc);
         printf("invokeExternal: %i ",arg1);
 	switch (arg1) {
-	  case 1:
-	    arg3 = vPop(thisStack);
-	    arg2 = vPop(thisStack);
-	    printf("pinMode(%i,%i)\n",arg2,arg3);
-#if defined (MRAA)
-	    mraa_gpio_context pin = mraa_gpio_init(13);
-	    if (arg3 == 0) 
-	      {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
-	    else 
-	      {mraa_gpio_dir(pin,MRAA_GPIO_IN);};
+	case 1:
+	  arg3 = vPop(thisStack);
+	  arg2 = vPop(thisStack);
+	  printf("pinMode(%i,%i)\n",arg2,arg3);
+#ifdef linux
+	  mraa_gpio_context pin = mraa_gpio_init(13);
+	  if (arg3 == 0) 
+	    {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
+	  else 
+	    {mraa_gpio_dir(pin,MRAA_GPIO_IN);};
 #else
-	    printf("pinMode(%i,%i) not implemented for this platform\n"
-	       ,arg2,arg3);
+	  printf("pinMode(%i,%i) not implemented for this platform\n"
+		 ,arg2,arg3);
 #endif
-	    break;
-	  case 2:
-	    arg3 = vPop(thisStack);
-	    arg2 = vPop(thisStack);
-	    printf("digitalWrite(%i,%i)\n",arg2,arg3);
-#if defined (MRAA)
-	    if (arg3 == 0) 
-	      {mraa_gpio_write(pin,LOW);}
-	    else 
-	      {mraa_gpio_write(pin,HIGH);};
+	  break;
+	case 2:
+	  arg3 = vPop(thisStack);
+	  arg2 = vPop(thisStack);
+	  printf("digitalWrite(%i,%i)\n",arg2,arg3);
+#ifdef linux
+	  if (arg3 == 0) 
+	    {mraa_gpio_write(pin,LOW);}
+	  else 
+	    {mraa_gpio_write(pin,HIGH);};
 #else
-	    printf("digitalWrite(%i,%i) not implemented for this platform\n"
-	    	   ,arg2,arg3);
+	  printf("digitalWrite(%i,%i) not implemented for this platform\n"
+		 ,arg2,arg3);
 #endif
 	    break;
 	case 3:
