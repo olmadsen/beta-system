@@ -1,6 +1,6 @@
 	-- QBETA
 	-- Module:gen: 
-	component Comp NoOfDescs: 1025
+	component Comp NoOfDescs: 695
 	-- ConsRef:gen: BETAworld
 
 	class Object 33
@@ -69,7 +69,7 @@
 	-- ConsRef:gen: workspace
 	-- ObjectGenerator:gen: super: :singular:staticOff: 4
 	pushThis 
-	invoke 260 4 workspace
+	invoke 229 4 workspace
 	rpop
 	rtnEventQ 0
 	DO:
@@ -159,27 +159,26 @@
 	invoke 172 5 EMC2array
 	rpop
 	-- Module:gen: 
-	-- Module:gen: 
 	-- ModuleItem:gen ForkJoinSystem
 	-- ConsRef:gen: ForkJoinSystem
-	-- ObjectGenerator:gen: super: :singular:staticOff: 7
+	-- ObjectGenerator:gen: super: :singular:staticOff: 6
 	pushThis 
-	invoke 228 7 ForkJoinSystem
+	invoke 197 6 ForkJoinSystem
 	rpop
 	-- Module:gen: 
 	-- ModuleItem:gen MonitorSystem
 	-- ConsRef:gen: MonitorSystem
-	-- ObjectGenerator:gen: super: :singular:staticOff: 8
+	-- ObjectGenerator:gen: super: :singular:staticOff: 7
 	pushThis 
-	invoke 235 8 MonitorSystem
+	invoke 204 7 MonitorSystem
 	rpop
 	-- Module:gen: 
 	-- Module:gen: 
 	-- ModuleItem:gen String
 	-- ConsRef:gen: String
-	-- ObjectGenerator:gen: super: :singular:staticOff: 10
+	-- ObjectGenerator:gen: super: :singular:staticOff: 9
 	pushThis 
-	invoke 96 10 String
+	invoke 96 9 String
 	rpop
 	rtnEventQ 0
 	DO:
@@ -193,7 +192,7 @@
 	rtn(D)
 	end 1
 
-	class workspace 260
+	class workspace 229
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -201,25 +200,11 @@
 	-- Module:gen: 
 	-- Module:gen: 
 	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
-	-- Module:gen: 
 	-- ModuleItem:gen demo
 	-- ConsRef:gen: demo
-	-- ObjectGenerator:gen: super: :singular:staticOff: 18
+	-- ObjectGenerator:gen: super: :singular:staticOff: 4
 	pushThis 
-	invoke 534 18 demo
+	invoke 429 4 demo
 	rpop
 	rtnEventQ 0
 	DO:
@@ -783,7 +768,7 @@
 	rtn(D)
 	end 1
 
-	class ForkJoinSystem 228
+	class ForkJoinSystem 197
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -800,7 +785,7 @@
 	rtn(D)
 	end 1
 
-	class MonitorSystem 235
+	class MonitorSystem 204
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -834,7 +819,7 @@
 	rtn(D)
 	end 1
 
-	class demo 534
+	class demo 429
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -844,9 +829,8 @@
 	-- ConsRef:gen: ArrayDemos
 	-- ObjectGenerator:gen: super: :singular:staticOff: 2
 	pushThis 
-	invoke 535 2 ArrayDemos
+	invoke 430 2 ArrayDemos
 	rpop
-	-- Module:gen: 
 	-- Module:gen: 
 	-- Module:gen: 
 	-- Module:gen: 
@@ -976,7 +960,7 @@
 	jmpFalse L50
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 787 0 #S#787
+	invoke 534 0 #S#534
 	rpop
  L50:
 	-- ObjectGenerator:gen: super: elsePart:IS-empty: staticOff: 0
@@ -1438,7 +1422,7 @@
 	jmpFalse L66
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 829 0 #S#829
+	invoke 576 0 #S#576
 	rpop
  L66:
  L65:
@@ -1743,12 +1727,12 @@
 	rtnInner
 	end 1
 
-	class ForkJoinSystem 229
+	class ForkJoinSystem 198
 	rstore 1 origin
 	allocEventQ
 	-- super BasicSystem
 	--  1:0 2:0 3:0 4:0
-	-- vdtAdd: inx=1 descInx=229
+	-- vdtAdd: inx=1 descInx=198
 	-- Invocation:loadOrigin: BasicSystem
 	-- Invocation:loadOrigin:scan: BasicSystem
 	-- Unary:pushThis: 
@@ -1784,12 +1768,12 @@
 	rtnInner
 	end 1
 
-	class System 236
+	class System 205
 	rstore 8 origin
 	allocEventQ
 	-- super BasicSystem
 	--  1:0 2:0 3:0 4:0
-	-- vdtAdd: inx=1 descInx=236
+	-- vdtAdd: inx=1 descInx=205
 	-- Invocation:loadOrigin: LIB.BasicSystem.basicSystem
 	-- Invocation:loadOrigin:scan: LIB
 	-- Unary:pushThis: 
@@ -1866,7 +1850,7 @@
 	rtn(D)
 	end 1
 
-	class ArrayDemos 535
+	class ArrayDemos 430
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -1878,10 +1862,8 @@
 	-- ConsRef:gen: List
 	-- ObjectGenerator:gen: super: :singular:staticOff: 4
 	pushThis 
-	invoke 546 4 List
+	invoke 441 4 List
 	rpop
-	-- Module:gen: 
-	-- Module:gen: 
 	-- Module:gen: 
 	rtnEventQ 0
 	DO:
@@ -1895,7 +1877,7 @@
 	rtn(D)
 	end 1
 
-	class #S#787 787
+	class #S#534 534
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -2016,7 +1998,7 @@
 	jmpFalse L83
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 788 0 #S#788
+	invoke 535 0 #S#535
 	rpop
  L83:
  L82:
@@ -2246,7 +2228,7 @@
 	jmpFalse L86
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 789 0 #S#789
+	invoke 536 0 #S#536
 	rpop
  L86:
  L85:
@@ -3764,7 +3746,7 @@
 	jmpFalse L133
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 828 0 #S#828
+	invoke 575 0 #S#575
 	rpop
  L133:
  L132:
@@ -3872,7 +3854,7 @@
 	rtn(D)
 	end 1
 
-	class #S#829 829
+	class #S#576 576
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -4934,7 +4916,7 @@
 	rtnInner
 	end 1
 
-	class ForkJoin 230
+	class ForkJoin 199
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -5024,7 +5006,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: AwaitTermination
-	invoke 232 0 AwaitTermination
+	invoke 201 0 AwaitTermination
 	rpop
  L151:
 	rtnEventQ 0
@@ -5033,7 +5015,7 @@
 	rtn(D)
 	end 1
 
-	class Semaphore 237
+	class Semaphore 206
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -5085,12 +5067,12 @@
 	rtn(D)
 	end 1
 
-	class Process 243
+	class Process 212
 	rstore 1 origin
 	allocEventQ
 	-- super BasicProcess
 	--  1:126 2:0 3:0 4:0
-	-- vdtAdd: inx=2 descInx=243
+	-- vdtAdd: inx=2 descInx=212
 	-- Invocation:loadOrigin: BasicProcess
 	-- Invocation:loadOrigin:scan: BasicProcess
 	-- Unary:pushThis: 
@@ -5102,7 +5084,7 @@
 	-- Unary:loadArgs: 
 	topSuper  125
 	-- pattern:gen: start
-	-- vdtAdd: inx=1 descInx=244
+	-- vdtAdd: inx=1 descInx=213
 	innerA  3
 	rtnInner
 	DO:
@@ -5124,7 +5106,7 @@
 	rtnInner
 	end 1
 
-	class Monitor 245
+	class Monitor 214
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -5142,7 +5124,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: Semaphore
-	invoke 237 2 Semaphore
+	invoke 206 2 Semaphore
 	rpop
 	-- VarRef:gen: V
 	-- pattern:gen: init
@@ -5398,7 +5380,7 @@
 	rtn(D)
 	end 1
 
-	class List 546
+	class List 441
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -5466,7 +5448,7 @@
 	-- Binary:loadArgs: 
 	-- ObjectGenerator:gen: super: List(Object,none,none):IS-empty: staticOff: 0
 	pushThis 
-	invoke 920 0 List#S#920
+	invoke 637 0 List#S#637
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -5530,7 +5512,7 @@
 	allocIndexed 52 StaticRep asObj
 	-- Function:invoke: 
 	-- pattern:load: Range(r: ? Indexed)
-	invoke 552 0 Range
+	invoke 447 0 Range
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -5594,7 +5576,7 @@
 	allocIndexed 52 StaticRep asObj
 	-- Function:invoke: 
 	-- pattern:load: Range(r: ? Indexed)
-	invoke 552 0 Range
+	invoke 447 0 Range
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -5648,7 +5630,7 @@
 	rpushg 4 emptyList
 	-- Function:invoke: 
 	-- pattern:load: RangeList
-	invoke 550 0 RangeList
+	invoke 445 0 RangeList
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -6082,24 +6064,24 @@
 	-- pattern:load: putint(V: ? integer)
 	invoke 67 0 putint
 	rpop
-	-- ObjectGenerator:gen: super: rl := RangeList(r1,RangeList(r2,none)):IS-empty: staticOff: 0
-	-- Invocation:gen: rl := RangeList(r1,RangeList(r2,none))
-	-- Invocation:loadOrigin: rl := RangeList(r1,RangeList(r2,none))
+	-- ObjectGenerator:gen: super: rl := RangeList(r1,RangeList(r2,emptyList)):IS-empty: staticOff: 0
+	-- Invocation:gen: rl := RangeList(r1,RangeList(r2,emptyList))
+	-- Invocation:loadOrigin: rl := RangeList(r1,RangeList(r2,emptyList))
 	-- Invocation:loadOrigin:scan: rl
 	-- Unary:pushThis: 
 	pushThis 
 	-- Unary:loadOrigin: rl
 	-- AdjustOrigin: 0
 	-- on : 0
-	-- Invocation:loadOrigin:scan: := RangeList(r1,RangeList(r2,none))
+	-- Invocation:loadOrigin:scan: := RangeList(r1,RangeList(r2,emptyList))
 	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: RangeList(r1,RangeList(r2,none)):IS-empty: staticOff: 0
-	-- Invocation:gen: RangeList(r1,RangeList(r2,none))
-	-- Invocation:loadOrigin: RangeList(r1,RangeList(r2,none))
-	-- Invocation:loadOrigin:scan: RangeList(r1,RangeList(r2,none))
+	-- ObjectGenerator:gen: super: RangeList(r1,RangeList(r2,emptyList)):IS-empty: staticOff: 0
+	-- Invocation:gen: RangeList(r1,RangeList(r2,emptyList))
+	-- Invocation:loadOrigin: RangeList(r1,RangeList(r2,emptyList))
+	-- Invocation:loadOrigin:scan: RangeList(r1,RangeList(r2,emptyList))
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: RangeList(r1,RangeList(r2,none))
+	-- Function:loadOrigin: RangeList(r1,RangeList(r2,emptyList))
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -6116,13 +6098,13 @@
 	-- Unary:invoke: 
 	-- VarRef:load: r1
 	rpushg 6 r1
-	-- ObjectGenerator:gen: super: RangeList(r2,none):IS-empty: staticOff: 0
-	-- Invocation:gen: RangeList(r2,none)
-	-- Invocation:loadOrigin: RangeList(r2,none)
-	-- Invocation:loadOrigin:scan: RangeList(r2,none)
+	-- ObjectGenerator:gen: super: RangeList(r2,emptyList):IS-empty: staticOff: 0
+	-- Invocation:gen: RangeList(r2,emptyList)
+	-- Invocation:loadOrigin: RangeList(r2,emptyList)
+	-- Invocation:loadOrigin:scan: RangeList(r2,emptyList)
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: RangeList(r2,none)
+	-- Function:loadOrigin: RangeList(r2,emptyList)
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -6139,22 +6121,25 @@
 	-- Unary:invoke: 
 	-- VarRef:load: r2
 	rpushg 7 r2
-	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
-	-- Invocation:gen: none
-	-- Invocation:loadOrigin: none
-	-- Invocation:loadOrigin:scan: none
+	-- ObjectGenerator:gen: super: emptyList:IS-empty: staticOff: 0
+	-- Invocation:gen: emptyList
+	-- Invocation:loadOrigin: emptyList
+	-- Invocation:loadOrigin:scan: emptyList
 	-- Unary:pushThis: 
-	-- Unary:loadOrigin: none
+	pushThis 
+	-- Unary:loadOrigin: emptyList
+	-- AdjustOrigin: 0
+	-- on : 0
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
-	-- pattern:load: none
-	pushNone
+	-- VarRef:load: emptyList
+	rpushg 4 emptyList
 	-- Function:invoke: 
 	-- pattern:load: RangeList
-	invoke 550 0 RangeList
+	invoke 445 0 RangeList
 	-- Function:invoke: 
 	-- pattern:load: RangeList
-	invoke 550 0 RangeList
+	invoke 445 0 RangeList
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -6204,29 +6189,29 @@
 	rpushg 2 rl
 	-- Function:invoke: 
 	-- pattern:load: testArray(ndim: ? integer,ranges: RangeList)
-	invoke 553 0 testArray
+	invoke 448 0 testArray
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 8 ta
-	-- ObjectGenerator:gen: super: ta := testArray(2,RangeList(r1,RangeList(r2,emptyRangeList))):IS-empty: staticOff: 0
-	-- Invocation:gen: ta := testArray(2,RangeList(r1,RangeList(r2,emptyRangeList)))
-	-- Invocation:loadOrigin: ta := testArray(2,RangeList(r1,RangeList(r2,emptyRangeList)))
+	-- ObjectGenerator:gen: super: ta := testArray(2,RangeList(r1,RangeList(r2,emptyList))):IS-empty: staticOff: 0
+	-- Invocation:gen: ta := testArray(2,RangeList(r1,RangeList(r2,emptyList)))
+	-- Invocation:loadOrigin: ta := testArray(2,RangeList(r1,RangeList(r2,emptyList)))
 	-- Invocation:loadOrigin:scan: ta
 	-- Unary:pushThis: 
 	pushThis 
 	-- Unary:loadOrigin: ta
 	-- AdjustOrigin: 0
 	-- on : 0
-	-- Invocation:loadOrigin:scan: := testArray(2,RangeList(r1,RangeList(r2,emptyRangeList)))
+	-- Invocation:loadOrigin:scan: := testArray(2,RangeList(r1,RangeList(r2,emptyList)))
 	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: testArray(2,RangeList(r1,RangeList(r2,emptyRangeList))):IS-empty: staticOff: 0
-	-- Invocation:gen: testArray(2,RangeList(r1,RangeList(r2,emptyRangeList)))
-	-- Invocation:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,emptyRangeList)))
-	-- Invocation:loadOrigin:scan: testArray(2,RangeList(r1,RangeList(r2,emptyRangeList)))
+	-- ObjectGenerator:gen: super: testArray(2,RangeList(r1,RangeList(r2,emptyList))):IS-empty: staticOff: 0
+	-- Invocation:gen: testArray(2,RangeList(r1,RangeList(r2,emptyList)))
+	-- Invocation:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,emptyList)))
+	-- Invocation:loadOrigin:scan: testArray(2,RangeList(r1,RangeList(r2,emptyList)))
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,emptyRangeList)))
+	-- Function:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,emptyList)))
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -6239,13 +6224,13 @@
 	-- Const::loadArgs: 
 	-- Const::invoke: 
 	pushc 2
-	-- ObjectGenerator:gen: super: RangeList(r1,RangeList(r2,emptyRangeList)):IS-empty: staticOff: 0
-	-- Invocation:gen: RangeList(r1,RangeList(r2,emptyRangeList))
-	-- Invocation:loadOrigin: RangeList(r1,RangeList(r2,emptyRangeList))
-	-- Invocation:loadOrigin:scan: RangeList(r1,RangeList(r2,emptyRangeList))
+	-- ObjectGenerator:gen: super: RangeList(r1,RangeList(r2,emptyList)):IS-empty: staticOff: 0
+	-- Invocation:gen: RangeList(r1,RangeList(r2,emptyList))
+	-- Invocation:loadOrigin: RangeList(r1,RangeList(r2,emptyList))
+	-- Invocation:loadOrigin:scan: RangeList(r1,RangeList(r2,emptyList))
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: RangeList(r1,RangeList(r2,emptyRangeList))
+	-- Function:loadOrigin: RangeList(r1,RangeList(r2,emptyList))
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -6262,13 +6247,13 @@
 	-- Unary:invoke: 
 	-- VarRef:load: r1
 	rpushg 6 r1
-	-- ObjectGenerator:gen: super: RangeList(r2,emptyRangeList):IS-empty: staticOff: 0
-	-- Invocation:gen: RangeList(r2,emptyRangeList)
-	-- Invocation:loadOrigin: RangeList(r2,emptyRangeList)
-	-- Invocation:loadOrigin:scan: RangeList(r2,emptyRangeList)
+	-- ObjectGenerator:gen: super: RangeList(r2,emptyList):IS-empty: staticOff: 0
+	-- Invocation:gen: RangeList(r2,emptyList)
+	-- Invocation:loadOrigin: RangeList(r2,emptyList)
+	-- Invocation:loadOrigin:scan: RangeList(r2,emptyList)
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: RangeList(r2,emptyRangeList)
+	-- Function:loadOrigin: RangeList(r2,emptyList)
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -6285,28 +6270,28 @@
 	-- Unary:invoke: 
 	-- VarRef:load: r2
 	rpushg 7 r2
-	-- ObjectGenerator:gen: super: emptyRangeList:IS-empty: staticOff: 0
-	-- Invocation:gen: emptyRangeList
-	-- Invocation:loadOrigin: emptyRangeList
-	-- Invocation:loadOrigin:scan: emptyRangeList
+	-- ObjectGenerator:gen: super: emptyList:IS-empty: staticOff: 0
+	-- Invocation:gen: emptyList
+	-- Invocation:loadOrigin: emptyList
+	-- Invocation:loadOrigin:scan: emptyList
 	-- Unary:pushThis: 
 	pushThis 
-	-- Unary:loadOrigin: emptyRangeList
+	-- Unary:loadOrigin: emptyList
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
-	-- VarRef:load: emptyRangeList
-	rpushg 3 emptyRangeList
+	-- VarRef:load: emptyList
+	rpushg 4 emptyList
 	-- Function:invoke: 
 	-- pattern:load: RangeList
-	invoke 550 0 RangeList
+	invoke 445 0 RangeList
 	-- Function:invoke: 
 	-- pattern:load: RangeList
-	invoke 550 0 RangeList
+	invoke 445 0 RangeList
 	-- Function:invoke: 
 	-- pattern:load: testArray(ndim: ? integer,ranges: RangeList)
-	invoke 553 0 testArray
+	invoke 448 0 testArray
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -6318,7 +6303,7 @@
 	rtn(D)
 	end 1
 
-	class #S#788 788
+	class #S#535 535
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -6411,7 +6396,7 @@
 	rtn(D)
 	end 1
 
-	class #S#789 789
+	class #S#536 536
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -6439,7 +6424,7 @@
 	rtn(D)
 	end 1
 
-	class body#SB#790 790
+	class body#SB#537 537
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -7621,7 +7606,7 @@
 	jmpFalse L204
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 794 0 #S#794
+	invoke 541 0 #S#541
 	rpop
  L204:
  L203:
@@ -7737,7 +7722,7 @@
 	jmpFalse L209
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 798 0 #S#798
+	invoke 545 0 #S#545
 	rpop
  L209:
  L208:
@@ -8179,7 +8164,7 @@
 	jmpFalse L226
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 817 0 #S#817
+	invoke 564 0 #S#564
 	rpop
  L226:
 	-- ObjectGenerator:gen: super: inner:IS-empty: staticOff: 0
@@ -9318,7 +9303,7 @@
 	jmpFalse L259
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 826 0 #S#826
+	invoke 573 0 #S#573
 	rpop
  L259:
  L258:
@@ -9393,7 +9378,7 @@
 	rtnInner
 	end 1
 
-	class #S#828 828
+	class #S#575 575
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -9426,7 +9411,7 @@
 	rtn(D)
 	end 1
 
-	class run 231
+	class run 200
 	pushThis 
 	rstoreg 2 P
 	rstore 1 origin
@@ -9556,14 +9541,14 @@
 	rtn(D)
 	end 1
 
-	class AwaitTermination 232
+	class AwaitTermination 201
 	rstore 1 origin
 	allocEventQ
 	mvStack 
 	-- ConsRef:gen: loop
 	-- ObjectGenerator:gen: super: :singular:staticOff: 2
 	pushThis 
-	invoke 233 2 loop
+	invoke 202 2 loop
 	rpop
 	rtnEventQ 0
 	DO:
@@ -9577,7 +9562,7 @@
 	rtn(D)
 	end 1
 
-	class init 238
+	class init 207
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -9618,7 +9603,7 @@
 	rtn(D)
 	end 1
 
-	class wait 239
+	class wait 208
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -9703,7 +9688,7 @@
     theActive.suspend %else% 
     M.free:IS-empty: staticOff: 0
 	pushThis 
-	invoke 240 0 %if%then%%else%#S#240
+	invoke 209 0 %if%then%%else%#S#209
 	rpop
  L271:
 	rtnEventQ 0
@@ -9712,7 +9697,7 @@
 	rtn(D)
 	end 1
 
-	class signal 241
+	class signal 210
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -9796,7 +9781,7 @@
     M.free %else% 
     M.free:IS-empty: staticOff: 0
 	pushThis 
-	invoke 242 0 %if%then%%else%#S#242
+	invoke 211 0 %if%then%%else%#S#211
 	rpop
  L273:
 	rtnEventQ 0
@@ -9805,12 +9790,12 @@
 	rtn(D)
 	end 1
 
-	class start 244
+	class start 213
 	rstore 2 origin
 	allocEventQ
 	-- super start
 	--  1:0 2:0 3:0 4:0
-	-- vdtAdd: inx=1 descInx=244
+	-- vdtAdd: inx=1 descInx=213
 	pushThis 
 	rpushg 2 iOrigin
 	topSuper  126
@@ -9943,7 +9928,7 @@
 	rtnInner
 	end 1
 
-	class init 246
+	class init 215
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -9972,7 +9957,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: init
-	invoke 238 0 init
+	invoke 207 0 init
 	rpop
  L277:
 	rtnEventQ 0
@@ -9981,7 +9966,7 @@
 	rtn(D)
 	end 1
 
-	class entry 247
+	class entry 216
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -10011,7 +9996,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: wait
-	invoke 239 0 wait
+	invoke 208 0 wait
 	rpop
 	-- ObjectGenerator:gen: super: V := V + 1:IS-empty: staticOff: 0
 	-- Invocation:gen: V := V + 1
@@ -10086,7 +10071,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: signal
-	invoke 241 0 signal
+	invoke 210 0 signal
 	rpop
  L279:
 	rtnEventQ 0
@@ -10095,7 +10080,7 @@
 	rtn(D)
 	end 1
 
-	class wait 248
+	class wait 217
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -10103,7 +10088,7 @@
 	-- ConsRef:gen: loop
 	-- ObjectGenerator:gen: super: :singular:staticOff: 2
 	pushThis 
-	invoke 249 2 loop
+	invoke 218 2 loop
 	rpop
 	innerA  1
 	rtnEventQ 0
@@ -10470,7 +10455,7 @@
 	jmpFalse L290
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 804 0 #S#804
+	invoke 551 0 #S#551
 	rpop
  L290:
 	-- ObjectGenerator:gen: super: B := true:IS-empty: staticOff: 0
@@ -10652,7 +10637,7 @@
 	rtn(D)
 	end 1
 
-	class List 548
+	class List 443
 	pushThis 
 	rstoreg 3 tail
 	pushThis 
@@ -10673,7 +10658,7 @@
 	rtn(D)
 	end 1
 
-	class RangeList 550
+	class RangeList 445
 	rstore 1 origin
 	allocEventQ
 	-- super List
@@ -10701,8 +10686,8 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: Range(r: ? Indexed)
-	invoke 552 0 Range
-	topSuper  548
+	invoke 447 0 Range
+	topSuper  443
 	innerA  2
 	rtnInner
 	DO:
@@ -10727,7 +10712,7 @@
 	rtnInner
 	end 1
 
-	class Range 552
+	class Range 447
 	pushThis 
 	rstoreg 2 r
 	rstore 1 origin
@@ -10760,7 +10745,7 @@
 	rtn(D)
 	end 1
 
-	class testArray 553
+	class testArray 448
 	pushThis 
 	pushThis 
 	storeg 1 ndim
@@ -10794,7 +10779,7 @@
 	rtn(D)
 	end 1
 
-	class List#S#920 920
+	class List#S#637 637
 	rstore 1 origin
 	allocEventQ
 	-- super List
@@ -10837,7 +10822,7 @@
 	-- Unary:invoke: 
 	-- pattern:load: none
 	pushNone
-	topSuper  548
+	topSuper  443
 	rtnInner
 	DO:
 	mvStack 
@@ -10996,7 +10981,7 @@
 	jmpFalse L305
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 811 0 #S#811
+	invoke 558 0 #S#558
 	rpop
  L305:
  L304:
@@ -11160,7 +11145,7 @@
 	jmpFalse L308
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 812 0 #S#812
+	invoke 559 0 #S#559
 	rpop
  L308:
 	-- ObjectGenerator:gen: super: %if SQS.isEmpty %then% 
@@ -11249,7 +11234,7 @@
 	rtn(D)
 	end 1
 
-	class #S#794 794
+	class #S#541 541
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -11311,7 +11296,7 @@
     head.pred := E
     head := E:IS-empty: staticOff: 0
 	pushThis 
-	invoke 795 0 %if%then%%else%#S#795
+	invoke 542 0 %if%then%%else%#S#542
 	rpop
  L316:
 	rtnEventQ 0
@@ -11443,14 +11428,14 @@
 	jmpFalse L319
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 796 0 #S#796
+	invoke 543 0 #S#543
 	rpop
  L319:
  L318:
 	rtnInner
 	end 1
 
-	class #S#798 798
+	class #S#545 545
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -11539,7 +11524,7 @@
     last.succ := none %else% 
     head := none:IS-empty: staticOff: 0
 	pushThis 
-	invoke 799 0 %if%then%%else%#S#799
+	invoke 546 0 %if%then%%else%#S#546
 	rpop
  L321:
 	rtnEventQ 0
@@ -11766,7 +11751,7 @@
 	rtnInner
 	end 1
 
-	class #S#817 817
+	class #S#564 564
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -12001,7 +11986,7 @@
 	rtnInner
 	end 1
 
-	class thenPart#SB#818 818
+	class thenPart#SB#565 565
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12044,7 +12029,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#819 819
+	class elsePart#SB#566 566
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12109,7 +12094,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#820 820
+	class thenPart#SB#567 567
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12152,7 +12137,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#821 821
+	class elsePart#SB#568 568
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12217,7 +12202,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#822 822
+	class thenPart#SB#569 569
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12260,7 +12245,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#823 823
+	class elsePart#SB#570 570
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12348,7 +12333,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#824 824
+	class thenPart#SB#571 571
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12391,7 +12376,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#825 825
+	class elsePart#SB#572 572
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12479,7 +12464,7 @@
 	rtn(D)
 	end 1
 
-	class #S#826 826
+	class #S#573 573
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -12507,7 +12492,7 @@
 	rtn(D)
 	end 1
 
-	class body#SB#827 827
+	class body#SB#574 574
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12597,7 +12582,7 @@
 	rtn(D)
 	end 1
 
-	class loop 233
+	class loop 202
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -12662,7 +12647,7 @@
 	storeg 1 continue
 	-- ObjectGenerator:gen: super: Q.scan:singular:staticOff: 0
 	pushThis 
-	invoke 234 0 scan#S#234
+	invoke 203 0 scan#S#203
 	rpop
 	-- ObjectGenerator:gen: super: %if continue %then% 
     %restart loop:IS-empty: staticOff: 0
@@ -12696,7 +12681,7 @@
 	jmpFalse L358
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 846 0 #S#846
+	invoke 579 0 #S#579
 	rpop
  L358:
 	-- ObjectGenerator:gen: super: Q.clear:IS-empty: staticOff: 0
@@ -12728,7 +12713,7 @@
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#240 240
+	class %if%then%%else%#S#209 209
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -12814,7 +12799,7 @@
 	rtnInner
 	end 1
 
-	class %if%then%%else%#S#242 242
+	class %if%then%%else%#S#211 211
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -12896,7 +12881,7 @@
 	rtnInner
 	end 1
 
-	class loop 249
+	class loop 218
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -12989,7 +12974,7 @@
 	jmpFalse L365
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 851 0 #S#851
+	invoke 584 0 #S#584
 	rpop
  L365:
  L364:
@@ -13129,7 +13114,7 @@
 	rtnInner
 	end 1
 
-	class body#SB#802 802
+	class body#SB#549 549
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -13209,7 +13194,7 @@
 	rtn(D)
 	end 1
 
-	class body#SB#803 803
+	class body#SB#550 550
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -13268,7 +13253,7 @@
 	rtn(D)
 	end 1
 
-	class #S#804 804
+	class #S#551 551
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13468,7 +13453,7 @@
 	rtnInner
 	end 1
 
-	class empty 549
+	class empty 444
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13550,7 +13535,7 @@
 	rtn(D)
 	end 1
 
-	class #S#811 811
+	class #S#558 558
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13607,7 +13592,7 @@
 	rtn(D)
 	end 1
 
-	class #S#812 812
+	class #S#559 559
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13817,7 +13802,7 @@
 	jmpFalse L388
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 998 0 #S#998
+	invoke 678 0 #S#678
 	rpop
  L388:
  L387:
@@ -14066,7 +14051,7 @@
 	jmpFalse L395
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 792 0 #S#792
+	invoke 539 0 #S#539
 	rpop
  L395:
  L394:
@@ -14154,7 +14139,7 @@
 	jmpFalse L398
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 793 0 #S#793
+	invoke 540 0 #S#540
 	rpop
  L398:
  L397:
@@ -14164,7 +14149,7 @@
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#795 795
+	class %if%then%%else%#S#542 542
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -14245,7 +14230,7 @@
 	rtnInner
 	end 1
 
-	class #S#796 796
+	class #S#543 543
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14265,7 +14250,7 @@
     head.pred := none %else% 
     last := none:IS-empty: staticOff: 0
 	pushThis 
-	invoke 797 0 %if%then%%else%#S#797
+	invoke 544 0 %if%then%%else%#S#544
 	rpop
  L402:
 	rtnEventQ 0
@@ -14274,7 +14259,7 @@
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#799 799
+	class %if%then%%else%#S#546 546
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -14343,12 +14328,12 @@
 	rtnInner
 	end 1
 
-	class scan#S#234 234
+	class scan#S#203 203
 	rstore 4 origin
 	allocEventQ
 	-- super scan
 	--  1:0 2:0 3:0 4:0
-	-- vdtAdd: inx=1 descInx=234
+	-- vdtAdd: inx=1 descInx=203
 	-- Invocation:loadOrigin: Q.scan
 	-- Invocation:loadOrigin:scan: Q
 	-- Unary:pushThis: 
@@ -14470,14 +14455,14 @@
 	jmpFalse L407
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 845 0 #S#845
+	invoke 578 0 #S#578
 	rpop
  L407:
  L406:
 	rtnInner
 	end 1
 
-	class #S#846 846
+	class #S#579 579
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14505,7 +14490,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#847 847
+	class thenPart#SB#580 580
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -14726,7 +14711,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#848 848
+	class elsePart#SB#581 581
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -14766,7 +14751,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#849 849
+	class thenPart#SB#582 582
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -14953,7 +14938,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#850 850
+	class elsePart#SB#583 583
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -14993,7 +14978,7 @@
 	rtn(D)
 	end 1
 
-	class #S#851 851
+	class #S#584 584
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -15024,7 +15009,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: signal
-	invoke 241 0 signal
+	invoke 210 0 signal
 	rpop
 	-- ObjectGenerator:gen: super: mutex.wait:IS-empty: staticOff: 0
 	-- Invocation:gen: mutex.wait
@@ -15047,7 +15032,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: wait
-	invoke 239 0 wait
+	invoke 208 0 wait
 	rpop
 	-- ObjectGenerator:gen: super: %restart loop:IS-empty: staticOff: 0
 	-- Invocation:gen: %restart loop
@@ -15067,7 +15052,7 @@
 	rtn(D)
 	end 1
 
-	class body#SB#800 800
+	class body#SB#547 547
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15186,7 +15171,7 @@
 	rtn(D)
 	end 1
 
-	class body#SB#801 801
+	class body#SB#548 548
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15363,7 +15348,7 @@
 	rtn(D)
 	end 1
 
-	class body#SB#805 805
+	class body#SB#552 552
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15537,7 +15522,7 @@
 	jmpFalse L426
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 997 0 #S#997
+	invoke 677 0 #S#677
 	rpop
  L426:
  L425:
@@ -15755,7 +15740,7 @@
 	jmpFalse L429
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 806 0 #S#806
+	invoke 553 0 #S#553
 	rpop
  L429:
  L428:
@@ -15790,7 +15775,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#809 809
+	class thenPart#SB#556 556
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15838,7 +15823,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#810 810
+	class elsePart#SB#557 557
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15886,7 +15871,7 @@
 	rtn(D)
 	end 1
 
-	class #S#998 998
+	class #S#678 678
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -15945,7 +15930,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#813 813
+	class thenPart#SB#560 560
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16004,7 +15989,7 @@
 	jmpFalse L440
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 999 0 #S#999
+	invoke 679 0 #S#679
 	rpop
  L440:
 	-- ObjectGenerator:gen: super: sch.dcr:IS-empty: staticOff: 0
@@ -16087,7 +16072,7 @@
 	jmpFalse L441
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 1000 0 #S#1000
+	invoke 680 0 #S#680
 	rpop
  L441:
  L439:
@@ -16097,7 +16082,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#814 814
+	class elsePart#SB#561 561
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16125,7 +16110,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#815 815
+	class thenPart#SB#562 562
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16166,7 +16151,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#816 816
+	class elsePart#SB#563 563
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16213,7 +16198,7 @@
 	rtn(D)
 	end 1
 
-	class #S#792 792
+	class #S#539 539
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -16337,7 +16322,7 @@
 	rtn(D)
 	end 1
 
-	class #S#793 793
+	class #S#540 540
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -16461,7 +16446,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#989 989
+	class thenPart#SB#669 669
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16549,7 +16534,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#990 990
+	class elsePart#SB#670 670
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16683,7 +16668,7 @@
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#797 797
+	class %if%then%%else%#S#544 544
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -16782,7 +16767,7 @@
 	rtnInner
 	end 1
 
-	class thenPart#SB#995 995
+	class thenPart#SB#675 675
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16834,7 +16819,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#996 996
+	class elsePart#SB#676 676
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16880,7 +16865,7 @@
 	rtn(D)
 	end 1
 
-	class #S#845 845
+	class #S#578 578
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -16933,7 +16918,7 @@
 	rtn(D)
 	end 1
 
-	class #S#997 997
+	class #S#677 677
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -16999,7 +16984,7 @@
 	rtn(D)
 	end 1
 
-	class #S#806 806
+	class #S#553 553
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17158,7 +17143,7 @@
 	rtnInner
 	end 1
 
-	class #S#999 999
+	class #S#679 679
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17205,7 +17190,7 @@
 	rtn(D)
 	end 1
 
-	class #S#1000 1000
+	class #S#680 680
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17278,7 +17263,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#991 991
+	class thenPart#SB#671 671
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17344,7 +17329,7 @@
     currentElement.succ.pred := currentElement.pred %else% 
     last := currentElement.pred:IS-empty: staticOff: 0
 	pushThis 
-	invoke 992 0 %if%then%%else%#S#992
+	invoke 672 0 %if%then%%else%#S#672
 	rpop
  L476:
 	rtnEventQ 0
@@ -17353,7 +17338,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#993 993
+	class elsePart#SB#673 673
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17409,7 +17394,7 @@
     head.pred := none %else% 
     last := none:IS-empty: staticOff: 0
 	pushThis 
-	invoke 994 0 %if%then%%else%#S#994
+	invoke 674 0 %if%then%%else%#S#674
 	rpop
  L478:
 	rtnEventQ 0
@@ -17418,7 +17403,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#807 807
+	class thenPart#SB#554 554
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17505,7 +17490,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#808 808
+	class elsePart#SB#555 555
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17590,7 +17575,7 @@
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#992 992
+	class %if%then%%else%#S#672 672
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -17669,7 +17654,7 @@
 	rtnInner
 	end 1
 
-	class %if%then%%else%#S#994 994
+	class %if%then%%else%#S#674 674
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -17744,7 +17729,7 @@
 	rtnInner
 	end 1
 
-	class thenPart#SB#1021 1021
+	class thenPart#SB#691 691
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17817,7 +17802,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#1022 1022
+	class elsePart#SB#692 692
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17880,7 +17865,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#1023 1023
+	class thenPart#SB#693 693
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17935,7 +17920,7 @@
 	rtn(D)
 	end 1
 
-	class elsePart#SB#1024 1024
+	class elsePart#SB#694 694
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17984,57 +17969,57 @@
 	rtn(D)
 	end 1
 
-	class main 1026
+	class main 696
 	pushThis 
 	invoke 1 0 BETAworld
 	stop
 	end 0
 
-	class EventProcessor 1027
+	class EventProcessor 697
 	stop
 
-	class ThreadStub 1028
+	class ThreadStub 698
 	DO:
 	mvStack 
 	call(D)ThreadStub
 	stop
-	-- vdtAdd: inx=1 descInx=790
-	-- vdtAdd: inx=1 descInx=818
-	-- vdtAdd: inx=2 descInx=819
-	-- vdtAdd: inx=1 descInx=820
-	-- vdtAdd: inx=2 descInx=821
-	-- vdtAdd: inx=1 descInx=822
-	-- vdtAdd: inx=2 descInx=823
-	-- vdtAdd: inx=1 descInx=824
-	-- vdtAdd: inx=2 descInx=825
-	-- vdtAdd: inx=1 descInx=827
-	-- vdtAdd: inx=1 descInx=802
-	-- vdtAdd: inx=1 descInx=803
-	-- vdtAdd: inx=1 descInx=847
-	-- vdtAdd: inx=2 descInx=848
-	-- vdtAdd: inx=1 descInx=849
-	-- vdtAdd: inx=2 descInx=850
-	-- vdtAdd: inx=1 descInx=800
-	-- vdtAdd: inx=1 descInx=801
-	-- vdtAdd: inx=1 descInx=805
-	-- vdtAdd: inx=1 descInx=809
-	-- vdtAdd: inx=2 descInx=810
-	-- vdtAdd: inx=1 descInx=813
-	-- vdtAdd: inx=2 descInx=814
-	-- vdtAdd: inx=1 descInx=815
-	-- vdtAdd: inx=2 descInx=816
-	-- vdtAdd: inx=1 descInx=989
-	-- vdtAdd: inx=2 descInx=990
-	-- vdtAdd: inx=1 descInx=995
-	-- vdtAdd: inx=2 descInx=996
-	-- vdtAdd: inx=1 descInx=991
-	-- vdtAdd: inx=2 descInx=993
-	-- vdtAdd: inx=1 descInx=807
-	-- vdtAdd: inx=2 descInx=808
-	-- vdtAdd: inx=1 descInx=1021
-	-- vdtAdd: inx=2 descInx=1022
-	-- vdtAdd: inx=1 descInx=1023
-	-- vdtAdd: inx=2 descInx=1024
+	-- vdtAdd: inx=1 descInx=537
+	-- vdtAdd: inx=1 descInx=565
+	-- vdtAdd: inx=2 descInx=566
+	-- vdtAdd: inx=1 descInx=567
+	-- vdtAdd: inx=2 descInx=568
+	-- vdtAdd: inx=1 descInx=569
+	-- vdtAdd: inx=2 descInx=570
+	-- vdtAdd: inx=1 descInx=571
+	-- vdtAdd: inx=2 descInx=572
+	-- vdtAdd: inx=1 descInx=574
+	-- vdtAdd: inx=1 descInx=549
+	-- vdtAdd: inx=1 descInx=550
+	-- vdtAdd: inx=1 descInx=580
+	-- vdtAdd: inx=2 descInx=581
+	-- vdtAdd: inx=1 descInx=582
+	-- vdtAdd: inx=2 descInx=583
+	-- vdtAdd: inx=1 descInx=547
+	-- vdtAdd: inx=1 descInx=548
+	-- vdtAdd: inx=1 descInx=552
+	-- vdtAdd: inx=1 descInx=556
+	-- vdtAdd: inx=2 descInx=557
+	-- vdtAdd: inx=1 descInx=560
+	-- vdtAdd: inx=2 descInx=561
+	-- vdtAdd: inx=1 descInx=562
+	-- vdtAdd: inx=2 descInx=563
+	-- vdtAdd: inx=1 descInx=669
+	-- vdtAdd: inx=2 descInx=670
+	-- vdtAdd: inx=1 descInx=675
+	-- vdtAdd: inx=2 descInx=676
+	-- vdtAdd: inx=1 descInx=671
+	-- vdtAdd: inx=2 descInx=673
+	-- vdtAdd: inx=1 descInx=554
+	-- vdtAdd: inx=2 descInx=555
+	-- vdtAdd: inx=1 descInx=691
+	-- vdtAdd: inx=2 descInx=692
+	-- vdtAdd: inx=1 descInx=693
+	-- vdtAdd: inx=2 descInx=694
 
 Class BETAworld 1 1
 allocE:
@@ -18050,7 +18035,7 @@ allocE:
 17:	invoke 71 3 1
 23:	rpop 
 24:	pushthis 
-25:	invoke 260 4 1
+25:	invoke 229 4 1
 31:	rpop 
 32:	rtnEventQ 0
 doE: 
@@ -18218,7 +18203,7 @@ doE:
 13:	pushg 1
 15:	jmpFalse 26
 18:	pushthis 
-19:	invoke 787 0 1
+19:	invoke 534 0 1
 25:	rpop 
 26:	pushthis 
 27:	rpushg 1
@@ -18313,7 +18298,7 @@ doE:
 24:	le
 25:	jmpFalse 36
 28:	pushthis 
-29:	invoke 788 0 1
+29:	invoke 535 0 1
 35:	rpop 
 36:	rtnEventQ 0
 38:	setThisStack
@@ -18460,7 +18445,7 @@ doE:
 79:	gt 
 80:	jmpFalse 91
 83:	pushthis 
-84:	invoke 789 0 1
+84:	invoke 536 0 1
 90:	rpop 
 91:	rtnEventQ 0
 93:	setThisStack
@@ -18507,13 +18492,13 @@ allocE:
 31:	invoke 172 5 1
 37:	rpop 
 38:	pushthis 
-39:	invoke 228 7 1
+39:	invoke 197 6 1
 45:	rpop 
 46:	pushthis 
-47:	invoke 235 8 1
+47:	invoke 204 7 1
 53:	rpop 
 54:	pushthis 
-55:	invoke 96 10 1
+55:	invoke 96 9 1
 61:	rpop 
 62:	rtnEventQ 0
 doE: 
@@ -18664,7 +18649,7 @@ doE:
 18:	57
 19:	jmpFalse 30
 22:	pushthis 
-23:	invoke 792 0 1
+23:	invoke 539 0 1
 29:	rpop 
 30:	rtnEventQ 0
 32:	setThisStack
@@ -18731,7 +18716,7 @@ doE:
 18:	57
 19:	jmpFalse 30
 22:	pushthis 
-23:	invoke 793 0 1
+23:	invoke 540 0 1
 29:	rpop 
 30:	rtnEventQ 0
 32:	setThisStack
@@ -18760,7 +18745,7 @@ doE:
 22:	pushg 1
 24:	jmpFalse 35
 27:	pushthis 
-28:	invoke 794 0 1
+28:	invoke 541 0 1
 34:	rpop 
 35:	rtnEventQ 0
 37:	setThisStack
@@ -18809,7 +18794,7 @@ doE:
 24:	req 
 25:	jmpFalse 36
 28:	pushthis 
-29:	invoke 796 0 1
+29:	invoke 543 0 1
 35:	rpop 
 36:	rtnInner
 
@@ -18830,7 +18815,7 @@ doE:
 16:	57
 17:	jmpFalse 28
 20:	pushthis 
-21:	invoke 798 0 1
+21:	invoke 545 0 1
 27:	rpop 
 28:	rtnEventQ 0
 30:	setThisStack
@@ -19199,7 +19184,7 @@ doE:
 38:	ne 
 39:	jmpFalse 50
 42:	pushthis 
-43:	invoke 804 0 1
+43:	invoke 551 0 1
 49:	rpop 
 50:	pushthis 
 51:	rpushg 1
@@ -19370,7 +19355,7 @@ doE:
 75:	eq 
 76:	jmpFalse 87
 79:	pushthis 
-80:	invoke 806 0 1
+80:	invoke 553 0 1
 86:	rpop 
 87:	rtnEventQ 0
 89:	setThisStack
@@ -19576,7 +19561,7 @@ doE:
 43:	eq 
 44:	jmpFalse 55
 47:	pushthis 
-48:	invoke 811 0 1
+48:	invoke 558 0 1
 54:	rpop 
 55:	rtnEventQ 0
 57:	setThisStack
@@ -19731,7 +19716,7 @@ doE:
 50:	57
 51:	jmpFalse 62
 54:	pushthis 
-55:	invoke 812 0 1
+55:	invoke 559 0 1
 61:	rpop 
 62:	pushthis 
 63:	invoke 130 0 1
@@ -20291,7 +20276,7 @@ doE:
 44:	gt 
 45:	jmpFalse 56
 48:	pushthis 
-49:	invoke 817 0 1
+49:	invoke 564 0 1
 55:	rpop 
 56:	inner 1
 58:	pushthis 
@@ -21133,7 +21118,7 @@ doE:
 68:	lt
 69:	jmpFalse 80
 72:	pushthis 
-73:	invoke 826 0 1
+73:	invoke 573 0 1
 79:	rpop 
 80:	rtnEventQ 0
 82:	setThisStack
@@ -21226,7 +21211,7 @@ doE:
 34:	lt
 35:	jmpFalse 46
 38:	pushthis 
-39:	invoke 829 0 1
+39:	invoke 576 0 1
 45:	rpop 
 46:	rtnEventQ 0
 48:	setThisStack
@@ -21260,7 +21245,7 @@ doE:
 31:	orr
 32:	jmpFalse 43
 35:	pushthis 
-36:	invoke 828 0 1
+36:	invoke 575 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -21651,7 +21636,7 @@ doE:
 47:	rtnInner
 
 
-Class ForkJoinSystem 228 1
+Class ForkJoinSystem 197 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
@@ -21665,7 +21650,7 @@ doE:
 13:	rtn D
 
 
-Class ForkJoinSystem 229 1
+Class ForkJoinSystem 198 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -21684,7 +21669,7 @@ doE:
 20:	rtnInner
 
 
-Class ForkJoin 230 1
+Class ForkJoin 199 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -21710,7 +21695,7 @@ doE:
 43:	innerP 1
 45:	popThisObj
 46:	pushthis 
-47:	invoke 232 0 1
+47:	invoke 201 0 1
 53:	rpop 
 54:	rtnEventQ 0
 56:	setThisStack
@@ -21718,7 +21703,7 @@ doE:
 58:	rtn D
 
 
-Class run 231 1
+Class run 200 1
 allocE:
 1:	pushthis 
 2:	rstoreg 2
@@ -21760,13 +21745,13 @@ doE:
 73:	rtn D
 
 
-Class AwaitTermination 232 1
+Class AwaitTermination 201 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
 5:	mvStack
 6:	pushthis 
-7:	invoke 233 2 1
+7:	invoke 202 2 1
 13:	rpop 
 14:	rtnEventQ 0
 doE: 
@@ -21777,7 +21762,7 @@ doE:
 21:	rtn D
 
 
-Class loop 233 1
+Class loop 202 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -21798,13 +21783,13 @@ doE:
 26:	invoke 23 0 0
 32:	storeg 1
 34:	pushthis 
-35:	invoke 234 0 1
+35:	invoke 203 0 1
 41:	rpop 
 42:	pushthis 
 43:	pushg 1
 45:	jmpFalse 56
 48:	pushthis 
-49:	invoke 846 0 1
+49:	invoke 579 0 1
 55:	rpop 
 56:	pushthis 
 57:	rpushg 1
@@ -21818,7 +21803,7 @@ doE:
 74:	rtn D
 
 
-Class scan#S#234 234 4
+Class scan#S#203 203 4
 allocE:
 1:	rstore 4
 3:	allocEventQ 0
@@ -21853,12 +21838,12 @@ doE:
 49:	ne 
 50:	jmpFalse 61
 53:	pushthis 
-54:	invoke 845 0 1
+54:	invoke 578 0 1
 60:	rpop 
 61:	rtnInner
 
 
-Class MonitorSystem 235 1
+Class MonitorSystem 204 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
@@ -21872,7 +21857,7 @@ doE:
 13:	rtn D
 
 
-Class System 236 8
+Class System 205 8
 allocE:
 1:	rstore 8
 3:	allocEventQ 0
@@ -21893,7 +21878,7 @@ doE:
 26:	rtnInner
 
 
-Class Semaphore 237 1
+Class Semaphore 206 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
@@ -21915,7 +21900,7 @@ doE:
 33:	rtn D
 
 
-Class init 238 1
+Class init 207 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -21934,7 +21919,7 @@ doE:
 21:	rtn D
 
 
-Class wait 239 1
+Class wait 208 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -21957,7 +21942,7 @@ doE:
 32:	-
 33:	storeg 1
 35:	pushthis 
-36:	invoke 240 0 1
+36:	invoke 209 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -21965,7 +21950,7 @@ doE:
 47:	rtn D
 
 
-Class %if%then%%else%#S#240 240 3
+Class %if%then%%else%#S#209 209 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -21989,7 +21974,7 @@ doE:
 31:	rtnInner
 
 
-Class signal 241 1
+Class signal 210 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22012,7 +21997,7 @@ doE:
 32:	+
 33:	storeg 1
 35:	pushthis 
-36:	invoke 242 0 1
+36:	invoke 211 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -22020,7 +22005,7 @@ doE:
 47:	rtn D
 
 
-Class %if%then%%else%#S#242 242 3
+Class %if%then%%else%#S#211 211 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -22044,7 +22029,7 @@ doE:
 31:	rtnInner
 
 
-Class Process 243 1
+Class Process 212 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22061,7 +22046,7 @@ doE:
 18:	rtnInner
 
 
-Class start 244 2
+Class start 213 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -22104,14 +22089,14 @@ doE:
 75:	rtnInner
 
 
-Class Monitor 245 1
+Class Monitor 214 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
 5:	mvStack
 6:	pushthis 
 7:	rpushg 1
-9:	invoke 237 2 1
+9:	invoke 206 2 1
 15:	rpop 
 16:	rtnEventQ 0
 doE: 
@@ -22122,7 +22107,7 @@ doE:
 23:	rtn D
 
 
-Class init 246 1
+Class init 215 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22134,7 +22119,7 @@ doE:
 10:	pushthis 
 11:	rpushg 1
 13:	rpushg 2
-15:	invoke 238 0 0
+15:	invoke 207 0 0
 21:	rpop 
 22:	rtnEventQ 0
 24:	setThisStack
@@ -22142,7 +22127,7 @@ doE:
 26:	rtn D
 
 
-Class entry 247 1
+Class entry 216 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22155,7 +22140,7 @@ doE:
 12:	pushthis 
 13:	rpushg 1
 15:	rpushg 2
-17:	invoke 239 0 0
+17:	invoke 208 0 0
 23:	rpop 
 24:	pushthis 
 25:	rpushg 1
@@ -22169,7 +22154,7 @@ doE:
 39:	pushthis 
 40:	rpushg 1
 42:	rpushg 2
-44:	invoke 241 0 0
+44:	invoke 210 0 0
 50:	rpop 
 51:	rtnEventQ 0
 53:	setThisStack
@@ -22177,13 +22162,13 @@ doE:
 55:	rtn D
 
 
-Class wait 248 1
+Class wait 217 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
 5:	mvStack
 6:	pushthis 
-7:	invoke 249 2 1
+7:	invoke 218 2 1
 13:	rpop 
 14:	innera 1
 16:	rtnEventQ 0
@@ -22195,7 +22180,7 @@ doE:
 23:	rtn D
 
 
-Class loop 249 1
+Class loop 218 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22221,7 +22206,7 @@ doE:
 38:	eq 
 39:	jmpFalse 50
 42:	pushthis 
-43:	invoke 851 0 1
+43:	invoke 584 0 1
 49:	rpop 
 50:	rtnEventQ 0
 52:	setThisStack
@@ -22229,13 +22214,13 @@ doE:
 54:	rtn D
 
 
-Class workspace 260 1
+Class workspace 229 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
 5:	mvStack
 6:	pushthis 
-7:	invoke 534 18 1
+7:	invoke 429 4 1
 13:	rpop 
 14:	rtnEventQ 0
 doE: 
@@ -22246,13 +22231,13 @@ doE:
 21:	rtn D
 
 
-Class demo 534 1
+Class demo 429 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
 5:	mvStack
 6:	pushthis 
-7:	invoke 535 2 1
+7:	invoke 430 2 1
 13:	rpop 
 14:	rtnEventQ 0
 doE: 
@@ -22263,13 +22248,13 @@ doE:
 21:	rtn D
 
 
-Class ArrayDemos 535 1
+Class ArrayDemos 430 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
 5:	mvStack
 6:	pushthis 
-7:	invoke 546 4 1
+7:	invoke 441 4 1
 13:	rpop 
 14:	rtnEventQ 0
 doE: 
@@ -22280,7 +22265,7 @@ doE:
 21:	rtn D
 
 
-Class List 546 1
+Class List 441 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22300,7 +22285,7 @@ doE:
 32:	rpop 
 33:	pushthis 
 34:	pushthis 
-35:	invoke 920 0 1
+35:	invoke 637 0 1
 41:	rswap 
 42:	rstoreg 4
 44:	pushthis 
@@ -22313,7 +22298,7 @@ doE:
 55:	pushc 0
 57:	pushc 1
 59:	allocIndexed 52 1
-63:	invoke 552 0 0
+63:	invoke 447 0 0
 69:	rswap 
 70:	rstoreg 6
 72:	pushthis 
@@ -22326,7 +22311,7 @@ doE:
 83:	pushc 0
 85:	pushc 1
 87:	allocIndexed 52 1
-91:	invoke 552 0 0
+91:	invoke 447 0 0
 97:	rswap 
 98:	rstoreg 7
 100:	pushthis 
@@ -22335,7 +22320,7 @@ doE:
 103:	rpushg 6
 105:	pushthis 
 106:	rpushg 4
-108:	invoke 550 0 0
+108:	invoke 445 0 0
 114:	rswap 
 115:	rstoreg 3
 117:	pushText 20
@@ -22422,42 +22407,43 @@ doE:
 281:	pushthis 
 282:	pushthis 
 283:	rpushg 7
-285:	pushNone 
-286:	invoke 550 0 0
-292:	invoke 550 0 0
-298:	rswap 
-299:	rstoreg 2
-301:	pushthis 
-302:	pushthis 
-303:	pushc 2
-305:	pushthis 
-306:	rpushg 2
-308:	invoke 553 0 0
-314:	rswap 
-315:	rstoreg 8
-317:	pushthis 
-318:	pushthis 
-319:	pushc 2
-321:	pushthis 
-322:	pushthis 
-323:	rpushg 6
-325:	pushthis 
-326:	pushthis 
-327:	rpushg 7
-329:	pushthis 
-330:	rpushg 3
-332:	invoke 550 0 0
-338:	invoke 550 0 0
-344:	invoke 553 0 0
-350:	rswap 
-351:	rstoreg 8
-353:	rtnEventQ 0
-355:	setThisStack
-356:	pushthis 
-357:	rtn D
+285:	pushthis 
+286:	rpushg 4
+288:	invoke 445 0 0
+294:	invoke 445 0 0
+300:	rswap 
+301:	rstoreg 2
+303:	pushthis 
+304:	pushthis 
+305:	pushc 2
+307:	pushthis 
+308:	rpushg 2
+310:	invoke 448 0 0
+316:	rswap 
+317:	rstoreg 8
+319:	pushthis 
+320:	pushthis 
+321:	pushc 2
+323:	pushthis 
+324:	pushthis 
+325:	rpushg 6
+327:	pushthis 
+328:	pushthis 
+329:	rpushg 7
+331:	pushthis 
+332:	rpushg 4
+334:	invoke 445 0 0
+340:	invoke 445 0 0
+346:	invoke 448 0 0
+352:	rswap 
+353:	rstoreg 8
+355:	rtnEventQ 0
+357:	setThisStack
+358:	pushthis 
+359:	rtn D
 
 
-Class List 548 1
+Class List 443 1
 allocE:
 1:	pushthis 
 2:	rstoreg 3
@@ -22475,7 +22461,7 @@ doE:
 19:	rtn D
 
 
-Class empty 549 1
+Class empty 444 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22502,7 +22488,7 @@ doE:
 32:	rtn D
 
 
-Class RangeList 550 1
+Class RangeList 445 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22511,8 +22497,8 @@ allocE:
 8:	pushthis 
 9:	rpushg 1
 11:	rpushg 1
-13:	invoke 552 0 0
-19:	toSuper 548
+13:	invoke 447 0 0
+19:	toSuper 443
 enterE: 
 22:	innera 2
 24:	rtnInner
@@ -22525,7 +22511,7 @@ doE:
 31:	rtnInner
 
 
-Class Range 552 1
+Class Range 447 1
 allocE:
 1:	pushthis 
 2:	rstoreg 2
@@ -22546,7 +22532,7 @@ doE:
 23:	rtn D
 
 
-Class testArray 553 1
+Class testArray 448 1
 allocE:
 1:	pushthis 
 2:	pushthis 
@@ -22568,7 +22554,7 @@ doE:
 24:	rtn D
 
 
-Class #S#787 787 1
+Class #S#534 534 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22589,7 +22575,7 @@ doE:
 26:	rtn D
 
 
-Class #S#788 788 1
+Class #S#535 535 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22623,7 +22609,7 @@ doE:
 49:	rtn D
 
 
-Class #S#789 789 1
+Class #S#536 536 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22639,7 +22625,7 @@ doE:
 18:	rtn D
 
 
-Class body#SB#790 790 2
+Class body#SB#537 537 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -22678,7 +22664,7 @@ doE:
 54:	rtn D
 
 
-Class #S#792 792 1
+Class #S#539 539 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22724,7 +22710,7 @@ doE:
 70:	rtn D
 
 
-Class #S#793 793 1
+Class #S#540 540 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22770,7 +22756,7 @@ doE:
 70:	rtn D
 
 
-Class #S#794 794 1
+Class #S#541 541 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22791,7 +22777,7 @@ doE:
 29:	rswap 
 30:	rstoreg 3
 32:	pushthis 
-33:	invoke 795 0 1
+33:	invoke 542 0 1
 39:	rpop 
 40:	rtnEventQ 0
 42:	setThisStack
@@ -22799,7 +22785,7 @@ doE:
 44:	rtn D
 
 
-Class %if%then%%else%#S#795 795 3
+Class %if%then%%else%#S#542 542 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -22825,7 +22811,7 @@ doE:
 34:	rtnInner
 
 
-Class #S#796 796 1
+Class #S#543 543 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22835,7 +22821,7 @@ doE:
 8:	doEventQ 
 9:	mvStack
 10:	pushthis 
-11:	invoke 797 0 1
+11:	invoke 544 0 1
 17:	rpop 
 18:	rtnEventQ 0
 20:	setThisStack
@@ -22843,7 +22829,7 @@ doE:
 22:	rtn D
 
 
-Class %if%then%%else%#S#797 797 3
+Class %if%then%%else%#S#544 544 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -22870,7 +22856,7 @@ doE:
 36:	rtnInner
 
 
-Class #S#798 798 1
+Class #S#545 545 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -22899,7 +22885,7 @@ doE:
 39:	rswap 
 40:	rstoreg 3
 42:	pushthis 
-43:	invoke 799 0 1
+43:	invoke 546 0 1
 49:	rpop 
 50:	rtnEventQ 0
 52:	setThisStack
@@ -22907,7 +22893,7 @@ doE:
 54:	rtn D
 
 
-Class %if%then%%else%#S#799 799 3
+Class %if%then%%else%#S#546 546 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -22933,7 +22919,7 @@ doE:
 34:	rtnInner
 
 
-Class body#SB#800 800 2
+Class body#SB#547 547 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -22973,7 +22959,7 @@ doE:
 58:	rtn D
 
 
-Class body#SB#801 801 2
+Class body#SB#548 548 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23027,7 +23013,7 @@ doE:
 82:	rtn D
 
 
-Class body#SB#802 802 2
+Class body#SB#549 549 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23059,7 +23045,7 @@ doE:
 43:	rtn D
 
 
-Class body#SB#803 803 2
+Class body#SB#550 550 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23083,7 +23069,7 @@ doE:
 30:	rtn D
 
 
-Class #S#804 804 1
+Class #S#551 551 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23099,7 +23085,7 @@ doE:
 18:	rtn D
 
 
-Class body#SB#805 805 2
+Class body#SB#552 552 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23145,7 +23131,7 @@ doE:
 70:	ne 
 71:	jmpFalse 82
 74:	pushthis 
-75:	invoke 997 0 1
+75:	invoke 677 0 1
 81:	rpop 
 82:	rtnEventQ 0
 84:	setThisStack
@@ -23153,7 +23139,7 @@ doE:
 86:	rtn D
 
 
-Class #S#806 806 1
+Class #S#553 553 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23180,7 +23166,7 @@ doE:
 38:	rtn D
 
 
-Class thenPart#SB#807 807 2
+Class thenPart#SB#554 554 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23216,7 +23202,7 @@ doE:
 54:	rtn D
 
 
-Class elsePart#SB#808 808 2
+Class elsePart#SB#555 555 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23250,7 +23236,7 @@ doE:
 50:	rtn D
 
 
-Class thenPart#SB#809 809 2
+Class thenPart#SB#556 556 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23273,7 +23259,7 @@ doE:
 28:	rtn D
 
 
-Class elsePart#SB#810 810 2
+Class elsePart#SB#557 557 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23296,7 +23282,7 @@ doE:
 28:	rtn D
 
 
-Class #S#811 811 1
+Class #S#558 558 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23315,7 +23301,7 @@ doE:
 24:	rtn D
 
 
-Class #S#812 812 1
+Class #S#559 559 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23373,7 +23359,7 @@ doE:
 95:	eq 
 96:	jmpFalse 107
 99:	pushthis 
-100:	invoke 998 0 1
+100:	invoke 678 0 1
 106:	rpop 
 107:	rtnEventQ 0
 109:	setThisStack
@@ -23381,7 +23367,7 @@ doE:
 111:	rtn D
 
 
-Class thenPart#SB#813 813 2
+Class thenPart#SB#560 560 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23400,7 +23386,7 @@ doE:
 23:	invoke 161 0 0
 29:	jmpFalse 40
 32:	pushthis 
-33:	invoke 999 0 1
+33:	invoke 679 0 1
 39:	rpop 
 40:	pushthis 
 41:	rpushg 2
@@ -23421,7 +23407,7 @@ doE:
 73:	invoke 147 0 0
 79:	jmpFalse 90
 82:	pushthis 
-83:	invoke 1000 0 1
+83:	invoke 680 0 1
 89:	rpop 
 90:	rtnEventQ 0
 92:	setThisStack
@@ -23429,7 +23415,7 @@ doE:
 94:	rtn D
 
 
-Class elsePart#SB#814 814 2
+Class elsePart#SB#561 561 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23445,7 +23431,7 @@ doE:
 18:	rtn D
 
 
-Class thenPart#SB#815 815 2
+Class thenPart#SB#562 562 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23468,7 +23454,7 @@ doE:
 28:	rtn D
 
 
-Class elsePart#SB#816 816 2
+Class elsePart#SB#563 563 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23486,7 +23472,7 @@ doE:
 22:	rtn D
 
 
-Class #S#817 817 1
+Class #S#564 564 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23503,7 +23489,7 @@ doE:
 18:	rtn D
 
 
-Class thenPart#SB#818 818 2
+Class thenPart#SB#565 565 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23524,7 +23510,7 @@ doE:
 25:	rtn D
 
 
-Class elsePart#SB#819 819 2
+Class elsePart#SB#566 566 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23551,7 +23537,7 @@ doE:
 35:	rtn D
 
 
-Class thenPart#SB#820 820 2
+Class thenPart#SB#567 567 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23572,7 +23558,7 @@ doE:
 25:	rtn D
 
 
-Class elsePart#SB#821 821 2
+Class elsePart#SB#568 568 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23599,7 +23585,7 @@ doE:
 35:	rtn D
 
 
-Class thenPart#SB#822 822 2
+Class thenPart#SB#569 569 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23618,7 +23604,7 @@ doE:
 21:	rtn D
 
 
-Class elsePart#SB#823 823 2
+Class elsePart#SB#570 570 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23650,7 +23636,7 @@ doE:
 44:	rtn D
 
 
-Class thenPart#SB#824 824 2
+Class thenPart#SB#571 571 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23669,7 +23655,7 @@ doE:
 21:	rtn D
 
 
-Class elsePart#SB#825 825 2
+Class elsePart#SB#572 572 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23701,7 +23687,7 @@ doE:
 44:	rtn D
 
 
-Class #S#826 826 1
+Class #S#573 573 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23717,7 +23703,7 @@ doE:
 18:	rtn D
 
 
-Class body#SB#827 827 2
+Class body#SB#574 574 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23752,7 +23738,7 @@ doE:
 57:	rtn D
 
 
-Class #S#828 828 1
+Class #S#575 575 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23770,7 +23756,7 @@ doE:
 23:	rtn D
 
 
-Class #S#829 829 1
+Class #S#576 576 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23788,7 +23774,7 @@ doE:
 23:	rtn D
 
 
-Class #S#845 845 1
+Class #S#578 578 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23816,7 +23802,7 @@ doE:
 42:	rtn D
 
 
-Class #S#846 846 1
+Class #S#579 579 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23832,7 +23818,7 @@ doE:
 18:	rtn D
 
 
-Class thenPart#SB#847 847 2
+Class thenPart#SB#580 580 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23896,7 +23882,7 @@ doE:
 113:	rtn D
 
 
-Class elsePart#SB#848 848 2
+Class elsePart#SB#581 581 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23918,7 +23904,7 @@ doE:
 30:	rtn D
 
 
-Class thenPart#SB#849 849 2
+Class thenPart#SB#582 582 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23983,7 +23969,7 @@ doE:
 118:	rtn D
 
 
-Class elsePart#SB#850 850 2
+Class elsePart#SB#583 583 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24005,7 +23991,7 @@ doE:
 30:	rtn D
 
 
-Class #S#851 851 1
+Class #S#584 584 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24019,14 +24005,14 @@ doE:
 13:	rpushg 1
 15:	rpushg 1
 17:	rpushg 2
-19:	invoke 241 0 0
+19:	invoke 210 0 0
 25:	rpop 
 26:	pushthis 
 27:	rpushg 1
 29:	rpushg 1
 31:	rpushg 1
 33:	rpushg 2
-35:	invoke 239 0 0
+35:	invoke 208 0 0
 41:	rpop 
 42:	break 1 363
 46:	rtnEventQ 0
@@ -24035,7 +24021,7 @@ doE:
 50:	rtn D
 
 
-Class List#S#920 920 1
+Class List#S#637 637 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 1
@@ -24043,7 +24029,7 @@ allocE:
 6:	rpushg 1
 8:	pushNone 
 9:	pushNone 
-10:	toSuper 548
+10:	toSuper 443
 enterE: 
 13:	rtnInner
 doE: 
@@ -24051,7 +24037,7 @@ doE:
 15:	rtnInner
 
 
-Class thenPart#SB#989 989 2
+Class thenPart#SB#669 669 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24091,7 +24077,7 @@ doE:
 58:	rtn D
 
 
-Class elsePart#SB#990 990 2
+Class elsePart#SB#670 670 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24144,7 +24130,7 @@ doE:
 81:	rtn D
 
 
-Class thenPart#SB#991 991 2
+Class thenPart#SB#671 671 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24168,7 +24154,7 @@ doE:
 32:	rswap 
 33:	rstoreg 5
 35:	pushthis 
-36:	invoke 992 0 1
+36:	invoke 672 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -24176,7 +24162,7 @@ doE:
 47:	rtn D
 
 
-Class %if%then%%else%#S#992 992 3
+Class %if%then%%else%#S#672 672 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -24207,7 +24193,7 @@ doE:
 44:	rtnInner
 
 
-Class elsePart#SB#993 993 2
+Class elsePart#SB#673 673 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24231,7 +24217,7 @@ doE:
 32:	rswap 
 33:	rstoreg 2
 35:	pushthis 
-36:	invoke 994 0 1
+36:	invoke 674 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -24239,7 +24225,7 @@ doE:
 47:	rtn D
 
 
-Class %if%then%%else%#S#994 994 3
+Class %if%then%%else%#S#674 674 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -24271,7 +24257,7 @@ doE:
 46:	rtnInner
 
 
-Class thenPart#SB#995 995 2
+Class thenPart#SB#675 675 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24295,7 +24281,7 @@ doE:
 29:	rtn D
 
 
-Class elsePart#SB#996 996 2
+Class elsePart#SB#676 676 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24318,7 +24304,7 @@ doE:
 27:	rtn D
 
 
-Class #S#997 997 1
+Class #S#677 677 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24349,7 +24335,7 @@ doE:
 50:	rtn D
 
 
-Class #S#998 998 1
+Class #S#678 678 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24379,7 +24365,7 @@ doE:
 45:	rtn D
 
 
-Class #S#999 999 1
+Class #S#679 679 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24397,7 +24383,7 @@ doE:
 22:	rtn D
 
 
-Class #S#1000 1000 1
+Class #S#680 680 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24425,7 +24411,7 @@ doE:
 44:	rtn D
 
 
-Class thenPart#SB#1021 1021 2
+Class thenPart#SB#691 691 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24458,7 +24444,7 @@ doE:
 47:	rtn D
 
 
-Class elsePart#SB#1022 1022 2
+Class elsePart#SB#692 692 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24491,7 +24477,7 @@ doE:
 47:	rtn D
 
 
-Class thenPart#SB#1023 1023 2
+Class thenPart#SB#693 693 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24518,7 +24504,7 @@ doE:
 35:	rtn D
 
 
-Class elsePart#SB#1024 1024 2
+Class elsePart#SB#694 694 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24544,19 +24530,19 @@ doE:
 33:	rtn D
 
 
-Class main 1026 0
+Class main 696 0
 allocE:
 1:	pushthis 
 2:	invoke 1 0 1
 8:	stop 
 
 
-Class EventProcessor 1027 0
+Class EventProcessor 697 0
 allocE:
 1:	stop 
 
 
-Class ThreadStub 1028 0
+Class ThreadStub 698 0
 allocE:
 doE: 
 1:	mvStack
