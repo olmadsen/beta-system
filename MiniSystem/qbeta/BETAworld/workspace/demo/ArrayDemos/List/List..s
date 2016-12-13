@@ -6144,6 +6144,39 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 2 rl
+	-- ObjectGenerator:gen: super: "integerArrayStart3".print:IS-empty: staticOff: 0
+	-- Invocation:gen: "integerArrayStart3".print
+	-- Invocation:loadOrigin: "integerArrayStart3".print
+	-- Invocation:loadOrigin:scan: "integerArrayStart3"
+	-- String::pushThis: 
+	-- String::loadOrigin: 
+	pushText integerArrayStart3
+	-- next not assign: print :E: "integerArrayStart3"
+	-- String::loadArgs: 
+	-- String::invoke: 
+	-- Invocation:loadOrigin:scan: print
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: print
+	invoke 107 0 print
+	rpop
+	-- ObjectGenerator:gen: super: newline:IS-empty: staticOff: 0
+	-- Invocation:gen: newline
+	-- Invocation:loadOrigin: newline
+	-- Invocation:loadOrigin:scan: newline
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: newline
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 1 origin
+	rpushg 1 origin
+	rpushg 1 origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: newline
+	invoke 66 0 newline
+	rpop
 	-- ObjectGenerator:gen: super: ta := testArray(2,rl):IS-empty: staticOff: 0
 	-- Invocation:gen: ta := testArray(2,rl)
 	-- Invocation:loadOrigin: ta := testArray(2,rl)
@@ -6194,6 +6227,39 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 8 ta
+	-- ObjectGenerator:gen: super: "integerArrayStart4".print:IS-empty: staticOff: 0
+	-- Invocation:gen: "integerArrayStart4".print
+	-- Invocation:loadOrigin: "integerArrayStart4".print
+	-- Invocation:loadOrigin:scan: "integerArrayStart4"
+	-- String::pushThis: 
+	-- String::loadOrigin: 
+	pushText integerArrayStart4
+	-- next not assign: print :E: "integerArrayStart4"
+	-- String::loadArgs: 
+	-- String::invoke: 
+	-- Invocation:loadOrigin:scan: print
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: print
+	invoke 107 0 print
+	rpop
+	-- ObjectGenerator:gen: super: newline:IS-empty: staticOff: 0
+	-- Invocation:gen: newline
+	-- Invocation:loadOrigin: newline
+	-- Invocation:loadOrigin:scan: newline
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: newline
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 1 origin
+	rpushg 1 origin
+	rpushg 1 origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: newline
+	invoke 66 0 newline
+	rpop
 	-- ObjectGenerator:gen: super: ta := testArray(2,RangeList(r1,RangeList(r2,emptyList))):IS-empty: staticOff: 0
 	-- Invocation:gen: ta := testArray(2,RangeList(r1,RangeList(r2,emptyList)))
 	-- Invocation:loadOrigin: ta := testArray(2,RangeList(r1,RangeList(r2,emptyList)))
@@ -6296,6 +6362,39 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 8 ta
+	-- ObjectGenerator:gen: super: "integerArrayStart5".print:IS-empty: staticOff: 0
+	-- Invocation:gen: "integerArrayStart5".print
+	-- Invocation:loadOrigin: "integerArrayStart5".print
+	-- Invocation:loadOrigin:scan: "integerArrayStart5"
+	-- String::pushThis: 
+	-- String::loadOrigin: 
+	pushText integerArrayStart5
+	-- next not assign: print :E: "integerArrayStart5"
+	-- String::loadArgs: 
+	-- String::invoke: 
+	-- Invocation:loadOrigin:scan: print
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: print
+	invoke 107 0 print
+	rpop
+	-- ObjectGenerator:gen: super: newline:IS-empty: staticOff: 0
+	-- Invocation:gen: newline
+	-- Invocation:loadOrigin: newline
+	-- Invocation:loadOrigin:scan: newline
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: newline
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 1 origin
+	rpushg 1 origin
+	rpushg 1 origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: newline
+	invoke 66 0 newline
+	rpop
  L173:
 	rtnEventQ 0
 	setThisStack 
@@ -22413,34 +22512,61 @@ doE:
 294:	invoke 445 0 0
 300:	rswap 
 301:	rstoreg 2
-303:	pushthis 
-304:	pushthis 
-305:	pushc 2
-307:	pushthis 
-308:	rpushg 2
-310:	invoke 448 0 0
-316:	rswap 
-317:	rstoreg 8
-319:	pushthis 
-320:	pushthis 
-321:	pushc 2
-323:	pushthis 
-324:	pushthis 
-325:	rpushg 6
+303:	pushText 39
+305:	invoke 107 0 0
+311:	rpop 
+312:	pushthis 
+313:	rpushg 1
+315:	rpushg 1
+317:	rpushg 1
+319:	invoke 66 0 0
+325:	rpop 
+326:	pushthis 
 327:	pushthis 
-328:	pushthis 
-329:	rpushg 7
-331:	pushthis 
-332:	rpushg 4
-334:	invoke 445 0 0
-340:	invoke 445 0 0
-346:	invoke 448 0 0
-352:	rswap 
-353:	rstoreg 8
-355:	rtnEventQ 0
-357:	setThisStack
-358:	pushthis 
-359:	rtn D
+328:	pushc 2
+330:	pushthis 
+331:	rpushg 2
+333:	invoke 448 0 0
+339:	rswap 
+340:	rstoreg 8
+342:	pushText 58
+344:	invoke 107 0 0
+350:	rpop 
+351:	pushthis 
+352:	rpushg 1
+354:	rpushg 1
+356:	rpushg 1
+358:	invoke 66 0 0
+364:	rpop 
+365:	pushthis 
+366:	pushthis 
+367:	pushc 2
+369:	pushthis 
+370:	pushthis 
+371:	rpushg 6
+373:	pushthis 
+374:	pushthis 
+375:	rpushg 7
+377:	pushthis 
+378:	rpushg 4
+380:	invoke 445 0 0
+386:	invoke 445 0 0
+392:	invoke 448 0 0
+398:	rswap 
+399:	rstoreg 8
+401:	pushText 77
+403:	invoke 107 0 0
+409:	rpop 
+410:	pushthis 
+411:	rpushg 1
+413:	rpushg 1
+415:	rpushg 1
+417:	invoke 66 0 0
+423:	rpop 
+424:	rtnEventQ 0
+426:	setThisStack
+427:	pushthis 
+428:	rtn D
 
 
 Class List 443 1
