@@ -1,6 +1,6 @@
 	-- QBETA
 	-- Module:gen: 
-	component Comp NoOfDescs: 947
+	component Comp NoOfDescs: 1013
 	-- ConsRef:gen: BETAworld
 
 	class Object 33
@@ -977,7 +977,7 @@
 	jmpFalse L50
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 727 0 #S#727
+	invoke 774 0 #S#774
 	rpop
  L50:
 	-- ObjectGenerator:gen: super: elsePart:IS-empty: staticOff: 0
@@ -1439,7 +1439,7 @@
 	jmpFalse L66
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 769 0 #S#769
+	invoke 816 0 #S#816
 	rpop
  L66:
  L65:
@@ -1896,7 +1896,7 @@
 	rtn(D)
 	end 1
 
-	class #S#727 727
+	class #S#774 774
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -1915,7 +1915,7 @@
 	-- Unary:loadOrigin: thenPart
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#727:origin
+	rpushg 1 #S#774:origin
 	rpushg 1 _L:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -2017,7 +2017,7 @@
 	jmpFalse L83
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 728 0 #S#728
+	invoke 775 0 #S#775
 	rpop
  L83:
  L82:
@@ -2247,7 +2247,7 @@
 	jmpFalse L86
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 729 0 #S#729
+	invoke 776 0 #S#776
 	rpop
  L86:
  L85:
@@ -3765,7 +3765,7 @@
 	jmpFalse L133
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 768 0 #S#768
+	invoke 815 0 #S#815
 	rpop
  L133:
  L132:
@@ -3873,7 +3873,7 @@
 	rtn(D)
 	end 1
 
-	class #S#769 769
+	class #S#816 816
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -5403,14 +5403,17 @@
 	rstore 1 origin
 	allocEventQ
 	mvStack 
+	-- pattern:gen: int2int(e: ? integer) -> val: ? integer
+	-- pattern:gen: intint2int(i1: ? integer,i2: ? integer) -> val: ? integer
+	-- pattern:gen: IntList(head: ? integer,tail: ? IntList)
 	-- pattern:gen: Range(low: ? integer,upp: ? integer)
 	-- pattern:gen: RangeList(head: ? Range,tail: ? RangeList)
 	-- VarRef:gen: rl
 	-- VarRef:gen: r
 	-- VarRef:gen: r1
 	-- VarRef:gen: r2
-	-- pattern:gen: testArray(ndim: ? integer,ranges: ? RangeList)
-	-- VarRef:gen: ta
+	-- pattern:gen: Array(ndim: ? integer,ranges: ? RangeList)
+	-- VarRef:gen: a
 	-- VarRef:gen: i
 	rtnEventQ 1
 	DO:
@@ -5418,39 +5421,6 @@
 	mvStack 
  L172:
 	-- Include:gen: 
-	-- ObjectGenerator:gen: super: "integerArrayStart1".print:IS-empty: staticOff: 0
-	-- Invocation:gen: "integerArrayStart1".print
-	-- Invocation:loadOrigin: "integerArrayStart1".print
-	-- Invocation:loadOrigin:scan: "integerArrayStart1"
-	-- String::pushThis: 
-	-- String::loadOrigin: 
-	pushText integerArrayStart1
-	-- next not assign: print :E: "integerArrayStart1"
-	-- String::loadArgs: 
-	-- String::invoke: 
-	-- Invocation:loadOrigin:scan: print
-	-- Unary:loadArgs: 
-	-- Unary:invoke: 
-	-- pattern:load: print
-	invoke 107 0 print
-	rpop
-	-- ObjectGenerator:gen: super: newline:IS-empty: staticOff: 0
-	-- Invocation:gen: newline
-	-- Invocation:loadOrigin: newline
-	-- Invocation:loadOrigin:scan: newline
-	-- Unary:pushThis: 
-	pushThis 
-	-- Unary:loadOrigin: newline
-	-- AdjustOrigin: 0
-	-- on : 3
-	rpushg 1 RangeList:origin
-	rpushg 1 ArrayDemos:origin
-	rpushg 1 demo:origin
-	-- Unary:loadArgs: 
-	-- Unary:invoke: 
-	-- pattern:load: newline
-	invoke 66 0 newline
-	rpop
 	-- ObjectGenerator:gen: super: r := Range(0,0):IS-empty: staticOff: 0
 	-- Invocation:gen: r := Range(0,0)
 	-- Invocation:loadOrigin: r := Range(0,0)
@@ -5492,7 +5462,7 @@
 	pushc 0
 	-- Function:invoke: 
 	-- pattern:load: Range(low: ? integer,upp: ? integer)
-	invoke 558 0 Range
+	invoke 567 0 Range
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -5538,7 +5508,7 @@
 	pushc 3
 	-- Function:invoke: 
 	-- pattern:load: Range(low: ? integer,upp: ? integer)
-	invoke 558 0 Range
+	invoke 567 0 Range
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
@@ -5584,44 +5554,11 @@
 	pushc 5
 	-- Function:invoke: 
 	-- pattern:load: Range(low: ? integer,upp: ? integer)
-	invoke 558 0 Range
+	invoke 567 0 Range
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 5 r2
-	-- ObjectGenerator:gen: super: "integerArrayStart2".print:IS-empty: staticOff: 0
-	-- Invocation:gen: "integerArrayStart2".print
-	-- Invocation:loadOrigin: "integerArrayStart2".print
-	-- Invocation:loadOrigin:scan: "integerArrayStart2"
-	-- String::pushThis: 
-	-- String::loadOrigin: 
-	pushText integerArrayStart2
-	-- next not assign: print :E: "integerArrayStart2"
-	-- String::loadArgs: 
-	-- String::invoke: 
-	-- Invocation:loadOrigin:scan: print
-	-- Unary:loadArgs: 
-	-- Unary:invoke: 
-	-- pattern:load: print
-	invoke 107 0 print
-	rpop
-	-- ObjectGenerator:gen: super: newline:IS-empty: staticOff: 0
-	-- Invocation:gen: newline
-	-- Invocation:loadOrigin: newline
-	-- Invocation:loadOrigin:scan: newline
-	-- Unary:pushThis: 
-	pushThis 
-	-- Unary:loadOrigin: newline
-	-- AdjustOrigin: 0
-	-- on : 3
-	rpushg 1 RangeList:origin
-	rpushg 1 ArrayDemos:origin
-	rpushg 1 demo:origin
-	-- Unary:loadArgs: 
-	-- Unary:invoke: 
-	-- pattern:load: newline
-	invoke 66 0 newline
-	rpop
 	-- ObjectGenerator:gen: super: putint(r1.low):IS-empty: staticOff: 0
 	-- Invocation:gen: putint(r1.low)
 	-- Invocation:loadOrigin: putint(r1.low)
@@ -5869,32 +5806,32 @@
 	pushNone
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 2 rl
-	-- ObjectGenerator:gen: super: ta := testArray(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
-	-- Invocation:gen: ta := testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin: ta := testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin:scan: ta
+	-- ObjectGenerator:gen: super: a := Array(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
+	-- Invocation:gen: a := Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin: a := Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin:scan: a
 	-- Unary:pushThis: 
 	pushThis 
-	-- Unary:loadOrigin: ta
+	-- Unary:loadOrigin: a
 	-- AdjustOrigin: 0
 	-- on : 0
-	-- Invocation:loadOrigin:scan: := testArray(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin:scan: := Array(2,RangeList(r1,RangeList(r2,none)))
 	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: testArray(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
-	-- Invocation:gen: testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin:scan: testArray(2,RangeList(r1,RangeList(r2,none)))
+	-- ObjectGenerator:gen: super: Array(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
+	-- Invocation:gen: Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin: Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin:scan: Array(2,RangeList(r1,RangeList(r2,none)))
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,none)))
+	-- Function:loadOrigin: Array(2,RangeList(r1,RangeList(r2,none)))
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -5965,35 +5902,35 @@
 	pushNone
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Function:invoke: 
-	-- pattern:load: testArray(ndim: ? integer,ranges: ? RangeList)
-	invoke 569 0 testArray
+	-- pattern:load: Array(ndim: ? integer,ranges: ? RangeList)
+	invoke 578 0 Array
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
-	rstoreg 6 ta
-	-- ObjectGenerator:gen: super: ta := testArray(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
-	-- Invocation:gen: ta := testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin: ta := testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin:scan: ta
+	rstoreg 6 a
+	-- ObjectGenerator:gen: super: a := Array(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
+	-- Invocation:gen: a := Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin: a := Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin:scan: a
 	-- Unary:pushThis: 
 	pushThis 
-	-- Unary:loadOrigin: ta
+	-- Unary:loadOrigin: a
 	-- AdjustOrigin: 0
 	-- on : 0
-	-- Invocation:loadOrigin:scan: := testArray(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin:scan: := Array(2,RangeList(r1,RangeList(r2,none)))
 	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: testArray(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
-	-- Invocation:gen: testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,none)))
-	-- Invocation:loadOrigin:scan: testArray(2,RangeList(r1,RangeList(r2,none)))
+	-- ObjectGenerator:gen: super: Array(2,RangeList(r1,RangeList(r2,none))):IS-empty: staticOff: 0
+	-- Invocation:gen: Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin: Array(2,RangeList(r1,RangeList(r2,none)))
+	-- Invocation:loadOrigin:scan: Array(2,RangeList(r1,RangeList(r2,none)))
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: testArray(2,RangeList(r1,RangeList(r2,none)))
+	-- Function:loadOrigin: Array(2,RangeList(r1,RangeList(r2,none)))
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -6064,35 +6001,35 @@
 	pushNone
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Function:invoke: 
-	-- pattern:load: testArray(ndim: ? integer,ranges: ? RangeList)
-	invoke 569 0 testArray
+	-- pattern:load: Array(ndim: ? integer,ranges: ? RangeList)
+	invoke 578 0 Array
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
-	rstoreg 6 ta
-	-- ObjectGenerator:gen: super: ta := testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none))):IS-empty: staticOff: 0
-	-- Invocation:gen: ta := testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
-	-- Invocation:loadOrigin: ta := testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
-	-- Invocation:loadOrigin:scan: ta
+	rstoreg 6 a
+	-- ObjectGenerator:gen: super: a := Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none))):IS-empty: staticOff: 0
+	-- Invocation:gen: a := Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
+	-- Invocation:loadOrigin: a := Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
+	-- Invocation:loadOrigin:scan: a
 	-- Unary:pushThis: 
 	pushThis 
-	-- Unary:loadOrigin: ta
+	-- Unary:loadOrigin: a
 	-- AdjustOrigin: 0
 	-- on : 0
-	-- Invocation:loadOrigin:scan: := testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
+	-- Invocation:loadOrigin:scan: := Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
 	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none))):IS-empty: staticOff: 0
-	-- Invocation:gen: testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
-	-- Invocation:loadOrigin: testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
-	-- Invocation:loadOrigin:scan: testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
+	-- ObjectGenerator:gen: super: Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none))):IS-empty: staticOff: 0
+	-- Invocation:gen: Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
+	-- Invocation:loadOrigin: Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
+	-- Invocation:loadOrigin:scan: Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
 	-- Function:pushThis: 
 	pushThis 
-	-- Function:loadOrigin: testArray(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
+	-- Function:loadOrigin: Array(2,RangeList(Range(2,3),RangeList(Range(4,5),none)))
 	-- AdjustOrigin: 0
 	-- on : 0
 	-- Function:loadArgs: 
@@ -6145,7 +6082,7 @@
 	pushc 3
 	-- Function:invoke: 
 	-- pattern:load: Range(low: ? integer,upp: ? integer)
-	invoke 558 0 Range
+	invoke 567 0 Range
 	-- ObjectGenerator:gen: super: RangeList(Range(4,5),none):IS-empty: staticOff: 0
 	-- Invocation:gen: RangeList(Range(4,5),none)
 	-- Invocation:loadOrigin: RangeList(Range(4,5),none)
@@ -6186,7 +6123,7 @@
 	pushc 5
 	-- Function:invoke: 
 	-- pattern:load: Range(low: ? integer,upp: ? integer)
-	invoke 558 0 Range
+	invoke 567 0 Range
 	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
 	-- Invocation:gen: none
 	-- Invocation:loadOrigin: none
@@ -6199,17 +6136,17 @@
 	pushNone
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Function:invoke: 
 	-- pattern:load: RangeList(head: ? Range,tail: ? RangeList)
-	invoke 561 0 RangeList
+	invoke 570 0 RangeList
 	-- Function:invoke: 
-	-- pattern:load: testArray(ndim: ? integer,ranges: ? RangeList)
-	invoke 569 0 testArray
+	-- pattern:load: Array(ndim: ? integer,ranges: ? RangeList)
+	invoke 578 0 Array
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	rswap
-	rstoreg 6 ta
+	rstoreg 6 a
  L173:
 	rtnEventQ 0
 	setThisStack 
@@ -6217,7 +6154,7 @@
 	rtn(D)
 	end 1
 
-	class #S#728 728
+	class #S#775 775
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -6236,7 +6173,7 @@
 	-- Unary:loadOrigin: body
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#728:origin
+	rpushg 1 #S#775:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Unary:loadArgs: 
@@ -6253,7 +6190,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#728:origin
+	rpushg 1 #S#775:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Invocation:loadOrigin:scan: := inx + 1
@@ -6267,7 +6204,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#728:origin
+	rpushg 1 #S#775:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: + 1 :E: inx
@@ -6310,7 +6247,7 @@
 	rtn(D)
 	end 1
 
-	class #S#729 729
+	class #S#776 776
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -6338,7 +6275,7 @@
 	rtn(D)
 	end 1
 
-	class body#SB#730 730
+	class body#SB#777 777
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -6369,7 +6306,7 @@
 	-- Unary:loadOrigin: L
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#730:origin
+	rpushg 2 body#S#777:origin
 	rpushg 2 %for%to%%do%#S#70:origin
 	rpushg 1 doit:origin
 	-- next not assign: + 1 - inx :E: L
@@ -6400,7 +6337,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#730:origin
+	rpushg 2 body#S#777:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -6442,7 +6379,7 @@
 	-- Unary:loadOrigin: D
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#730:origin
+	rpushg 2 body#S#777:origin
 	rpushg 2 %for%to%%do%#S#70:origin
 	rpushg 1 doit:origin
 	-- next not assign: %get i :E: D
@@ -7520,7 +7457,7 @@
 	jmpFalse L204
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 734 0 #S#734
+	invoke 781 0 #S#781
 	rpop
  L204:
  L203:
@@ -7636,7 +7573,7 @@
 	jmpFalse L209
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 738 0 #S#738
+	invoke 785 0 #S#785
 	rpop
  L209:
  L208:
@@ -8078,7 +8015,7 @@
 	jmpFalse L226
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 757 0 #S#757
+	invoke 804 0 #S#804
 	rpop
  L226:
 	-- ObjectGenerator:gen: super: inner:IS-empty: staticOff: 0
@@ -9217,7 +9154,7 @@
 	jmpFalse L259
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 766 0 #S#766
+	invoke 813 0 #S#813
 	rpop
  L259:
  L258:
@@ -9292,7 +9229,7 @@
 	rtnInner
 	end 1
 
-	class #S#768 768
+	class #S#815 815
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -10369,7 +10306,7 @@
 	jmpFalse L290
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 744 0 #S#744
+	invoke 791 0 #S#791
 	rpop
  L290:
 	-- ObjectGenerator:gen: super: B := true:IS-empty: staticOff: 0
@@ -10551,7 +10488,118 @@
 	rtn(D)
 	end 1
 
-	class Range 558
+	class int2int 558
+	pushThis 
+	storeg 1 e
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	innerA  1
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L293:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %inner int2int:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner int2int
+	-- Invocation:loadOrigin: %inner int2int
+	-- Invocation:loadOrigin:scan: %inner int2int
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %inner int2int
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %inner P: ? Object%inner int2int
+	-- KeyWord:invoke: 
+	-- pattern:load: %inner P: ? Object
+	pushThis 
+	inner  1
+	rpopThisObj 
+ L294:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: val
+	pushg 2 val
+	rtn(D)
+	end 1
+
+	class intint2int 559
+	pushThis 
+	storeg 2 i2
+	pushThis 
+	storeg 1 i1
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	innerA  1
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L295:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %inner intint2int:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner intint2int
+	-- Invocation:loadOrigin: %inner intint2int
+	-- Invocation:loadOrigin:scan: %inner intint2int
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %inner intint2int
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %inner P: ? Object%inner intint2int
+	-- KeyWord:invoke: 
+	-- pattern:load: %inner P: ? Object
+	pushThis 
+	inner  1
+	rpopThisObj 
+ L296:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: val
+	pushg 3 val
+	rtn(D)
+	end 1
+
+	class IntList 560
+	pushThis 
+	rstoreg 2 tail
+	pushThis 
+	storeg 1 head
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- pattern:gen: first -> r: ? integer
+	-- pattern:gen: second -> r: ? integer
+	-- pattern:gen: scan
+	-- pattern:gen: length -> len: ? integer
+	innerA  1
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L297:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %inner IntList:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner IntList
+	-- Invocation:loadOrigin: %inner IntList
+	-- Invocation:loadOrigin:scan: %inner IntList
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %inner IntList
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %inner P: ? Object%inner IntList
+	-- KeyWord:invoke: 
+	-- pattern:load: %inner P: ? Object
+	pushThis 
+	inner  1
+	rpopThisObj 
+ L298:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class Range 567
 	pushThis 
 	storeg 2 upp
 	pushThis 
@@ -10620,7 +10668,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L293:
+ L299:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if noof < 1 %then% 
     "range error\n".print:IS-empty: staticOff: 0
@@ -10666,20 +10714,20 @@
 	-- Binary:invoke: 
 	-- pattern:load: < V: ? integer -> B: ? Boolean
 	51
-	jmpFalse L295
+	jmpFalse L301
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 862 0 #S#862
+	invoke 910 0 #S#910
 	rpop
- L295:
- L294:
+ L301:
+ L300:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class RangeList 561
+	class RangeList 570
 	pushThis 
 	rstoreg 3 tail
 	pushThis 
@@ -10697,7 +10745,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L296:
+ L302:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %inner RangeList:IS-empty: staticOff: 0
 	-- Invocation:gen: %inner RangeList
@@ -10712,14 +10760,14 @@
 	pushThis 
 	inner  1
 	rpopThisObj 
- L297:
+ L303:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class testArray 569
+	class Array 578
 	pushThis 
 	rstoreg 2 ranges
 	pushThis 
@@ -10727,13 +10775,246 @@
 	rstore 1 origin
 	allocEventQ
 	mvStack 
-	innerA  1
+	-- VarRef:gen: R1
+	-- VarRef:gen: R2
+	-- VarRef:gen: pos
+	-- VarRef:gen: noof
+	-- VarRef:gen: rep
+	-- pattern:gen: put(e: ? integer) -> res: ? Array
+	-- pattern:gen: get -> res: ? integer
+	-- pattern:gen: nxt -> res: ? integer
+	-- pattern:gen: prv -> res: ? integer
+	-- pattern:gen: putAt(inx: ? integer,exp: ? integer)
+	-- pattern:gen: getAt(inx: ? integer) -> res: ? integer
+	-- pattern:gen: putAtAt(inx1: ? integer,inx2: ? integer,exp: ? integer)
+	-- pattern:gen: getAtAt(inx1: ? integer,inx2: ? integer) -> exp: ? integer
+	-- pattern:gen: realPutAt(il: ? IntList,exp: ? integer)
+	-- pattern:gen: forAll
+	-- pattern:gen: forAllIndex
+	-- pattern:gen: fill(v: ? integer)
+	-- pattern:gen: zeroes
+	-- pattern:gen: ones
+	-- pattern:gen: sum -> s: ? integer
+	-- pattern:gen: iadd(a: ? Array)
+	-- pattern:gen: iminus(a: ? Array)
+	-- pattern:gen: imult(a: ? Array)
+	-- pattern:gen: idiv(a: ? Array)
+	-- pattern:gen: equal(a: ? Array) -> b: ? boolean
+	-- pattern:gen: countNonZero -> count: ? integer
+	-- pattern:gen: print
+	-- vdtAdd: inx=1 descInx=615
+	innerA  2
 	rtnEventQ 1
 	DO:
 	doEventQ
 	mvStack 
- L298:
+ L304:
 	-- Include:gen: 
+	-- ObjectGenerator:gen: super: R1 := ranges.first:IS-empty: staticOff: 0
+	-- Invocation:gen: R1 := ranges.first
+	-- Invocation:loadOrigin: R1 := ranges.first
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := ranges.first
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: ranges.first:IS-empty: staticOff: 0
+	-- Invocation:gen: ranges.first
+	-- Invocation:loadOrigin: ranges.first
+	-- Invocation:loadOrigin:scan: ranges
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: ranges
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: first :E: ranges
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: ranges
+	rpushg 2 ranges
+	-- Invocation:loadOrigin:scan: first
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: first -> r: ? Range
+	invoke 572 0 first
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	rswap
+	rstoreg 3 R1
+	-- ObjectGenerator:gen: super: R2 := ranges.second:IS-empty: staticOff: 0
+	-- Invocation:gen: R2 := ranges.second
+	-- Invocation:loadOrigin: R2 := ranges.second
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := ranges.second
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: ranges.second:IS-empty: staticOff: 0
+	-- Invocation:gen: ranges.second
+	-- Invocation:loadOrigin: ranges.second
+	-- Invocation:loadOrigin:scan: ranges
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: ranges
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: second :E: ranges
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: ranges
+	rpushg 2 ranges
+	-- Invocation:loadOrigin:scan: second
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: second -> r: ? Range
+	invoke 573 0 second
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	rswap
+	rstoreg 4 R2
+	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := 1
+	-- Invocation:loadOrigin: pos := 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+	-- ObjectGenerator:gen: super: noof := R1.noof * R2.noof:IS-empty: staticOff: 0
+	-- Invocation:gen: noof := R1.noof * R2.noof
+	-- Invocation:loadOrigin: noof := R1.noof * R2.noof
+	-- Invocation:loadOrigin:scan: noof
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: noof
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := R1.noof * R2.noof
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R1.noof * R2.noof:IS-empty: staticOff: 0
+	-- Invocation:gen: R1.noof * R2.noof
+	-- Invocation:loadOrigin: R1.noof * R2.noof
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: noof :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: noof
+	-- next not assign: * R2.noof :E: noof
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- ConsRef:load: noof
+	pushg 3 noof
+	-- Invocation:loadOrigin:scan: * R2.noof
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R2.noof:IS-empty: staticOff: 0
+	-- Invocation:gen: R2.noof
+	-- Invocation:loadOrigin: R2.noof
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: noof :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: noof
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- ConsRef:load: noof
+	pushg 3 noof
+	-- Binary:invoke: 
+	-- pattern:load: * V: ? integer -> R: ? integer
+	66
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 3 noof
+	-- ObjectGenerator:gen: super: rep := Indexed(noof,integer):IS-empty: staticOff: 0
+	-- Invocation:gen: rep := Indexed(noof,integer)
+	-- Invocation:loadOrigin: rep := Indexed(noof,integer)
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := Indexed(noof,integer)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: Indexed(noof,integer):IS-empty: staticOff: 0
+	-- Invocation:gen: Indexed(noof,integer)
+	-- Invocation:loadOrigin: Indexed(noof,integer)
+	-- Invocation:loadOrigin:scan: Indexed(noof,integer)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: Indexed(noof,integer)
+	-- AdjustOrigin: 0
+	-- on : 4
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: noof:IS-empty: staticOff: 0
+	-- Invocation:gen: noof
+	-- Invocation:loadOrigin: noof
+	-- Invocation:loadOrigin:scan: noof
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: noof
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: noof
+	pushg 3 noof
+	-- ObjectGenerator:gen: super: integer:IS-empty: staticOff: 0
+	-- Invocation:gen: integer
+	-- Invocation:loadOrigin: integer
+	-- Invocation:loadOrigin:scan: integer
+	-- Unary:pushThis: 
+	-- Unary:loadOrigin: integer
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: integer(W: ? integer)
+	-- Function:invoke: 
+	-- pattern:load: Indexed(range: ? Integer,elm:< Object)
+	pushc 0
+	pushc 1
+	allocIndexed 52 StaticRep asObj
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	rswap
+	rstoreg 5 rep
 	-- ObjectGenerator:gen: super: putint(ranges.first.low):IS-empty: staticOff: 0
 	-- Invocation:gen: putint(ranges.first.low)
 	-- Invocation:loadOrigin: putint(ranges.first.low)
@@ -10743,7 +11024,7 @@
 	-- Function:loadOrigin: putint(ranges.first.low)
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 testArray:origin
+	rpushg 1 Array:origin
 	rpushg 1 RangeList:origin
 	rpushg 1 ArrayDemos:origin
 	rpushg 1 demo:origin
@@ -10767,7 +11048,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: first -> r: ? Range
-	invoke 563 0 first
+	invoke 572 0 first
 	-- Invocation:loadOrigin:scan: low
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -10802,7 +11083,7 @@
 	-- Function:loadOrigin: putint(ranges.first.upp)
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 testArray:origin
+	rpushg 1 Array:origin
 	rpushg 1 RangeList:origin
 	rpushg 1 ArrayDemos:origin
 	rpushg 1 demo:origin
@@ -10826,7 +11107,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: first -> r: ? Range
-	invoke 563 0 first
+	invoke 572 0 first
 	-- Invocation:loadOrigin:scan: upp
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -10845,7 +11126,7 @@
 	-- Unary:loadOrigin: newline
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 testArray:origin
+	rpushg 1 Array:origin
 	rpushg 1 RangeList:origin
 	rpushg 1 ArrayDemos:origin
 	rpushg 1 demo:origin
@@ -10863,7 +11144,7 @@
 	-- Function:loadOrigin: putint(ranges.second.low)
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 testArray:origin
+	rpushg 1 Array:origin
 	rpushg 1 RangeList:origin
 	rpushg 1 ArrayDemos:origin
 	rpushg 1 demo:origin
@@ -10887,7 +11168,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: second -> r: ? Range
-	invoke 564 0 second
+	invoke 573 0 second
 	-- Invocation:loadOrigin:scan: low
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -10922,7 +11203,7 @@
 	-- Function:loadOrigin: putint(ranges.second.upp)
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 testArray:origin
+	rpushg 1 Array:origin
 	rpushg 1 RangeList:origin
 	rpushg 1 ArrayDemos:origin
 	rpushg 1 demo:origin
@@ -10946,7 +11227,7 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: second -> r: ? Range
-	invoke 564 0 second
+	invoke 573 0 second
 	-- Invocation:loadOrigin:scan: upp
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -10965,7 +11246,7 @@
 	-- Unary:loadOrigin: newline
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 testArray:origin
+	rpushg 1 Array:origin
 	rpushg 1 RangeList:origin
 	rpushg 1 ArrayDemos:origin
 	rpushg 1 demo:origin
@@ -10974,20 +11255,20 @@
 	-- pattern:load: newline
 	invoke 66 0 newline
 	rpop
-	-- ObjectGenerator:gen: super: %inner testArray:IS-empty: staticOff: 0
-	-- Invocation:gen: %inner testArray
-	-- Invocation:loadOrigin: %inner testArray
-	-- Invocation:loadOrigin:scan: %inner testArray
+	-- ObjectGenerator:gen: super: %inner Array:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner Array
+	-- Invocation:loadOrigin: %inner Array
+	-- Invocation:loadOrigin:scan: %inner Array
 	-- KeyWord:pushThis: 
-	-- KeyWord:loadOrigin: %inner testArray
+	-- KeyWord:loadOrigin: %inner Array
 	-- KeyWord:loadArgs: 
-	-- pattern:loadArgs: %inner P: ? Object%inner testArray
+	-- pattern:loadArgs: %inner P: ? Object%inner Array
 	-- KeyWord:invoke: 
 	-- pattern:load: %inner P: ? Object
 	pushThis 
-	inner  1
+	inner  2
 	rpopThisObj 
- L299:
+ L305:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11002,7 +11283,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L300:
+ L306:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: disable:IS-empty: staticOff: 0
 	-- Invocation:gen: disable
@@ -11141,13 +11422,13 @@
 	-- Binary:invoke: 
 	-- pattern:load: = V: ? integer -> B: ? Boolean
 	eq
-	jmpFalse L302
+	jmpFalse L308
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 751 0 #S#751
+	invoke 798 0 #S#798
 	rpop
- L302:
- L301:
+ L308:
+ L307:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11162,7 +11443,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L303:
+ L309:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: inScheduler := 1:IS-empty: staticOff: 0
 	-- Invocation:gen: inScheduler := 1
@@ -11305,12 +11586,12 @@
 	-- Binary:invoke: 
 	-- pattern:load: <> obj: ? Object -> V: ? Boolean
 	rne
-	jmpFalse L305
+	jmpFalse L311
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 752 0 #S#752
+	invoke 799 0 #S#799
 	rpop
- L305:
+ L311:
 	-- ObjectGenerator:gen: super: %if SQS.isEmpty %then% 
     %if SQS.hasWaiting %then% 
     sleep(100)
@@ -11324,7 +11605,7 @@
 	pushThis 
 	invoke 130 0 %if%then%%else%#S#130
 	rpop
- L304:
+ L310:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11339,7 +11620,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L306:
+ L312:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if main <> none %then% 
     main.resume %else% 
@@ -11348,7 +11629,7 @@
 	pushThis 
 	invoke 135 0 %if%then%%else%#S#135
 	rpop
- L307:
+ L313:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11367,9 +11648,9 @@
 	rtnEventQ 0
 	DO:
 	mvStack 
- L308:
+ L314:
 	-- Include:gen: 
- L309:
+ L315:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11388,16 +11669,16 @@
 	rtnEventQ 0
 	DO:
 	mvStack 
- L310:
+ L316:
 	-- Include:gen: 
- L311:
+ L317:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#734 734
+	class #S#781 781
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -11405,7 +11686,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L312:
+ L318:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: E := Element(elm):IS-empty: staticOff: 0
 	-- Invocation:gen: E := Element(elm)
@@ -11416,7 +11697,7 @@
 	-- Unary:loadOrigin: E
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 1 #S#734:origin
+	rpushg 1 #S#781:origin
 	-- Invocation:loadOrigin:scan: := Element(elm)
 	-- Binary:loadArgs: 
 	-- ObjectGenerator:gen: super: Element(elm):IS-empty: staticOff: 0
@@ -11428,7 +11709,7 @@
 	-- Function:loadOrigin: Element(elm)
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#734:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- Function:loadArgs: 
 	-- ObjectGenerator:gen: super: elm:IS-empty: staticOff: 0
@@ -11440,7 +11721,7 @@
 	-- Unary:loadOrigin: elm
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 1 #S#734:origin
+	rpushg 1 #S#781:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: elm
@@ -11459,9 +11740,9 @@
     head.pred := E
     head := E:IS-empty: staticOff: 0
 	pushThis 
-	invoke 735 0 %if%then%%else%#S#735
+	invoke 782 0 %if%then%%else%#S#782
 	rpop
- L313:
+ L319:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11489,7 +11770,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L314:
+ L320:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if elm = current %then% 
     %if currentElement.pred <> none %then% 
@@ -11588,17 +11869,17 @@
 	-- Binary:invoke: 
 	-- pattern:load: = obj: ? Object -> V: ? Boolean
 	req
-	jmpFalse L316
+	jmpFalse L322
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 736 0 #S#736
+	invoke 783 0 #S#783
 	rpop
- L316:
- L315:
+ L322:
+ L321:
 	rtnInner
 	end 1
 
-	class #S#738 738
+	class #S#785 785
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -11606,7 +11887,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L317:
+ L323:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: elm := last.elm:IS-empty: staticOff: 0
 	-- Invocation:gen: elm := last.elm
@@ -11617,7 +11898,7 @@
 	-- Unary:loadOrigin: elm
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 1 #S#738:origin
+	rpushg 1 #S#785:origin
 	-- Invocation:loadOrigin:scan: := last.elm
 	-- Binary:loadArgs: 
 	-- ObjectGenerator:gen: super: last.elm:IS-empty: staticOff: 0
@@ -11629,7 +11910,7 @@
 	-- Unary:loadOrigin: last
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#738:origin
+	rpushg 1 #S#785:origin
 	rpushg 1 removeNext:origin
 	-- next not assign: elm :E: last
 	-- Unary:loadArgs: 
@@ -11654,7 +11935,7 @@
 	-- Unary:loadOrigin: last
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#738:origin
+	rpushg 1 #S#785:origin
 	rpushg 1 removeNext:origin
 	-- Invocation:loadOrigin:scan: := last.pred
 	-- Binary:loadArgs: 
@@ -11667,7 +11948,7 @@
 	-- Unary:loadOrigin: last
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#738:origin
+	rpushg 1 #S#785:origin
 	rpushg 1 removeNext:origin
 	-- next not assign: pred :E: last
 	-- Unary:loadArgs: 
@@ -11687,9 +11968,9 @@
     last.succ := none %else% 
     head := none:IS-empty: staticOff: 0
 	pushThis 
-	invoke 739 0 %if%then%%else%#S#739
+	invoke 786 0 %if%then%%else%#S#786
 	rpop
- L318:
+ L324:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11717,7 +11998,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L319:
+ L325:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: M := M + 1:IS-empty: staticOff: 0
 	-- Invocation:gen: M := M + 1
@@ -11765,7 +12046,7 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 M
- L320:
+ L326:
 	rtnInner
 	end 1
 
@@ -11790,7 +12071,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L321:
+ L327:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: M := M - 1:IS-empty: staticOff: 0
 	-- Invocation:gen: M := M - 1
@@ -11838,7 +12119,7 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 M
- L322:
+ L328:
 	rtnInner
 	end 1
 
@@ -11863,7 +12144,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L323:
+ L329:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: B := M > 0:IS-empty: staticOff: 0
 	-- Invocation:gen: B := M > 0
@@ -11910,11 +12191,11 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 B
- L324:
+ L330:
 	rtnInner
 	end 1
 
-	class #S#757 757
+	class #S#804 804
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -11922,7 +12203,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L325:
+ L331:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: put('V'):IS-empty: staticOff: 0
 	-- Invocation:gen: put('V')
@@ -11943,7 +12224,7 @@
 	-- Function:invoke: 
 	-- pattern:load: put(ch: ? char)
 	%put 2
- L326:
+ L332:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -11971,7 +12252,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L327:
+ L333:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: P := Q.removeNext:IS-empty: staticOff: 0
 	-- Invocation:gen: P := Q.removeNext
@@ -12010,7 +12291,7 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 2 P
- L328:
+ L334:
 	rtnInner
 	end 1
 
@@ -12035,7 +12316,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L329:
+ L335:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: B := Q.isEmpty:IS-empty: staticOff: 0
 	-- Invocation:gen: B := Q.isEmpty
@@ -12073,7 +12354,7 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 B
- L330:
+ L336:
 	rtnInner
 	end 1
 
@@ -12098,7 +12379,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L331:
+ L337:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: B := W > 0:IS-empty: staticOff: 0
 	-- Invocation:gen: B := W > 0
@@ -12145,162 +12426,11 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 B
- L332:
+ L338:
 	rtnInner
 	end 1
 
-	class thenPart#SB#758 758
-	rstore 2 origin
-	allocEventQ
-	mvStack 
-	rtnEventQ 1
-	DO:
-	doEventQ
-	mvStack 
- L333:
-	-- Include:gen: 
-	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
-	-- Invocation:gen: pos := 1
-	-- Invocation:loadOrigin: pos := 1
-	-- Invocation:loadOrigin:scan: pos
-	-- Unary:pushThis: 
-	pushThis 
-	-- Unary:loadOrigin: pos
-	-- AdjustOrigin: 0
-	-- on : 3
-	rpushg 2 thenPart#S#758:origin
-	rpushg 3 %if%then%%else%#S#175:origin
-	rpushg 1 put:origin
-	-- Invocation:loadOrigin:scan: := 1
-	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
-	-- Invocation:gen: 1
-	-- Invocation:loadOrigin: 1
-	-- Invocation:loadOrigin:scan: 1
-	-- Const::pushThis: 
-	-- Const::loadOrigin: 
-	-- Const::loadArgs: 
-	-- Const::invoke: 
-	pushc 1
-	-- Binary:invoke: 
-	-- pattern:load: := V: ? Object
-	storeg 1 pos
- L334:
-	rtnEventQ 0
-	setThisStack 
-	pushThis 
-	rtn(D)
-	end 1
-
-	class elsePart#SB#759 759
-	rstore 2 origin
-	allocEventQ
-	mvStack 
-	rtnEventQ 1
-	DO:
-	doEventQ
-	mvStack 
- L335:
-	-- Include:gen: 
-	-- ObjectGenerator:gen: super: pos := pos + 1:IS-empty: staticOff: 0
-	-- Invocation:gen: pos := pos + 1
-	-- Invocation:loadOrigin: pos := pos + 1
-	-- Invocation:loadOrigin:scan: pos
-	-- Unary:pushThis: 
-	pushThis 
-	-- Unary:loadOrigin: pos
-	-- AdjustOrigin: 0
-	-- on : 3
-	rpushg 2 elsePart#S#759:origin
-	rpushg 3 %if%then%%else%#S#175:origin
-	rpushg 1 put:origin
-	-- Invocation:loadOrigin:scan: := pos + 1
-	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
-	-- Invocation:gen: pos + 1
-	-- Invocation:loadOrigin: pos + 1
-	-- Invocation:loadOrigin:scan: pos
-	-- Unary:pushThis: 
-	pushThis 
-	-- Unary:loadOrigin: pos
-	-- AdjustOrigin: 0
-	-- on : 3
-	rpushg 2 elsePart#S#759:origin
-	rpushg 3 %if%then%%else%#S#175:origin
-	rpushg 1 put:origin
-	-- next not assign: + 1 :E: pos
-	-- Unary:loadArgs: 
-	-- Unary:invoke: 
-	-- VarRef:load: pos
-	pushg 1 pos
-	-- Invocation:loadOrigin:scan: + 1
-	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
-	-- Invocation:gen: 1
-	-- Invocation:loadOrigin: 1
-	-- Invocation:loadOrigin:scan: 1
-	-- Const::pushThis: 
-	-- Const::loadOrigin: 
-	-- Const::loadArgs: 
-	-- Const::invoke: 
-	pushc 1
-	-- Binary:invoke: 
-	-- pattern:load: + V: ? integer -> R: ? integer
-	plus
-	-- Binary:invoke: 
-	-- pattern:load: := V: ? Object
-	storeg 1 pos
- L336:
-	rtnEventQ 0
-	setThisStack 
-	pushThis 
-	rtn(D)
-	end 1
-
-	class thenPart#SB#760 760
-	rstore 2 origin
-	allocEventQ
-	mvStack 
-	rtnEventQ 1
-	DO:
-	doEventQ
-	mvStack 
- L337:
-	-- Include:gen: 
-	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
-	-- Invocation:gen: pos := 1
-	-- Invocation:loadOrigin: pos := 1
-	-- Invocation:loadOrigin:scan: pos
-	-- Unary:pushThis: 
-	pushThis 
-	-- Unary:loadOrigin: pos
-	-- AdjustOrigin: 0
-	-- on : 3
-	rpushg 2 thenPart#S#760:origin
-	rpushg 3 %if%then%%else%#S#177:origin
-	rpushg 1 get:origin
-	-- Invocation:loadOrigin:scan: := 1
-	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
-	-- Invocation:gen: 1
-	-- Invocation:loadOrigin: 1
-	-- Invocation:loadOrigin:scan: 1
-	-- Const::pushThis: 
-	-- Const::loadOrigin: 
-	-- Const::loadArgs: 
-	-- Const::invoke: 
-	pushc 1
-	-- Binary:invoke: 
-	-- pattern:load: := V: ? Object
-	storeg 1 pos
- L338:
-	rtnEventQ 0
-	setThisStack 
-	pushThis 
-	rtn(D)
-	end 1
-
-	class elsePart#SB#761 761
+	class thenPart#SB#805 805
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12310,38 +12440,19 @@
 	mvStack 
  L339:
 	-- Include:gen: 
-	-- ObjectGenerator:gen: super: pos := pos + 1:IS-empty: staticOff: 0
-	-- Invocation:gen: pos := pos + 1
-	-- Invocation:loadOrigin: pos := pos + 1
+	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := 1
+	-- Invocation:loadOrigin: pos := 1
 	-- Invocation:loadOrigin:scan: pos
 	-- Unary:pushThis: 
 	pushThis 
 	-- Unary:loadOrigin: pos
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#761:origin
-	rpushg 3 %if%then%%else%#S#177:origin
-	rpushg 1 get:origin
-	-- Invocation:loadOrigin:scan: := pos + 1
-	-- Binary:loadArgs: 
-	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
-	-- Invocation:gen: pos + 1
-	-- Invocation:loadOrigin: pos + 1
-	-- Invocation:loadOrigin:scan: pos
-	-- Unary:pushThis: 
-	pushThis 
-	-- Unary:loadOrigin: pos
-	-- AdjustOrigin: 0
-	-- on : 3
-	rpushg 2 elsePart#S#761:origin
-	rpushg 3 %if%then%%else%#S#177:origin
-	rpushg 1 get:origin
-	-- next not assign: + 1 :E: pos
-	-- Unary:loadArgs: 
-	-- Unary:invoke: 
-	-- VarRef:load: pos
-	pushg 1 pos
-	-- Invocation:loadOrigin:scan: + 1
+	rpushg 2 thenPart#S#805:origin
+	rpushg 3 %if%then%%else%#S#175:origin
+	rpushg 1 put:origin
+	-- Invocation:loadOrigin:scan: := 1
 	-- Binary:loadArgs: 
 	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
 	-- Invocation:gen: 1
@@ -12352,9 +12463,6 @@
 	-- Const::loadArgs: 
 	-- Const::invoke: 
 	pushc 1
-	-- Binary:invoke: 
-	-- pattern:load: + V: ? integer -> R: ? integer
-	plus
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 pos
@@ -12365,7 +12473,7 @@
 	rtn(D)
 	end 1
 
-	class thenPart#SB#762 762
+	class elsePart#SB#806 806
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12374,6 +12482,179 @@
 	doEventQ
 	mvStack 
  L341:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := pos + 1
+	-- Invocation:loadOrigin: pos := pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#806:origin
+	rpushg 3 %if%then%%else%#S#175:origin
+	rpushg 1 put:origin
+	-- Invocation:loadOrigin:scan: := pos + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos + 1
+	-- Invocation:loadOrigin: pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#806:origin
+	rpushg 3 %if%then%%else%#S#175:origin
+	rpushg 1 put:origin
+	-- next not assign: + 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 1 pos
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 pos
+ L342:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class thenPart#SB#807 807
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L343:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := 1
+	-- Invocation:loadOrigin: pos := 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 thenPart#S#807:origin
+	rpushg 3 %if%then%%else%#S#177:origin
+	rpushg 1 get:origin
+	-- Invocation:loadOrigin:scan: := 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 pos
+ L344:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class elsePart#SB#808 808
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L345:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := pos + 1
+	-- Invocation:loadOrigin: pos := pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#808:origin
+	rpushg 3 %if%then%%else%#S#177:origin
+	rpushg 1 get:origin
+	-- Invocation:loadOrigin:scan: := pos + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos + 1
+	-- Invocation:loadOrigin: pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#808:origin
+	rpushg 3 %if%then%%else%#S#177:origin
+	rpushg 1 get:origin
+	-- next not assign: + 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 1 pos
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 pos
+ L346:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class thenPart#SB#809 809
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L347:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: res := 9999999:IS-empty: staticOff: 0
 	-- Invocation:gen: res := 9999999
@@ -12384,7 +12665,7 @@
 	-- Unary:loadOrigin: res
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#762:origin
+	rpushg 2 thenPart#S#809:origin
 	rpushg 3 %if%then%%else%#S#179:origin
 	-- Invocation:loadOrigin:scan: := 9999999
 	-- Binary:loadArgs: 
@@ -12401,14 +12682,14 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 res
- L342:
+ L348:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#763 763
+	class elsePart#SB#810 810
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12416,7 +12697,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L343:
+ L349:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: res := rep.%get pos + 1:IS-empty: staticOff: 0
 	-- Invocation:gen: res := rep.%get pos + 1
@@ -12427,7 +12708,7 @@
 	-- Unary:loadOrigin: res
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 elsePart#S#763:origin
+	rpushg 2 elsePart#S#810:origin
 	rpushg 3 %if%then%%else%#S#179:origin
 	-- Invocation:loadOrigin:scan: := rep.%get pos + 1
 	-- Binary:loadArgs: 
@@ -12440,7 +12721,7 @@
 	-- Unary:loadOrigin: rep
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#763:origin
+	rpushg 2 elsePart#S#810:origin
 	rpushg 3 %if%then%%else%#S#179:origin
 	rpushg 1 nxt:origin
 	-- next not assign: %get pos + 1 :E: rep
@@ -12463,7 +12744,7 @@
 	-- Unary:loadOrigin: pos
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#763:origin
+	rpushg 2 elsePart#S#810:origin
 	rpushg 3 %if%then%%else%#S#179:origin
 	rpushg 1 nxt:origin
 	-- next not assign: + 1 :E: pos
@@ -12489,14 +12770,14 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 res
- L344:
+ L350:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#764 764
+	class thenPart#SB#811 811
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12504,7 +12785,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L345:
+ L351:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: res := 9999999:IS-empty: staticOff: 0
 	-- Invocation:gen: res := 9999999
@@ -12515,7 +12796,7 @@
 	-- Unary:loadOrigin: res
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#764:origin
+	rpushg 2 thenPart#S#811:origin
 	rpushg 3 %if%then%%else%#S#181:origin
 	-- Invocation:loadOrigin:scan: := 9999999
 	-- Binary:loadArgs: 
@@ -12532,14 +12813,14 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 res
- L346:
+ L352:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#765 765
+	class elsePart#SB#812 812
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12547,7 +12828,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L347:
+ L353:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: res := rep.%get pos - 1:IS-empty: staticOff: 0
 	-- Invocation:gen: res := rep.%get pos - 1
@@ -12558,7 +12839,7 @@
 	-- Unary:loadOrigin: res
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 elsePart#S#765:origin
+	rpushg 2 elsePart#S#812:origin
 	rpushg 3 %if%then%%else%#S#181:origin
 	-- Invocation:loadOrigin:scan: := rep.%get pos - 1
 	-- Binary:loadArgs: 
@@ -12571,7 +12852,7 @@
 	-- Unary:loadOrigin: rep
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#765:origin
+	rpushg 2 elsePart#S#812:origin
 	rpushg 3 %if%then%%else%#S#181:origin
 	rpushg 1 prv:origin
 	-- next not assign: %get pos - 1 :E: rep
@@ -12594,7 +12875,7 @@
 	-- Unary:loadOrigin: pos
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#765:origin
+	rpushg 2 elsePart#S#812:origin
 	rpushg 3 %if%then%%else%#S#181:origin
 	rpushg 1 prv:origin
 	-- next not assign: - 1 :E: pos
@@ -12620,14 +12901,14 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 res
- L348:
+ L354:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#766 766
+	class #S#813 813
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -12635,7 +12916,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L349:
+ L355:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %restart loop:IS-empty: staticOff: 0
 	-- Invocation:gen: %restart loop
@@ -12648,14 +12929,14 @@
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
 	break 1 257
- L350:
+ L356:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class body#SB#767 767
+	class body#SB#814 814
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -12663,7 +12944,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L351:
+ L357:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: putint(rep.%get inx):IS-empty: staticOff: 0
 	-- Invocation:gen: putint(rep.%get inx)
@@ -12674,7 +12955,7 @@
 	-- Function:loadOrigin: putint(rep.%get inx)
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 body#S#767:origin
+	rpushg 2 body#S#814:origin
 	rpushg 2 %for%to%%do%#S#185:origin
 	rpushg 1 print:origin
 	rpushg 1 Array:origin
@@ -12689,7 +12970,7 @@
 	-- Unary:loadOrigin: rep
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#767:origin
+	rpushg 2 body#S#814:origin
 	rpushg 2 %for%to%%do%#S#185:origin
 	rpushg 1 print:origin
 	-- next not assign: %get inx :E: rep
@@ -12712,7 +12993,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#767:origin
+	rpushg 2 body#S#814:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -12738,7 +13019,7 @@
 	-- pattern:load: print
 	invoke 107 0 print
 	rpop
- L352:
+ L358:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -12755,7 +13036,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L353:
+ L359:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: sleep(100):IS-empty: staticOff: 0
 	-- Invocation:gen: sleep(100)
@@ -12841,12 +13122,12 @@
 	-- Unary:invoke: 
 	-- VarRef:load: continue
 	pushg 1 continue
-	jmpFalse L355
+	jmpFalse L361
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 786 0 #S#786
+	invoke 833 0 #S#833
 	rpop
- L355:
+ L361:
 	-- ObjectGenerator:gen: super: Q.clear:IS-empty: staticOff: 0
 	-- Invocation:gen: Q.clear
 	-- Invocation:loadOrigin: Q.clear
@@ -12869,7 +13150,7 @@
 	-- pattern:load: clear
 	invoke 95 0 clear
 	rpop
- L354:
+ L360:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -12957,8 +13238,8 @@
 	rtnInner
 	DO:
 	mvStack 
- L356:
- L357:
+ L362:
+ L363:
 	rtnInner
 	end 1
 
@@ -13039,8 +13320,8 @@
 	rtnInner
 	DO:
 	mvStack 
- L358:
- L359:
+ L364:
+ L365:
 	rtnInner
 	end 1
 
@@ -13052,7 +13333,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L360:
+ L366:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %inner wait:IS-empty: staticOff: 0
 	-- Invocation:gen: %inner wait
@@ -13134,13 +13415,13 @@
 	-- Binary:invoke: 
 	-- pattern:load: = B: ? Boolean -> R: ? Boolean
 	eq
-	jmpFalse L362
+	jmpFalse L368
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 791 0 #S#791
+	invoke 838 0 #S#838
 	rpop
- L362:
- L361:
+ L368:
+ L367:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -13202,8 +13483,8 @@
 	rtnInner
 	DO:
 	mvStack 
- L363:
- L364:
+ L369:
+ L370:
 	rtnInner
 	end 1
 
@@ -13272,12 +13553,12 @@
 	rtnInner
 	DO:
 	mvStack 
- L365:
- L366:
+ L371:
+ L372:
 	rtnInner
 	end 1
 
-	class body#SB#742 742
+	class body#SB#789 789
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -13285,7 +13566,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L367:
+ L373:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: current := %get inx:IS-empty: staticOff: 0
 	-- Invocation:gen: current := %get inx
@@ -13296,7 +13577,7 @@
 	-- Unary:loadOrigin: current
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#742:origin
+	rpushg 2 body#S#789:origin
 	rpushg 2 %for%to%%do%#S#106:origin
 	-- Invocation:loadOrigin:scan: := %get inx
 	-- Binary:loadArgs: 
@@ -13309,7 +13590,7 @@
 	-- KeyWord:loadOrigin: %get inx
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#742:origin
+	rpushg 2 body#S#789:origin
 	rpushg 2 %for%to%%do%#S#106:origin
 	rpushg 1 scan:origin
 	-- KeyWord:loadArgs: 
@@ -13326,7 +13607,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#742:origin
+	rpushg 2 body#S#789:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -13346,18 +13627,18 @@
 	-- KeyWord:invoke: 
 	-- pattern:load: %inner P: ? Object
 	pushThis 
-	rpushg 2 body#S#742:origin
+	rpushg 2 body#S#789:origin
 	rpushg 2 %for%to%%do%#S#106:origin
 	inner  1
 	rpopThisObj 
- L368:
+ L374:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class body#SB#743 743
+	class body#SB#790 790
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -13365,7 +13646,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L369:
+ L375:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: put(%get inx):IS-empty: staticOff: 0
 	-- Invocation:gen: put(%get inx)
@@ -13383,7 +13664,7 @@
 	-- KeyWord:loadOrigin: %get inx
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#743:origin
+	rpushg 2 body#S#790:origin
 	rpushg 2 %for%to%%do%#S#108:origin
 	rpushg 1 print:origin
 	-- KeyWord:loadArgs: 
@@ -13400,7 +13681,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#743:origin
+	rpushg 2 body#S#790:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -13409,14 +13690,14 @@
 	-- Function:invoke: 
 	-- pattern:load: put(ch: ? char)
 	%put 2
- L370:
+ L376:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#744 744
+	class #S#791 791
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13424,7 +13705,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L371:
+ L377:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %leave loop:IS-empty: staticOff: 0
 	-- Invocation:gen: %leave loop
@@ -13437,7 +13718,7 @@
 	-- KeyWord:invoke: 
 	-- pattern:load: %leave Obj: ? integer
 	break 1 289
- L372:
+ L378:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -13512,8 +13793,8 @@
 	rtnInner
 	DO:
 	mvStack 
- L373:
- L374:
+ L379:
+ L380:
 	rtnInner
 	end 1
 
@@ -13537,9 +13818,9 @@
 	rtnEventQ 0
 	DO:
 	mvStack 
- L375:
+ L381:
 	-- Include:gen: 
- L376:
+ L382:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -13611,12 +13892,249 @@
 	rtnInner
 	DO:
 	mvStack 
- L377:
- L378:
+ L383:
+ L384:
 	rtnInner
 	end 1
 
-	class check 559
+	class first 561
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L385:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: r := head:IS-empty: staticOff: 0
+	-- Invocation:gen: r := head
+	-- Invocation:loadOrigin: r := head
+	-- Invocation:loadOrigin:scan: r
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: r
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := head
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: head:IS-empty: staticOff: 0
+	-- Invocation:gen: head
+	-- Invocation:loadOrigin: head
+	-- Invocation:loadOrigin:scan: head
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: head
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 first:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: head
+	pushg 1 head
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 r
+ L386:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: r
+	pushg 1 r
+	rtn(D)
+	end 1
+
+	class second 562
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L387:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: r := tail.head:IS-empty: staticOff: 0
+	-- Invocation:gen: r := tail.head
+	-- Invocation:loadOrigin: r := tail.head
+	-- Invocation:loadOrigin:scan: r
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: r
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := tail.head
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: tail.head:IS-empty: staticOff: 0
+	-- Invocation:gen: tail.head
+	-- Invocation:loadOrigin: tail.head
+	-- Invocation:loadOrigin:scan: tail
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: tail
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 second:origin
+	-- next not assign: head :E: tail
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: tail
+	rpushg 2 tail
+	-- Invocation:loadOrigin:scan: head
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: head
+	pushg 1 head
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 r
+ L388:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: r
+	pushg 1 r
+	rtn(D)
+	end 1
+
+	class scan 563
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- VarRef:gen: current
+	-- VarRef:gen: L
+	-- pattern:gen: loop
+	innerA  1
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L389:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: L := %this IntList:IS-empty: staticOff: 0
+	-- Invocation:gen: L := %this IntList
+	-- Invocation:loadOrigin: L := %this IntList
+	-- Invocation:loadOrigin:scan: L
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: L
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := %this IntList
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: %this IntList:IS-empty: staticOff: 0
+	-- Invocation:gen: %this IntList
+	-- Invocation:loadOrigin: %this IntList
+	-- Invocation:loadOrigin:scan: %this IntList
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %this IntList
+	-- AdjustOrigin: 0
+	rpushg 1 scan:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %this P: ? Object%this IntList
+	-- KeyWord:invoke: 
+	-- pattern:load: %this P: ? Object
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	rswap
+	rstoreg 2 L
+	-- ObjectGenerator:gen: super: current := head:IS-empty: staticOff: 0
+	-- Invocation:gen: current := head
+	-- Invocation:loadOrigin: current := head
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := head
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: head:IS-empty: staticOff: 0
+	-- Invocation:gen: head
+	-- Invocation:loadOrigin: head
+	-- Invocation:loadOrigin:scan: head
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: head
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 scan:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: head
+	pushg 1 head
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 current
+	-- ObjectGenerator:gen: super: loop:IS-empty: staticOff: 0
+	-- Invocation:gen: loop
+	-- Invocation:loadOrigin: loop
+	-- Invocation:loadOrigin:scan: loop
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: loop
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: loop
+	invoke 564 0 loop
+	rpop
+ L390:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class length 565
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L391:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: len := 0:IS-empty: staticOff: 0
+	-- Invocation:gen: len := 0
+	-- Invocation:loadOrigin: len := 0
+	-- Invocation:loadOrigin:scan: len
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: len
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := 0
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 0:IS-empty: staticOff: 0
+	-- Invocation:gen: 0
+	-- Invocation:loadOrigin: 0
+	-- Invocation:loadOrigin:scan: 0
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 0
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 len
+	-- ObjectGenerator:gen: super: scan:singular:staticOff: 0
+	pushThis 
+	invoke 566 0 scan#S#566
+	rpop
+ L392:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: len
+	pushg 1 len
+	rtn(D)
+	end 1
+
+	class check 568
 	pushThis 
 	storeg 1 inx
 	rstore 1 origin
@@ -13626,7 +14144,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L379:
+ L393:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if (inx < low) || (inx > upp) %then% 
     "index error in range".print:IS-empty: staticOff: 0
@@ -13726,20 +14244,20 @@
 	-- Binary:invoke: 
 	-- pattern:load: || B: ? Boolean -> R: ? Boolean
 	63
-	jmpFalse L381
+	jmpFalse L395
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 861 0 #S#861
+	invoke 909 0 #S#909
 	rpop
- L381:
- L380:
+ L395:
+ L394:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class print 560
+	class print 569
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13747,7 +14265,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L382:
+ L396:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: putint(low):IS-empty: staticOff: 0
 	-- Invocation:gen: putint(low)
@@ -13834,14 +14352,14 @@
 	-- pattern:load: putint(V: ? integer)
 	invoke 67 0 putint
 	rpop
- L383:
+ L397:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#862 862
+	class #S#910 910
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13849,7 +14367,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L384:
+ L398:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: "range error\n".print:IS-empty: staticOff: 0
 	-- Invocation:gen: "range error\n".print
@@ -13867,14 +14385,14 @@
 	-- pattern:load: print
 	invoke 107 0 print
 	rpop
- L385:
+ L399:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class empty 562
+	class empty 571
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13883,7 +14401,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L386:
+ L400:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: b := (head = none):IS-empty: staticOff: 0
 	-- Invocation:gen: b := (head = none)
@@ -13947,7 +14465,7 @@
 	pushThis 
 	inner  1
 	rpopThisObj 
- L387:
+ L401:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -13956,7 +14474,7 @@
 	rtn(D)
 	end 1
 
-	class first 563
+	class first 572
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -13964,7 +14482,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L388:
+ L402:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: r := head:IS-empty: staticOff: 0
 	-- Invocation:gen: r := head
@@ -13995,7 +14513,7 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 2 r
- L389:
+ L403:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -14004,7 +14522,7 @@
 	rtn(D)
 	end 1
 
-	class second 564
+	class second 573
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14012,7 +14530,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L390:
+ L404:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: r := tail.head:IS-empty: staticOff: 0
 	-- Invocation:gen: r := tail.head
@@ -14049,7 +14567,7 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 2 r
- L391:
+ L405:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -14058,7 +14576,7 @@
 	rtn(D)
 	end 1
 
-	class scan 565
+	class scan 574
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14070,7 +14588,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L392:
+ L406:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: L := %this RangeList:IS-empty: staticOff: 0
 	-- Invocation:gen: L := %this RangeList
@@ -14141,16 +14659,16 @@
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- pattern:load: loop
-	invoke 566 0 loop
+	invoke 575 0 loop
 	rpop
- L393:
+ L407:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class length 567
+	class length 576
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14158,7 +14676,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L394:
+ L408:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: len := 0:IS-empty: staticOff: 0
 	-- Invocation:gen: len := 0
@@ -14185,9 +14703,9 @@
 	storeg 1 len
 	-- ObjectGenerator:gen: super: scan:singular:staticOff: 0
 	pushThis 
-	invoke 568 0 scan#S#568
+	invoke 577 0 scan#S#577
 	rpop
- L395:
+ L409:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -14196,7 +14714,9 @@
 	rtn(D)
 	end 1
 
-	class #S#751 751
+	class put 579
+	pushThis 
+	storeg 1 e
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14204,7 +14724,1280 @@
 	DO:
 	doEventQ
 	mvStack 
- L396:
+ L410:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: rep.%put e %at% pos:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%put e %at% pos
+	-- Invocation:loadOrigin: rep.%put e %at% pos
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 put:origin
+	-- next not assign: %put e %at% pos :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %put e %at% pos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %put V: ? elm %at% inx: ? integer%put e %at% pos
+	-- KeyWord:invoke: 
+	-- pattern:load: %put V: ? elm %at% inx: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: e:IS-empty: staticOff: 0
+	-- Invocation:gen: e
+	-- Invocation:loadOrigin: e
+	-- Invocation:loadOrigin:scan: e
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: e
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: e
+	pushg 1 e
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: pos:IS-empty: staticOff: 0
+	-- Invocation:gen: pos
+	-- Invocation:loadOrigin: pos
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 put:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	xstoreg 1 inx
+	-- ObjectGenerator:gen: super: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1:IS-empty: staticOff: 0
+	pushThis 
+	invoke 580 0 %if%then%%else%#S#580
+	rpop
+	-- ObjectGenerator:gen: super: res := %this Array:IS-empty: staticOff: 0
+	-- Invocation:gen: res := %this Array
+	-- Invocation:loadOrigin: res := %this Array
+	-- Invocation:loadOrigin:scan: res
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: res
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := %this Array
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: %this Array:IS-empty: staticOff: 0
+	-- Invocation:gen: %this Array
+	-- Invocation:loadOrigin: %this Array
+	-- Invocation:loadOrigin:scan: %this Array
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %this Array
+	-- AdjustOrigin: 0
+	rpushg 1 put:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %this P: ? Object%this Array
+	-- KeyWord:invoke: 
+	-- pattern:load: %this P: ? Object
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	rswap
+	rstoreg 2 res
+ L411:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: res
+	rpushg 2 res
+	rtn(D)
+	end 1
+
+	class get 581
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L412:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: res := rep.%get pos:IS-empty: staticOff: 0
+	-- Invocation:gen: res := rep.%get pos
+	-- Invocation:loadOrigin: res := rep.%get pos
+	-- Invocation:loadOrigin:scan: res
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: res
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := rep.%get pos
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.%get pos:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%get pos
+	-- Invocation:loadOrigin: rep.%get pos
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 get:origin
+	-- next not assign: %get pos :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %get pos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %get inx: ? integer -> V: ? integer%get pos
+	-- KeyWord:invoke: 
+	-- pattern:load: %get inx: ? integer -> V: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: pos:IS-empty: staticOff: 0
+	-- Invocation:gen: pos
+	-- Invocation:loadOrigin: pos
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 get:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	xpushg 1 inx
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 res
+	-- ObjectGenerator:gen: super: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1:IS-empty: staticOff: 0
+	pushThis 
+	invoke 582 0 %if%then%%else%#S#582
+	rpop
+ L413:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: res
+	pushg 1 res
+	rtn(D)
+	end 1
+
+	class nxt 583
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L414:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if pos = noof %then% 
+    res := 999999 %else% 
+    res := rep.%get pos + 1:IS-empty: staticOff: 0
+	pushThis 
+	invoke 584 0 %if%then%%else%#S#584
+	rpop
+ L415:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: res
+	pushg 1 res
+	rtn(D)
+	end 1
+
+	class prv 585
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L416:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if pos = 1 %then% 
+    res := 999999 %else% 
+    res := rep.%get pos - 1:IS-empty: staticOff: 0
+	pushThis 
+	invoke 586 0 %if%then%%else%#S#586
+	rpop
+ L417:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: res
+	pushg 1 res
+	rtn(D)
+	end 1
+
+	class putAt 587
+	pushThis 
+	storeg 2 exp
+	pushThis 
+	storeg 1 inx
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L418:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if R2 = none %then% 
+    R1.check(inx)
+    rep.%put exp %at% (inx - R1.low) + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: %if R2 = none %then% 
+    R1.check(inx)
+    rep.%put exp %at% (inx - R1.low) + 1
+	-- Invocation:loadOrigin: %if R2 = none %then% 
+    R1.check(inx)
+    rep.%put exp %at% (inx - R1.low) + 1
+	-- Invocation:loadOrigin:scan: %if R2 = none %then% 
+    R1.check(inx)
+    rep.%put exp %at% (inx - R1.low) + 1
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if R2 = none %then% 
+    R1.check(inx)
+    rep.%put exp %at% (inx - R1.low) + 1
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if R2 = none %then% 
+    R1.check(inx)
+    rep.%put exp %at% (inx - R1.low) + 1
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: R2 = none:IS-empty: staticOff: 0
+	-- Invocation:gen: R2 = none
+	-- Invocation:loadOrigin: R2 = none
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 putAt:origin
+	-- next not assign: = none :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: = none
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
+	-- Invocation:gen: none
+	-- Invocation:loadOrigin: none
+	-- Invocation:loadOrigin:scan: none
+	-- Unary:pushThis: 
+	-- Unary:loadOrigin: none
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: none
+	pushNone
+	-- Binary:invoke: 
+	-- pattern:load: = obj: ? Object -> V: ? Boolean
+	req
+	jmpFalse L420
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 920 0 #S#920
+	rpop
+ L420:
+ L419:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class getAt 588
+	pushThis 
+	storeg 1 inx
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L421:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if R2 = none %then% 
+    R1.check(inx)
+    res := rep.%get (inx - R1.low) + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: %if R2 = none %then% 
+    R1.check(inx)
+    res := rep.%get (inx - R1.low) + 1
+	-- Invocation:loadOrigin: %if R2 = none %then% 
+    R1.check(inx)
+    res := rep.%get (inx - R1.low) + 1
+	-- Invocation:loadOrigin:scan: %if R2 = none %then% 
+    R1.check(inx)
+    res := rep.%get (inx - R1.low) + 1
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if R2 = none %then% 
+    R1.check(inx)
+    res := rep.%get (inx - R1.low) + 1
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if R2 = none %then% 
+    R1.check(inx)
+    res := rep.%get (inx - R1.low) + 1
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: R2 = none:IS-empty: staticOff: 0
+	-- Invocation:gen: R2 = none
+	-- Invocation:loadOrigin: R2 = none
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 getAt:origin
+	-- next not assign: = none :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: = none
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
+	-- Invocation:gen: none
+	-- Invocation:loadOrigin: none
+	-- Invocation:loadOrigin:scan: none
+	-- Unary:pushThis: 
+	-- Unary:loadOrigin: none
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: none
+	pushNone
+	-- Binary:invoke: 
+	-- pattern:load: = obj: ? Object -> V: ? Boolean
+	req
+	jmpFalse L423
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 921 0 #S#921
+	rpop
+ L423:
+ L422:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: res
+	pushg 2 res
+	rtn(D)
+	end 1
+
+	class putAtAt 589
+	pushThis 
+	storeg 3 exp
+	pushThis 
+	storeg 2 inx2
+	pushThis 
+	storeg 1 inx1
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L424:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- Invocation:loadOrigin: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- Invocation:loadOrigin:scan: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: R2 <> none:IS-empty: staticOff: 0
+	-- Invocation:gen: R2 <> none
+	-- Invocation:loadOrigin: R2 <> none
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 putAtAt:origin
+	-- next not assign: <> none :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: <> none
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
+	-- Invocation:gen: none
+	-- Invocation:loadOrigin: none
+	-- Invocation:loadOrigin:scan: none
+	-- Unary:pushThis: 
+	-- Unary:loadOrigin: none
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: none
+	pushNone
+	-- Binary:invoke: 
+	-- pattern:load: <> obj: ? Object -> V: ? Boolean
+	rne
+	jmpFalse L426
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 922 0 #S#922
+	rpop
+ L426:
+ L425:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class getAtAt 590
+	pushThis 
+	storeg 2 inx2
+	pushThis 
+	storeg 1 inx1
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L427:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    exp := rep.%get repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    exp := rep.%get repPos
+	-- Invocation:loadOrigin: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    exp := rep.%get repPos
+	-- Invocation:loadOrigin:scan: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    exp := rep.%get repPos
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    exp := rep.%get repPos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if R2 <> none %then% 
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    exp := rep.%get repPos
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: R2 <> none:IS-empty: staticOff: 0
+	-- Invocation:gen: R2 <> none
+	-- Invocation:loadOrigin: R2 <> none
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 getAtAt:origin
+	-- next not assign: <> none :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: <> none
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
+	-- Invocation:gen: none
+	-- Invocation:loadOrigin: none
+	-- Invocation:loadOrigin:scan: none
+	-- Unary:pushThis: 
+	-- Unary:loadOrigin: none
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: none
+	pushNone
+	-- Binary:invoke: 
+	-- pattern:load: <> obj: ? Object -> V: ? Boolean
+	rne
+	jmpFalse L429
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 923 0 #S#923
+	rpop
+ L429:
+ L428:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: exp
+	pushg 3 exp
+	rtn(D)
+	end 1
+
+	class realPutAt 591
+	pushThis 
+	storeg 1 exp
+	pushThis 
+	rstoreg 2 il
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- VarRef:gen: inx1
+	-- VarRef:gen: inx2
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L430:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if R2 <> none %then% 
+    inx1 := il.first
+    inx2 := il.second
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: %if R2 <> none %then% 
+    inx1 := il.first
+    inx2 := il.second
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- Invocation:loadOrigin: %if R2 <> none %then% 
+    inx1 := il.first
+    inx2 := il.second
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- Invocation:loadOrigin:scan: %if R2 <> none %then% 
+    inx1 := il.first
+    inx2 := il.second
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if R2 <> none %then% 
+    inx1 := il.first
+    inx2 := il.second
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if R2 <> none %then% 
+    inx1 := il.first
+    inx2 := il.second
+    R1.check(inx1)
+    R2.check(inx2)
+    repPos: ? integer
+    repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+    rep.%put exp %at% repPos
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: R2 <> none:IS-empty: staticOff: 0
+	-- Invocation:gen: R2 <> none
+	-- Invocation:loadOrigin: R2 <> none
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 realPutAt:origin
+	-- next not assign: <> none :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: <> none
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
+	-- Invocation:gen: none
+	-- Invocation:loadOrigin: none
+	-- Invocation:loadOrigin:scan: none
+	-- Unary:pushThis: 
+	-- Unary:loadOrigin: none
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: none
+	pushNone
+	-- Binary:invoke: 
+	-- pattern:load: <> obj: ? Object -> V: ? Boolean
+	rne
+	jmpFalse L432
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 924 0 #S#924
+	rpop
+ L432:
+ L431:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class forAll 592
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- VarRef:gen: current
+	-- pattern:gen: loop
+	innerA  1
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L433:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := 1
+	-- Invocation:loadOrigin: pos := 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 forAll:origin
+	-- Invocation:loadOrigin:scan: := 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+	-- ObjectGenerator:gen: super: loop:IS-empty: staticOff: 0
+	-- Invocation:gen: loop
+	-- Invocation:loadOrigin: loop
+	-- Invocation:loadOrigin:scan: loop
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: loop
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: loop
+	invoke 593 0 loop
+	rpop
+ L434:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class forAllIndex 594
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- VarRef:gen: inx
+	-- pattern:gen: loop
+	innerA  1
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L435:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := 1
+	-- Invocation:loadOrigin: pos := 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 forAllIndex:origin
+	-- Invocation:loadOrigin:scan: := 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+	-- ObjectGenerator:gen: super: inx := pos:IS-empty: staticOff: 0
+	-- Invocation:gen: inx := pos
+	-- Invocation:loadOrigin: inx := pos
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := pos
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: pos:IS-empty: staticOff: 0
+	-- Invocation:gen: pos
+	-- Invocation:loadOrigin: pos
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 forAllIndex:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 inx
+	-- ObjectGenerator:gen: super: loop:IS-empty: staticOff: 0
+	-- Invocation:gen: loop
+	-- Invocation:loadOrigin: loop
+	-- Invocation:loadOrigin:scan: loop
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: loop
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: loop
+	invoke 595 0 loop
+	rpop
+ L436:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class fill 596
+	pushThis 
+	storeg 1 v
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L437:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: forAllIndex:singular:staticOff: 0
+	pushThis 
+	invoke 597 0 forAllIndex#S#597
+	rpop
+ L438:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class zeroes 598
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L439:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: fill(0):IS-empty: staticOff: 0
+	-- Invocation:gen: fill(0)
+	-- Invocation:loadOrigin: fill(0)
+	-- Invocation:loadOrigin:scan: fill(0)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: fill(0)
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 zeroes:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: 0:IS-empty: staticOff: 0
+	-- Invocation:gen: 0
+	-- Invocation:loadOrigin: 0
+	-- Invocation:loadOrigin:scan: 0
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 0
+	-- Function:invoke: 
+	-- pattern:load: fill(v: ? integer)
+	invoke 596 0 fill
+	rpop
+ L440:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class ones 599
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L441:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: fill(1):IS-empty: staticOff: 0
+	-- Invocation:gen: fill(1)
+	-- Invocation:loadOrigin: fill(1)
+	-- Invocation:loadOrigin:scan: fill(1)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: fill(1)
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 ones:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Function:invoke: 
+	-- pattern:load: fill(v: ? integer)
+	invoke 596 0 fill
+	rpop
+ L442:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class sum 600
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L443:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: s := 0:IS-empty: staticOff: 0
+	-- Invocation:gen: s := 0
+	-- Invocation:loadOrigin: s := 0
+	-- Invocation:loadOrigin:scan: s
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: s
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := 0
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 0:IS-empty: staticOff: 0
+	-- Invocation:gen: 0
+	-- Invocation:loadOrigin: 0
+	-- Invocation:loadOrigin:scan: 0
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 0
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 s
+	-- ObjectGenerator:gen: super: forAll:singular:staticOff: 0
+	pushThis 
+	invoke 601 0 forAll#S#601
+	rpop
+ L444:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: s
+	pushg 1 s
+	rtn(D)
+	end 1
+
+	class iadd 602
+	pushThis 
+	rstoreg 2 a
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L445:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: forAll:singular:staticOff: 0
+	pushThis 
+	invoke 603 0 forAll#S#603
+	rpop
+ L446:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class iminus 604
+	pushThis 
+	rstoreg 2 a
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L447:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: forAll:singular:staticOff: 0
+	pushThis 
+	invoke 605 0 forAll#S#605
+	rpop
+ L448:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class imult 606
+	pushThis 
+	rstoreg 2 a
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L449:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: forAll:singular:staticOff: 0
+	pushThis 
+	invoke 607 0 forAll#S#607
+	rpop
+ L450:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class idiv 608
+	pushThis 
+	rstoreg 2 a
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L451:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: forAll:singular:staticOff: 0
+	pushThis 
+	invoke 609 0 forAll#S#609
+	rpop
+ L452:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class equal 610
+	pushThis 
+	rstoreg 2 a
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L453:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: b := false:IS-empty: staticOff: 0
+	-- Invocation:gen: b := false
+	-- Invocation:loadOrigin: b := false
+	-- Invocation:loadOrigin:scan: b
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: b
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := false
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: false:IS-empty: staticOff: 0
+	-- Invocation:gen: false
+	-- Invocation:loadOrigin: false
+	-- Invocation:loadOrigin:scan: false
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: false
+	-- AdjustOrigin: 0
+	-- on : 5
+	rpushg 1 equal:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: False -> B: ? Boolean
+	invoke 23 0 False
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 b
+	-- ObjectGenerator:gen: super: forAll:singular:staticOff: 0
+	pushThis 
+	invoke 611 0 forAll#S#611
+	rpop
+ L454:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: b
+	pushg 1 b
+	rtn(D)
+	end 1
+
+	class countNonZero 612
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L455:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: count := 0:IS-empty: staticOff: 0
+	-- Invocation:gen: count := 0
+	-- Invocation:loadOrigin: count := 0
+	-- Invocation:loadOrigin:scan: count
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: count
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := 0
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 0:IS-empty: staticOff: 0
+	-- Invocation:gen: 0
+	-- Invocation:loadOrigin: 0
+	-- Invocation:loadOrigin:scan: 0
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 0
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 count
+	-- ObjectGenerator:gen: super: forAll:singular:staticOff: 0
+	pushThis 
+	invoke 613 0 forAll#S#613
+	rpop
+ L456:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	-- VarRef:load: count
+	pushg 1 count
+	rtn(D)
+	end 1
+
+	class print 615
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	innerA  1
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L457:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: "Array(".print:IS-empty: staticOff: 0
+	-- Invocation:gen: "Array(".print
+	-- Invocation:loadOrigin: "Array(".print
+	-- Invocation:loadOrigin:scan: "Array("
+	-- String::pushThis: 
+	-- String::loadOrigin: 
+	pushText Array(
+	-- next not assign: print :E: "Array("
+	-- String::loadArgs: 
+	-- String::invoke: 
+	-- Invocation:loadOrigin:scan: print
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: print
+	invoke 107 0 print
+	rpop
+	-- ObjectGenerator:gen: super: %inner print:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner print
+	-- Invocation:loadOrigin: %inner print
+	-- Invocation:loadOrigin:scan: %inner print
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %inner print
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %inner P: ? Object%inner print
+	-- KeyWord:invoke: 
+	-- pattern:load: %inner P: ? Object
+	pushThis 
+	inner  1
+	rpopThisObj 
+	-- ObjectGenerator:gen: super: "): ".print:IS-empty: staticOff: 0
+	-- Invocation:gen: "): ".print
+	-- Invocation:loadOrigin: "): ".print
+	-- Invocation:loadOrigin:scan: "): "
+	-- String::pushThis: 
+	-- String::loadOrigin: 
+	pushText ): 
+	-- next not assign: print :E: "): "
+	-- String::loadArgs: 
+	-- String::invoke: 
+	-- Invocation:loadOrigin:scan: print
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: print
+	invoke 107 0 print
+	rpop
+	-- ObjectGenerator:gen: super: %for 1 %to% rep.length %do% 
+    putint(rep.%get inx)
+    ", ".print:IS-empty: staticOff: 0
+	pushThis 
+	invoke 616 0 %for%to%%do%#S#616
+	rpop
+	-- ObjectGenerator:gen: super: newline:IS-empty: staticOff: 0
+	-- Invocation:gen: newline
+	-- Invocation:loadOrigin: newline
+	-- Invocation:loadOrigin:scan: newline
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: newline
+	-- AdjustOrigin: 0
+	-- on : 5
+	rpushg 1 print:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: newline
+	invoke 66 0 newline
+	rpop
+ L458:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#798 798
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L459:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: enable:IS-empty: staticOff: 0
 	-- Invocation:gen: enable
@@ -14245,15 +16038,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 1 300
- L397:
+	break 1 306
+ L460:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#752 752
+	class #S#799 799
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14261,7 +16054,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L398:
+ L461:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: active.status := P_status.ACTIVE:IS-empty: staticOff: 0
 	-- Invocation:gen: active.status := P_status.ACTIVE
@@ -14272,7 +16065,7 @@
 	-- Unary:loadOrigin: active
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: status :E: active
@@ -14292,7 +16085,7 @@
 	-- Unary:loadOrigin: P_status
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	rpushg 1 Scheduler:origin
@@ -14318,7 +16111,7 @@
 	-- Unary:loadOrigin: inScheduler
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Invocation:loadOrigin:scan: := 0
@@ -14344,7 +16137,7 @@
 	-- Unary:loadOrigin: active
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: attach(50) :E: active
@@ -14376,7 +16169,7 @@
 	-- Unary:loadOrigin: inScheduler
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Invocation:loadOrigin:scan: := 1
@@ -14418,7 +16211,7 @@
 	-- Unary:loadOrigin: active
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: status :E: active
@@ -14443,7 +16236,7 @@
 	-- Unary:loadOrigin: P_status
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	rpushg 1 Scheduler:origin
@@ -14460,13 +16253,13 @@
 	-- Binary:invoke: 
 	-- pattern:load: = V: ? integer -> B: ? Boolean
 	eq
-	jmpFalse L400
+	jmpFalse L463
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 922 0 #S#922
+	invoke 988 0 #S#988
 	rpop
- L400:
- L399:
+ L463:
+ L462:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -14556,8 +16349,8 @@
 	rtnInner
 	DO:
 	mvStack 
- L401:
- L402:
+ L464:
+ L465:
 	rtnInner
 	end 1
 
@@ -14629,8 +16422,8 @@
 	rtnInner
 	DO:
 	mvStack 
- L403:
- L404:
+ L466:
+ L467:
 	rtnInner
 	end 1
 
@@ -14642,7 +16435,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L405:
+ L468:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if currentElement <> none %then% 
     current := currentElement.elm
@@ -14709,13 +16502,13 @@
 	-- Binary:invoke: 
 	-- pattern:load: <> obj: ? Object -> V: ? Boolean
 	rne
-	jmpFalse L407
+	jmpFalse L470
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 732 0 #S#732
+	invoke 779 0 #S#779
 	rpop
- L407:
- L406:
+ L470:
+ L469:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -14730,7 +16523,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L408:
+ L471:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if currentElement <> none %then% 
     current := currentElement.elm
@@ -14797,20 +16590,20 @@
 	-- Binary:invoke: 
 	-- pattern:load: <> obj: ? Object -> V: ? Boolean
 	rne
-	jmpFalse L410
+	jmpFalse L473
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 733 0 #S#733
+	invoke 780 0 #S#780
 	rpop
- L410:
- L409:
+ L473:
+ L472:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#735 735
+	class %if%then%%else%#S#782 782
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -14838,7 +16631,7 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 5
-	rpushg 1 #S#734:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	rpushg 1 Queue:origin
 	rpushg 1 mQueue:origin
@@ -14860,7 +16653,7 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 2
-	rpushg 1 #S#734:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- next not assign: = none :E: head
 	-- Unary:loadArgs: 
@@ -14886,12 +16679,12 @@
 	rtnInner
 	DO:
 	mvStack 
- L411:
- L412:
+ L474:
+ L475:
 	rtnInner
 	end 1
 
-	class #S#736 736
+	class #S#783 783
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -14899,7 +16692,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L413:
+ L476:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if currentElement.pred <> none %then% 
     currentElement.pred.succ := currentElement.succ
@@ -14911,16 +16704,16 @@
     head.pred := none %else% 
     last := none:IS-empty: staticOff: 0
 	pushThis 
-	invoke 737 0 %if%then%%else%#S#737
+	invoke 784 0 %if%then%%else%#S#784
 	rpop
- L414:
+ L477:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#739 739
+	class %if%then%%else%#S#786 786
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -14939,7 +16732,7 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 5
-	rpushg 1 #S#738:origin
+	rpushg 1 #S#785:origin
 	rpushg 1 removeNext:origin
 	rpushg 1 Queue:origin
 	rpushg 1 mQueue:origin
@@ -14958,7 +16751,7 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 2
-	rpushg 1 #S#738:origin
+	rpushg 1 #S#785:origin
 	rpushg 1 removeNext:origin
 	-- next not assign: <> none :E: last
 	-- Unary:loadArgs: 
@@ -14984,8 +16777,8 @@
 	rtnInner
 	DO:
 	mvStack 
- L415:
- L416:
+ L478:
+ L479:
 	rtnInner
 	end 1
 
@@ -15017,7 +16810,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L417:
+ L480:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: P := current:IS-empty: staticOff: 0
 	-- Invocation:gen: P := current
@@ -15113,17 +16906,17 @@
 	-- Binary:invoke: 
 	-- pattern:load: <> V: ? integer -> B: ? Boolean
 	55
-	jmpFalse L419
+	jmpFalse L482
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 785 0 #S#785
+	invoke 832 0 #S#832
 	rpop
- L419:
- L418:
+ L482:
+ L481:
 	rtnInner
 	end 1
 
-	class #S#786 786
+	class #S#833 833
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -15131,7 +16924,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L420:
+ L483:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %restart loop:IS-empty: staticOff: 0
 	-- Invocation:gen: %restart loop
@@ -15143,15 +16936,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 1 353
- L421:
+	break 1 359
+ L484:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#787 787
+	class thenPart#SB#834 834
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15159,7 +16952,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L422:
+ L485:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: thisCore.main.active.status := P_status.WAITING:IS-empty: staticOff: 0
 	-- Invocation:gen: thisCore.main.active.status := P_status.WAITING
@@ -15196,7 +16989,7 @@
 	-- Unary:loadOrigin: P_status
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#787:origin
+	rpushg 2 thenPart#S#834:origin
 	rpushg 3 %if%then%%else%#S#240:origin
 	rpushg 1 wait:origin
 	rpushg 1 Semaphore:origin
@@ -15222,7 +17015,7 @@
 	-- Unary:loadOrigin: SQS
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#787:origin
+	rpushg 2 thenPart#S#834:origin
 	rpushg 3 %if%then%%else%#S#240:origin
 	rpushg 1 wait:origin
 	rpushg 1 Semaphore:origin
@@ -15246,7 +17039,7 @@
 	-- Unary:loadOrigin: Q
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 thenPart#S#787:origin
+	rpushg 2 thenPart#S#834:origin
 	rpushg 3 %if%then%%else%#S#240:origin
 	rpushg 1 wait:origin
 	-- next not assign: insert(thisCore.main.active) :E: Q
@@ -15291,7 +17084,7 @@
 	-- Unary:loadOrigin: theActive
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#787:origin
+	rpushg 2 thenPart#S#834:origin
 	rpushg 3 %if%then%%else%#S#240:origin
 	-- Invocation:loadOrigin:scan: := thisCore.main.active
 	-- Binary:loadArgs: 
@@ -15330,7 +17123,7 @@
 	-- Unary:loadOrigin: M
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 thenPart#S#787:origin
+	rpushg 2 thenPart#S#834:origin
 	rpushg 3 %if%then%%else%#S#240:origin
 	rpushg 1 wait:origin
 	-- next not assign: free :E: M
@@ -15353,7 +17146,7 @@
 	-- Unary:loadOrigin: theActive
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#787:origin
+	rpushg 2 thenPart#S#834:origin
 	rpushg 3 %if%then%%else%#S#240:origin
 	-- next not assign: suspend :E: theActive
 	-- Unary:loadArgs: 
@@ -15365,14 +17158,14 @@
 	-- Unary:invoke: 
 	-- pattern:load: suspend
 	suspend
- L423:
+ L486:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#788 788
+	class elsePart#SB#835 835
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15380,7 +17173,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L424:
+ L487:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: M.free:IS-empty: staticOff: 0
 	-- Invocation:gen: M.free
@@ -15391,7 +17184,7 @@
 	-- Unary:loadOrigin: M
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#788:origin
+	rpushg 2 elsePart#S#835:origin
 	rpushg 3 %if%then%%else%#S#240:origin
 	rpushg 1 wait:origin
 	-- next not assign: free :E: M
@@ -15405,14 +17198,14 @@
 	-- pattern:load: free
 	invoke 124 0 free
 	rpop
- L425:
+ L488:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#789 789
+	class thenPart#SB#836 836
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15420,7 +17213,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L426:
+ L489:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: P := Q.removeNext:IS-empty: staticOff: 0
 	-- Invocation:gen: P := Q.removeNext
@@ -15431,7 +17224,7 @@
 	-- Unary:loadOrigin: P
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	-- Invocation:loadOrigin:scan: := Q.removeNext
 	-- Binary:loadArgs: 
@@ -15444,7 +17237,7 @@
 	-- Unary:loadOrigin: Q
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	rpushg 1 signal:origin
 	-- next not assign: removeNext :E: Q
@@ -15470,7 +17263,7 @@
 	-- Unary:loadOrigin: P
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	-- next not assign: status :E: P
 	-- Unary:loadArgs: 
@@ -15489,7 +17282,7 @@
 	-- Unary:loadOrigin: P_status
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	rpushg 1 signal:origin
 	rpushg 1 Semaphore:origin
@@ -15515,7 +17308,7 @@
 	-- Unary:loadOrigin: SQS
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	rpushg 1 signal:origin
 	rpushg 1 Semaphore:origin
@@ -15535,7 +17328,7 @@
 	-- Unary:loadOrigin: P
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -15554,7 +17347,7 @@
 	-- Unary:loadOrigin: SQS
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	rpushg 1 signal:origin
 	rpushg 1 Semaphore:origin
@@ -15578,7 +17371,7 @@
 	-- Unary:loadOrigin: M
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 thenPart#S#789:origin
+	rpushg 2 thenPart#S#836:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	rpushg 1 signal:origin
 	-- next not assign: free :E: M
@@ -15592,14 +17385,14 @@
 	-- pattern:load: free
 	invoke 124 0 free
 	rpop
- L427:
+ L490:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#790 790
+	class elsePart#SB#837 837
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15607,7 +17400,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L428:
+ L491:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: M.free:IS-empty: staticOff: 0
 	-- Invocation:gen: M.free
@@ -15618,7 +17411,7 @@
 	-- Unary:loadOrigin: M
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#790:origin
+	rpushg 2 elsePart#S#837:origin
 	rpushg 3 %if%then%%else%#S#242:origin
 	rpushg 1 signal:origin
 	-- next not assign: free :E: M
@@ -15632,14 +17425,14 @@
 	-- pattern:load: free
 	invoke 124 0 free
 	rpop
- L429:
+ L492:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#791 791
+	class #S#838 838
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -15647,7 +17440,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L430:
+ L493:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: mutex.signal:IS-empty: staticOff: 0
 	-- Invocation:gen: mutex.signal
@@ -15658,7 +17451,7 @@
 	-- Unary:loadOrigin: mutex
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#791:origin
+	rpushg 1 #S#838:origin
 	rpushg 1 loop:origin
 	rpushg 1 wait:origin
 	-- next not assign: signal :E: mutex
@@ -15681,7 +17474,7 @@
 	-- Unary:loadOrigin: mutex
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#791:origin
+	rpushg 1 #S#838:origin
 	rpushg 1 loop:origin
 	rpushg 1 wait:origin
 	-- next not assign: wait :E: mutex
@@ -15705,15 +17498,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 1 360
- L431:
+	break 1 366
+ L494:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class body#SB#740 740
+	class body#SB#787 787
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15721,7 +17514,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L432:
+ L495:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: e := %get inx:IS-empty: staticOff: 0
 	-- Invocation:gen: e := %get inx
@@ -15732,7 +17525,7 @@
 	-- Unary:loadOrigin: e
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#740:origin
+	rpushg 2 body#S#787:origin
 	rpushg 2 %for%to%%do%#S#102:origin
 	-- Invocation:loadOrigin:scan: := %get inx
 	-- Binary:loadArgs: 
@@ -15745,7 +17538,7 @@
 	-- KeyWord:loadOrigin: %get inx
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 body#S#740:origin
+	rpushg 2 body#S#787:origin
 	rpushg 2 %for%to%%do%#S#102:origin
 	rpushg 1 doplus:origin
 	rpushg 1 +:origin
@@ -15763,7 +17556,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#740:origin
+	rpushg 2 body#S#787:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -15781,7 +17574,7 @@
 	-- Unary:loadOrigin: T
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#740:origin
+	rpushg 2 body#S#787:origin
 	rpushg 2 %for%to%%do%#S#102:origin
 	-- next not assign: %put e %at% inx :E: T
 	-- Unary:loadArgs: 
@@ -15803,7 +17596,7 @@
 	-- Unary:loadOrigin: e
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#740:origin
+	rpushg 2 body#S#787:origin
 	rpushg 2 %for%to%%do%#S#102:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -15819,20 +17612,20 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#740:origin
+	rpushg 2 body#S#787:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
 	pushg 3 inx
 	xstoreg 1 inx
- L433:
+ L496:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class body#SB#741 741
+	class body#SB#788 788
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -15840,7 +17633,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L434:
+ L497:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: e := S.%get inx:IS-empty: staticOff: 0
 	-- Invocation:gen: e := S.%get inx
@@ -15851,7 +17644,7 @@
 	-- Unary:loadOrigin: e
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	rpushg 2 %for%to%%do%#S#103:origin
 	-- Invocation:loadOrigin:scan: := S.%get inx
 	-- Binary:loadArgs: 
@@ -15864,7 +17657,7 @@
 	-- Unary:loadOrigin: S
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	rpushg 2 %for%to%%do%#S#103:origin
 	rpushg 1 doplus:origin
 	-- next not assign: %get inx :E: S
@@ -15887,7 +17680,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -15905,7 +17698,7 @@
 	-- Unary:loadOrigin: i
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	rpushg 2 %for%to%%do%#S#103:origin
 	-- Invocation:loadOrigin:scan: := L + inx
 	-- Binary:loadArgs: 
@@ -15918,7 +17711,7 @@
 	-- Unary:loadOrigin: L
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	rpushg 2 %for%to%%do%#S#103:origin
 	rpushg 1 doplus:origin
 	-- next not assign: + inx :E: L
@@ -15937,7 +17730,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -15957,7 +17750,7 @@
 	-- Unary:loadOrigin: T
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	rpushg 2 %for%to%%do%#S#103:origin
 	-- next not assign: %put e %at% i :E: T
 	-- Unary:loadArgs: 
@@ -15979,7 +17772,7 @@
 	-- Unary:loadOrigin: e
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	rpushg 2 %for%to%%do%#S#103:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -15995,21 +17788,21 @@
 	-- Unary:loadOrigin: i
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#741:origin
+	rpushg 2 body#S#788:origin
 	rpushg 2 %for%to%%do%#S#103:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: i
 	pushg 2 i
 	xstoreg 1 inx
- L435:
+ L498:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class body#SB#745 745
+	class body#SB#792 792
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16017,7 +17810,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L436:
+ L499:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: c1 := %get inx:IS-empty: staticOff: 0
 	-- Invocation:gen: c1 := %get inx
@@ -16028,7 +17821,7 @@
 	-- Unary:loadOrigin: c1
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	-- Invocation:loadOrigin:scan: := %get inx
 	-- Binary:loadArgs: 
@@ -16041,7 +17834,7 @@
 	-- KeyWord:loadOrigin: %get inx
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	rpushg 1 loop:origin
 	rpushg 1 =:origin
@@ -16059,7 +17852,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -16077,7 +17870,7 @@
 	-- Unary:loadOrigin: c2
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	-- Invocation:loadOrigin:scan: := S.%get inx
 	-- Binary:loadArgs: 
@@ -16090,7 +17883,7 @@
 	-- Unary:loadOrigin: S
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	rpushg 1 loop:origin
 	-- next not assign: %get inx :E: S
@@ -16113,7 +17906,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: inx
@@ -16153,7 +17946,7 @@
 	-- Unary:loadOrigin: c1
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	-- next not assign: <> c2 :E: c1
 	-- Unary:loadArgs: 
@@ -16171,7 +17964,7 @@
 	-- Unary:loadOrigin: c2
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 body#S#745:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -16180,13 +17973,13 @@
 	-- Binary:invoke: 
 	-- pattern:load: <> V: ? char -> B: ? Boolean
 	55
-	jmpFalse L438
+	jmpFalse L501
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 921 0 #S#921
+	invoke 987 0 #S#987
 	rpop
- L438:
- L437:
+ L501:
+ L500:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -16201,7 +17994,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L439:
+ L502:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: inx := inx + 1:IS-empty: staticOff: 0
 	-- Invocation:gen: inx := inx + 1
@@ -16398,13 +18191,13 @@
 	-- Binary:invoke: 
 	-- pattern:load: = V: ? char -> B: ? Boolean
 	eq
-	jmpFalse L441
+	jmpFalse L504
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 746 0 #S#746
+	invoke 793 0 #S#793
 	rpop
- L441:
- L440:
+ L504:
+ L503:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -16419,7 +18212,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L442:
+ L505:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if c1 = c2 %then% 
     B := L1 <= L2
@@ -16429,14 +18222,14 @@
 	pushThis 
 	invoke 117 0 %if%then%%else%#S#117
 	rpop
- L443:
+ L506:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#749 749
+	class thenPart#SB#796 796
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16444,7 +18237,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L444:
+ L507:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: L := L1:IS-empty: staticOff: 0
 	-- Invocation:gen: L := L1
@@ -16455,7 +18248,7 @@
 	-- Unary:loadOrigin: L
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#749:origin
+	rpushg 2 thenPart#S#796:origin
 	rpushg 3 %if%then%%else%#S#118:origin
 	-- Invocation:loadOrigin:scan: := L1
 	-- Binary:loadArgs: 
@@ -16468,7 +18261,7 @@
 	-- Unary:loadOrigin: L1
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 thenPart#S#749:origin
+	rpushg 2 thenPart#S#796:origin
 	rpushg 3 %if%then%%else%#S#118:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -16477,14 +18270,14 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 L
- L445:
+ L508:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#750 750
+	class elsePart#SB#797 797
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16492,7 +18285,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L446:
+ L509:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: L := L2:IS-empty: staticOff: 0
 	-- Invocation:gen: L := L2
@@ -16503,7 +18296,7 @@
 	-- Unary:loadOrigin: L
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 elsePart#S#750:origin
+	rpushg 2 elsePart#S#797:origin
 	rpushg 3 %if%then%%else%#S#118:origin
 	-- Invocation:loadOrigin:scan: := L2
 	-- Binary:loadArgs: 
@@ -16516,7 +18309,7 @@
 	-- Unary:loadOrigin: L2
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 2 elsePart#S#750:origin
+	rpushg 2 elsePart#S#797:origin
 	rpushg 3 %if%then%%else%#S#118:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -16525,14 +18318,14 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 L
- L447:
+ L510:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#861 861
+	class loop 564
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -16540,7 +18333,179 @@
 	DO:
 	doEventQ
 	mvStack 
- L448:
+ L511:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %inner scan:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner scan
+	-- Invocation:loadOrigin: %inner scan
+	-- Invocation:loadOrigin:scan: %inner scan
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %inner scan
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %inner P: ? Object%inner scan
+	-- KeyWord:invoke: 
+	-- pattern:load: %inner P: ? Object
+	pushThis 
+	rpushg 1 loop:origin
+	inner  1
+	rpopThisObj 
+	-- ObjectGenerator:gen: super: %if L.tail <> none %then% 
+    L := tail
+    current := L.head
+    %restart loop:IS-empty: staticOff: 0
+	-- Invocation:gen: %if L.tail <> none %then% 
+    L := tail
+    current := L.head
+    %restart loop
+	-- Invocation:loadOrigin: %if L.tail <> none %then% 
+    L := tail
+    current := L.head
+    %restart loop
+	-- Invocation:loadOrigin:scan: %if L.tail <> none %then% 
+    L := tail
+    current := L.head
+    %restart loop
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if L.tail <> none %then% 
+    L := tail
+    current := L.head
+    %restart loop
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if L.tail <> none %then% 
+    L := tail
+    current := L.head
+    %restart loop
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: L.tail <> none:IS-empty: staticOff: 0
+	-- Invocation:gen: L.tail <> none
+	-- Invocation:loadOrigin: L.tail <> none
+	-- Invocation:loadOrigin:scan: L
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: L
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 loop:origin
+	-- next not assign: tail :E: L
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: L
+	rpushg 2 L
+	-- Invocation:loadOrigin:scan: tail
+	-- next not assign: <> none :E: tail
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: tail
+	rpushg 2 tail
+	-- Invocation:loadOrigin:scan: <> none
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: none:IS-empty: staticOff: 0
+	-- Invocation:gen: none
+	-- Invocation:loadOrigin: none
+	-- Invocation:loadOrigin:scan: none
+	-- Unary:pushThis: 
+	-- Unary:loadOrigin: none
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: none
+	pushNone
+	-- Binary:invoke: 
+	-- pattern:load: <> obj: ? Object -> V: ? Boolean
+	rne
+	jmpFalse L513
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 908 0 #S#908
+	rpop
+ L513:
+ L512:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class scan#S#566 566
+	rstore 3 origin
+	allocEventQ
+	-- super scan
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=566
+	-- Invocation:loadOrigin: scan
+	-- Invocation:loadOrigin:scan: scan
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: scan
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 length:origin
+	-- Unary:loadArgs: 
+	topSuper  563
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L514:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: len := len + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: len := len + 1
+	-- Invocation:loadOrigin: len := len + 1
+	-- Invocation:loadOrigin:scan: len
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: len
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 3 scan#S#566:origin
+	-- Invocation:loadOrigin:scan: := len + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: len + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: len + 1
+	-- Invocation:loadOrigin: len + 1
+	-- Invocation:loadOrigin:scan: len
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: len
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 3 scan#S#566:origin
+	-- next not assign: + 1 :E: len
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: len
+	pushg 1 len
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 len
+ L515:
+	rtnInner
+	end 1
+
+	class #S#909 909
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L516:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: "index error in range".print:IS-empty: staticOff: 0
 	-- Invocation:gen: "index error in range".print
@@ -16558,14 +18523,14 @@
 	-- pattern:load: print
 	invoke 107 0 print
 	rpop
- L449:
+ L517:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class loop 566
+	class loop 575
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -16573,7 +18538,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L450:
+ L518:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %inner scan:IS-empty: staticOff: 0
 	-- Invocation:gen: %inner scan
@@ -16653,25 +18618,25 @@
 	-- Binary:invoke: 
 	-- pattern:load: <> obj: ? Object -> V: ? Boolean
 	rne
-	jmpFalse L452
+	jmpFalse L520
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 863 0 #S#863
+	invoke 911 0 #S#911
 	rpop
- L452:
- L451:
+ L520:
+ L519:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class scan#S#568 568
+	class scan#S#577 577
 	rstore 4 origin
 	allocEventQ
 	-- super scan
 	--  1:0 2:0 3:0 4:0
-	-- vdtAdd: inx=1 descInx=568
+	-- vdtAdd: inx=1 descInx=577
 	-- Invocation:loadOrigin: scan
 	-- Invocation:loadOrigin:scan: scan
 	-- Unary:pushThis: 
@@ -16682,12 +18647,12 @@
 	-- on : 1
 	rpushg 1 length:origin
 	-- Unary:loadArgs: 
-	topSuper  565
+	topSuper  574
 	rtnInner
 	DO:
 	doEventQ
 	mvStack 
- L453:
+ L521:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: len := len + 1:IS-empty: staticOff: 0
 	-- Invocation:gen: len := len + 1
@@ -16698,7 +18663,7 @@
 	-- Unary:loadOrigin: len
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 4 scan#S#568:origin
+	rpushg 4 scan#S#577:origin
 	-- Invocation:loadOrigin:scan: := len + 1
 	-- Binary:loadArgs: 
 	-- ObjectGenerator:gen: super: len + 1:IS-empty: staticOff: 0
@@ -16710,7 +18675,7 @@
 	-- Unary:loadOrigin: len
 	-- AdjustOrigin: 0
 	-- on : 1
-	rpushg 4 scan#S#568:origin
+	rpushg 4 scan#S#577:origin
 	-- next not assign: + 1 :E: len
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -16733,11 +18698,309 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 len
- L454:
+ L522:
 	rtnInner
 	end 1
 
-	class #S#922 922
+	class %if%then%%else%#S#580 580
+	rstore 3 origin
+	allocEventQ
+	-- super %if%then%%else%
+	--  1:0 2:0 3:0 4:0
+	-- Invocation:loadOrigin: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- Invocation:loadOrigin:scan: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 5
+	rpushg 1 put:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if cond: ? Boolean %then% thenPart:< Object %else% elsePart:< Object%if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- ObjectGenerator:gen: super: pos = rep.length:IS-empty: staticOff: 0
+	-- Invocation:gen: pos = rep.length
+	-- Invocation:loadOrigin: pos = rep.length
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 put:origin
+	-- next not assign: = rep.length :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: = rep.length
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.length:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.length
+	-- Invocation:loadOrigin: rep.length
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 put:origin
+	-- next not assign: length :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: length
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: length -> res: ? integer
+	invoke 55 0 length
+	-- Binary:invoke: 
+	-- pattern:load: = V: ? integer -> B: ? Boolean
+	eq
+	topSuper  60
+	rtnInner
+	DO:
+	mvStack 
+ L523:
+ L524:
+	rtnInner
+	end 1
+
+	class %if%then%%else%#S#582 582
+	rstore 3 origin
+	allocEventQ
+	-- super %if%then%%else%
+	--  1:0 2:0 3:0 4:0
+	-- Invocation:loadOrigin: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- Invocation:loadOrigin:scan: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 5
+	rpushg 1 get:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if cond: ? Boolean %then% thenPart:< Object %else% elsePart:< Object%if pos = rep.length %then% 
+    pos := 1 %else% 
+    pos := pos + 1
+	-- ObjectGenerator:gen: super: pos = rep.length:IS-empty: staticOff: 0
+	-- Invocation:gen: pos = rep.length
+	-- Invocation:loadOrigin: pos = rep.length
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 get:origin
+	-- next not assign: = rep.length :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: = rep.length
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.length:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.length
+	-- Invocation:loadOrigin: rep.length
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 get:origin
+	-- next not assign: length :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: length
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: length -> res: ? integer
+	invoke 55 0 length
+	-- Binary:invoke: 
+	-- pattern:load: = V: ? integer -> B: ? Boolean
+	eq
+	topSuper  60
+	rtnInner
+	DO:
+	mvStack 
+ L525:
+ L526:
+	rtnInner
+	end 1
+
+	class %if%then%%else%#S#584 584
+	rstore 3 origin
+	allocEventQ
+	-- super %if%then%%else%
+	--  1:0 2:0 3:0 4:0
+	-- Invocation:loadOrigin: %if pos = noof %then% 
+    res := 999999 %else% 
+    res := rep.%get pos + 1
+	-- Invocation:loadOrigin:scan: %if pos = noof %then% 
+    res := 999999 %else% 
+    res := rep.%get pos + 1
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %if pos = noof %then% 
+    res := 999999 %else% 
+    res := rep.%get pos + 1
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 5
+	rpushg 1 nxt:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if cond: ? Boolean %then% thenPart:< Object %else% elsePart:< Object%if pos = noof %then% 
+    res := 999999 %else% 
+    res := rep.%get pos + 1
+	-- ObjectGenerator:gen: super: pos = noof:IS-empty: staticOff: 0
+	-- Invocation:gen: pos = noof
+	-- Invocation:loadOrigin: pos = noof
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 nxt:origin
+	-- next not assign: = noof :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: = noof
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: noof:IS-empty: staticOff: 0
+	-- Invocation:gen: noof
+	-- Invocation:loadOrigin: noof
+	-- Invocation:loadOrigin:scan: noof
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: noof
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 nxt:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: noof
+	pushg 3 noof
+	-- Binary:invoke: 
+	-- pattern:load: = V: ? integer -> B: ? Boolean
+	eq
+	topSuper  60
+	rtnInner
+	DO:
+	mvStack 
+ L527:
+ L528:
+	rtnInner
+	end 1
+
+	class %if%then%%else%#S#586 586
+	rstore 3 origin
+	allocEventQ
+	-- super %if%then%%else%
+	--  1:0 2:0 3:0 4:0
+	-- Invocation:loadOrigin: %if pos = 1 %then% 
+    res := 999999 %else% 
+    res := rep.%get pos - 1
+	-- Invocation:loadOrigin:scan: %if pos = 1 %then% 
+    res := 999999 %else% 
+    res := rep.%get pos - 1
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %if pos = 1 %then% 
+    res := 999999 %else% 
+    res := rep.%get pos - 1
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 5
+	rpushg 1 prv:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if cond: ? Boolean %then% thenPart:< Object %else% elsePart:< Object%if pos = 1 %then% 
+    res := 999999 %else% 
+    res := rep.%get pos - 1
+	-- ObjectGenerator:gen: super: pos = 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos = 1
+	-- Invocation:loadOrigin: pos = 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 1
+	rpushg 1 prv:origin
+	-- next not assign: = 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: = 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: = V: ? integer -> B: ? Boolean
+	eq
+	topSuper  60
+	rtnInner
+	DO:
+	mvStack 
+ L529:
+ L530:
+	rtnInner
+	end 1
+
+	class #S#920 920
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -16745,7 +19008,2268 @@
 	DO:
 	doEventQ
 	mvStack 
- L455:
+ L531:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: R1.check(inx):IS-empty: staticOff: 0
+	-- Invocation:gen: R1.check(inx)
+	-- Invocation:loadOrigin: R1.check(inx)
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#920:origin
+	rpushg 1 putAt:origin
+	-- next not assign: check(inx) :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: check(inx)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx:IS-empty: staticOff: 0
+	-- Invocation:gen: inx
+	-- Invocation:loadOrigin: inx
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#920:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx
+	pushg 1 inx
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: rep.%put exp %at% (inx - R1.low) + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%put exp %at% (inx - R1.low) + 1
+	-- Invocation:loadOrigin: rep.%put exp %at% (inx - R1.low) + 1
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#920:origin
+	rpushg 1 putAt:origin
+	-- next not assign: %put exp %at% (inx - R1.low) + 1 :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %put exp %at% (inx - R1.low) + 1
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %put V: ? elm %at% inx: ? integer%put exp %at% (inx - R1.low) + 1
+	-- KeyWord:invoke: 
+	-- pattern:load: %put V: ? elm %at% inx: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: exp:IS-empty: staticOff: 0
+	-- Invocation:gen: exp
+	-- Invocation:loadOrigin: exp
+	-- Invocation:loadOrigin:scan: exp
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: exp
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#920:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: exp
+	pushg 2 exp
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: (inx - R1.low) + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: (inx - R1.low) + 1
+	-- Invocation:loadOrigin: (inx - R1.low) + 1
+	-- Invocation:loadOrigin:scan: (inx - R1.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (inx - R1.low)
+	-- Invocation:loadOrigin: inx - R1.low
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#920:origin
+	-- next not assign: - R1.low :E: inx
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx
+	pushg 1 inx
+	-- Invocation:loadOrigin:scan: - R1.low
+	-- BE:loadOrigin:E: - R1.low
+	-- next not assign: + 1 :E: - R1.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R1.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R1.low
+	-- Invocation:loadOrigin: R1.low
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#920:origin
+	rpushg 1 putAt:origin
+	-- next not assign: low :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	xstoreg 1 inx
+ L532:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#921 921
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L533:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: R1.check(inx):IS-empty: staticOff: 0
+	-- Invocation:gen: R1.check(inx)
+	-- Invocation:loadOrigin: R1.check(inx)
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#921:origin
+	rpushg 1 getAt:origin
+	-- next not assign: check(inx) :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: check(inx)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx:IS-empty: staticOff: 0
+	-- Invocation:gen: inx
+	-- Invocation:loadOrigin: inx
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#921:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx
+	pushg 1 inx
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: res := rep.%get (inx - R1.low) + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: res := rep.%get (inx - R1.low) + 1
+	-- Invocation:loadOrigin: res := rep.%get (inx - R1.low) + 1
+	-- Invocation:loadOrigin:scan: res
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: res
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#921:origin
+	-- Invocation:loadOrigin:scan: := rep.%get (inx - R1.low) + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.%get (inx - R1.low) + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%get (inx - R1.low) + 1
+	-- Invocation:loadOrigin: rep.%get (inx - R1.low) + 1
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#921:origin
+	rpushg 1 getAt:origin
+	-- next not assign: %get (inx - R1.low) + 1 :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %get (inx - R1.low) + 1
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %get inx: ? integer -> V: ? integer%get (inx - R1.low) + 1
+	-- KeyWord:invoke: 
+	-- pattern:load: %get inx: ? integer -> V: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: (inx - R1.low) + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: (inx - R1.low) + 1
+	-- Invocation:loadOrigin: (inx - R1.low) + 1
+	-- Invocation:loadOrigin:scan: (inx - R1.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (inx - R1.low)
+	-- Invocation:loadOrigin: inx - R1.low
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#921:origin
+	-- next not assign: - R1.low :E: inx
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx
+	pushg 1 inx
+	-- Invocation:loadOrigin:scan: - R1.low
+	-- BE:loadOrigin:E: - R1.low
+	-- next not assign: + 1 :E: - R1.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R1.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R1.low
+	-- Invocation:loadOrigin: R1.low
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#921:origin
+	rpushg 1 getAt:origin
+	-- next not assign: low :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	xpushg 1 inx
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 res
+ L534:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#922 922
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- VarRef:gen: repPos
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L535:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: R1.check(inx1):IS-empty: staticOff: 0
+	-- Invocation:gen: R1.check(inx1)
+	-- Invocation:loadOrigin: R1.check(inx1)
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#922:origin
+	rpushg 1 putAtAt:origin
+	-- next not assign: check(inx1) :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: check(inx1)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx1:IS-empty: staticOff: 0
+	-- Invocation:gen: inx1
+	-- Invocation:loadOrigin: inx1
+	-- Invocation:loadOrigin:scan: inx1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx1
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#922:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx1
+	pushg 1 inx1
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: R2.check(inx2):IS-empty: staticOff: 0
+	-- Invocation:gen: R2.check(inx2)
+	-- Invocation:loadOrigin: R2.check(inx2)
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#922:origin
+	rpushg 1 putAtAt:origin
+	-- next not assign: check(inx2) :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: check(inx2)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx2:IS-empty: staticOff: 0
+	-- Invocation:gen: inx2
+	-- Invocation:loadOrigin: inx2
+	-- Invocation:loadOrigin:scan: inx2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#922:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx2
+	pushg 2 inx2
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: repPos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: repPos
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: (inx1 - R1.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (inx1 - R1.low)
+	-- Invocation:loadOrigin: inx1 - R1.low
+	-- Invocation:loadOrigin:scan: inx1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx1
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#922:origin
+	-- next not assign: - R1.low :E: inx1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx1
+	pushg 1 inx1
+	-- Invocation:loadOrigin:scan: - R1.low
+	-- BE:loadOrigin:E: - R1.low
+	-- next not assign: * R2.noof + (1 + inx2 - R2.low) :E: - R1.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R1.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R1.low
+	-- Invocation:loadOrigin: R1.low
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#922:origin
+	rpushg 1 putAtAt:origin
+	-- next not assign: low :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Invocation:loadOrigin:scan: * R2.noof + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#922:origin
+	rpushg 1 putAtAt:origin
+	-- next not assign: noof :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: noof
+	-- next not assign: + (1 + inx2 - R2.low) :E: noof
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- ConsRef:load: noof
+	pushg 3 noof
+	-- Invocation:loadOrigin:scan: + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: (1 + inx2 - R2.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: 1 + inx2 - R2.low
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- next not assign: + inx2 - R2.low :E: 1
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Invocation:loadOrigin:scan: + inx2 - R2.low
+	-- BE:loadOrigin:E: + inx2 - R2.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: inx2 - R2.low:IS-empty: staticOff: 0
+	-- Invocation:gen: inx2 - R2.low
+	-- Invocation:loadOrigin: inx2 - R2.low
+	-- Invocation:loadOrigin:scan: inx2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#922:origin
+	-- next not assign: - R2.low :E: inx2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx2
+	pushg 2 inx2
+	-- Invocation:loadOrigin:scan: - R2.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R2.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R2.low
+	-- Invocation:loadOrigin: R2.low
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#922:origin
+	rpushg 1 putAtAt:origin
+	-- next not assign: low :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: * V: ? integer -> R: ? integer
+	66
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 repPos
+	-- ObjectGenerator:gen: super: rep.%put exp %at% repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%put exp %at% repPos
+	-- Invocation:loadOrigin: rep.%put exp %at% repPos
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#922:origin
+	rpushg 1 putAtAt:origin
+	-- next not assign: %put exp %at% repPos :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %put exp %at% repPos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %put V: ? elm %at% inx: ? integer%put exp %at% repPos
+	-- KeyWord:invoke: 
+	-- pattern:load: %put V: ? elm %at% inx: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: exp:IS-empty: staticOff: 0
+	-- Invocation:gen: exp
+	-- Invocation:loadOrigin: exp
+	-- Invocation:loadOrigin:scan: exp
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: exp
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#922:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: exp
+	pushg 3 exp
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: repPos
+	-- Invocation:loadOrigin: repPos
+	-- Invocation:loadOrigin:scan: repPos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: repPos
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: repPos
+	pushg 1 repPos
+	xstoreg 1 inx
+ L536:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#923 923
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- VarRef:gen: repPos
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L537:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: R1.check(inx1):IS-empty: staticOff: 0
+	-- Invocation:gen: R1.check(inx1)
+	-- Invocation:loadOrigin: R1.check(inx1)
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#923:origin
+	rpushg 1 getAtAt:origin
+	-- next not assign: check(inx1) :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: check(inx1)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx1:IS-empty: staticOff: 0
+	-- Invocation:gen: inx1
+	-- Invocation:loadOrigin: inx1
+	-- Invocation:loadOrigin:scan: inx1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx1
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#923:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx1
+	pushg 1 inx1
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: R2.check(inx2):IS-empty: staticOff: 0
+	-- Invocation:gen: R2.check(inx2)
+	-- Invocation:loadOrigin: R2.check(inx2)
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#923:origin
+	rpushg 1 getAtAt:origin
+	-- next not assign: check(inx2) :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: check(inx2)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx2:IS-empty: staticOff: 0
+	-- Invocation:gen: inx2
+	-- Invocation:loadOrigin: inx2
+	-- Invocation:loadOrigin:scan: inx2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#923:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx2
+	pushg 2 inx2
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: repPos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: repPos
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: (inx1 - R1.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (inx1 - R1.low)
+	-- Invocation:loadOrigin: inx1 - R1.low
+	-- Invocation:loadOrigin:scan: inx1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx1
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#923:origin
+	-- next not assign: - R1.low :E: inx1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx1
+	pushg 1 inx1
+	-- Invocation:loadOrigin:scan: - R1.low
+	-- BE:loadOrigin:E: - R1.low
+	-- next not assign: * R2.noof + (1 + inx2 - R2.low) :E: - R1.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R1.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R1.low
+	-- Invocation:loadOrigin: R1.low
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#923:origin
+	rpushg 1 getAtAt:origin
+	-- next not assign: low :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Invocation:loadOrigin:scan: * R2.noof + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#923:origin
+	rpushg 1 getAtAt:origin
+	-- next not assign: noof :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: noof
+	-- next not assign: + (1 + inx2 - R2.low) :E: noof
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- ConsRef:load: noof
+	pushg 3 noof
+	-- Invocation:loadOrigin:scan: + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: (1 + inx2 - R2.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: 1 + inx2 - R2.low
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- next not assign: + inx2 - R2.low :E: 1
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Invocation:loadOrigin:scan: + inx2 - R2.low
+	-- BE:loadOrigin:E: + inx2 - R2.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: inx2 - R2.low:IS-empty: staticOff: 0
+	-- Invocation:gen: inx2 - R2.low
+	-- Invocation:loadOrigin: inx2 - R2.low
+	-- Invocation:loadOrigin:scan: inx2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#923:origin
+	-- next not assign: - R2.low :E: inx2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx2
+	pushg 2 inx2
+	-- Invocation:loadOrigin:scan: - R2.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R2.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R2.low
+	-- Invocation:loadOrigin: R2.low
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#923:origin
+	rpushg 1 getAtAt:origin
+	-- next not assign: low :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: * V: ? integer -> R: ? integer
+	66
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 repPos
+	-- ObjectGenerator:gen: super: exp := rep.%get repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: exp := rep.%get repPos
+	-- Invocation:loadOrigin: exp := rep.%get repPos
+	-- Invocation:loadOrigin:scan: exp
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: exp
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#923:origin
+	-- Invocation:loadOrigin:scan: := rep.%get repPos
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.%get repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%get repPos
+	-- Invocation:loadOrigin: rep.%get repPos
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#923:origin
+	rpushg 1 getAtAt:origin
+	-- next not assign: %get repPos :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %get repPos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %get inx: ? integer -> V: ? integer%get repPos
+	-- KeyWord:invoke: 
+	-- pattern:load: %get inx: ? integer -> V: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: repPos
+	-- Invocation:loadOrigin: repPos
+	-- Invocation:loadOrigin:scan: repPos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: repPos
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: repPos
+	pushg 1 repPos
+	xpushg 1 inx
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 3 exp
+ L538:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#924 924
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	-- VarRef:gen: repPos
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L539:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: inx1 := il.first:IS-empty: staticOff: 0
+	-- Invocation:gen: inx1 := il.first
+	-- Invocation:loadOrigin: inx1 := il.first
+	-- Invocation:loadOrigin:scan: inx1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx1
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- Invocation:loadOrigin:scan: := il.first
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: il.first:IS-empty: staticOff: 0
+	-- Invocation:gen: il.first
+	-- Invocation:loadOrigin: il.first
+	-- Invocation:loadOrigin:scan: il
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: il
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- next not assign: first :E: il
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: il
+	rpushg 2 il
+	-- Invocation:loadOrigin:scan: first
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: first -> r: ? integer
+	invoke 561 0 first
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 inx1
+	-- ObjectGenerator:gen: super: inx2 := il.second:IS-empty: staticOff: 0
+	-- Invocation:gen: inx2 := il.second
+	-- Invocation:loadOrigin: inx2 := il.second
+	-- Invocation:loadOrigin:scan: inx2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- Invocation:loadOrigin:scan: := il.second
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: il.second:IS-empty: staticOff: 0
+	-- Invocation:gen: il.second
+	-- Invocation:loadOrigin: il.second
+	-- Invocation:loadOrigin:scan: il
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: il
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- next not assign: second :E: il
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: il
+	rpushg 2 il
+	-- Invocation:loadOrigin:scan: second
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: second -> r: ? integer
+	invoke 562 0 second
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 3 inx2
+	-- ObjectGenerator:gen: super: R1.check(inx1):IS-empty: staticOff: 0
+	-- Invocation:gen: R1.check(inx1)
+	-- Invocation:loadOrigin: R1.check(inx1)
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#924:origin
+	rpushg 1 realPutAt:origin
+	-- next not assign: check(inx1) :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: check(inx1)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx1:IS-empty: staticOff: 0
+	-- Invocation:gen: inx1
+	-- Invocation:loadOrigin: inx1
+	-- Invocation:loadOrigin:scan: inx1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx1
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx1
+	pushg 2 inx1
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: R2.check(inx2):IS-empty: staticOff: 0
+	-- Invocation:gen: R2.check(inx2)
+	-- Invocation:loadOrigin: R2.check(inx2)
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#924:origin
+	rpushg 1 realPutAt:origin
+	-- next not assign: check(inx2) :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: check(inx2)
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: inx2:IS-empty: staticOff: 0
+	-- Invocation:gen: inx2
+	-- Invocation:loadOrigin: inx2
+	-- Invocation:loadOrigin:scan: inx2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx2
+	pushg 3 inx2
+	-- Function:invoke: 
+	-- pattern:load: check(inx: ? integer)
+	invoke 568 0 check
+	rpop
+	-- ObjectGenerator:gen: super: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: repPos := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: repPos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: repPos
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Invocation:loadOrigin:scan: := (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: (inx1 - R1.low) * R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: (inx1 - R1.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (inx1 - R1.low)
+	-- Invocation:loadOrigin: inx1 - R1.low
+	-- Invocation:loadOrigin:scan: inx1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx1
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- next not assign: - R1.low :E: inx1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx1
+	pushg 2 inx1
+	-- Invocation:loadOrigin:scan: - R1.low
+	-- BE:loadOrigin:E: - R1.low
+	-- next not assign: * R2.noof + (1 + inx2 - R2.low) :E: - R1.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R1.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R1.low
+	-- Invocation:loadOrigin: R1.low
+	-- Invocation:loadOrigin:scan: R1
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R1
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#924:origin
+	rpushg 1 realPutAt:origin
+	-- next not assign: low :E: R1
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R1
+	rpushg 3 R1
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Invocation:loadOrigin:scan: * R2.noof + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R2.noof + (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: R2.noof + (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#924:origin
+	rpushg 1 realPutAt:origin
+	-- next not assign: noof :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: noof
+	-- next not assign: + (1 + inx2 - R2.low) :E: noof
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- ConsRef:load: noof
+	pushg 3 noof
+	-- Invocation:loadOrigin:scan: + (1 + inx2 - R2.low)
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: (1 + inx2 - R2.low):IS-empty: staticOff: 0
+	-- Invocation:gen: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin:scan: (1 + inx2 - R2.low)
+	-- BracketedExp:pushThis: 
+	-- BracketedExp:loadOrigin: (1 + inx2 - R2.low)
+	-- Invocation:loadOrigin: 1 + inx2 - R2.low
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- next not assign: + inx2 - R2.low :E: 1
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Invocation:loadOrigin:scan: + inx2 - R2.low
+	-- BE:loadOrigin:E: + inx2 - R2.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: inx2 - R2.low:IS-empty: staticOff: 0
+	-- Invocation:gen: inx2 - R2.low
+	-- Invocation:loadOrigin: inx2 - R2.low
+	-- Invocation:loadOrigin:scan: inx2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx2
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- next not assign: - R2.low :E: inx2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx2
+	pushg 3 inx2
+	-- Invocation:loadOrigin:scan: - R2.low
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: R2.low:IS-empty: staticOff: 0
+	-- Invocation:gen: R2.low
+	-- Invocation:loadOrigin: R2.low
+	-- Invocation:loadOrigin:scan: R2
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: R2
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#924:origin
+	rpushg 1 realPutAt:origin
+	-- next not assign: low :E: R2
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: R2
+	rpushg 4 R2
+	-- Invocation:loadOrigin:scan: low
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: low
+	pushg 1 low
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: * V: ? integer -> R: ? integer
+	66
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 repPos
+	-- ObjectGenerator:gen: super: rep.%put exp %at% repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%put exp %at% repPos
+	-- Invocation:loadOrigin: rep.%put exp %at% repPos
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#924:origin
+	rpushg 1 realPutAt:origin
+	-- next not assign: %put exp %at% repPos :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %put exp %at% repPos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %put V: ? elm %at% inx: ? integer%put exp %at% repPos
+	-- KeyWord:invoke: 
+	-- pattern:load: %put V: ? elm %at% inx: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: exp:IS-empty: staticOff: 0
+	-- Invocation:gen: exp
+	-- Invocation:loadOrigin: exp
+	-- Invocation:loadOrigin:scan: exp
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: exp
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 #S#924:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: exp
+	pushg 1 exp
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: repPos:IS-empty: staticOff: 0
+	-- Invocation:gen: repPos
+	-- Invocation:loadOrigin: repPos
+	-- Invocation:loadOrigin:scan: repPos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: repPos
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: repPos
+	pushg 1 repPos
+	xstoreg 1 inx
+ L540:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class loop 593
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L541:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: current := rep.%get pos:IS-empty: staticOff: 0
+	-- Invocation:gen: current := rep.%get pos
+	-- Invocation:loadOrigin: current := rep.%get pos
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 loop:origin
+	-- Invocation:loadOrigin:scan: := rep.%get pos
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.%get pos:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%get pos
+	-- Invocation:loadOrigin: rep.%get pos
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAll:origin
+	-- next not assign: %get pos :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %get pos
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %get inx: ? integer -> V: ? integer%get pos
+	-- KeyWord:invoke: 
+	-- pattern:load: %get inx: ? integer -> V: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: pos:IS-empty: staticOff: 0
+	-- Invocation:gen: pos
+	-- Invocation:loadOrigin: pos
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAll:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	xpushg 1 inx
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 current
+	-- ObjectGenerator:gen: super: %inner forAll:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner forAll
+	-- Invocation:loadOrigin: %inner forAll
+	-- Invocation:loadOrigin:scan: %inner forAll
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %inner forAll
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %inner P: ? Object%inner forAll
+	-- KeyWord:invoke: 
+	-- pattern:load: %inner P: ? Object
+	pushThis 
+	rpushg 1 loop:origin
+	inner  1
+	rpopThisObj 
+	-- ObjectGenerator:gen: super: %if pos < noof %then% 
+    %restart loop:IS-empty: staticOff: 0
+	-- Invocation:gen: %if pos < noof %then% 
+    %restart loop
+	-- Invocation:loadOrigin: %if pos < noof %then% 
+    %restart loop
+	-- Invocation:loadOrigin:scan: %if pos < noof %then% 
+    %restart loop
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if pos < noof %then% 
+    %restart loop
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if pos < noof %then% 
+    %restart loop
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: pos < noof:IS-empty: staticOff: 0
+	-- Invocation:gen: pos < noof
+	-- Invocation:loadOrigin: pos < noof
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAll:origin
+	-- next not assign: < noof :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: < noof
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: noof:IS-empty: staticOff: 0
+	-- Invocation:gen: noof
+	-- Invocation:loadOrigin: noof
+	-- Invocation:loadOrigin:scan: noof
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: noof
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAll:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: noof
+	pushg 3 noof
+	-- Binary:invoke: 
+	-- pattern:load: < V: ? integer -> B: ? Boolean
+	51
+	jmpFalse L543
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 925 0 #S#925
+	rpop
+ L543:
+ L542:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class loop 595
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L544:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %inner forAllIndex:IS-empty: staticOff: 0
+	-- Invocation:gen: %inner forAllIndex
+	-- Invocation:loadOrigin: %inner forAllIndex
+	-- Invocation:loadOrigin:scan: %inner forAllIndex
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %inner forAllIndex
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %inner P: ? Object%inner forAllIndex
+	-- KeyWord:invoke: 
+	-- pattern:load: %inner P: ? Object
+	pushThis 
+	rpushg 1 loop:origin
+	inner  1
+	rpopThisObj 
+	-- ObjectGenerator:gen: super: pos := pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := pos + 1
+	-- Invocation:loadOrigin: pos := pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAllIndex:origin
+	-- Invocation:loadOrigin:scan: := pos + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos + 1
+	-- Invocation:loadOrigin: pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAllIndex:origin
+	-- next not assign: + 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+	-- ObjectGenerator:gen: super: inx := pos:IS-empty: staticOff: 0
+	-- Invocation:gen: inx := pos
+	-- Invocation:loadOrigin: inx := pos
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 1 loop:origin
+	-- Invocation:loadOrigin:scan: := pos
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: pos:IS-empty: staticOff: 0
+	-- Invocation:gen: pos
+	-- Invocation:loadOrigin: pos
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAllIndex:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 inx
+	-- ObjectGenerator:gen: super: %if pos < noof %then% 
+    %restart loop:IS-empty: staticOff: 0
+	-- Invocation:gen: %if pos < noof %then% 
+    %restart loop
+	-- Invocation:loadOrigin: %if pos < noof %then% 
+    %restart loop
+	-- Invocation:loadOrigin:scan: %if pos < noof %then% 
+    %restart loop
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if pos < noof %then% 
+    %restart loop
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if pos < noof %then% 
+    %restart loop
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: pos < noof:IS-empty: staticOff: 0
+	-- Invocation:gen: pos < noof
+	-- Invocation:loadOrigin: pos < noof
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAllIndex:origin
+	-- next not assign: < noof :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: < noof
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: noof:IS-empty: staticOff: 0
+	-- Invocation:gen: noof
+	-- Invocation:loadOrigin: noof
+	-- Invocation:loadOrigin:scan: noof
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: noof
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 loop:origin
+	rpushg 1 forAllIndex:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: noof
+	pushg 3 noof
+	-- Binary:invoke: 
+	-- pattern:load: < V: ? integer -> B: ? Boolean
+	51
+	jmpFalse L546
+	-- ObjectGenerator:gen: super: :singular:staticOff: 0
+	pushThis 
+	invoke 926 0 #S#926
+	rpop
+ L546:
+ L545:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class forAllIndex#S#597 597
+	rstore 2 origin
+	allocEventQ
+	-- super forAllIndex
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=597
+	-- Invocation:loadOrigin: forAllIndex
+	-- Invocation:loadOrigin:scan: forAllIndex
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAllIndex
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 fill:origin
+	-- Unary:loadArgs: 
+	topSuper  594
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L547:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: rep.%put v %at% inx:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%put v %at% inx
+	-- Invocation:loadOrigin: rep.%put v %at% inx
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 forAllIndex#S#597:origin
+	rpushg 1 fill:origin
+	-- next not assign: %put v %at% inx :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %put v %at% inx
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %put V: ? elm %at% inx: ? integer%put v %at% inx
+	-- KeyWord:invoke: 
+	-- pattern:load: %put V: ? elm %at% inx: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: v:IS-empty: staticOff: 0
+	-- Invocation:gen: v
+	-- Invocation:loadOrigin: v
+	-- Invocation:loadOrigin:scan: v
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: v
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAllIndex#S#597:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: v
+	pushg 1 v
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: inx:IS-empty: staticOff: 0
+	-- Invocation:gen: inx
+	-- Invocation:loadOrigin: inx
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx
+	pushg 1 inx
+	xstoreg 1 inx
+ L548:
+	rtnInner
+	end 1
+
+	class forAll#S#601 601
+	rstore 2 origin
+	allocEventQ
+	-- super forAll
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=601
+	-- Invocation:loadOrigin: forAll
+	-- Invocation:loadOrigin:scan: forAll
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAll
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 sum:origin
+	-- Unary:loadArgs: 
+	topSuper  592
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L549:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: s := s + current:IS-empty: staticOff: 0
+	-- Invocation:gen: s := s + current
+	-- Invocation:loadOrigin: s := s + current
+	-- Invocation:loadOrigin:scan: s
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: s
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#601:origin
+	-- Invocation:loadOrigin:scan: := s + current
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: s + current:IS-empty: staticOff: 0
+	-- Invocation:gen: s + current
+	-- Invocation:loadOrigin: s + current
+	-- Invocation:loadOrigin:scan: s
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: s
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#601:origin
+	-- next not assign: + current :E: s
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: s
+	pushg 1 s
+	-- Invocation:loadOrigin:scan: + current
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: current:IS-empty: staticOff: 0
+	-- Invocation:gen: current
+	-- Invocation:loadOrigin: current
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: current
+	pushg 1 current
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 s
+ L550:
+	rtnInner
+	end 1
+
+	class forAll#S#603 603
+	rstore 2 origin
+	allocEventQ
+	-- super forAll
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=603
+	-- Invocation:loadOrigin: forAll
+	-- Invocation:loadOrigin:scan: forAll
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAll
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 iadd:origin
+	-- Unary:loadArgs: 
+	topSuper  592
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L551:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: put(current + a.get):IS-empty: staticOff: 0
+	-- Invocation:gen: put(current + a.get)
+	-- Invocation:loadOrigin: put(current + a.get)
+	-- Invocation:loadOrigin:scan: put(current + a.get)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: put(current + a.get)
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 forAll#S#603:origin
+	rpushg 1 iadd:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: current + a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: current + a.get
+	-- Invocation:loadOrigin: current + a.get
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: + a.get :E: current
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: current
+	pushg 1 current
+	-- Invocation:loadOrigin:scan: + a.get
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: a.get
+	-- Invocation:loadOrigin: a.get
+	-- Invocation:loadOrigin:scan: a
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: a
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#603:origin
+	-- next not assign: get :E: a
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: a
+	rpushg 2 a
+	-- Invocation:loadOrigin:scan: get
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: get -> res: ? integer
+	invoke 581 0 get
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Function:invoke: 
+	-- pattern:load: put(e: ? integer) -> res: ? Array
+	invoke 579 0 put
+	rpop
+ L552:
+	rtnInner
+	end 1
+
+	class forAll#S#605 605
+	rstore 2 origin
+	allocEventQ
+	-- super forAll
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=605
+	-- Invocation:loadOrigin: forAll
+	-- Invocation:loadOrigin:scan: forAll
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAll
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 iminus:origin
+	-- Unary:loadArgs: 
+	topSuper  592
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L553:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: put(current - a.get):IS-empty: staticOff: 0
+	-- Invocation:gen: put(current - a.get)
+	-- Invocation:loadOrigin: put(current - a.get)
+	-- Invocation:loadOrigin:scan: put(current - a.get)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: put(current - a.get)
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 forAll#S#605:origin
+	rpushg 1 iminus:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: current - a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: current - a.get
+	-- Invocation:loadOrigin: current - a.get
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: - a.get :E: current
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: current
+	pushg 1 current
+	-- Invocation:loadOrigin:scan: - a.get
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: a.get
+	-- Invocation:loadOrigin: a.get
+	-- Invocation:loadOrigin:scan: a
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: a
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#605:origin
+	-- next not assign: get :E: a
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: a
+	rpushg 2 a
+	-- Invocation:loadOrigin:scan: get
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: get -> res: ? integer
+	invoke 581 0 get
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	-- Function:invoke: 
+	-- pattern:load: put(e: ? integer) -> res: ? Array
+	invoke 579 0 put
+	rpop
+ L554:
+	rtnInner
+	end 1
+
+	class forAll#S#607 607
+	rstore 2 origin
+	allocEventQ
+	-- super forAll
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=607
+	-- Invocation:loadOrigin: forAll
+	-- Invocation:loadOrigin:scan: forAll
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAll
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 imult:origin
+	-- Unary:loadArgs: 
+	topSuper  592
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L555:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: put(current * a.get):IS-empty: staticOff: 0
+	-- Invocation:gen: put(current * a.get)
+	-- Invocation:loadOrigin: put(current * a.get)
+	-- Invocation:loadOrigin:scan: put(current * a.get)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: put(current * a.get)
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 forAll#S#607:origin
+	rpushg 1 imult:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: current * a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: current * a.get
+	-- Invocation:loadOrigin: current * a.get
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: * a.get :E: current
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: current
+	pushg 1 current
+	-- Invocation:loadOrigin:scan: * a.get
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: a.get
+	-- Invocation:loadOrigin: a.get
+	-- Invocation:loadOrigin:scan: a
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: a
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#607:origin
+	-- next not assign: get :E: a
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: a
+	rpushg 2 a
+	-- Invocation:loadOrigin:scan: get
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: get -> res: ? integer
+	invoke 581 0 get
+	-- Binary:invoke: 
+	-- pattern:load: * V: ? integer -> R: ? integer
+	66
+	-- Function:invoke: 
+	-- pattern:load: put(e: ? integer) -> res: ? Array
+	invoke 579 0 put
+	rpop
+ L556:
+	rtnInner
+	end 1
+
+	class forAll#S#609 609
+	rstore 2 origin
+	allocEventQ
+	-- super forAll
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=609
+	-- Invocation:loadOrigin: forAll
+	-- Invocation:loadOrigin:scan: forAll
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAll
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 idiv:origin
+	-- Unary:loadArgs: 
+	topSuper  592
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L557:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: put(current / a.get):IS-empty: staticOff: 0
+	-- Invocation:gen: put(current / a.get)
+	-- Invocation:loadOrigin: put(current / a.get)
+	-- Invocation:loadOrigin:scan: put(current / a.get)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: put(current / a.get)
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 forAll#S#609:origin
+	rpushg 1 idiv:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: current / a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: current / a.get
+	-- Invocation:loadOrigin: current / a.get
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 0
+	-- next not assign: / a.get :E: current
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: current
+	pushg 1 current
+	-- Invocation:loadOrigin:scan: / a.get
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: a.get
+	-- Invocation:loadOrigin: a.get
+	-- Invocation:loadOrigin:scan: a
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: a
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#609:origin
+	-- next not assign: get :E: a
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: a
+	rpushg 2 a
+	-- Invocation:loadOrigin:scan: get
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: get -> res: ? integer
+	invoke 581 0 get
+	-- Binary:invoke: 
+	-- pattern:load: / V: ? integer -> R: ? integer
+	67
+	-- Function:invoke: 
+	-- pattern:load: put(e: ? integer) -> res: ? Array
+	invoke 579 0 put
+	rpop
+ L558:
+	rtnInner
+	end 1
+
+	class forAll#S#611 611
+	rstore 2 origin
+	allocEventQ
+	-- super forAll
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=611
+	-- Invocation:loadOrigin: forAll
+	-- Invocation:loadOrigin:scan: forAll
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAll
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 equal:origin
+	-- Unary:loadArgs: 
+	topSuper  592
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L559:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if get = a.get %then% b := true:IS-empty: staticOff: 0
+	-- Invocation:gen: %if get = a.get %then% b := true
+	-- Invocation:loadOrigin: %if get = a.get %then% b := true
+	-- Invocation:loadOrigin:scan: %if get = a.get %then% b := true
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %if get = a.get %then% b := true
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if _cond: ? Boolean %then% _thenPart:< Object%if get = a.get %then% b := true
+	-- KeyWord:invoke: 
+	-- pattern:load: %if _cond: ? Boolean %then% _thenPart:< Object
+	-- ObjectGenerator:gen: super: get = a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: get = a.get
+	-- Invocation:loadOrigin: get = a.get
+	-- Invocation:loadOrigin:scan: get
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: get
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 forAll#S#611:origin
+	rpushg 1 equal:origin
+	-- next not assign: = a.get :E: get
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: get -> res: ? integer
+	invoke 581 0 get
+	-- Invocation:loadOrigin:scan: = a.get
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: a.get:IS-empty: staticOff: 0
+	-- Invocation:gen: a.get
+	-- Invocation:loadOrigin: a.get
+	-- Invocation:loadOrigin:scan: a
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: a
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#611:origin
+	-- next not assign: get :E: a
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: a
+	rpushg 2 a
+	-- Invocation:loadOrigin:scan: get
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: get -> res: ? integer
+	invoke 581 0 get
+	-- Binary:invoke: 
+	-- pattern:load: = V: ? integer -> B: ? Boolean
+	eq
+	jmpFalse L561
+	-- ObjectGenerator:gen: super: b := true:IS-empty: staticOff: 0
+	-- Invocation:gen: b := true
+	-- Invocation:loadOrigin: b := true
+	-- Invocation:loadOrigin:scan: b
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: b
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 forAll#S#611:origin
+	-- Invocation:loadOrigin:scan: := true
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: true:IS-empty: staticOff: 0
+	-- Invocation:gen: true
+	-- Invocation:loadOrigin: true
+	-- Invocation:loadOrigin:scan: true
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: true
+	-- AdjustOrigin: 0
+	-- on : 6
+	rpushg 2 forAll#S#611:origin
+	rpushg 1 equal:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: True -> B: ? Boolean
+	invoke 24 0 True
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 b
+ L561:
+ L560:
+	rtnInner
+	end 1
+
+	class forAll#S#613 613
+	rstore 2 origin
+	allocEventQ
+	-- super forAll
+	--  1:0 2:0 3:0 4:0
+	-- vdtAdd: inx=1 descInx=613
+	-- Invocation:loadOrigin: forAll
+	-- Invocation:loadOrigin:scan: forAll
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: forAll
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 countNonZero:origin
+	-- Unary:loadArgs: 
+	topSuper  592
+	rtnInner
+	DO:
+	doEventQ
+	mvStack 
+ L562:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %if current = 0 %then% 
+    count := count %else% 
+    count := count + 1:IS-empty: staticOff: 0
+	pushThis 
+	invoke 614 0 %if%then%%else%#S#614
+	rpop
+ L563:
+	rtnInner
+	end 1
+
+	class %for%to%%do%#S#616 616
+	rstore 2 origin
+	allocEventQ
+	-- super %for%to%%do%
+	--  1:0 2:0 3:0 4:0
+	-- Invocation:loadOrigin: %for 1 %to% rep.length %do% 
+    putint(rep.%get inx)
+    ", ".print
+	-- Invocation:loadOrigin:scan: %for 1 %to% rep.length %do% 
+    putint(rep.%get inx)
+    ", ".print
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %for 1 %to% rep.length %do% 
+    putint(rep.%get inx)
+    ", ".print
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 5
+	rpushg 1 print:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %for first: ? integer %to% last: ? integer %do% body:< Object%for 1 %to% rep.length %do% 
+    putint(rep.%get inx)
+    ", ".print
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- ObjectGenerator:gen: super: rep.length:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.length
+	-- Invocation:loadOrigin: rep.length
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 2
+	rpushg 2 origin
+	-- on : 1
+	rpushg 1 print:origin
+	-- next not assign: length :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: length
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: length -> res: ? integer
+	invoke 55 0 length
+	topSuper  63
+	rtnInner
+	DO:
+	mvStack 
+ L564:
+ L565:
+	rtnInner
+	end 1
+
+	class #S#988 988
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L566:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: SQS.insert(active):IS-empty: staticOff: 0
 	-- Invocation:gen: SQS.insert(active)
@@ -16756,8 +21280,8 @@
 	-- Unary:loadOrigin: SQS
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 1 #S#922:origin
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#988:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	rpushg 1 Scheduler:origin
@@ -16777,8 +21301,8 @@
 	-- Unary:loadOrigin: active
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 #S#922:origin
-	rpushg 1 #S#752:origin
+	rpushg 1 #S#988:origin
+	rpushg 1 #S#799:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Unary:loadArgs: 
@@ -16789,14 +21313,14 @@
 	-- pattern:load: insert(P: ? BasicProcess)
 	invoke 152 0 insert
 	rpop
- L456:
+ L567:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#753 753
+	class thenPart#SB#800 800
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16804,7 +21328,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L457:
+ L568:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if SQS.hasWaiting %then% 
     sleep(100)
@@ -16837,7 +21361,7 @@
 	-- Unary:loadOrigin: SQS
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 thenPart#S#753:origin
+	rpushg 2 thenPart#S#800:origin
 	rpushg 3 %if%then%%else%#S#130:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
@@ -16852,12 +21376,12 @@
 	-- Unary:invoke: 
 	-- pattern:load: hasWaiting -> B: ? boolean
 	invoke 161 0 hasWaiting
-	jmpFalse L459
+	jmpFalse L570
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 923 0 #S#923
+	invoke 989 0 #S#989
 	rpop
- L459:
+ L570:
 	-- ObjectGenerator:gen: super: sch.dcr:IS-empty: staticOff: 0
 	-- Invocation:gen: sch.dcr
 	-- Invocation:loadOrigin: sch.dcr
@@ -16867,7 +21391,7 @@
 	-- Unary:loadOrigin: sch
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 thenPart#S#753:origin
+	rpushg 2 thenPart#S#800:origin
 	rpushg 3 %if%then%%else%#S#130:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
@@ -16920,7 +21444,7 @@
 	-- Unary:loadOrigin: sch
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 thenPart#S#753:origin
+	rpushg 2 thenPart#S#800:origin
 	rpushg 3 %if%then%%else%#S#130:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
@@ -16935,20 +21459,20 @@
 	-- Unary:invoke: 
 	-- pattern:load: running -> B: ? Boolean
 	invoke 147 0 running
-	jmpFalse L460
+	jmpFalse L571
 	-- ObjectGenerator:gen: super: :singular:staticOff: 0
 	pushThis 
-	invoke 924 0 #S#924
+	invoke 990 0 #S#990
 	rpop
- L460:
- L458:
+ L571:
+ L569:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#754 754
+	class elsePart#SB#801 801
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16956,7 +21480,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L461:
+ L572:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %restart Loop:IS-empty: staticOff: 0
 	-- Invocation:gen: %restart Loop
@@ -16968,15 +21492,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart Loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 2 303
- L462:
+	break 2 309
+ L573:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#755 755
+	class thenPart#SB#802 802
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -16984,7 +21508,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L463:
+ L574:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: main.resume:IS-empty: staticOff: 0
 	-- Invocation:gen: main.resume
@@ -16995,7 +21519,7 @@
 	-- Unary:loadOrigin: main
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#755:origin
+	rpushg 2 thenPart#S#802:origin
 	rpushg 3 %if%then%%else%#S#135:origin
 	rpushg 1 loopX:origin
 	rpushg 1 do:origin
@@ -17010,14 +21534,14 @@
 	-- pattern:load: resume
 	call(D)Resume
 	rpop
- L464:
+ L575:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#756 756
+	class elsePart#SB#803 803
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17025,7 +21549,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L465:
+ L576:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: sleep(100):IS-empty: staticOff: 0
 	-- Invocation:gen: sleep(100)
@@ -17056,15 +21580,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loopX
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 2 306
- L466:
+	break 2 312
+ L577:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#732 732
+	class #S#779 779
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17072,7 +21596,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L467:
+ L578:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: current := currentElement.elm:IS-empty: staticOff: 0
 	-- Invocation:gen: current := currentElement.elm
@@ -17083,7 +21607,7 @@
 	-- Unary:loadOrigin: current
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#732:origin
+	rpushg 1 #S#779:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Invocation:loadOrigin:scan: := currentElement.elm
@@ -17097,7 +21621,7 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#732:origin
+	rpushg 1 #S#779:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: elm :E: currentElement
@@ -17125,7 +21649,7 @@
 	-- KeyWord:invoke: 
 	-- pattern:load: %inner P: ? Object
 	pushThis 
-	rpushg 1 #S#732:origin
+	rpushg 1 #S#779:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	inner  1
@@ -17139,7 +21663,7 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#732:origin
+	rpushg 1 #S#779:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Invocation:loadOrigin:scan: := currentElement.succ
@@ -17153,7 +21677,7 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#732:origin
+	rpushg 1 #S#779:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: succ :E: currentElement
@@ -17180,15 +21704,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 1 405
- L468:
+	break 1 468
+ L579:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#733 733
+	class #S#780 780
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17196,7 +21720,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L469:
+ L580:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: current := currentElement.elm:IS-empty: staticOff: 0
 	-- Invocation:gen: current := currentElement.elm
@@ -17207,7 +21731,7 @@
 	-- Unary:loadOrigin: current
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#733:origin
+	rpushg 1 #S#780:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Invocation:loadOrigin:scan: := currentElement.elm
@@ -17221,7 +21745,7 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#733:origin
+	rpushg 1 #S#780:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: elm :E: currentElement
@@ -17249,7 +21773,7 @@
 	-- KeyWord:invoke: 
 	-- pattern:load: %inner P: ? Object
 	pushThis 
-	rpushg 1 #S#733:origin
+	rpushg 1 #S#780:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	inner  1
@@ -17263,7 +21787,7 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#733:origin
+	rpushg 1 #S#780:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- Invocation:loadOrigin:scan: := currentElement.pred
@@ -17277,7 +21801,7 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#733:origin
+	rpushg 1 #S#780:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
 	-- next not assign: pred :E: currentElement
@@ -17304,15 +21828,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 1 408
- L470:
+	break 1 471
+ L581:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#913 913
+	class thenPart#SB#979 979
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17320,7 +21844,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L471:
+ L582:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: head := E:IS-empty: staticOff: 0
 	-- Invocation:gen: head := E
@@ -17331,9 +21855,9 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#913:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 thenPart#S#979:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- Invocation:loadOrigin:scan: := E
 	-- Binary:loadArgs: 
@@ -17346,9 +21870,9 @@
 	-- Unary:loadOrigin: E
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 thenPart#S#913:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 thenPart#S#979:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: E
@@ -17366,9 +21890,9 @@
 	-- Unary:loadOrigin: last
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#913:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 thenPart#S#979:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- Invocation:loadOrigin:scan: := head
 	-- Binary:loadArgs: 
@@ -17381,9 +21905,9 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#913:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 thenPart#S#979:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -17393,14 +21917,14 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 3 last
- L472:
+ L583:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#914 914
+	class elsePart#SB#980 980
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17408,7 +21932,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L473:
+ L584:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: E.succ := head:IS-empty: staticOff: 0
 	-- Invocation:gen: E.succ := head
@@ -17419,9 +21943,9 @@
 	-- Unary:loadOrigin: E
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#914:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 elsePart#S#980:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	-- next not assign: succ :E: E
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -17439,9 +21963,9 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 elsePart#S#914:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 elsePart#S#980:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -17460,9 +21984,9 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 elsePart#S#914:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 elsePart#S#980:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- next not assign: pred :E: head
 	-- Unary:loadArgs: 
@@ -17481,9 +22005,9 @@
 	-- Unary:loadOrigin: E
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#914:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 elsePart#S#980:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: E
@@ -17501,9 +22025,9 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 elsePart#S#914:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 elsePart#S#980:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	rpushg 1 insert:origin
 	-- Invocation:loadOrigin:scan: := E
 	-- Binary:loadArgs: 
@@ -17516,9 +22040,9 @@
 	-- Unary:loadOrigin: E
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#914:origin
-	rpushg 3 %if%then%%else%#S#735:origin
-	rpushg 1 #S#734:origin
+	rpushg 2 elsePart#S#980:origin
+	rpushg 3 %if%then%%else%#S#782:origin
+	rpushg 1 #S#781:origin
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
 	-- VarRef:load: E
@@ -17527,14 +22051,14 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 2 head
- L474:
+ L585:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#737 737
+	class %if%then%%else%#S#784 784
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -17571,7 +22095,7 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 6
-	rpushg 1 #S#736:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	rpushg 1 Queue:origin
@@ -17597,7 +22121,7 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 1
-	rpushg 1 #S#736:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: pred :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -17628,12 +22152,12 @@
 	rtnInner
 	DO:
 	mvStack 
- L475:
- L476:
+ L586:
+ L587:
 	rtnInner
 	end 1
 
-	class thenPart#SB#919 919
+	class thenPart#SB#985 985
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17641,7 +22165,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L477:
+ L588:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: last.succ := none:IS-empty: staticOff: 0
 	-- Invocation:gen: last.succ := none
@@ -17652,9 +22176,9 @@
 	-- Unary:loadOrigin: last
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#919:origin
-	rpushg 3 %if%then%%else%#S#739:origin
-	rpushg 1 #S#738:origin
+	rpushg 2 thenPart#S#985:origin
+	rpushg 3 %if%then%%else%#S#786:origin
+	rpushg 1 #S#785:origin
 	rpushg 1 removeNext:origin
 	-- next not assign: succ :E: last
 	-- Unary:loadArgs: 
@@ -17678,14 +22202,14 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 5 succ
- L478:
+ L589:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#920 920
+	class elsePart#SB#986 986
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -17693,7 +22217,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L479:
+ L590:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: head := none:IS-empty: staticOff: 0
 	-- Invocation:gen: head := none
@@ -17704,9 +22228,9 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 elsePart#S#920:origin
-	rpushg 3 %if%then%%else%#S#739:origin
-	rpushg 1 #S#738:origin
+	rpushg 2 elsePart#S#986:origin
+	rpushg 3 %if%then%%else%#S#786:origin
+	rpushg 1 #S#785:origin
 	rpushg 1 removeNext:origin
 	-- Invocation:loadOrigin:scan: := none
 	-- Binary:loadArgs: 
@@ -17724,14 +22248,14 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 2 head
- L480:
+ L591:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#785 785
+	class #S#832 832
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17739,7 +22263,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L481:
+ L592:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: continue := true:IS-empty: staticOff: 0
 	-- Invocation:gen: continue := true
@@ -17750,7 +22274,7 @@
 	-- Unary:loadOrigin: continue
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#785:origin
+	rpushg 1 #S#832:origin
 	rpushg 4 scan#S#234:origin
 	-- Invocation:loadOrigin:scan: := true
 	-- Binary:loadArgs: 
@@ -17763,7 +22287,7 @@
 	-- Unary:loadOrigin: true
 	-- AdjustOrigin: 0
 	-- on : 7
-	rpushg 1 #S#785:origin
+	rpushg 1 #S#832:origin
 	rpushg 4 scan#S#234:origin
 	rpushg 1 loop:origin
 	rpushg 1 AwaitTermination:origin
@@ -17777,14 +22301,14 @@
 	-- Binary:invoke: 
 	-- pattern:load: := V: ? Object
 	storeg 1 continue
- L482:
+ L593:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#921 921
+	class #S#987 987
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17792,7 +22316,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L483:
+ L594:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: B := false:IS-empty: staticOff: 0
 	-- Invocation:gen: B := false
@@ -17803,8 +22327,8 @@
 	-- Unary:loadOrigin: B
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 1 #S#921:origin
-	rpushg 2 body#S#745:origin
+	rpushg 1 #S#987:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	rpushg 1 loop:origin
 	-- Invocation:loadOrigin:scan: := false
@@ -17818,8 +22342,8 @@
 	-- Unary:loadOrigin: false
 	-- AdjustOrigin: 0
 	-- on : 7
-	rpushg 1 #S#921:origin
-	rpushg 2 body#S#745:origin
+	rpushg 1 #S#987:origin
+	rpushg 2 body#S#792:origin
 	rpushg 2 %for%to%%do%#S#111:origin
 	rpushg 1 loop:origin
 	rpushg 1 =:origin
@@ -17843,14 +22367,14 @@
 	-- KeyWord:invoke: 
 	-- pattern:load: %leave Obj: ? integer
 	break 3 289
- L484:
+ L595:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#746 746
+	class #S#793 793
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -17858,7 +22382,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L485:
+ L596:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: %if inx < L %then% %restart loop:IS-empty: staticOff: 0
 	-- Invocation:gen: %if inx < L %then% %restart loop
@@ -17879,7 +22403,7 @@
 	-- Unary:loadOrigin: inx
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#746:origin
+	rpushg 1 #S#793:origin
 	rpushg 1 loop:origin
 	-- next not assign: < L :E: inx
 	-- Unary:loadArgs: 
@@ -17897,7 +22421,7 @@
 	-- Unary:loadOrigin: L
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#746:origin
+	rpushg 1 #S#793:origin
 	rpushg 1 loop:origin
 	rpushg 1 matchEq:origin
 	-- Unary:loadArgs: 
@@ -17907,7 +22431,7 @@
 	-- Binary:invoke: 
 	-- pattern:load: < V: ? integer -> B: ? Boolean
 	51
-	jmpFalse L487
+	jmpFalse L598
 	-- ObjectGenerator:gen: super: %restart loop:IS-empty: staticOff: 0
 	-- Invocation:gen: %restart loop
 	-- Invocation:loadOrigin: %restart loop
@@ -17918,9 +22442,9 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 1 439
- L487:
- L486:
+	break 1 502
+ L598:
+ L597:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
@@ -18004,12 +22528,12 @@
 	rtnInner
 	DO:
 	mvStack 
- L488:
- L489:
+ L599:
+ L600:
 	rtnInner
 	end 1
 
-	class #S#863 863
+	class #S#908 908
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -18017,7 +22541,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L490:
+ L601:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: L := tail:IS-empty: staticOff: 0
 	-- Invocation:gen: L := tail
@@ -18028,7 +22552,7 @@
 	-- Unary:loadOrigin: L
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#863:origin
+	rpushg 1 #S#908:origin
 	rpushg 1 loop:origin
 	-- Invocation:loadOrigin:scan: := tail
 	-- Binary:loadArgs: 
@@ -18041,7 +22565,105 @@
 	-- Unary:loadOrigin: tail
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 1 #S#863:origin
+	rpushg 1 #S#908:origin
+	rpushg 1 loop:origin
+	rpushg 1 scan:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: tail
+	rpushg 2 tail
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	rswap
+	rstoreg 2 L
+	-- ObjectGenerator:gen: super: current := L.head:IS-empty: staticOff: 0
+	-- Invocation:gen: current := L.head
+	-- Invocation:loadOrigin: current := L.head
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#908:origin
+	rpushg 1 loop:origin
+	-- Invocation:loadOrigin:scan: := L.head
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: L.head:IS-empty: staticOff: 0
+	-- Invocation:gen: L.head
+	-- Invocation:loadOrigin: L.head
+	-- Invocation:loadOrigin:scan: L
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: L
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#908:origin
+	rpushg 1 loop:origin
+	-- next not assign: head :E: L
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: L
+	rpushg 2 L
+	-- Invocation:loadOrigin:scan: head
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: head
+	pushg 1 head
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 current
+	-- ObjectGenerator:gen: super: %restart loop:IS-empty: staticOff: 0
+	-- Invocation:gen: %restart loop
+	-- Invocation:loadOrigin: %restart loop
+	-- Invocation:loadOrigin:scan: %restart loop
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %restart loop
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
+	-- KeyWord:invoke: 
+	-- pattern:load: %restart Obj: ? integer
+	break 1 511
+ L602:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#911 911
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L603:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: L := tail:IS-empty: staticOff: 0
+	-- Invocation:gen: L := tail
+	-- Invocation:loadOrigin: L := tail
+	-- Invocation:loadOrigin:scan: L
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: L
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 1 #S#911:origin
+	rpushg 1 loop:origin
+	-- Invocation:loadOrigin:scan: := tail
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: tail:IS-empty: staticOff: 0
+	-- Invocation:gen: tail
+	-- Invocation:loadOrigin: tail
+	-- Invocation:loadOrigin:scan: tail
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: tail
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 1 #S#911:origin
 	rpushg 1 loop:origin
 	rpushg 1 scan:origin
 	-- Unary:loadArgs: 
@@ -18061,7 +22683,7 @@
 	-- Unary:loadOrigin: current
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#863:origin
+	rpushg 1 #S#911:origin
 	rpushg 1 loop:origin
 	-- Invocation:loadOrigin:scan: := L.head
 	-- Binary:loadArgs: 
@@ -18074,7 +22696,7 @@
 	-- Unary:loadOrigin: L
 	-- AdjustOrigin: 0
 	-- on : 2
-	rpushg 1 #S#863:origin
+	rpushg 1 #S#911:origin
 	rpushg 1 loop:origin
 	-- next not assign: head :E: L
 	-- Unary:loadArgs: 
@@ -18100,15 +22722,493 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 1 450
- L491:
+	break 1 518
+ L604:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#923 923
+	class thenPart#SB#912 912
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L605:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := 1
+	-- Invocation:loadOrigin: pos := 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 thenPart#S#912:origin
+	rpushg 3 %if%then%%else%#S#580:origin
+	rpushg 1 put:origin
+	-- Invocation:loadOrigin:scan: := 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+ L606:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class elsePart#SB#913 913
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L607:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := pos + 1
+	-- Invocation:loadOrigin: pos := pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#913:origin
+	rpushg 3 %if%then%%else%#S#580:origin
+	rpushg 1 put:origin
+	-- Invocation:loadOrigin:scan: := pos + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos + 1
+	-- Invocation:loadOrigin: pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#913:origin
+	rpushg 3 %if%then%%else%#S#580:origin
+	rpushg 1 put:origin
+	-- next not assign: + 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+ L608:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class thenPart#SB#914 914
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L609:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := 1
+	-- Invocation:loadOrigin: pos := 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 thenPart#S#914:origin
+	rpushg 3 %if%then%%else%#S#582:origin
+	rpushg 1 get:origin
+	-- Invocation:loadOrigin:scan: := 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+ L610:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class elsePart#SB#915 915
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L611:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: pos := pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos := pos + 1
+	-- Invocation:loadOrigin: pos := pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#915:origin
+	rpushg 3 %if%then%%else%#S#582:origin
+	rpushg 1 get:origin
+	-- Invocation:loadOrigin:scan: := pos + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos + 1
+	-- Invocation:loadOrigin: pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#915:origin
+	rpushg 3 %if%then%%else%#S#582:origin
+	rpushg 1 get:origin
+	-- next not assign: + 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 2 pos
+ L612:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class thenPart#SB#916 916
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L613:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: res := 999999:IS-empty: staticOff: 0
+	-- Invocation:gen: res := 999999
+	-- Invocation:loadOrigin: res := 999999
+	-- Invocation:loadOrigin:scan: res
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: res
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 thenPart#S#916:origin
+	rpushg 3 %if%then%%else%#S#584:origin
+	-- Invocation:loadOrigin:scan: := 999999
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 999999:IS-empty: staticOff: 0
+	-- Invocation:gen: 999999
+	-- Invocation:loadOrigin: 999999
+	-- Invocation:loadOrigin:scan: 999999
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 999999
+	-- OBS! Constant >= 2^16 is not implemented
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 res
+ L614:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class elsePart#SB#917 917
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L615:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: res := rep.%get pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: res := rep.%get pos + 1
+	-- Invocation:loadOrigin: res := rep.%get pos + 1
+	-- Invocation:loadOrigin:scan: res
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: res
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 elsePart#S#917:origin
+	rpushg 3 %if%then%%else%#S#584:origin
+	-- Invocation:loadOrigin:scan: := rep.%get pos + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.%get pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%get pos + 1
+	-- Invocation:loadOrigin: rep.%get pos + 1
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#917:origin
+	rpushg 3 %if%then%%else%#S#584:origin
+	rpushg 1 nxt:origin
+	-- next not assign: %get pos + 1 :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %get pos + 1
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %get inx: ? integer -> V: ? integer%get pos + 1
+	-- KeyWord:invoke: 
+	-- pattern:load: %get inx: ? integer -> V: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: pos + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos + 1
+	-- Invocation:loadOrigin: pos + 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#917:origin
+	rpushg 3 %if%then%%else%#S#584:origin
+	rpushg 1 nxt:origin
+	-- next not assign: + 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	xpushg 1 inx
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 res
+ L616:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class thenPart#SB#918 918
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L617:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: res := 999999:IS-empty: staticOff: 0
+	-- Invocation:gen: res := 999999
+	-- Invocation:loadOrigin: res := 999999
+	-- Invocation:loadOrigin:scan: res
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: res
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 thenPart#S#918:origin
+	rpushg 3 %if%then%%else%#S#586:origin
+	-- Invocation:loadOrigin:scan: := 999999
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 999999:IS-empty: staticOff: 0
+	-- Invocation:gen: 999999
+	-- Invocation:loadOrigin: 999999
+	-- Invocation:loadOrigin:scan: 999999
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 999999
+	-- OBS! Constant >= 2^16 is not implemented
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 res
+ L618:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class elsePart#SB#919 919
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L619:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: res := rep.%get pos - 1:IS-empty: staticOff: 0
+	-- Invocation:gen: res := rep.%get pos - 1
+	-- Invocation:loadOrigin: res := rep.%get pos - 1
+	-- Invocation:loadOrigin:scan: res
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: res
+	-- AdjustOrigin: 0
+	-- on : 2
+	rpushg 2 elsePart#S#919:origin
+	rpushg 3 %if%then%%else%#S#586:origin
+	-- Invocation:loadOrigin:scan: := rep.%get pos - 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.%get pos - 1:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%get pos - 1
+	-- Invocation:loadOrigin: rep.%get pos - 1
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#919:origin
+	rpushg 3 %if%then%%else%#S#586:origin
+	rpushg 1 prv:origin
+	-- next not assign: %get pos - 1 :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %get pos - 1
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %get inx: ? integer -> V: ? integer%get pos - 1
+	-- KeyWord:invoke: 
+	-- pattern:load: %get inx: ? integer -> V: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: pos - 1:IS-empty: staticOff: 0
+	-- Invocation:gen: pos - 1
+	-- Invocation:loadOrigin: pos - 1
+	-- Invocation:loadOrigin:scan: pos
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: pos
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#919:origin
+	rpushg 3 %if%then%%else%#S#586:origin
+	rpushg 1 prv:origin
+	-- next not assign: - 1 :E: pos
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: pos
+	pushg 2 pos
+	-- Invocation:loadOrigin:scan: - 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: - V: ? integer -> R: ? integer
+	minus
+	xpushg 1 inx
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 res
+ L620:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#925 925
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -18116,7 +23216,222 @@
 	DO:
 	doEventQ
 	mvStack 
- L492:
+ L621:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %restart loop:IS-empty: staticOff: 0
+	-- Invocation:gen: %restart loop
+	-- Invocation:loadOrigin: %restart loop
+	-- Invocation:loadOrigin:scan: %restart loop
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %restart loop
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
+	-- KeyWord:invoke: 
+	-- pattern:load: %restart Obj: ? integer
+	break 1 541
+ L622:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#926 926
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L623:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: %restart loop:IS-empty: staticOff: 0
+	-- Invocation:gen: %restart loop
+	-- Invocation:loadOrigin: %restart loop
+	-- Invocation:loadOrigin:scan: %restart loop
+	-- KeyWord:pushThis: 
+	-- KeyWord:loadOrigin: %restart loop
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
+	-- KeyWord:invoke: 
+	-- pattern:load: %restart Obj: ? integer
+	break 1 544
+ L624:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class %if%then%%else%#S#614 614
+	rstore 3 origin
+	allocEventQ
+	-- super %if%then%%else%
+	--  1:0 2:0 3:0 4:0
+	-- Invocation:loadOrigin: %if current = 0 %then% 
+    count := count %else% 
+    count := count + 1
+	-- Invocation:loadOrigin:scan: %if current = 0 %then% 
+    count := count %else% 
+    count := count + 1
+	-- KeyWord:pushThis: 
+	pushThis 
+	-- KeyWord:loadOrigin: %if current = 0 %then% 
+    count := count %else% 
+    count := count + 1
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 6
+	rpushg 2 forAll#S#613:origin
+	rpushg 1 countNonZero:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %if cond: ? Boolean %then% thenPart:< Object %else% elsePart:< Object%if current = 0 %then% 
+    count := count %else% 
+    count := count + 1
+	-- ObjectGenerator:gen: super: current = 0:IS-empty: staticOff: 0
+	-- Invocation:gen: current = 0
+	-- Invocation:loadOrigin: current = 0
+	-- Invocation:loadOrigin:scan: current
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: current
+	-- AdjustOrigin: 3
+	rpushg 3 origin
+	-- on : 0
+	-- next not assign: = 0 :E: current
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: current
+	pushg 1 current
+	-- Invocation:loadOrigin:scan: = 0
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 0:IS-empty: staticOff: 0
+	-- Invocation:gen: 0
+	-- Invocation:loadOrigin: 0
+	-- Invocation:loadOrigin:scan: 0
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 0
+	-- Binary:invoke: 
+	-- pattern:load: = V: ? integer -> B: ? Boolean
+	eq
+	topSuper  60
+	rtnInner
+	DO:
+	mvStack 
+ L625:
+ L626:
+	rtnInner
+	end 1
+
+	class body#SB#929 929
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L627:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: putint(rep.%get inx):IS-empty: staticOff: 0
+	-- Invocation:gen: putint(rep.%get inx)
+	-- Invocation:loadOrigin: putint(rep.%get inx)
+	-- Invocation:loadOrigin:scan: putint(rep.%get inx)
+	-- Function:pushThis: 
+	pushThis 
+	-- Function:loadOrigin: putint(rep.%get inx)
+	-- AdjustOrigin: 0
+	-- on : 7
+	rpushg 2 body#S#929:origin
+	rpushg 2 %for%to%%do%#S#616:origin
+	rpushg 1 print:origin
+	rpushg 1 Array:origin
+	rpushg 1 RangeList:origin
+	rpushg 1 ArrayDemos:origin
+	rpushg 1 demo:origin
+	-- Function:loadArgs: 
+	-- ObjectGenerator:gen: super: rep.%get inx:IS-empty: staticOff: 0
+	-- Invocation:gen: rep.%get inx
+	-- Invocation:loadOrigin: rep.%get inx
+	-- Invocation:loadOrigin:scan: rep
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: rep
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 body#S#929:origin
+	rpushg 2 %for%to%%do%#S#616:origin
+	rpushg 1 print:origin
+	-- next not assign: %get inx :E: rep
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: rep
+	rpushg 5 rep
+	-- Invocation:loadOrigin:scan: %get inx
+	-- KeyWord:loadArgs: 
+	-- pattern:loadArgs: %get inx: ? integer -> V: ? integer%get inx
+	-- KeyWord:invoke: 
+	-- pattern:load: %get inx: ? integer -> V: ? integer
+	-- name::gen: 
+	-- ObjectGenerator:gen: super: inx:IS-empty: staticOff: 0
+	-- Invocation:gen: inx
+	-- Invocation:loadOrigin: inx
+	-- Invocation:loadOrigin:scan: inx
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: inx
+	-- AdjustOrigin: 0
+	-- on : 1
+	rpushg 2 body#S#929:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: inx
+	pushg 3 inx
+	xpushg 1 inx
+	-- Function:invoke: 
+	-- pattern:load: putint(V: ? integer)
+	invoke 67 0 putint
+	rpop
+	-- ObjectGenerator:gen: super: ", ".print:IS-empty: staticOff: 0
+	-- Invocation:gen: ", ".print
+	-- Invocation:loadOrigin: ", ".print
+	-- Invocation:loadOrigin:scan: ", "
+	-- String::pushThis: 
+	-- String::loadOrigin: 
+	pushText , 
+	-- next not assign: print :E: ", "
+	-- String::loadArgs: 
+	-- String::invoke: 
+	-- Invocation:loadOrigin:scan: print
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- pattern:load: print
+	invoke 107 0 print
+	rpop
+ L628:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class #S#989 989
+	rstore 1 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L629:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: sleep(100):IS-empty: staticOff: 0
 	-- Invocation:gen: sleep(100)
@@ -18147,15 +23462,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart Loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 3 303
- L493:
+	break 3 309
+ L630:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class #S#924 924
+	class #S#990 990
 	rstore 1 origin
 	allocEventQ
 	mvStack 
@@ -18163,7 +23478,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L494:
+ L631:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: sleep(50):IS-empty: staticOff: 0
 	-- Invocation:gen: sleep(50)
@@ -18193,8 +23508,8 @@
 	-- Unary:loadOrigin: sch
 	-- AdjustOrigin: 0
 	-- on : 6
-	rpushg 1 #S#924:origin
-	rpushg 2 thenPart#S#753:origin
+	rpushg 1 #S#990:origin
+	rpushg 2 thenPart#S#800:origin
 	rpushg 3 %if%then%%else%#S#130:origin
 	rpushg 1 loop:origin
 	rpushg 1 do:origin
@@ -18220,15 +23535,15 @@
 	-- pattern:loadArgs: %restart Obj: ? integer%restart loop
 	-- KeyWord:invoke: 
 	-- pattern:load: %restart Obj: ? integer
-	break 3 303
- L495:
+	break 3 309
+ L632:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#915 915
+	class thenPart#SB#981 981
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18236,7 +23551,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L496:
+ L633:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: currentElement.pred.succ := currentElement.succ:IS-empty: staticOff: 0
 	-- Invocation:gen: currentElement.pred.succ := currentElement.succ
@@ -18247,9 +23562,9 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: pred :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -18273,9 +23588,9 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: succ :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -18294,16 +23609,16 @@
     currentElement.succ.pred := currentElement.pred %else% 
     last := currentElement.pred:IS-empty: staticOff: 0
 	pushThis 
-	invoke 916 0 %if%then%%else%#S#916
+	invoke 982 0 %if%then%%else%#S#982
 	rpop
- L497:
+ L634:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#917 917
+	class elsePart#SB#983 983
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18311,7 +23626,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L498:
+ L635:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: head := currentElement.succ:IS-empty: staticOff: 0
 	-- Invocation:gen: head := currentElement.succ
@@ -18322,9 +23637,9 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 elsePart#S#917:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 elsePart#S#983:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	-- Invocation:loadOrigin:scan: := currentElement.succ
@@ -18338,9 +23653,9 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#917:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 elsePart#S#983:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: succ :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -18359,16 +23674,16 @@
     head.pred := none %else% 
     last := none:IS-empty: staticOff: 0
 	pushThis 
-	invoke 918 0 %if%then%%else%#S#918
+	invoke 984 0 %if%then%%else%#S#984
 	rpop
- L499:
+ L636:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#747 747
+	class thenPart#SB#794 794
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18376,7 +23691,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L500:
+ L637:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: B := L1 <= L2:IS-empty: staticOff: 0
 	-- Invocation:gen: B := L1 <= L2
@@ -18387,7 +23702,7 @@
 	-- Unary:loadOrigin: B
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 thenPart#S#747:origin
+	rpushg 2 thenPart#S#794:origin
 	rpushg 3 %if%then%%else%#S#117:origin
 	rpushg 1 doit:origin
 	rpushg 1 matchEq:origin
@@ -18403,7 +23718,7 @@
 	-- Unary:loadOrigin: L1
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#747:origin
+	rpushg 2 thenPart#S#794:origin
 	rpushg 3 %if%then%%else%#S#117:origin
 	rpushg 1 doit:origin
 	rpushg 1 matchEq:origin
@@ -18423,7 +23738,7 @@
 	-- Unary:loadOrigin: L2
 	-- AdjustOrigin: 0
 	-- on : 4
-	rpushg 2 thenPart#S#747:origin
+	rpushg 2 thenPart#S#794:origin
 	rpushg 3 %if%then%%else%#S#117:origin
 	rpushg 1 doit:origin
 	rpushg 1 matchEq:origin
@@ -18447,15 +23762,15 @@
 	-- pattern:loadArgs: %leave Obj: ? integer%leave matchEq
 	-- KeyWord:invoke: 
 	-- pattern:load: %leave Obj: ? integer
-	break 3 376
- L501:
+	break 3 382
+ L638:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#748 748
+	class elsePart#SB#795 795
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18463,7 +23778,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L502:
+ L639:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: B := c1 < c2:IS-empty: staticOff: 0
 	-- Invocation:gen: B := c1 < c2
@@ -18474,7 +23789,7 @@
 	-- Unary:loadOrigin: B
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 elsePart#S#748:origin
+	rpushg 2 elsePart#S#795:origin
 	rpushg 3 %if%then%%else%#S#117:origin
 	rpushg 1 doit:origin
 	rpushg 1 matchEq:origin
@@ -18490,7 +23805,7 @@
 	-- Unary:loadOrigin: c1
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#748:origin
+	rpushg 2 elsePart#S#795:origin
 	rpushg 3 %if%then%%else%#S#117:origin
 	rpushg 1 doit:origin
 	-- next not assign: < c2 :E: c1
@@ -18509,7 +23824,7 @@
 	-- Unary:loadOrigin: c2
 	-- AdjustOrigin: 0
 	-- on : 3
-	rpushg 2 elsePart#S#748:origin
+	rpushg 2 elsePart#S#795:origin
 	rpushg 3 %if%then%%else%#S#117:origin
 	rpushg 1 doit:origin
 	-- Unary:loadArgs: 
@@ -18532,15 +23847,130 @@
 	-- pattern:loadArgs: %leave Obj: ? integer%leave matchEq
 	-- KeyWord:invoke: 
 	-- pattern:load: %leave Obj: ? integer
-	break 3 376
- L503:
+	break 3 382
+ L640:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class %if%then%%else%#S#916 916
+	class thenPart#SB#927 927
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L641:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: count := count:IS-empty: staticOff: 0
+	-- Invocation:gen: count := count
+	-- Invocation:loadOrigin: count := count
+	-- Invocation:loadOrigin:scan: count
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: count
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 thenPart#S#927:origin
+	rpushg 3 %if%then%%else%#S#614:origin
+	rpushg 2 forAll#S#613:origin
+	-- Invocation:loadOrigin:scan: := count
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: count:IS-empty: staticOff: 0
+	-- Invocation:gen: count
+	-- Invocation:loadOrigin: count
+	-- Invocation:loadOrigin:scan: count
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: count
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 thenPart#S#927:origin
+	rpushg 3 %if%then%%else%#S#614:origin
+	rpushg 2 forAll#S#613:origin
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: count
+	pushg 1 count
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 count
+ L642:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class elsePart#SB#928 928
+	rstore 2 origin
+	allocEventQ
+	mvStack 
+	rtnEventQ 1
+	DO:
+	doEventQ
+	mvStack 
+ L643:
+	-- Include:gen: 
+	-- ObjectGenerator:gen: super: count := count + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: count := count + 1
+	-- Invocation:loadOrigin: count := count + 1
+	-- Invocation:loadOrigin:scan: count
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: count
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#928:origin
+	rpushg 3 %if%then%%else%#S#614:origin
+	rpushg 2 forAll#S#613:origin
+	-- Invocation:loadOrigin:scan: := count + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: count + 1:IS-empty: staticOff: 0
+	-- Invocation:gen: count + 1
+	-- Invocation:loadOrigin: count + 1
+	-- Invocation:loadOrigin:scan: count
+	-- Unary:pushThis: 
+	pushThis 
+	-- Unary:loadOrigin: count
+	-- AdjustOrigin: 0
+	-- on : 3
+	rpushg 2 elsePart#S#928:origin
+	rpushg 3 %if%then%%else%#S#614:origin
+	rpushg 2 forAll#S#613:origin
+	-- next not assign: + 1 :E: count
+	-- Unary:loadArgs: 
+	-- Unary:invoke: 
+	-- VarRef:load: count
+	pushg 1 count
+	-- Invocation:loadOrigin:scan: + 1
+	-- Binary:loadArgs: 
+	-- ObjectGenerator:gen: super: 1:IS-empty: staticOff: 0
+	-- Invocation:gen: 1
+	-- Invocation:loadOrigin: 1
+	-- Invocation:loadOrigin:scan: 1
+	-- Const::pushThis: 
+	-- Const::loadOrigin: 
+	-- Const::loadArgs: 
+	-- Const::invoke: 
+	pushc 1
+	-- Binary:invoke: 
+	-- pattern:load: + V: ? integer -> R: ? integer
+	plus
+	-- Binary:invoke: 
+	-- pattern:load: := V: ? Object
+	storeg 1 count
+ L644:
+	rtnEventQ 0
+	setThisStack 
+	pushThis 
+	rtn(D)
+	end 1
+
+	class %if%then%%else%#S#982 982
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -18559,9 +23989,9 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 8
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	rpushg 1 Queue:origin
@@ -18581,9 +24011,9 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 3
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: succ :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -18614,12 +24044,12 @@
 	rtnInner
 	DO:
 	mvStack 
- L504:
- L505:
+ L645:
+ L646:
 	rtnInner
 	end 1
 
-	class %if%then%%else%#S#918 918
+	class %if%then%%else%#S#984 984
 	rstore 3 origin
 	allocEventQ
 	-- super %if%then%%else%
@@ -18638,9 +24068,9 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 8
-	rpushg 2 elsePart#S#917:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 elsePart#S#983:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	rpushg 1 Queue:origin
@@ -18660,9 +24090,9 @@
 	-- AdjustOrigin: 3
 	rpushg 3 origin
 	-- on : 5
-	rpushg 2 elsePart#S#917:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 elsePart#S#983:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	-- next not assign: <> none :E: head
@@ -18689,12 +24119,12 @@
 	rtnInner
 	DO:
 	mvStack 
- L506:
- L507:
+ L647:
+ L648:
 	rtnInner
 	end 1
 
-	class thenPart#SB#943 943
+	class thenPart#SB#1009 1009
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18702,7 +24132,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L508:
+ L649:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: currentElement.succ.pred := currentElement.pred:IS-empty: staticOff: 0
 	-- Invocation:gen: currentElement.succ.pred := currentElement.pred
@@ -18713,11 +24143,11 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 thenPart#S#943:origin
-	rpushg 3 %if%then%%else%#S#916:origin
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 thenPart#S#1009:origin
+	rpushg 3 %if%then%%else%#S#982:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: succ :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -18741,11 +24171,11 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 thenPart#S#943:origin
-	rpushg 3 %if%then%%else%#S#916:origin
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 thenPart#S#1009:origin
+	rpushg 3 %if%then%%else%#S#982:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: pred :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -18760,14 +24190,14 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 4 pred
- L509:
+ L650:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#944 944
+	class elsePart#SB#1010 1010
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18775,7 +24205,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L510:
+ L651:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: last := currentElement.pred:IS-empty: staticOff: 0
 	-- Invocation:gen: last := currentElement.pred
@@ -18786,11 +24216,11 @@
 	-- Unary:loadOrigin: last
 	-- AdjustOrigin: 0
 	-- on : 7
-	rpushg 2 elsePart#S#944:origin
-	rpushg 3 %if%then%%else%#S#916:origin
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 elsePart#S#1010:origin
+	rpushg 3 %if%then%%else%#S#982:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	-- Invocation:loadOrigin:scan: := currentElement.pred
@@ -18804,11 +24234,11 @@
 	-- Unary:loadOrigin: currentElement
 	-- AdjustOrigin: 0
 	-- on : 5
-	rpushg 2 elsePart#S#944:origin
-	rpushg 3 %if%then%%else%#S#916:origin
-	rpushg 2 thenPart#S#915:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 elsePart#S#1010:origin
+	rpushg 3 %if%then%%else%#S#982:origin
+	rpushg 2 thenPart#S#981:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	-- next not assign: pred :E: currentElement
 	-- Unary:loadArgs: 
 	-- Unary:invoke: 
@@ -18823,14 +24253,14 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 3 last
- L511:
+ L652:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class thenPart#SB#945 945
+	class thenPart#SB#1011 1011
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18838,7 +24268,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L512:
+ L653:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: head.pred := none:IS-empty: staticOff: 0
 	-- Invocation:gen: head.pred := none
@@ -18849,11 +24279,11 @@
 	-- Unary:loadOrigin: head
 	-- AdjustOrigin: 0
 	-- on : 7
-	rpushg 2 thenPart#S#945:origin
-	rpushg 3 %if%then%%else%#S#918:origin
-	rpushg 2 elsePart#S#917:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 thenPart#S#1011:origin
+	rpushg 3 %if%then%%else%#S#984:origin
+	rpushg 2 elsePart#S#983:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	-- next not assign: pred :E: head
@@ -18878,14 +24308,14 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 4 pred
- L513:
+ L654:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class elsePart#SB#946 946
+	class elsePart#SB#1012 1012
 	rstore 2 origin
 	allocEventQ
 	mvStack 
@@ -18893,7 +24323,7 @@
 	DO:
 	doEventQ
 	mvStack 
- L514:
+ L655:
 	-- Include:gen: 
 	-- ObjectGenerator:gen: super: last := none:IS-empty: staticOff: 0
 	-- Invocation:gen: last := none
@@ -18904,11 +24334,11 @@
 	-- Unary:loadOrigin: last
 	-- AdjustOrigin: 0
 	-- on : 7
-	rpushg 2 elsePart#S#946:origin
-	rpushg 3 %if%then%%else%#S#918:origin
-	rpushg 2 elsePart#S#917:origin
-	rpushg 3 %if%then%%else%#S#737:origin
-	rpushg 1 #S#736:origin
+	rpushg 2 elsePart#S#1012:origin
+	rpushg 3 %if%then%%else%#S#984:origin
+	rpushg 2 elsePart#S#983:origin
+	rpushg 3 %if%then%%else%#S#784:origin
+	rpushg 1 #S#783:origin
 	rpushg 4 scan#S#92:origin
 	rpushg 1 remove:origin
 	-- Invocation:loadOrigin:scan: := none
@@ -18927,64 +24357,75 @@
 	-- pattern:load: := V: ? Object
 	rswap
 	rstoreg 3 last
- L515:
+ L656:
 	rtnEventQ 0
 	setThisStack 
 	pushThis 
 	rtn(D)
 	end 1
 
-	class main 948
+	class main 1014
 	pushThis 
 	invoke 1 0 BETAworld
 	stop
 	end 0
 
-	class EventProcessor 949
+	class EventProcessor 1015
 	stop
 
-	class ThreadStub 950
+	class ThreadStub 1016
 	DO:
 	mvStack 
 	call(D)ThreadStub
 	stop
-	-- vdtAdd: inx=1 descInx=730
-	-- vdtAdd: inx=1 descInx=758
-	-- vdtAdd: inx=2 descInx=759
-	-- vdtAdd: inx=1 descInx=760
-	-- vdtAdd: inx=2 descInx=761
-	-- vdtAdd: inx=1 descInx=762
-	-- vdtAdd: inx=2 descInx=763
-	-- vdtAdd: inx=1 descInx=764
-	-- vdtAdd: inx=2 descInx=765
-	-- vdtAdd: inx=1 descInx=767
-	-- vdtAdd: inx=1 descInx=742
-	-- vdtAdd: inx=1 descInx=743
-	-- vdtAdd: inx=1 descInx=787
-	-- vdtAdd: inx=2 descInx=788
+	-- vdtAdd: inx=1 descInx=777
+	-- vdtAdd: inx=1 descInx=805
+	-- vdtAdd: inx=2 descInx=806
+	-- vdtAdd: inx=1 descInx=807
+	-- vdtAdd: inx=2 descInx=808
+	-- vdtAdd: inx=1 descInx=809
+	-- vdtAdd: inx=2 descInx=810
+	-- vdtAdd: inx=1 descInx=811
+	-- vdtAdd: inx=2 descInx=812
+	-- vdtAdd: inx=1 descInx=814
 	-- vdtAdd: inx=1 descInx=789
-	-- vdtAdd: inx=2 descInx=790
-	-- vdtAdd: inx=1 descInx=740
-	-- vdtAdd: inx=1 descInx=741
-	-- vdtAdd: inx=1 descInx=745
-	-- vdtAdd: inx=1 descInx=749
-	-- vdtAdd: inx=2 descInx=750
-	-- vdtAdd: inx=1 descInx=753
-	-- vdtAdd: inx=2 descInx=754
-	-- vdtAdd: inx=1 descInx=755
-	-- vdtAdd: inx=2 descInx=756
-	-- vdtAdd: inx=1 descInx=913
-	-- vdtAdd: inx=2 descInx=914
-	-- vdtAdd: inx=1 descInx=919
-	-- vdtAdd: inx=2 descInx=920
-	-- vdtAdd: inx=1 descInx=915
+	-- vdtAdd: inx=1 descInx=790
+	-- vdtAdd: inx=1 descInx=834
+	-- vdtAdd: inx=2 descInx=835
+	-- vdtAdd: inx=1 descInx=836
+	-- vdtAdd: inx=2 descInx=837
+	-- vdtAdd: inx=1 descInx=787
+	-- vdtAdd: inx=1 descInx=788
+	-- vdtAdd: inx=1 descInx=792
+	-- vdtAdd: inx=1 descInx=796
+	-- vdtAdd: inx=2 descInx=797
+	-- vdtAdd: inx=1 descInx=800
+	-- vdtAdd: inx=2 descInx=801
+	-- vdtAdd: inx=1 descInx=802
+	-- vdtAdd: inx=2 descInx=803
+	-- vdtAdd: inx=1 descInx=979
+	-- vdtAdd: inx=2 descInx=980
+	-- vdtAdd: inx=1 descInx=985
+	-- vdtAdd: inx=2 descInx=986
+	-- vdtAdd: inx=1 descInx=912
+	-- vdtAdd: inx=2 descInx=913
+	-- vdtAdd: inx=1 descInx=914
+	-- vdtAdd: inx=2 descInx=915
+	-- vdtAdd: inx=1 descInx=916
 	-- vdtAdd: inx=2 descInx=917
-	-- vdtAdd: inx=1 descInx=747
-	-- vdtAdd: inx=2 descInx=748
-	-- vdtAdd: inx=1 descInx=943
-	-- vdtAdd: inx=2 descInx=944
-	-- vdtAdd: inx=1 descInx=945
-	-- vdtAdd: inx=2 descInx=946
+	-- vdtAdd: inx=1 descInx=918
+	-- vdtAdd: inx=2 descInx=919
+	-- vdtAdd: inx=1 descInx=929
+	-- vdtAdd: inx=1 descInx=981
+	-- vdtAdd: inx=2 descInx=983
+	-- vdtAdd: inx=1 descInx=794
+	-- vdtAdd: inx=2 descInx=795
+	-- vdtAdd: inx=1 descInx=927
+	-- vdtAdd: inx=2 descInx=928
+	-- vdtAdd: inx=1 descInx=1009
+	-- vdtAdd: inx=2 descInx=1010
+	-- vdtAdd: inx=1 descInx=1011
+	-- vdtAdd: inx=2 descInx=1012
 
 Class BETAworld 1 1
 allocE:
@@ -19168,7 +24609,7 @@ doE:
 13:	pushg 1
 15:	jmpFalse 26
 18:	pushthis 
-19:	invoke 727 0 1
+19:	invoke 774 0 1
 25:	rpop 
 26:	pushthis 
 27:	rpushg 1
@@ -19263,7 +24704,7 @@ doE:
 24:	le
 25:	jmpFalse 36
 28:	pushthis 
-29:	invoke 728 0 1
+29:	invoke 775 0 1
 35:	rpop 
 36:	rtnEventQ 0
 38:	setThisStack
@@ -19410,7 +24851,7 @@ doE:
 79:	gt 
 80:	jmpFalse 91
 83:	pushthis 
-84:	invoke 729 0 1
+84:	invoke 776 0 1
 90:	rpop 
 91:	rtnEventQ 0
 93:	setThisStack
@@ -19614,7 +25055,7 @@ doE:
 18:	57
 19:	jmpFalse 30
 22:	pushthis 
-23:	invoke 732 0 1
+23:	invoke 779 0 1
 29:	rpop 
 30:	rtnEventQ 0
 32:	setThisStack
@@ -19681,7 +25122,7 @@ doE:
 18:	57
 19:	jmpFalse 30
 22:	pushthis 
-23:	invoke 733 0 1
+23:	invoke 780 0 1
 29:	rpop 
 30:	rtnEventQ 0
 32:	setThisStack
@@ -19710,7 +25151,7 @@ doE:
 22:	pushg 1
 24:	jmpFalse 35
 27:	pushthis 
-28:	invoke 734 0 1
+28:	invoke 781 0 1
 34:	rpop 
 35:	rtnEventQ 0
 37:	setThisStack
@@ -19759,7 +25200,7 @@ doE:
 24:	req 
 25:	jmpFalse 36
 28:	pushthis 
-29:	invoke 736 0 1
+29:	invoke 783 0 1
 35:	rpop 
 36:	rtnInner
 
@@ -19780,7 +25221,7 @@ doE:
 16:	57
 17:	jmpFalse 28
 20:	pushthis 
-21:	invoke 738 0 1
+21:	invoke 785 0 1
 27:	rpop 
 28:	rtnEventQ 0
 30:	setThisStack
@@ -20149,7 +25590,7 @@ doE:
 38:	ne 
 39:	jmpFalse 50
 42:	pushthis 
-43:	invoke 744 0 1
+43:	invoke 791 0 1
 49:	rpop 
 50:	pushthis 
 51:	rpushg 1
@@ -20320,7 +25761,7 @@ doE:
 75:	eq 
 76:	jmpFalse 87
 79:	pushthis 
-80:	invoke 746 0 1
+80:	invoke 793 0 1
 86:	rpop 
 87:	rtnEventQ 0
 89:	setThisStack
@@ -20526,7 +25967,7 @@ doE:
 43:	eq 
 44:	jmpFalse 55
 47:	pushthis 
-48:	invoke 751 0 1
+48:	invoke 798 0 1
 54:	rpop 
 55:	rtnEventQ 0
 57:	setThisStack
@@ -20681,7 +26122,7 @@ doE:
 50:	57
 51:	jmpFalse 62
 54:	pushthis 
-55:	invoke 752 0 1
+55:	invoke 799 0 1
 61:	rpop 
 62:	pushthis 
 63:	invoke 130 0 1
@@ -21241,7 +26682,7 @@ doE:
 44:	gt 
 45:	jmpFalse 56
 48:	pushthis 
-49:	invoke 757 0 1
+49:	invoke 804 0 1
 55:	rpop 
 56:	inner 1
 58:	pushthis 
@@ -22083,7 +27524,7 @@ doE:
 68:	lt
 69:	jmpFalse 80
 72:	pushthis 
-73:	invoke 766 0 1
+73:	invoke 813 0 1
 79:	rpop 
 80:	rtnEventQ 0
 82:	setThisStack
@@ -22176,7 +27617,7 @@ doE:
 34:	lt
 35:	jmpFalse 46
 38:	pushthis 
-39:	invoke 769 0 1
+39:	invoke 816 0 1
 45:	rpop 
 46:	rtnEventQ 0
 48:	setThisStack
@@ -22210,7 +27651,7 @@ doE:
 31:	orr
 32:	jmpFalse 43
 35:	pushthis 
-36:	invoke 768 0 1
+36:	invoke 815 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -22754,7 +28195,7 @@ doE:
 43:	pushg 1
 45:	jmpFalse 56
 48:	pushthis 
-49:	invoke 786 0 1
+49:	invoke 833 0 1
 55:	rpop 
 56:	pushthis 
 57:	rpushg 1
@@ -22803,7 +28244,7 @@ doE:
 49:	ne 
 50:	jmpFalse 61
 53:	pushthis 
-54:	invoke 785 0 1
+54:	invoke 832 0 1
 60:	rpop 
 61:	rtnInner
 
@@ -23171,7 +28612,7 @@ doE:
 38:	eq 
 39:	jmpFalse 50
 42:	pushthis 
-43:	invoke 791 0 1
+43:	invoke 838 0 1
 49:	rpop 
 50:	rtnEventQ 0
 52:	setThisStack
@@ -23239,161 +28680,359 @@ allocE:
 doE: 
 8:	doEventQ 
 9:	mvStack
-10:	pushText 1
-12:	invoke 107 0 0
-18:	rpop 
-19:	pushthis 
-20:	rpushg 1
-22:	rpushg 1
-24:	rpushg 1
-26:	invoke 66 0 0
-32:	rpop 
-33:	pushthis 
-34:	pushthis 
-35:	pushc 0
-37:	pushc 0
-39:	invoke 558 0 0
-45:	rswap 
-46:	rstoreg 3
-48:	pushthis 
-49:	pushthis 
-50:	pushc 2
-52:	pushc 3
-54:	invoke 558 0 0
-60:	rswap 
-61:	rstoreg 4
-63:	pushthis 
-64:	pushthis 
-65:	pushc 4
-67:	pushc 5
-69:	invoke 558 0 0
-75:	rswap 
-76:	rstoreg 5
-78:	pushText 20
-80:	invoke 107 0 0
-86:	rpop 
-87:	pushthis 
-88:	rpushg 1
-90:	rpushg 1
-92:	rpushg 1
-94:	invoke 66 0 0
-100:	rpop 
-101:	pushthis 
-102:	rpushg 1
-104:	rpushg 1
-106:	rpushg 1
-108:	pushthis 
-109:	rpushg 4
-111:	pushg 1
-113:	invoke 67 0 0
-119:	rpop 
-120:	pushthis 
-121:	rpushg 1
-123:	rpushg 1
-125:	rpushg 1
-127:	pushthis 
-128:	rpushg 4
-130:	pushg 2
-132:	invoke 67 0 0
-138:	rpop 
-139:	pushthis 
-140:	rpushg 1
-142:	rpushg 1
-144:	rpushg 1
-146:	invoke 66 0 0
-152:	rpop 
-153:	pushthis 
-154:	rpushg 1
-156:	rpushg 1
-158:	rpushg 1
+10:	pushthis 
+11:	pushthis 
+12:	pushc 0
+14:	pushc 0
+16:	invoke 567 0 0
+22:	rswap 
+23:	rstoreg 3
+25:	pushthis 
+26:	pushthis 
+27:	pushc 2
+29:	pushc 3
+31:	invoke 567 0 0
+37:	rswap 
+38:	rstoreg 4
+40:	pushthis 
+41:	pushthis 
+42:	pushc 4
+44:	pushc 5
+46:	invoke 567 0 0
+52:	rswap 
+53:	rstoreg 5
+55:	pushthis 
+56:	rpushg 1
+58:	rpushg 1
+60:	rpushg 1
+62:	pushthis 
+63:	rpushg 4
+65:	pushg 1
+67:	invoke 67 0 0
+73:	rpop 
+74:	pushthis 
+75:	rpushg 1
+77:	rpushg 1
+79:	rpushg 1
+81:	pushthis 
+82:	rpushg 4
+84:	pushg 2
+86:	invoke 67 0 0
+92:	rpop 
+93:	pushthis 
+94:	rpushg 1
+96:	rpushg 1
+98:	rpushg 1
+100:	invoke 66 0 0
+106:	rpop 
+107:	pushthis 
+108:	rpushg 1
+110:	rpushg 1
+112:	rpushg 1
+114:	pushthis 
+115:	rpushg 5
+117:	pushg 1
+119:	invoke 67 0 0
+125:	rpop 
+126:	pushthis 
+127:	rpushg 1
+129:	rpushg 1
+131:	rpushg 1
+133:	pushthis 
+134:	rpushg 5
+136:	pushg 2
+138:	invoke 67 0 0
+144:	rpop 
+145:	pushthis 
+146:	rpushg 1
+148:	rpushg 1
+150:	rpushg 1
+152:	invoke 66 0 0
+158:	rpop 
+159:	pushthis 
 160:	pushthis 
-161:	rpushg 5
-163:	pushg 1
-165:	invoke 67 0 0
-171:	rpop 
-172:	pushthis 
-173:	rpushg 1
-175:	rpushg 1
-177:	rpushg 1
-179:	pushthis 
-180:	rpushg 5
-182:	pushg 2
-184:	invoke 67 0 0
-190:	rpop 
-191:	pushthis 
-192:	rpushg 1
-194:	rpushg 1
-196:	rpushg 1
-198:	invoke 66 0 0
-204:	rpop 
-205:	pushthis 
-206:	pushthis 
-207:	pushthis 
-208:	rpushg 4
-210:	pushthis 
-211:	pushthis 
-212:	rpushg 5
-214:	pushNone 
-215:	invoke 561 0 0
-221:	invoke 561 0 0
-227:	rswap 
-228:	rstoreg 2
-230:	pushthis 
-231:	pushthis 
-232:	pushc 2
-234:	pushthis 
-235:	pushthis 
-236:	rpushg 4
-238:	pushthis 
-239:	pushthis 
-240:	rpushg 5
-242:	pushNone 
-243:	invoke 561 0 0
-249:	invoke 561 0 0
-255:	invoke 569 0 0
-261:	rswap 
-262:	rstoreg 6
-264:	pushthis 
-265:	pushthis 
-266:	pushc 2
+161:	pushthis 
+162:	rpushg 4
+164:	pushthis 
+165:	pushthis 
+166:	rpushg 5
+168:	pushNone 
+169:	invoke 570 0 0
+175:	invoke 570 0 0
+181:	rswap 
+182:	rstoreg 2
+184:	pushthis 
+185:	pushthis 
+186:	pushc 2
+188:	pushthis 
+189:	pushthis 
+190:	rpushg 4
+192:	pushthis 
+193:	pushthis 
+194:	rpushg 5
+196:	pushNone 
+197:	invoke 570 0 0
+203:	invoke 570 0 0
+209:	invoke 578 0 0
+215:	rswap 
+216:	rstoreg 6
+218:	pushthis 
+219:	pushthis 
+220:	pushc 2
+222:	pushthis 
+223:	pushthis 
+224:	rpushg 4
+226:	pushthis 
+227:	pushthis 
+228:	rpushg 5
+230:	pushNone 
+231:	invoke 570 0 0
+237:	invoke 570 0 0
+243:	invoke 578 0 0
+249:	rswap 
+250:	rstoreg 6
+252:	pushthis 
+253:	pushthis 
+254:	pushc 2
+256:	pushthis 
+257:	pushthis 
+258:	pushc 2
+260:	pushc 3
+262:	invoke 567 0 0
 268:	pushthis 
 269:	pushthis 
-270:	rpushg 4
-272:	pushthis 
-273:	pushthis 
-274:	rpushg 5
-276:	pushNone 
-277:	invoke 561 0 0
-283:	invoke 561 0 0
-289:	invoke 569 0 0
-295:	rswap 
-296:	rstoreg 6
-298:	pushthis 
-299:	pushthis 
-300:	pushc 2
-302:	pushthis 
-303:	pushthis 
-304:	pushc 2
-306:	pushc 3
-308:	invoke 558 0 0
-314:	pushthis 
-315:	pushthis 
-316:	pushc 4
-318:	pushc 5
-320:	invoke 558 0 0
-326:	pushNone 
-327:	invoke 561 0 0
-333:	invoke 561 0 0
-339:	invoke 569 0 0
-345:	rswap 
-346:	rstoreg 6
-348:	rtnEventQ 0
-350:	setThisStack
-351:	pushthis 
-352:	rtn D
+270:	pushc 4
+272:	pushc 5
+274:	invoke 567 0 0
+280:	pushNone 
+281:	invoke 570 0 0
+287:	invoke 570 0 0
+293:	invoke 578 0 0
+299:	rswap 
+300:	rstoreg 6
+302:	rtnEventQ 0
+304:	setThisStack
+305:	pushthis 
+306:	rtn D
 
 
-Class Range 558 1
+Class int2int 558 1
+allocE:
+1:	pushthis 
+2:	storeg 1
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	innera 1
+11:	rtnEventQ 1
+doE: 
+13:	doEventQ 
+14:	mvStack
+15:	pushthis 
+16:	innerP 1
+18:	popThisObj
+19:	rtnEventQ 0
+21:	setThisStack
+22:	pushthis 
+23:	pushg 2
+25:	rtn D
+
+
+Class intint2int 559 1
+allocE:
+1:	pushthis 
+2:	storeg 2
+4:	pushthis 
+5:	storeg 1
+7:	rstore 1
+9:	allocEventQ 0
+11:	mvStack
+12:	innera 1
+14:	rtnEventQ 1
+doE: 
+16:	doEventQ 
+17:	mvStack
+18:	pushthis 
+19:	innerP 1
+21:	popThisObj
+22:	rtnEventQ 0
+24:	setThisStack
+25:	pushthis 
+26:	pushg 3
+28:	rtn D
+
+
+Class IntList 560 1
+allocE:
+1:	pushthis 
+2:	rstoreg 2
+4:	pushthis 
+5:	storeg 1
+7:	rstore 1
+9:	allocEventQ 0
+11:	mvStack
+12:	innera 1
+14:	rtnEventQ 1
+doE: 
+16:	doEventQ 
+17:	mvStack
+18:	pushthis 
+19:	innerP 1
+21:	popThisObj
+22:	rtnEventQ 0
+24:	setThisStack
+25:	pushthis 
+26:	rtn D
+
+
+Class first 561 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	pushthis 
+12:	rpushg 1
+14:	pushg 1
+16:	storeg 1
+18:	rtnEventQ 0
+20:	setThisStack
+21:	pushthis 
+22:	pushg 1
+24:	rtn D
+
+
+Class second 562 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	pushthis 
+12:	rpushg 1
+14:	rpushg 2
+16:	pushg 1
+18:	storeg 1
+20:	rtnEventQ 0
+22:	setThisStack
+23:	pushthis 
+24:	pushg 1
+26:	rtn D
+
+
+Class scan 563 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	innera 1
+8:	rtnEventQ 1
+doE: 
+10:	doEventQ 
+11:	mvStack
+12:	pushthis 
+13:	pushthis 
+14:	rpushg 1
+16:	rswap 
+17:	rstoreg 2
+19:	pushthis 
+20:	pushthis 
+21:	rpushg 1
+23:	pushg 1
+25:	storeg 1
+27:	pushthis 
+28:	invoke 564 0 0
+34:	rpop 
+35:	rtnEventQ 0
+37:	setThisStack
+38:	pushthis 
+39:	rtn D
+
+
+Class loop 564 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	innerP 1
+15:	popThisObj
+16:	pushthis 
+17:	rpushg 1
+19:	rpushg 2
+21:	rpushg 2
+23:	pushNone 
+24:	57
+25:	jmpFalse 36
+28:	pushthis 
+29:	invoke 908 0 1
+35:	rpop 
+36:	rtnEventQ 0
+38:	setThisStack
+39:	pushthis 
+40:	rtn D
+
+
+Class length 565 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	pushc 0
+13:	storeg 1
+15:	pushthis 
+16:	invoke 566 0 1
+22:	rpop 
+23:	rtnEventQ 0
+25:	setThisStack
+26:	pushthis 
+27:	pushg 1
+29:	rtn D
+
+
+Class scan#S#566 566 3
+allocE:
+1:	rstore 3
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 3
+8:	rpushg 1
+10:	toSuper 563
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 3
+19:	pushthis 
+20:	rpushg 3
+22:	pushg 1
+24:	pushc 1
+26:	+
+27:	storeg 1
+29:	rtnInner
+
+
+Class Range 567 1
 allocE:
 1:	pushthis 
 2:	storeg 2
@@ -23421,7 +29060,7 @@ doE:
 34:	lt
 35:	jmpFalse 46
 38:	pushthis 
-39:	invoke 862 0 1
+39:	invoke 910 0 1
 45:	rpop 
 46:	rtnEventQ 0
 48:	setThisStack
@@ -23429,7 +29068,7 @@ doE:
 50:	rtn D
 
 
-Class check 559 1
+Class check 568 1
 allocE:
 1:	pushthis 
 2:	storeg 1
@@ -23455,7 +29094,7 @@ doE:
 31:	orr
 32:	jmpFalse 43
 35:	pushthis 
-36:	invoke 861 0 1
+36:	invoke 909 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -23463,7 +29102,7 @@ doE:
 47:	rtn D
 
 
-Class print 560 1
+Class print 569 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23502,7 +29141,7 @@ doE:
 64:	rtn D
 
 
-Class RangeList 561 1
+Class RangeList 570 1
 allocE:
 1:	pushthis 
 2:	rstoreg 3
@@ -23525,7 +29164,7 @@ doE:
 26:	rtn D
 
 
-Class empty 562 1
+Class empty 571 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23552,7 +29191,7 @@ doE:
 32:	rtn D
 
 
-Class first 563 1
+Class first 572 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23574,7 +29213,7 @@ doE:
 25:	rtn D
 
 
-Class second 564 1
+Class second 573 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23597,7 +29236,7 @@ doE:
 27:	rtn D
 
 
-Class scan 565 1
+Class scan 574 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23619,7 +29258,7 @@ doE:
 25:	rswap 
 26:	rstoreg 2
 28:	pushthis 
-29:	invoke 566 0 0
+29:	invoke 575 0 0
 35:	rpop 
 36:	rtnEventQ 0
 38:	setThisStack
@@ -23627,7 +29266,7 @@ doE:
 40:	rtn D
 
 
-Class loop 566 1
+Class loop 575 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23648,7 +29287,7 @@ doE:
 24:	57
 25:	jmpFalse 36
 28:	pushthis 
-29:	invoke 863 0 1
+29:	invoke 911 0 1
 35:	rpop 
 36:	rtnEventQ 0
 38:	setThisStack
@@ -23656,7 +29295,7 @@ doE:
 40:	rtn D
 
 
-Class length 567 1
+Class length 576 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23669,7 +29308,7 @@ doE:
 11:	pushc 0
 13:	storeg 1
 15:	pushthis 
-16:	invoke 568 0 1
+16:	invoke 577 0 1
 22:	rpop 
 23:	rtnEventQ 0
 25:	setThisStack
@@ -23678,14 +29317,14 @@ doE:
 29:	rtn D
 
 
-Class scan#S#568 568 4
+Class scan#S#577 577 4
 allocE:
 1:	rstore 4
 3:	allocEventQ 0
 5:	pushthis 
 6:	rpushg 4
 8:	rpushg 1
-10:	toSuper 565
+10:	toSuper 574
 enterE: 
 13:	rtnInner
 doE: 
@@ -23702,7 +29341,7 @@ doE:
 29:	rtnInner
 
 
-Class testArray 569 1
+Class Array 578 1
 allocE:
 1:	pushthis 
 2:	rstoreg 2
@@ -23711,85 +29350,1139 @@ allocE:
 7:	rstore 1
 9:	allocEventQ 0
 11:	mvStack
-12:	innera 1
+12:	innera 2
 14:	rtnEventQ 1
 doE: 
 16:	doEventQ 
 17:	mvStack
 18:	pushthis 
+19:	pushthis 
+20:	rpushg 2
+22:	invoke 572 0 0
+28:	rswap 
+29:	rstoreg 3
+31:	pushthis 
+32:	pushthis 
+33:	rpushg 2
+35:	invoke 573 0 0
+41:	rswap 
+42:	rstoreg 4
+44:	pushthis 
+45:	pushc 1
+47:	storeg 2
+49:	pushthis 
+50:	pushthis 
+51:	rpushg 3
+53:	pushg 3
+55:	pushthis 
+56:	rpushg 4
+58:	pushg 3
+60:	*
+61:	storeg 3
+63:	pushthis 
+64:	pushthis 
+65:	rpushg 1
+67:	rpushg 1
+69:	rpushg 1
+71:	rpushg 1
+73:	pushthis 
+74:	pushg 3
+76:	pushc 0
+78:	pushc 1
+80:	allocIndexed 52 1
+84:	rswap 
+85:	rstoreg 5
+87:	pushthis 
+88:	rpushg 1
+90:	rpushg 1
+92:	rpushg 1
+94:	rpushg 1
+96:	pushthis 
+97:	rpushg 2
+99:	invoke 572 0 0
+105:	pushg 1
+107:	invoke 67 0 0
+113:	rpop 
+114:	pushText 1
+116:	invoke 107 0 0
+122:	rpop 
+123:	pushthis 
+124:	rpushg 1
+126:	rpushg 1
+128:	rpushg 1
+130:	rpushg 1
+132:	pushthis 
+133:	rpushg 2
+135:	invoke 572 0 0
+141:	pushg 2
+143:	invoke 67 0 0
+149:	rpop 
+150:	pushthis 
+151:	rpushg 1
+153:	rpushg 1
+155:	rpushg 1
+157:	rpushg 1
+159:	invoke 66 0 0
+165:	rpop 
+166:	pushthis 
+167:	rpushg 1
+169:	rpushg 1
+171:	rpushg 1
+173:	rpushg 1
+175:	pushthis 
+176:	rpushg 2
+178:	invoke 573 0 0
+184:	pushg 1
+186:	invoke 67 0 0
+192:	rpop 
+193:	pushText 4
+195:	invoke 107 0 0
+201:	rpop 
+202:	pushthis 
+203:	rpushg 1
+205:	rpushg 1
+207:	rpushg 1
+209:	rpushg 1
+211:	pushthis 
+212:	rpushg 2
+214:	invoke 573 0 0
+220:	pushg 2
+222:	invoke 67 0 0
+228:	rpop 
+229:	pushthis 
+230:	rpushg 1
+232:	rpushg 1
+234:	rpushg 1
+236:	rpushg 1
+238:	invoke 66 0 0
+244:	rpop 
+245:	pushthis 
+246:	innerP 2
+248:	popThisObj
+249:	rtnEventQ 0
+251:	setThisStack
+252:	pushthis 
+253:	rtn D
+
+
+Class put 579 1
+allocE:
+1:	pushthis 
+2:	storeg 1
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	rpushg 1
+16:	rpushg 5
+18:	pushthis 
+19:	pushg 1
+21:	pushthis 
+22:	rpushg 1
+24:	pushg 2
+26:	xstoreg 1
+28:	pushthis 
+29:	invoke 580 0 1
+35:	rpop 
+36:	pushthis 
+37:	pushthis 
+38:	rpushg 1
+40:	rswap 
+41:	rstoreg 2
+43:	rtnEventQ 0
+45:	setThisStack
+46:	pushthis 
+47:	rpushg 2
+49:	rtn D
+
+
+Class %if%then%%else%#S#580 580 3
+allocE:
+1:	rstore 3
+3:	allocEventQ 1
+5:	pushthis 
+6:	rpushg 3
+8:	rpushg 1
+10:	rpushg 1
+12:	rpushg 1
+14:	rpushg 1
+16:	rpushg 1
+18:	pushthis 
+19:	rpushg 3
+21:	rpushg 1
+23:	pushg 2
+25:	pushthis 
+26:	rpushg 3
+28:	rpushg 1
+30:	rpushg 5
+32:	invoke 55 0 0
+38:	eq 
+39:	toSuper 60
+enterE: 
+42:	rtnInner
+doE: 
+43:	mvStack
+44:	rtnInner
+
+
+Class get 581 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	pushthis 
+12:	rpushg 1
+14:	rpushg 5
+16:	pushthis 
+17:	rpushg 1
+19:	pushg 2
+21:	xpushg 1
+23:	storeg 1
+25:	pushthis 
+26:	invoke 582 0 1
+32:	rpop 
+33:	rtnEventQ 0
+35:	setThisStack
+36:	pushthis 
+37:	pushg 1
+39:	rtn D
+
+
+Class %if%then%%else%#S#582 582 3
+allocE:
+1:	rstore 3
+3:	allocEventQ 1
+5:	pushthis 
+6:	rpushg 3
+8:	rpushg 1
+10:	rpushg 1
+12:	rpushg 1
+14:	rpushg 1
+16:	rpushg 1
+18:	pushthis 
+19:	rpushg 3
+21:	rpushg 1
+23:	pushg 2
+25:	pushthis 
+26:	rpushg 3
+28:	rpushg 1
+30:	rpushg 5
+32:	invoke 55 0 0
+38:	eq 
+39:	toSuper 60
+enterE: 
+42:	rtnInner
+doE: 
+43:	mvStack
+44:	rtnInner
+
+
+Class nxt 583 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	invoke 584 0 1
+17:	rpop 
+18:	rtnEventQ 0
+20:	setThisStack
+21:	pushthis 
+22:	pushg 1
+24:	rtn D
+
+
+Class %if%then%%else%#S#584 584 3
+allocE:
+1:	rstore 3
+3:	allocEventQ 1
+5:	pushthis 
+6:	rpushg 3
+8:	rpushg 1
+10:	rpushg 1
+12:	rpushg 1
+14:	rpushg 1
+16:	rpushg 1
+18:	pushthis 
+19:	rpushg 3
+21:	rpushg 1
+23:	pushg 2
+25:	pushthis 
+26:	rpushg 3
+28:	rpushg 1
+30:	pushg 3
+32:	eq 
+33:	toSuper 60
+enterE: 
+36:	rtnInner
+doE: 
+37:	mvStack
+38:	rtnInner
+
+
+Class prv 585 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	invoke 586 0 1
+17:	rpop 
+18:	rtnEventQ 0
+20:	setThisStack
+21:	pushthis 
+22:	pushg 1
+24:	rtn D
+
+
+Class %if%then%%else%#S#586 586 3
+allocE:
+1:	rstore 3
+3:	allocEventQ 1
+5:	pushthis 
+6:	rpushg 3
+8:	rpushg 1
+10:	rpushg 1
+12:	rpushg 1
+14:	rpushg 1
+16:	rpushg 1
+18:	pushthis 
+19:	rpushg 3
+21:	rpushg 1
+23:	pushg 2
+25:	pushc 1
+27:	eq 
+28:	toSuper 60
+enterE: 
+31:	rtnInner
+doE: 
+32:	mvStack
+33:	rtnInner
+
+
+Class putAt 587 1
+allocE:
+1:	pushthis 
+2:	storeg 2
+4:	pushthis 
+5:	storeg 1
+7:	rstore 1
+9:	allocEventQ 0
+11:	mvStack
+12:	rtnEventQ 1
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 1
+19:	rpushg 4
+21:	pushNone 
+22:	req 
+23:	jmpFalse 34
+26:	pushthis 
+27:	invoke 920 0 1
+33:	rpop 
+34:	rtnEventQ 0
+36:	setThisStack
+37:	pushthis 
+38:	rtn D
+
+
+Class getAt 588 1
+allocE:
+1:	pushthis 
+2:	storeg 1
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	rpushg 1
+16:	rpushg 4
+18:	pushNone 
+19:	req 
+20:	jmpFalse 31
+23:	pushthis 
+24:	invoke 921 0 1
+30:	rpop 
+31:	rtnEventQ 0
+33:	setThisStack
+34:	pushthis 
+35:	pushg 2
+37:	rtn D
+
+
+Class putAtAt 589 1
+allocE:
+1:	pushthis 
+2:	storeg 3
+4:	pushthis 
+5:	storeg 2
+7:	pushthis 
+8:	storeg 1
+10:	rstore 1
+12:	allocEventQ 0
+14:	mvStack
+15:	rtnEventQ 1
+doE: 
+17:	doEventQ 
+18:	mvStack
+19:	pushthis 
+20:	rpushg 1
+22:	rpushg 4
+24:	pushNone 
+25:	57
+26:	jmpFalse 37
+29:	pushthis 
+30:	invoke 922 0 1
+36:	rpop 
+37:	rtnEventQ 0
+39:	setThisStack
+40:	pushthis 
+41:	rtn D
+
+
+Class getAtAt 590 1
+allocE:
+1:	pushthis 
+2:	storeg 2
+4:	pushthis 
+5:	storeg 1
+7:	rstore 1
+9:	allocEventQ 0
+11:	mvStack
+12:	rtnEventQ 1
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 1
+19:	rpushg 4
+21:	pushNone 
+22:	57
+23:	jmpFalse 34
+26:	pushthis 
+27:	invoke 923 0 1
+33:	rpop 
+34:	rtnEventQ 0
+36:	setThisStack
+37:	pushthis 
+38:	pushg 3
+40:	rtn D
+
+
+Class realPutAt 591 1
+allocE:
+1:	pushthis 
+2:	storeg 1
+4:	pushthis 
+5:	rstoreg 2
+7:	rstore 1
+9:	allocEventQ 0
+11:	mvStack
+12:	rtnEventQ 1
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 1
+19:	rpushg 4
+21:	pushNone 
+22:	57
+23:	jmpFalse 34
+26:	pushthis 
+27:	invoke 924 0 1
+33:	rpop 
+34:	rtnEventQ 0
+36:	setThisStack
+37:	pushthis 
+38:	rtn D
+
+
+Class forAll 592 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	innera 1
+8:	rtnEventQ 1
+doE: 
+10:	doEventQ 
+11:	mvStack
+12:	pushthis 
+13:	rpushg 1
+15:	pushc 1
+17:	storeg 2
+19:	pushthis 
+20:	invoke 593 0 0
+26:	rpop 
+27:	rtnEventQ 0
+29:	setThisStack
+30:	pushthis 
+31:	rtn D
+
+
+Class loop 593 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	pushthis 
+14:	rpushg 1
+16:	rpushg 1
+18:	rpushg 5
+20:	pushthis 
+21:	rpushg 1
+23:	rpushg 1
+25:	pushg 2
+27:	xpushg 1
+29:	storeg 1
+31:	pushthis 
+32:	rpushg 1
+34:	innerP 1
+36:	popThisObj
+37:	pushthis 
+38:	rpushg 1
+40:	rpushg 1
+42:	pushg 2
+44:	pushthis 
+45:	rpushg 1
+47:	rpushg 1
+49:	pushg 3
+51:	lt
+52:	jmpFalse 63
+55:	pushthis 
+56:	invoke 925 0 1
+62:	rpop 
+63:	rtnEventQ 0
+65:	setThisStack
+66:	pushthis 
+67:	rtn D
+
+
+Class forAllIndex 594 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	innera 1
+8:	rtnEventQ 1
+doE: 
+10:	doEventQ 
+11:	mvStack
+12:	pushthis 
+13:	rpushg 1
+15:	pushc 1
+17:	storeg 2
+19:	pushthis 
+20:	pushthis 
+21:	rpushg 1
+23:	pushg 2
+25:	storeg 1
+27:	pushthis 
+28:	invoke 595 0 0
+34:	rpop 
+35:	rtnEventQ 0
+37:	setThisStack
+38:	pushthis 
+39:	rtn D
+
+
+Class loop 595 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	innerP 1
+15:	popThisObj
+16:	pushthis 
+17:	rpushg 1
+19:	rpushg 1
+21:	pushthis 
+22:	rpushg 1
+24:	rpushg 1
+26:	pushg 2
+28:	pushc 1
+30:	+
+31:	storeg 2
+33:	pushthis 
+34:	rpushg 1
+36:	pushthis 
+37:	rpushg 1
+39:	rpushg 1
+41:	pushg 2
+43:	storeg 1
+45:	pushthis 
+46:	rpushg 1
+48:	rpushg 1
+50:	pushg 2
+52:	pushthis 
+53:	rpushg 1
+55:	rpushg 1
+57:	pushg 3
+59:	lt
+60:	jmpFalse 71
+63:	pushthis 
+64:	invoke 926 0 1
+70:	rpop 
+71:	rtnEventQ 0
+73:	setThisStack
+74:	pushthis 
+75:	rtn D
+
+
+Class fill 596 1
+allocE:
+1:	pushthis 
+2:	storeg 1
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	invoke 597 0 1
+20:	rpop 
+21:	rtnEventQ 0
+23:	setThisStack
+24:	pushthis 
+25:	rtn D
+
+
+Class forAllIndex#S#597 597 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 594
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 2
+19:	rpushg 1
+21:	rpushg 5
+23:	pushthis 
+24:	rpushg 2
+26:	pushg 1
+28:	pushthis 
+29:	pushg 1
+31:	xstoreg 1
+33:	rtnInner
+
+
+Class zeroes 598 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	pushc 0
+15:	invoke 596 0 0
+21:	rpop 
+22:	rtnEventQ 0
+24:	setThisStack
+25:	pushthis 
+26:	rtn D
+
+
+Class ones 599 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	pushc 1
+15:	invoke 596 0 0
+21:	rpop 
+22:	rtnEventQ 0
+24:	setThisStack
+25:	pushthis 
+26:	rtn D
+
+
+Class sum 600 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	pushc 0
+13:	storeg 1
+15:	pushthis 
+16:	invoke 601 0 1
+22:	rpop 
+23:	rtnEventQ 0
+25:	setThisStack
+26:	pushthis 
+27:	pushg 1
+29:	rtn D
+
+
+Class forAll#S#601 601 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 592
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 2
+19:	pushthis 
+20:	rpushg 2
+22:	pushg 1
+24:	pushthis 
+25:	pushg 1
+27:	+
+28:	storeg 1
+30:	rtnInner
+
+
+Class iadd 602 1
+allocE:
+1:	pushthis 
+2:	rstoreg 2
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	invoke 603 0 1
+20:	rpop 
+21:	rtnEventQ 0
+23:	setThisStack
+24:	pushthis 
+25:	rtn D
+
+
+Class forAll#S#603 603 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 592
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 2
+19:	rpushg 1
+21:	pushthis 
+22:	pushg 1
+24:	pushthis 
+25:	rpushg 2
+27:	rpushg 2
+29:	invoke 581 0 0
+35:	+
+36:	invoke 579 0 0
+42:	rpop 
+43:	rtnInner
+
+
+Class iminus 604 1
+allocE:
+1:	pushthis 
+2:	rstoreg 2
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	invoke 605 0 1
+20:	rpop 
+21:	rtnEventQ 0
+23:	setThisStack
+24:	pushthis 
+25:	rtn D
+
+
+Class forAll#S#605 605 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 592
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 2
+19:	rpushg 1
+21:	pushthis 
+22:	pushg 1
+24:	pushthis 
+25:	rpushg 2
+27:	rpushg 2
+29:	invoke 581 0 0
+35:	-
+36:	invoke 579 0 0
+42:	rpop 
+43:	rtnInner
+
+
+Class imult 606 1
+allocE:
+1:	pushthis 
+2:	rstoreg 2
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	invoke 607 0 1
+20:	rpop 
+21:	rtnEventQ 0
+23:	setThisStack
+24:	pushthis 
+25:	rtn D
+
+
+Class forAll#S#607 607 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 592
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 2
+19:	rpushg 1
+21:	pushthis 
+22:	pushg 1
+24:	pushthis 
+25:	rpushg 2
+27:	rpushg 2
+29:	invoke 581 0 0
+35:	*
+36:	invoke 579 0 0
+42:	rpop 
+43:	rtnInner
+
+
+Class idiv 608 1
+allocE:
+1:	pushthis 
+2:	rstoreg 2
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	invoke 609 0 1
+20:	rpop 
+21:	rtnEventQ 0
+23:	setThisStack
+24:	pushthis 
+25:	rtn D
+
+
+Class forAll#S#609 609 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 592
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 2
+19:	rpushg 1
+21:	pushthis 
+22:	pushg 1
+24:	pushthis 
+25:	rpushg 2
+27:	rpushg 2
+29:	invoke 581 0 0
+35:	rdiv
+36:	invoke 579 0 0
+42:	rpop 
+43:	rtnInner
+
+
+Class equal 610 1
+allocE:
+1:	pushthis 
+2:	rstoreg 2
+4:	rstore 1
+6:	allocEventQ 0
+8:	mvStack
+9:	rtnEventQ 1
+doE: 
+11:	doEventQ 
+12:	mvStack
+13:	pushthis 
+14:	pushthis 
+15:	rpushg 1
+17:	rpushg 1
 19:	rpushg 1
 21:	rpushg 1
 23:	rpushg 1
-25:	rpushg 1
+25:	invoke 23 0 0
+31:	storeg 1
+33:	pushthis 
+34:	invoke 611 0 1
+40:	rpop 
+41:	rtnEventQ 0
+43:	setThisStack
+44:	pushthis 
+45:	pushg 1
+47:	rtn D
+
+
+Class forAll#S#611 611 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 592
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	rpushg 2
+19:	rpushg 1
+21:	invoke 581 0 0
 27:	pushthis 
 28:	rpushg 2
-30:	invoke 563 0 0
-36:	pushg 1
-38:	invoke 67 0 0
-44:	rpop 
-45:	pushText 1
-47:	invoke 107 0 0
-53:	rpop 
-54:	pushthis 
-55:	rpushg 1
-57:	rpushg 1
-59:	rpushg 1
-61:	rpushg 1
+30:	rpushg 2
+32:	invoke 581 0 0
+38:	eq 
+39:	jmpFalse 66
+42:	pushthis 
+43:	rpushg 2
+45:	pushthis 
+46:	rpushg 2
+48:	rpushg 1
+50:	rpushg 1
+52:	rpushg 1
+54:	rpushg 1
+56:	rpushg 1
+58:	invoke 24 0 0
+64:	storeg 1
+66:	rtnInner
+
+
+Class countNonZero 612 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	pushc 0
+13:	storeg 1
+15:	pushthis 
+16:	invoke 613 0 1
+22:	rpop 
+23:	rtnEventQ 0
+25:	setThisStack
+26:	pushthis 
+27:	pushg 1
+29:	rtn D
+
+
+Class forAll#S#613 613 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	toSuper 592
+enterE: 
+13:	rtnInner
+doE: 
+14:	doEventQ 
+15:	mvStack
+16:	pushthis 
+17:	invoke 614 0 1
+23:	rpop 
+24:	rtnInner
+
+
+Class %if%then%%else%#S#614 614 3
+allocE:
+1:	rstore 3
+3:	allocEventQ 1
+5:	pushthis 
+6:	rpushg 3
+8:	rpushg 2
+10:	rpushg 1
+12:	rpushg 1
+14:	rpushg 1
+16:	rpushg 1
+18:	rpushg 1
+20:	pushthis 
+21:	rpushg 3
+23:	pushg 1
+25:	pushc 0
+27:	eq 
+28:	toSuper 60
+enterE: 
+31:	rtnInner
+doE: 
+32:	mvStack
+33:	rtnInner
+
+
+Class print 615 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	innera 1
+8:	rtnEventQ 1
+doE: 
+10:	doEventQ 
+11:	mvStack
+12:	pushText 1
+14:	invoke 107 0 0
+20:	rpop 
+21:	pushthis 
+22:	innerP 1
+24:	popThisObj
+25:	pushText 8
+27:	invoke 107 0 0
+33:	rpop 
+34:	pushthis 
+35:	invoke 616 0 1
+41:	rpop 
+42:	pushthis 
+43:	rpushg 1
+45:	rpushg 1
+47:	rpushg 1
+49:	rpushg 1
+51:	rpushg 1
+53:	invoke 66 0 0
+59:	rpop 
+60:	rtnEventQ 0
+62:	setThisStack
 63:	pushthis 
-64:	rpushg 2
-66:	invoke 563 0 0
-72:	pushg 2
-74:	invoke 67 0 0
-80:	rpop 
-81:	pushthis 
-82:	rpushg 1
-84:	rpushg 1
-86:	rpushg 1
-88:	rpushg 1
-90:	invoke 66 0 0
-96:	rpop 
-97:	pushthis 
-98:	rpushg 1
-100:	rpushg 1
-102:	rpushg 1
-104:	rpushg 1
-106:	pushthis 
-107:	rpushg 2
-109:	invoke 564 0 0
-115:	pushg 1
-117:	invoke 67 0 0
-123:	rpop 
-124:	pushText 4
-126:	invoke 107 0 0
-132:	rpop 
-133:	pushthis 
-134:	rpushg 1
-136:	rpushg 1
-138:	rpushg 1
-140:	rpushg 1
-142:	pushthis 
-143:	rpushg 2
-145:	invoke 564 0 0
-151:	pushg 2
-153:	invoke 67 0 0
-159:	rpop 
-160:	pushthis 
-161:	rpushg 1
-163:	rpushg 1
-165:	rpushg 1
-167:	rpushg 1
-169:	invoke 66 0 0
-175:	rpop 
-176:	pushthis 
-177:	innerP 1
-179:	popThisObj
-180:	rtnEventQ 0
-182:	setThisStack
-183:	pushthis 
-184:	rtn D
+64:	rtn D
 
 
-Class #S#727 727 1
+Class %for%to%%do%#S#616 616 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 1
+5:	pushthis 
+6:	rpushg 2
+8:	rpushg 1
+10:	rpushg 1
+12:	rpushg 1
+14:	rpushg 1
+16:	rpushg 1
+18:	pushc 1
+20:	pushthis 
+21:	rpushg 2
+23:	rpushg 1
+25:	rpushg 5
+27:	invoke 55 0 0
+33:	toSuper 63
+enterE: 
+36:	rtnInner
+doE: 
+37:	mvStack
+38:	rtnInner
+
+
+Class #S#774 774 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23810,7 +30503,7 @@ doE:
 26:	rtn D
 
 
-Class #S#728 728 1
+Class #S#775 775 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23844,7 +30537,7 @@ doE:
 49:	rtn D
 
 
-Class #S#729 729 1
+Class #S#776 776 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23860,7 +30553,7 @@ doE:
 18:	rtn D
 
 
-Class body#SB#730 730 2
+Class body#SB#777 777 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -23899,7 +30592,7 @@ doE:
 54:	rtn D
 
 
-Class #S#732 732 1
+Class #S#779 779 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23938,14 +30631,14 @@ doE:
 57:	rpushg 5
 59:	rswap 
 60:	rstoreg 3
-62:	break 1 405
+62:	break 1 468
 66:	rtnEventQ 0
 68:	setThisStack
 69:	pushthis 
 70:	rtn D
 
 
-Class #S#733 733 1
+Class #S#780 780 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -23984,14 +30677,14 @@ doE:
 57:	rpushg 4
 59:	rswap 
 60:	rstoreg 3
-62:	break 1 408
+62:	break 1 471
 66:	rtnEventQ 0
 68:	setThisStack
 69:	pushthis 
 70:	rtn D
 
 
-Class #S#734 734 1
+Class #S#781 781 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24012,7 +30705,7 @@ doE:
 29:	rswap 
 30:	rstoreg 3
 32:	pushthis 
-33:	invoke 735 0 1
+33:	invoke 782 0 1
 39:	rpop 
 40:	rtnEventQ 0
 42:	setThisStack
@@ -24020,7 +30713,7 @@ doE:
 44:	rtn D
 
 
-Class %if%then%%else%#S#735 735 3
+Class %if%then%%else%#S#782 782 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -24046,7 +30739,7 @@ doE:
 34:	rtnInner
 
 
-Class #S#736 736 1
+Class #S#783 783 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24056,7 +30749,7 @@ doE:
 8:	doEventQ 
 9:	mvStack
 10:	pushthis 
-11:	invoke 737 0 1
+11:	invoke 784 0 1
 17:	rpop 
 18:	rtnEventQ 0
 20:	setThisStack
@@ -24064,7 +30757,7 @@ doE:
 22:	rtn D
 
 
-Class %if%then%%else%#S#737 737 3
+Class %if%then%%else%#S#784 784 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -24091,7 +30784,7 @@ doE:
 36:	rtnInner
 
 
-Class #S#738 738 1
+Class #S#785 785 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24120,7 +30813,7 @@ doE:
 39:	rswap 
 40:	rstoreg 3
 42:	pushthis 
-43:	invoke 739 0 1
+43:	invoke 786 0 1
 49:	rpop 
 50:	rtnEventQ 0
 52:	setThisStack
@@ -24128,7 +30821,7 @@ doE:
 54:	rtn D
 
 
-Class %if%then%%else%#S#739 739 3
+Class %if%then%%else%#S#786 786 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -24154,7 +30847,7 @@ doE:
 34:	rtnInner
 
 
-Class body#SB#740 740 2
+Class body#SB#787 787 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24194,7 +30887,7 @@ doE:
 58:	rtn D
 
 
-Class body#SB#741 741 2
+Class body#SB#788 788 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24248,7 +30941,7 @@ doE:
 82:	rtn D
 
 
-Class body#SB#742 742 2
+Class body#SB#789 789 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24280,7 +30973,7 @@ doE:
 43:	rtn D
 
 
-Class body#SB#743 743 2
+Class body#SB#790 790 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24304,7 +30997,7 @@ doE:
 30:	rtn D
 
 
-Class #S#744 744 1
+Class #S#791 791 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24320,7 +31013,7 @@ doE:
 18:	rtn D
 
 
-Class body#SB#745 745 2
+Class body#SB#792 792 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24366,7 +31059,7 @@ doE:
 70:	ne 
 71:	jmpFalse 82
 74:	pushthis 
-75:	invoke 921 0 1
+75:	invoke 987 0 1
 81:	rpop 
 82:	rtnEventQ 0
 84:	setThisStack
@@ -24374,7 +31067,7 @@ doE:
 86:	rtn D
 
 
-Class #S#746 746 1
+Class #S#793 793 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24394,14 +31087,14 @@ doE:
 24:	pushg 1
 26:	lt
 27:	jmpFalse 34
-30:	break 1 439
+30:	break 1 502
 34:	rtnEventQ 0
 36:	setThisStack
 37:	pushthis 
 38:	rtn D
 
 
-Class thenPart#SB#747 747 2
+Class thenPart#SB#794 794 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24430,14 +31123,14 @@ doE:
 41:	pushg 3
 43:	le
 44:	storeg 1
-46:	break 3 376
+46:	break 3 382
 50:	rtnEventQ 0
 52:	setThisStack
 53:	pushthis 
 54:	rtn D
 
 
-Class elsePart#SB#748 748 2
+Class elsePart#SB#795 795 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24464,14 +31157,14 @@ doE:
 37:	pushg 3
 39:	lt
 40:	storeg 1
-42:	break 3 376
+42:	break 3 382
 46:	rtnEventQ 0
 48:	setThisStack
 49:	pushthis 
 50:	rtn D
 
 
-Class thenPart#SB#749 749 2
+Class thenPart#SB#796 796 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24494,7 +31187,7 @@ doE:
 28:	rtn D
 
 
-Class elsePart#SB#750 750 2
+Class elsePart#SB#797 797 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24517,7 +31210,7 @@ doE:
 28:	rtn D
 
 
-Class #S#751 751 1
+Class #S#798 798 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24529,14 +31222,14 @@ doE:
 10:	%prim enable 12
 12:	pushc 50
 14:	%prim sleep 15
-16:	break 1 300
+16:	break 1 306
 20:	rtnEventQ 0
 22:	setThisStack
 23:	pushthis 
 24:	rtn D
 
 
-Class #S#752 752 1
+Class #S#799 799 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24594,7 +31287,7 @@ doE:
 95:	eq 
 96:	jmpFalse 107
 99:	pushthis 
-100:	invoke 922 0 1
+100:	invoke 988 0 1
 106:	rpop 
 107:	rtnEventQ 0
 109:	setThisStack
@@ -24602,7 +31295,7 @@ doE:
 111:	rtn D
 
 
-Class thenPart#SB#753 753 2
+Class thenPart#SB#800 800 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24621,7 +31314,7 @@ doE:
 23:	invoke 161 0 0
 29:	jmpFalse 40
 32:	pushthis 
-33:	invoke 923 0 1
+33:	invoke 989 0 1
 39:	rpop 
 40:	pushthis 
 41:	rpushg 2
@@ -24642,7 +31335,7 @@ doE:
 73:	invoke 147 0 0
 79:	jmpFalse 90
 82:	pushthis 
-83:	invoke 924 0 1
+83:	invoke 990 0 1
 89:	rpop 
 90:	rtnEventQ 0
 92:	setThisStack
@@ -24650,7 +31343,7 @@ doE:
 94:	rtn D
 
 
-Class elsePart#SB#754 754 2
+Class elsePart#SB#801 801 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24659,14 +31352,14 @@ allocE:
 doE: 
 8:	doEventQ 
 9:	mvStack
-10:	break 2 303
+10:	break 2 309
 14:	rtnEventQ 0
 16:	setThisStack
 17:	pushthis 
 18:	rtn D
 
 
-Class thenPart#SB#755 755 2
+Class thenPart#SB#802 802 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24689,7 +31382,7 @@ doE:
 28:	rtn D
 
 
-Class elsePart#SB#756 756 2
+Class elsePart#SB#803 803 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24700,14 +31393,14 @@ doE:
 9:	mvStack
 10:	pushc 100
 12:	%prim sleep 15
-14:	break 2 306
+14:	break 2 312
 18:	rtnEventQ 0
 20:	setThisStack
 21:	pushthis 
 22:	rtn D
 
 
-Class #S#757 757 1
+Class #S#804 804 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24724,7 +31417,7 @@ doE:
 18:	rtn D
 
 
-Class thenPart#SB#758 758 2
+Class thenPart#SB#805 805 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24745,7 +31438,7 @@ doE:
 25:	rtn D
 
 
-Class elsePart#SB#759 759 2
+Class elsePart#SB#806 806 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24772,7 +31465,7 @@ doE:
 35:	rtn D
 
 
-Class thenPart#SB#760 760 2
+Class thenPart#SB#807 807 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24793,7 +31486,7 @@ doE:
 25:	rtn D
 
 
-Class elsePart#SB#761 761 2
+Class elsePart#SB#808 808 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24820,7 +31513,7 @@ doE:
 35:	rtn D
 
 
-Class thenPart#SB#762 762 2
+Class thenPart#SB#809 809 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24839,7 +31532,7 @@ doE:
 21:	rtn D
 
 
-Class elsePart#SB#763 763 2
+Class elsePart#SB#810 810 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24871,7 +31564,7 @@ doE:
 44:	rtn D
 
 
-Class thenPart#SB#764 764 2
+Class thenPart#SB#811 811 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24890,7 +31583,7 @@ doE:
 21:	rtn D
 
 
-Class elsePart#SB#765 765 2
+Class elsePart#SB#812 812 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24922,7 +31615,7 @@ doE:
 44:	rtn D
 
 
-Class #S#766 766 1
+Class #S#813 813 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24938,7 +31631,7 @@ doE:
 18:	rtn D
 
 
-Class body#SB#767 767 2
+Class body#SB#814 814 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -24973,7 +31666,7 @@ doE:
 57:	rtn D
 
 
-Class #S#768 768 1
+Class #S#815 815 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -24991,7 +31684,7 @@ doE:
 23:	rtn D
 
 
-Class #S#769 769 1
+Class #S#816 816 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25009,7 +31702,7 @@ doE:
 23:	rtn D
 
 
-Class #S#785 785 1
+Class #S#832 832 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25037,7 +31730,7 @@ doE:
 42:	rtn D
 
 
-Class #S#786 786 1
+Class #S#833 833 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25046,14 +31739,14 @@ allocE:
 doE: 
 8:	doEventQ 
 9:	mvStack
-10:	break 1 353
+10:	break 1 359
 14:	rtnEventQ 0
 16:	setThisStack
 17:	pushthis 
 18:	rtn D
 
 
-Class thenPart#SB#787 787 2
+Class thenPart#SB#834 834 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25117,7 +31810,7 @@ doE:
 113:	rtn D
 
 
-Class elsePart#SB#788 788 2
+Class elsePart#SB#835 835 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25139,7 +31832,7 @@ doE:
 30:	rtn D
 
 
-Class thenPart#SB#789 789 2
+Class thenPart#SB#836 836 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25204,7 +31897,7 @@ doE:
 118:	rtn D
 
 
-Class elsePart#SB#790 790 2
+Class elsePart#SB#837 837 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25226,7 +31919,7 @@ doE:
 30:	rtn D
 
 
-Class #S#791 791 1
+Class #S#838 838 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25249,14 +31942,49 @@ doE:
 33:	rpushg 2
 35:	invoke 239 0 0
 41:	rpop 
-42:	break 1 360
+42:	break 1 366
 46:	rtnEventQ 0
 48:	setThisStack
 49:	pushthis 
 50:	rtn D
 
 
-Class #S#861 861 1
+Class #S#908 908 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	rpushg 1
+15:	pushthis 
+16:	rpushg 1
+18:	rpushg 1
+20:	rpushg 1
+22:	rpushg 2
+24:	rswap 
+25:	rstoreg 2
+27:	pushthis 
+28:	rpushg 1
+30:	rpushg 1
+32:	pushthis 
+33:	rpushg 1
+35:	rpushg 1
+37:	rpushg 2
+39:	pushg 1
+41:	storeg 1
+43:	break 1 511
+47:	rtnEventQ 0
+49:	setThisStack
+50:	pushthis 
+51:	rtn D
+
+
+Class #S#909 909 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25274,7 +32002,7 @@ doE:
 23:	rtn D
 
 
-Class #S#862 862 1
+Class #S#910 910 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25292,7 +32020,7 @@ doE:
 23:	rtn D
 
 
-Class #S#863 863 1
+Class #S#911 911 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25321,14 +32049,649 @@ doE:
 39:	rpushg 2
 41:	rswap 
 42:	rstoreg 2
-44:	break 1 450
+44:	break 1 518
 48:	rtnEventQ 0
 50:	setThisStack
 51:	pushthis 
 52:	rtn D
 
 
-Class thenPart#SB#913 913 2
+Class thenPart#SB#912 912 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	rpushg 1
+17:	pushc 1
+19:	storeg 2
+21:	rtnEventQ 0
+23:	setThisStack
+24:	pushthis 
+25:	rtn D
+
+
+Class elsePart#SB#913 913 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	rpushg 1
+17:	pushthis 
+18:	rpushg 2
+20:	rpushg 3
+22:	rpushg 1
+24:	pushg 2
+26:	pushc 1
+28:	+
+29:	storeg 2
+31:	rtnEventQ 0
+33:	setThisStack
+34:	pushthis 
+35:	rtn D
+
+
+Class thenPart#SB#914 914 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	rpushg 1
+17:	pushc 1
+19:	storeg 2
+21:	rtnEventQ 0
+23:	setThisStack
+24:	pushthis 
+25:	rtn D
+
+
+Class elsePart#SB#915 915 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	rpushg 1
+17:	pushthis 
+18:	rpushg 2
+20:	rpushg 3
+22:	rpushg 1
+24:	pushg 2
+26:	pushc 1
+28:	+
+29:	storeg 2
+31:	rtnEventQ 0
+33:	setThisStack
+34:	pushthis 
+35:	rtn D
+
+
+Class thenPart#SB#916 916 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	storeg 1
+17:	rtnEventQ 0
+19:	setThisStack
+20:	pushthis 
+21:	rtn D
+
+
+Class elsePart#SB#917 917 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	pushthis 
+16:	rpushg 2
+18:	rpushg 3
+20:	rpushg 1
+22:	rpushg 5
+24:	pushthis 
+25:	rpushg 2
+27:	rpushg 3
+29:	rpushg 1
+31:	pushg 2
+33:	pushc 1
+35:	+
+36:	xpushg 1
+38:	storeg 1
+40:	rtnEventQ 0
+42:	setThisStack
+43:	pushthis 
+44:	rtn D
+
+
+Class thenPart#SB#918 918 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	storeg 1
+17:	rtnEventQ 0
+19:	setThisStack
+20:	pushthis 
+21:	rtn D
+
+
+Class elsePart#SB#919 919 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	pushthis 
+16:	rpushg 2
+18:	rpushg 3
+20:	rpushg 1
+22:	rpushg 5
+24:	pushthis 
+25:	rpushg 2
+27:	rpushg 3
+29:	rpushg 1
+31:	pushg 2
+33:	pushc 1
+35:	-
+36:	xpushg 1
+38:	storeg 1
+40:	rtnEventQ 0
+42:	setThisStack
+43:	pushthis 
+44:	rtn D
+
+
+Class #S#920 920 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	rpushg 1
+15:	rpushg 3
+17:	pushthis 
+18:	rpushg 1
+20:	pushg 1
+22:	invoke 568 0 0
+28:	rpop 
+29:	pushthis 
+30:	rpushg 1
+32:	rpushg 1
+34:	rpushg 5
+36:	pushthis 
+37:	rpushg 1
+39:	pushg 2
+41:	pushthis 
+42:	rpushg 1
+44:	pushg 1
+46:	pushthis 
+47:	rpushg 1
+49:	rpushg 1
+51:	rpushg 3
+53:	pushg 1
+55:	-
+56:	pushc 1
+58:	+
+59:	xstoreg 1
+61:	rtnEventQ 0
+63:	setThisStack
+64:	pushthis 
+65:	rtn D
+
+
+Class #S#921 921 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	rpushg 1
+15:	rpushg 3
+17:	pushthis 
+18:	rpushg 1
+20:	pushg 1
+22:	invoke 568 0 0
+28:	rpop 
+29:	pushthis 
+30:	rpushg 1
+32:	pushthis 
+33:	rpushg 1
+35:	rpushg 1
+37:	rpushg 5
+39:	pushthis 
+40:	rpushg 1
+42:	pushg 1
+44:	pushthis 
+45:	rpushg 1
+47:	rpushg 1
+49:	rpushg 3
+51:	pushg 1
+53:	-
+54:	pushc 1
+56:	+
+57:	xpushg 1
+59:	storeg 2
+61:	rtnEventQ 0
+63:	setThisStack
+64:	pushthis 
+65:	rtn D
+
+
+Class #S#922 922 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	rpushg 1
+15:	rpushg 3
+17:	pushthis 
+18:	rpushg 1
+20:	pushg 1
+22:	invoke 568 0 0
+28:	rpop 
+29:	pushthis 
+30:	rpushg 1
+32:	rpushg 1
+34:	rpushg 4
+36:	pushthis 
+37:	rpushg 1
+39:	pushg 2
+41:	invoke 568 0 0
+47:	rpop 
+48:	pushthis 
+49:	pushthis 
+50:	rpushg 1
+52:	pushg 1
+54:	pushthis 
+55:	rpushg 1
+57:	rpushg 1
+59:	rpushg 3
+61:	pushg 1
+63:	-
+64:	pushthis 
+65:	rpushg 1
+67:	rpushg 1
+69:	rpushg 4
+71:	pushg 3
+73:	pushc 1
+75:	pushthis 
+76:	rpushg 1
+78:	pushg 2
+80:	pushthis 
+81:	rpushg 1
+83:	rpushg 1
+85:	rpushg 4
+87:	pushg 1
+89:	-
+90:	+
+91:	+
+92:	*
+93:	storeg 1
+95:	pushthis 
+96:	rpushg 1
+98:	rpushg 1
+100:	rpushg 5
+102:	pushthis 
+103:	rpushg 1
+105:	pushg 3
+107:	pushthis 
+108:	pushg 1
+110:	xstoreg 1
+112:	rtnEventQ 0
+114:	setThisStack
+115:	pushthis 
+116:	rtn D
+
+
+Class #S#923 923 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	rpushg 1
+15:	rpushg 3
+17:	pushthis 
+18:	rpushg 1
+20:	pushg 1
+22:	invoke 568 0 0
+28:	rpop 
+29:	pushthis 
+30:	rpushg 1
+32:	rpushg 1
+34:	rpushg 4
+36:	pushthis 
+37:	rpushg 1
+39:	pushg 2
+41:	invoke 568 0 0
+47:	rpop 
+48:	pushthis 
+49:	pushthis 
+50:	rpushg 1
+52:	pushg 1
+54:	pushthis 
+55:	rpushg 1
+57:	rpushg 1
+59:	rpushg 3
+61:	pushg 1
+63:	-
+64:	pushthis 
+65:	rpushg 1
+67:	rpushg 1
+69:	rpushg 4
+71:	pushg 3
+73:	pushc 1
+75:	pushthis 
+76:	rpushg 1
+78:	pushg 2
+80:	pushthis 
+81:	rpushg 1
+83:	rpushg 1
+85:	rpushg 4
+87:	pushg 1
+89:	-
+90:	+
+91:	+
+92:	*
+93:	storeg 1
+95:	pushthis 
+96:	rpushg 1
+98:	pushthis 
+99:	rpushg 1
+101:	rpushg 1
+103:	rpushg 5
+105:	pushthis 
+106:	pushg 1
+108:	xpushg 1
+110:	storeg 3
+112:	rtnEventQ 0
+114:	setThisStack
+115:	pushthis 
+116:	rtn D
+
+
+Class #S#924 924 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 1
+13:	pushthis 
+14:	rpushg 1
+16:	rpushg 2
+18:	invoke 561 0 0
+24:	storeg 2
+26:	pushthis 
+27:	rpushg 1
+29:	pushthis 
+30:	rpushg 1
+32:	rpushg 2
+34:	invoke 562 0 0
+40:	storeg 3
+42:	pushthis 
+43:	rpushg 1
+45:	rpushg 1
+47:	rpushg 3
+49:	pushthis 
+50:	rpushg 1
+52:	pushg 2
+54:	invoke 568 0 0
+60:	rpop 
+61:	pushthis 
+62:	rpushg 1
+64:	rpushg 1
+66:	rpushg 4
+68:	pushthis 
+69:	rpushg 1
+71:	pushg 3
+73:	invoke 568 0 0
+79:	rpop 
+80:	pushthis 
+81:	pushthis 
+82:	rpushg 1
+84:	pushg 2
+86:	pushthis 
+87:	rpushg 1
+89:	rpushg 1
+91:	rpushg 3
+93:	pushg 1
+95:	-
+96:	pushthis 
+97:	rpushg 1
+99:	rpushg 1
+101:	rpushg 4
+103:	pushg 3
+105:	pushc 1
+107:	pushthis 
+108:	rpushg 1
+110:	pushg 3
+112:	pushthis 
+113:	rpushg 1
+115:	rpushg 1
+117:	rpushg 4
+119:	pushg 1
+121:	-
+122:	+
+123:	+
+124:	*
+125:	storeg 1
+127:	pushthis 
+128:	rpushg 1
+130:	rpushg 1
+132:	rpushg 5
+134:	pushthis 
+135:	rpushg 1
+137:	pushg 1
+139:	pushthis 
+140:	pushg 1
+142:	xstoreg 1
+144:	rtnEventQ 0
+146:	setThisStack
+147:	pushthis 
+148:	rtn D
+
+
+Class #S#925 925 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	break 1 541
+14:	rtnEventQ 0
+16:	setThisStack
+17:	pushthis 
+18:	rtn D
+
+
+Class #S#926 926 1
+allocE:
+1:	rstore 1
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	break 1 544
+14:	rtnEventQ 0
+16:	setThisStack
+17:	pushthis 
+18:	rtn D
+
+
+Class thenPart#SB#927 927 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	rpushg 2
+17:	pushthis 
+18:	rpushg 2
+20:	rpushg 3
+22:	rpushg 2
+24:	pushg 1
+26:	storeg 1
+28:	rtnEventQ 0
+30:	setThisStack
+31:	pushthis 
+32:	rtn D
+
+
+Class elsePart#SB#928 928 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 3
+15:	rpushg 2
+17:	pushthis 
+18:	rpushg 2
+20:	rpushg 3
+22:	rpushg 2
+24:	pushg 1
+26:	pushc 1
+28:	+
+29:	storeg 1
+31:	rtnEventQ 0
+33:	setThisStack
+34:	pushthis 
+35:	rtn D
+
+
+Class body#SB#929 929 2
+allocE:
+1:	rstore 2
+3:	allocEventQ 0
+5:	mvStack
+6:	rtnEventQ 1
+doE: 
+8:	doEventQ 
+9:	mvStack
+10:	pushthis 
+11:	rpushg 2
+13:	rpushg 2
+15:	rpushg 1
+17:	rpushg 1
+19:	rpushg 1
+21:	rpushg 1
+23:	rpushg 1
+25:	pushthis 
+26:	rpushg 2
+28:	rpushg 2
+30:	rpushg 1
+32:	rpushg 5
+34:	pushthis 
+35:	rpushg 2
+37:	pushg 3
+39:	xpushg 1
+41:	invoke 67 0 0
+47:	rpop 
+48:	pushText 1
+50:	invoke 107 0 0
+56:	rpop 
+57:	rtnEventQ 0
+59:	setThisStack
+60:	pushthis 
+61:	rtn D
+
+
+Class thenPart#SB#979 979 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25368,7 +32731,7 @@ doE:
 58:	rtn D
 
 
-Class elsePart#SB#914 914 2
+Class elsePart#SB#980 980 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25421,7 +32784,7 @@ doE:
 81:	rtn D
 
 
-Class thenPart#SB#915 915 2
+Class thenPart#SB#981 981 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25445,7 +32808,7 @@ doE:
 32:	rswap 
 33:	rstoreg 5
 35:	pushthis 
-36:	invoke 916 0 1
+36:	invoke 982 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -25453,7 +32816,7 @@ doE:
 47:	rtn D
 
 
-Class %if%then%%else%#S#916 916 3
+Class %if%then%%else%#S#982 982 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -25484,7 +32847,7 @@ doE:
 44:	rtnInner
 
 
-Class elsePart#SB#917 917 2
+Class elsePart#SB#983 983 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25508,7 +32871,7 @@ doE:
 32:	rswap 
 33:	rstoreg 2
 35:	pushthis 
-36:	invoke 918 0 1
+36:	invoke 984 0 1
 42:	rpop 
 43:	rtnEventQ 0
 45:	setThisStack
@@ -25516,7 +32879,7 @@ doE:
 47:	rtn D
 
 
-Class %if%then%%else%#S#918 918 3
+Class %if%then%%else%#S#984 984 3
 allocE:
 1:	rstore 3
 3:	allocEventQ 1
@@ -25548,7 +32911,7 @@ doE:
 46:	rtnInner
 
 
-Class thenPart#SB#919 919 2
+Class thenPart#SB#985 985 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25572,7 +32935,7 @@ doE:
 29:	rtn D
 
 
-Class elsePart#SB#920 920 2
+Class elsePart#SB#986 986 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25595,7 +32958,7 @@ doE:
 27:	rtn D
 
 
-Class #S#921 921 1
+Class #S#987 987 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25626,7 +32989,7 @@ doE:
 50:	rtn D
 
 
-Class #S#922 922 1
+Class #S#988 988 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25656,7 +33019,7 @@ doE:
 45:	rtn D
 
 
-Class #S#923 923 1
+Class #S#989 989 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25667,14 +33030,14 @@ doE:
 9:	mvStack
 10:	pushc 100
 12:	%prim sleep 15
-14:	break 3 303
+14:	break 3 309
 18:	rtnEventQ 0
 20:	setThisStack
 21:	pushthis 
 22:	rtn D
 
 
-Class #S#924 924 1
+Class #S#990 990 1
 allocE:
 1:	rstore 1
 3:	allocEventQ 0
@@ -25695,14 +33058,14 @@ doE:
 27:	rpushg 4
 29:	invoke 143 0 0
 35:	rpop 
-36:	break 3 303
+36:	break 3 309
 40:	rtnEventQ 0
 42:	setThisStack
 43:	pushthis 
 44:	rtn D
 
 
-Class thenPart#SB#943 943 2
+Class thenPart#SB#1009 1009 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25735,7 +33098,7 @@ doE:
 47:	rtn D
 
 
-Class elsePart#SB#944 944 2
+Class elsePart#SB#1010 1010 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25768,7 +33131,7 @@ doE:
 47:	rtn D
 
 
-Class thenPart#SB#945 945 2
+Class thenPart#SB#1011 1011 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25795,7 +33158,7 @@ doE:
 35:	rtn D
 
 
-Class elsePart#SB#946 946 2
+Class elsePart#SB#1012 1012 2
 allocE:
 1:	rstore 2
 3:	allocEventQ 0
@@ -25821,19 +33184,19 @@ doE:
 33:	rtn D
 
 
-Class main 948 0
+Class main 1014 0
 allocE:
 1:	pushthis 
 2:	invoke 1 0 1
 8:	stop 
 
 
-Class EventProcessor 949 0
+Class EventProcessor 1015 0
 allocE:
 1:	stop 
 
 
-Class ThreadStub 950 0
+Class ThreadStub 1016 0
 allocE:
 doE: 
 1:	mvStack
