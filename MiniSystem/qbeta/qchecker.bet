@@ -12,7 +12,7 @@ INCLUDE 'qprimitives';
  *)
 fixSuperOn: (# exit false #);
 checker: Parser
-  (# traceSearch: @ boolean;
+  (# traceCheck,traceSearch: @ boolean;
      Module::<
        (# setUpOrigin:: (# do origin[] -> DI.setUpOrigin #);
           check::
@@ -98,9 +98,12 @@ checker: Parser
                        (*newline;*)
                     #)
                  #);
-            do (*'CheckItems:\n' -> puttext; doPT->putline;*)
+            do (if traceCheck then '*** Check Items: \n' -> puttext; doPT->putline if);;
                this(items)[] -> basicScope[];
-               (if superApl[] = none then 'superApl is none' -> putline if);
+               (if superApl[] = none then
+                   'superApl is none' -> putline;
+                   'CheckItems:\n' -> puttext; doPT->putline
+               if);
                (if superApl.ATd[] <> none then
                    (* Has super <
                     * We must ensure that Super has been checked
@@ -211,7 +214,7 @@ checker: Parser
             #); 
           
           search::
-            (# org: ^Items
+            (# org: ^Items; F: ^Node
             do (if traceSearch then
                    '>>>Items:Search:'->puttext; CS[] -> putline;
                    'in: ' -> putline; doP -> putline
@@ -228,7 +231,11 @@ checker: Parser
                        (if (origin[] -> org[]) <> none then
                            (CS[],isFirst) -> org.search -> (ATd[],on,pn);
                            (if not org.isChecked then
-                               (none,org[],org[],true) -> org.check
+                               (if traceCheck then
+                                   '*** Origin not checked: ' -> puttext; doPT -> putline;
+                                   '    Search: ' -> puttext; org.father.label -> putline;
+                               if);
+                               (none,org[],org[],true) -> (org.father[]->F[]).check
                            if);
                            (if basicNo = ifthen_prim then
                                (* '!!! Origin:search:%if%then: Adjust ON: ' 
@@ -330,7 +337,8 @@ checker: Parser
           check::
             (# 
             do (if son[] <> none then
-                   (*'Check include:' -> puttext; doPT -> putline;*)
+                   (if traceCheck then 
+                       '*** Check include:' -> puttext; doPT -> putline if);
                    basicScope.origin[] -> basicScope[];
                    scanSons
                    (#do (none,basicScope[],basicScope[],true) -> current.check#);
@@ -352,11 +360,11 @@ checker: Parser
                  scanSons
                  (# IV: ^Invocation; MI: ^ModuleItem; pn: @integer
                  do (if traceSearch then
-                        '***** Include:search: ' -> puttext; 
+                        '*** Include:search: ' -> puttext; 
                         current.doPT -> putline;
                     if);
                     current[] -> IV[];
-                    (if IV.ATd[] = none then 'IV.ATd=none'->putline if);
+                    (if IV.ATd[] = none then 'searchInclude:IV.ATd=none'->putline if);
                     (if IV.ATd.desc = none then 'IV.ATd.desc=none'->putline if);
                     (CS[],false) -> (IV.ATd.desc).localSearch -> (ATd[],pn);
                     (if ATd[] <> none then
@@ -383,7 +391,10 @@ checker: Parser
             #);
           check::
             (# 
-            do (if true then 
+            do (if traceCheck then
+                   '*** Check signature: ' -> puttext; doPT -> putline
+               if);
+               (if true then 
                    (if type[] <> none then
                        (none,basicScope[],basicScope[],true) -> type.check;
                    if);
@@ -550,7 +561,7 @@ checker: Parser
             #);
           check::
             (# elm::Items
-            do (*'DataItem:check: ' -> puttext; doPT -> putline;*)
+            do (if traceCheck then '*** DataItem:check: ' -> puttext; doPT -> putline if);
                (none,basicScope[],argScope[],true) -> sig.check;
                (none,basicScope[],argScope[],true) -> OG.check; 
             #);
@@ -642,7 +653,8 @@ checker: Parser
 
             do (if (not isChecked) and (not isBeingChecked) then
                    true -> isBeingChecked;
-                   (*'\n***** Check ptn: ' -> puttext; sig.id[] -> putline;*)
+                   (if traceCheck then  
+                       '*** Check ptn: ' -> puttext; sig.id[] -> putline if);
                    setImplSuper;
                    (* Must check sig before OD;
                     * Items in OD may refer Decl's in sig
@@ -748,12 +760,16 @@ checker: Parser
                     sig[] -> IT.sig[]; (* is none *)
                  exit IT[]
                  #);
-            do (if super.ATd[] = none then 
+            do (if traceCheck then
+                   '*** Check ObjectGenerator:' -> puttext; doPT -> putline if);
+               (if super.ATd[] = none then 
                    (* else implict super that has been setUp*)
                    (if sig[] = none then
                        (if father## = pattern## then 'Is pattern' -> putline if);
-                       (*'***** OG:sig is none:'->putline;
-                       super.doPT -> putline;*)
+                       (if traceCheck then
+                           '*** sig is none: '->puttext;
+                           super.doPT -> putline;
+                       if);
                        (* A singular statement:
                         *     bar(a,...) { ... }
                         * isObjectDesc: IS not empty or has virtual arguments
@@ -770,6 +786,10 @@ checker: Parser
                         * where
                         *     super = bar(a,...) 
                         *)
+                       (if traceCheck then 
+                           '*** sig is not none: '->puttext;
+                           super.doPT -> putline;
+                       if);
                        (if fixSuperOn then
                            (none,sig[],sig[],true) -> super.check
                         else
@@ -853,7 +873,7 @@ checker: Parser
             (# do scanSons(# do origin[] -> current.setUpOrigin #)#);
           check::
             (# 
-            do (*'Invocation:check: ' -> puttext; doPT -> putline;*)
+            do (if traceCheck then '*** Invocation:check: ' -> puttext; doPT -> putline if);
                (* basicScope.doP -> putline;
                argscope.doP -> putline;*)
                scanSons
@@ -895,15 +915,16 @@ checker: Parser
             #);
           check::
             (# elm:: scope; org: ^Items
-            do (*'ObjectInvocation:check: ' -> puttext; ptnId.T[] -> puttext;
-                ' :scope: ' -> puttext; basicScope.doPT ->putline;*)
+            do (if traceCheck then
+                   '*** ObjectInvocation:check: ' -> puttext; ptnId.T[] -> putline if);
+               (* ' :scope: ' -> puttext; basicScope.doPT ->putline;*)
                (if basicScope[] <> none then (* ad hoc *)
                    (if traceSearch then
                        '>>>ObjectInvocation:search: ' -> puttext;
                        ptnId.T[] -> putline
                    if);
                    (ptnId.T[],isFirst) -> basicScope.search -> (ATd[],on,pn);
-                   (if ATd[] <> none then
+                   (if ATd[] <> none then 
                        on -> ptnId.on; (* just for debugging *)
                        (ptnId.T[],on,ATd[]) -> found;
                     else
@@ -928,10 +949,10 @@ checker: Parser
                         else
                            (args[],argScope[]) -> argBuf.add
                        if)
-                    else
+                    else 
                        (*this(Exp)[] -> ATd.checkVirtualArgs; -- error in ALLOC! *)
                        (args[],argScope[]) -> argBuf.add
-                   if);
+                   if); 
                    (if ATd[] <> none then 
                        (* ok if static/dynamicObject
                         * If pattern, scope is the desc of the return value
@@ -1137,6 +1158,7 @@ checker: Parser
                               * currently we compile all modules
                               *)
      false -> semanticErrors;
+     (*true -> traceCheck;*)
      rootModule.setUpOrigin;
      (*true -> traceSearch;*)
      rootModule.check;
