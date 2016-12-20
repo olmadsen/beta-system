@@ -27,7 +27,6 @@ checker: Parser
             #);
           alloc:: (# do IT[] -> DI.alloc #);
           desc:: (#do DI.desc -> D[] #);
-          isChecked: @boolean
        #);
      ModuleItem::<
        (# setUpOrigin:: (# do origin[] -> MD.setUpOrigin #);
@@ -56,7 +55,7 @@ checker: Parser
             #);
           setUpOrigin::
             (# 
-            do false -> isChecked (*-> beingChecked -> isVinxd -> isRinxd*) -> done ;
+            do false -> isChecked -> beingChecked (*-> isVinxd -> isRinxd*) -> done ;
                0 -> descNo -> vsize -> rsize -> originOff -> noOfInner -> dsize -> innerInx;
                scanSons(# do this(Items)[] -> current.setupOrigin #);
                (if props[] <> none then
@@ -337,26 +336,30 @@ checker: Parser
           check::
             (# 
             do (if son[] <> none then
-                   (if traceCheck then 
-                       '*** Check include:' -> puttext; doPT -> putline if);
-                   basicScope.origin[] -> basicScope[];
-                   scanSons
-                   (#do (none,basicScope[],basicScope[],true) -> current.check#);
-                   (* Force check of included modules *)
-                   scanSons
-                   (# IV: ^Invocation; MI: ^ModuleItem
-                   do current[] -> IV[];
-                      (if IV.ATd[] <> none then
-                          IV.ATd[] -> MI[];
-                          MI.MD.check;
-                   if)#)
-               if)
+                   (if not isChecked then (* see isChecked in compiler_IF::check *)
+                       (if traceCheck then 
+                           '*** Check include:' -> puttext; doPT -> putline if);
+                       basicScope.origin[] -> basicScope[];
+                       scanSons
+                       (#do (none,basicScope[],basicScope[],true) -> current.check#);
+                       (* Force check of included modules *)
+                       scanSons
+                       (# IV: ^Invocation; MI: ^ModuleItem
+                       do current[] -> IV[];
+                          (if IV.ATd[] <> none then
+                              IV.ATd[] -> MI[];
+                              MI.MD.check;
+                       if)#)
+               if)if)
             #);
           alloc:: (# do scanSons(#do IT[] -> current.alloc #)#);
           searchInclude:
             (# CS: ^Text; ATd: ^Decl
             enter CS[]
-            do search:
+            do (if not isChecked then
+                   (none,origin[],origin,true) -> check
+               if);
+               search:
                  scanSons
                  (# IV: ^Invocation; MI: ^ModuleItem; pn: @integer
                  do (if traceSearch then
@@ -651,8 +654,8 @@ checker: Parser
                     if)
                  #);
 
-            do (if (not isChecked) and (not isBeingChecked) then
-                   true -> isBeingChecked;
+            do (if (not isChecked) and (not beingChecked) then
+                   true -> beingChecked;
                    (if traceCheck then  
                        '*** Check ptn: ' -> puttext; sig.id[] -> putline if);
                    setImplSuper;
@@ -665,7 +668,7 @@ checker: Parser
                    (none,basicScope[],basicScope[],true) -> OD.check;
                    inner;
                    true -> isChecked;
-                   false -> isBeingChecked
+                   false -> beingChecked
                if);
             #);
           isInner::
@@ -702,7 +705,7 @@ checker: Parser
             #);
           desc::<
             (# elm:: items
-            do (*(if not isChecked and not isBeingChecked then 
+            do (*(if not isChecked and not beingChecked then 
                    '!!! ' -> puttext; sig.doPT -> putline;
                    '** Not checked: ' -> putline;
                    doPT -> putline;
@@ -722,9 +725,6 @@ checker: Parser
           skind:: (# do ': ' -> S[] #);
           getEntries:: (# do OD.getEntries -> (names[],entries[]) #);
           objDescEQ:: (# do DN -> OD.objDescEQ -> value #);
-          
-          isChecked: @boolean;
-          isBeingChecked : @boolean;
        #);
      
      ObjectGenerator::<
@@ -760,47 +760,51 @@ checker: Parser
                     sig[] -> IT.sig[]; (* is none *)
                  exit IT[]
                  #);
-            do (if traceCheck then
-                   '*** Check ObjectGenerator:' -> puttext; doPT -> putline if);
-               (if super.ATd[] = none then 
-                   (* else implict super that has been setUp*)
-                   (if sig[] = none then
-                       (if father## = pattern## then 'Is pattern' -> putline if);
-                       (if traceCheck then
-                           '*** sig is none: '->puttext;
-                           super.doPT -> putline;
-                       if);
-                       (* A singular statement:
-                        *     bar(a,...) { ... }
-                        * isObjectDesc: IS not empty or has virtual arguments
-                        * else: just a pattern invocation
-                        * Note! isObjectDesc is not defined before super.check 
-                        *       has been executed
-                        *)
-                       (none,basicScope[],basicScope[],true) -> super.check;
-                       (if false and fixSuperon and isObjectDesc then super.IncrOn if)
-                    else
-                       (if father## <> pattern## then 'Not pattern' -> putline if);
-                       (* A pattern:
-                        *     foo(a: ?int, ...): bar(a, ...){ ... } 
-                        * where
-                        *     super = bar(a,...) 
-                        *)
-                       (if traceCheck then 
-                           '*** sig is not none: '->puttext;
-                           super.doPT -> putline;
-                       if);
-                       (if fixSuperOn then
-                           (none,sig[],sig[],true) -> super.check
+            do (if not isChecked and not beingChecked then
+                   true -> beingChecked;
+                   (if traceCheck then
+                       '*** Check ObjectGenerator:' -> puttext; 
+                       doPT -> putline if);
+                   (if super.ATd[] = none then 
+                       (* else implict super that has been setUp*)
+                       (if sig[] = none then
+                           (if father## = pattern## then 'Is pattern' -> putline if);
+                           (if traceCheck then
+                               '*** sig is none: '->puttext;
+                               super.doPT -> putline;
+                           if);
+                           (* A singular statement:
+                            *     bar(a,...) { ... }
+                            * isObjectDesc: IS not empty or has virtual arguments
+                            * else: just a pattern invocation
+                            * Note! isObjectDesc is not defined before super.check 
+                            *       has been executed
+                            *)
+                           (none,basicScope[],basicScope[],true) -> super.check;
+                           (if false and fixSuperon and isObjectDesc then super.IncrOn if)
                         else
-                           (none,basicScope[],sig[],true) -> super.check
-                       if)
-                   if);                   
-               if);      
-               (if isObjectDesc then
-                   this(ObjectGenerator)[] -> newDesc -> IS.descNo;
-               if);
-               (origin[],super[],super.hasVirtualArgs) -> IS.checkItems;
+                           (if father## <> pattern## then 'Not pattern' -> putline if);
+                           (* A pattern:
+                            *     foo(a: ?int, ...): bar(a, ...){ ... } 
+                            * where
+                            *     super = bar(a,...) 
+                            *)
+                           (if traceCheck then 
+                               '*** sig is not none: '->puttext;
+                               super.doPT -> putline;
+                           if);
+                           (if fixSuperOn then
+                               (none,sig[],sig[],true) -> super.check
+                            else
+                               (none,basicScope[],sig[],true) -> super.check
+                           if)
+                       if);                   
+                   if);      
+                   (if isObjectDesc then
+                       this(ObjectGenerator)[] -> newDesc -> IS.descNo;
+                   if);
+                   (origin[],super[],super.hasVirtualArgs) -> IS.checkItems;
+               if)
             #);
           isSimpleValue: BooleanValue
             (* ObjectGeneration in (the rightside)
@@ -1159,8 +1163,9 @@ checker: Parser
                               *)
      false -> semanticErrors;
      (*true -> traceCheck;*)
-     rootModule.setUpOrigin;
      (*true -> traceSearch;*)
+     rootModule.setUpOrigin;
+
      rootModule.check;
      argBuf.check;
      '**** ALLOC     ****'->putline;
