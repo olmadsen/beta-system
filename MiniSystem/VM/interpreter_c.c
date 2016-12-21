@@ -18,7 +18,7 @@
 
 #include <string.h>
 
-#define TRACE
+//#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
