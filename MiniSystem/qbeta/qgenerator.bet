@@ -461,7 +461,9 @@ generator: semchecker
           loadArgs::
             (# gdb:: (# do sig.doPT -> lx.puttext; E.doPT -> lx.puttext #);
                args: [6]^ObjectGenerator; top,i: @integer;
-            do (if OD.primNo // 0 // put_prim then
+            do (if OD.primNo 
+                // 0 // put_prim // indexed_prim // integer_prim
+                // attach_prim // cmpAndSwap_prim // sleep_prim // fork_prim then
                    E.args.scanArgs
                    (#
                    do (if (top+1 -> top) > args.range then 
@@ -476,12 +478,13 @@ generator: semchecker
                           OG: ^ObjectGenerator; name: ^text; descNo: @integer
                        do i + 1 -> i;
                           current[] -> D[]; 
-                          L1:
+                          handleVirtArg:
                             (if D.isVirtual then
                                 L:
                                   args[i].super.scanSons(# do current[] -> Ex[]; leave L #);
                                 (if (Ex[] <> none) and (Ex## = ObjectInvocation##) then
-                                    'Try: ' -> puttext; Ex.label -> putline; Ex.doPT -> putline;
+                                    (* 'Try: ' -> puttext; Ex.label -> putline; 
+                                     * Ex.doPT -> putline; *)
                                     Ex[] -> OI[];
                                     (if (1 -> OI.ptnId.T.inxGet) = '#' then
                                         'Got ptn id: ' -> puttext; OI.ptnId.doPT -> puttext;                                      
@@ -489,19 +492,47 @@ generator: semchecker
                                         ' ' -> put; descNo -> putint; newline;
                                         E.father.father[] -> OG[]; (* need OG.descNo for VDT *)
                                         (D.off,descno,(OG.desc).descNo) -> cd.vdtTableAt;
-                                        leave L1
+                                        leave handleVirtArg
                                     if);
                                 if);
                                 D.sig.id.copy -> name[];
                                 '#SB#' -> name.append;
                                 (args[i].desc).descno -> descNo -> name.putint;
+                                
+                                (if (E.desc).primNo = indexed_prim then 
+                                    (* We ignore bindings of elm in Indexed *)
+                                    leave handleVirtArg
+                                 else
+                                    (if args[i].primNo = integer_prim then
+                                        '\n*** Virtual bound to integer in\n\n\t'->puttext;
+                                        E.doPT -> putline;
+                                        '\n    is ignored by the compiler\n' -> putline;
+                                        leave handleVirtArg
+                                    if);
+                                if);                                
+                                (if (descNo = 0) or (args[i].IS.descNo = 0) then
+                                    '\n\n*** Fatal error: descNo = ' -> puttext;
+                                    descNo -> putint; 
+                                    ' args[i].IS.descNo = ' -> puttext;
+                                    args[i].IS.descNo -> putint; newline;
+                                    args[i].doPT -> putline;
+                                    D.doPT -> putline;
+                                    newline;
+                                if);
                                 (name[],none,args[i][],args[i].super[]) 
                                   -> ObjTmpStack.add;
                                 E.father.father[] -> OG[]; (* need OG.descNo for VDT *)
                                 (D.off,descno,(OG.desc).descNo) -> cd.vdtTableAt
                              else
                                 (true,superAdj,0) -> args[i].gen
-               if)#)if)if)
+                   if)#)if);
+                   handleSuperArgs:
+                   (if i < top then (* a hack - need to scan arguments of super *)
+                       i + 1 -> i;
+                       (true,superAdj,0) -> args[i].gen;
+                       restart handleSuperargs
+                   if)                   
+               if)
             #);
           invoke::
             (# gdb:: (# do sig.doPT -> lx.puttext #);
@@ -809,7 +840,7 @@ generator: semchecker
             #);
           loadArgs:: 
             (#
-            do (if (type ## = KeyWord##) (*or (type## = Function##)*) then
+            do (if (type## = KeyWord##) or (type## = Function##) then
                    (this(Exp)[],superAdj) -> ATd.loadArgs
                 else
                    args.scanSons(# do (true,superAdj,0) -> current.gen #) 
