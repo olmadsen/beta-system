@@ -1,0 +1,1014 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '../compiler_IF/directoryComponents';
+---lib:attributes---
+mkAuxName:
+  (# FN,ext: ^text; auxF: ^text
+  enter(FN[],ext[])
+  do (1,FN.length-6) -> FN.sub -> auxF[];
+     (*auxF[] -> screen.putline;*)
+     ext[] -> auxF.append;
+     (* auxF[] -> screen.putline*)
+  exit auxF[]
+  #);   
+
+Lexer:
+  (#
+     (* Variables used outside of Lexer. The result of  
+      * calling Lexer is returned in these vaiables.      *)
+     symb:   @integer;
+     sym:    ^text;
+     blanks: @ integer;  (* No. of blanks preceding a whole-line-comment. *)
+
+     init:< 
+       (#
+       enter
+          (fileName[],in[],dbgStr[],dbgInfo) 
+       do special.init;
+          indent.init;
+          inner 
+       #);
+       
+     fileName: ^Text;
+     
+     in:     ^stream;
+     prev:   @integer; (* previous token, i.e. previous 'symb' *)
+     ch:     @char;    (* the next charcter in the input stream, not processed yet *)
+     
+     errorStream: ^text;
+     dbgStr:  ^stream; (* debug info goes to this stream *)
+     dbgInfo: @integer;  (* defines how much debug information to produce *)
+     debug : (# dbg: @integer;  enter dbg  do  exit dbg < dbgInfo  #);
+
+     buffer: [1000] @ char;  (* the program goes here *)
+     bTop: @integer; 
+     firstLexemPos: @ integer;    (* character position in source code *)
+     cmntPos :@ integer;          (* character position in source code *)
+      
+     nextCh: @
+       (# pos: @ integer;
+          lastWasCR: @boolean
+       do (if in.eos then
+              255 -> ch
+           else
+              in.get -> ch; 
+              pos+1 -> pos;
+          if);
+          (* pos -> putint; ' ' -> put;   ch -> put; *)
+          (if (bTop + 1 -> bTop) > buffer.range then buffer.range -> buffer.extend if);
+          ch -> buffer[bTop]
+       #);
+       
+     printLines:
+       (# n,lc,c: @integer; ch: @char
+       enter n
+       do bTop - 1 -> bTop; (* last char is white space and may be newline, 
+                             * which should not be counted below
+                             *)
+          1 -> lc;
+          (for i: btop repeat (if buffer[i] = ascii.newline then lc + 1 -> lc if)for);
+          L:
+            (for i: bTop repeat
+                 (if (i = bTop) or (buffer[bTop - i + 1] = ascii.newline) then
+                     n - 1 -> n; lc - 1 -> lc;
+                     (if (n = 0) or (i = bTop) then   
+                         lc + 1 -> lc -> putint; ':' -> put; ' ' -> put; 
+                         (for j: i repeat 
+                              buffer[bTop - i + j] -> ch -> put;
+                              c + 1 -> c;
+                              (if ch = ascii.newline then 
+                                  lc + 1 -> lc -> putint; ':' -> put;
+                                  0 -> c;
+                              if)
+                         for);
+                         leave L
+                     if)
+                 if);
+            for);
+          newline;
+          (for i: c + 2 repeat '*'-> put for);
+          '^' -> put
+       #);      
+
+     indent: @
+       (# init:
+            (#
+               do 0 -> push         (* always indent zero blanks for block level one *);
+       
+               true -> firstOnLine; (* Are we at the start of the line?       *)
+                                    (* I.e. no lexems found yet on this line. *)
+                                    (* This is true when the program starts.  *)
+            #);
+                   
+          blanksSkipped: @ integer;    (* no. of blanks skipped *)
+          emptyLines:    @ integer;    (* no. of empty lines skipped *)
+          firstOnLine:   @ boolean;    (* we have just passed a line shift *)
+
+          skipBlanks:
+            (# inOut: @integer;
+            do              
+               0 -> inOut -> blanksSkipped ;
+
+               (if ch = ascii.nul then nextCh if);
+               
+               (* count the number of consecutive space characters *)
+               L1: (if (ch = ascii.sp) then (* space charcater *)
+                      blanksSkipped + 1 -> blanksSkipped;
+                      nextCh; 
+                      restart L1 
+                  if);
+                  
+               (* If there now is a shift to a new line, then count from zero again.
+                * Make a note, if we start (re-)counting from the beginning of the line. *)
+               (if ch <= 13 then (* new line *)
+                   (if firstOnLine then emptyLines + 1 -> emptyLines if);
+                   0 -> blanksSkipped;   (* count only from the start of a line *)
+                   true -> firstOnLine;
+                   nextCh;
+                   restart skipBlanks; 
+                else (* No-empty line, i.e. a lexem is ahead of us on the current line.
+                      * If we did not start at the beginning of the line, just return zero'. *)
+                    (if firstOnLine then
+                        bTop -> firstLexemPos;
+                        false -> firstOnLine;
+                     L2: (if true 
+                         // blanksSkipped = iStack[top] then
+                            (* No change in block level, just moved to a new line.  I.e. 
+                             * end of declaration or statement (';'), or a whole line comment.
+                             * Special case: Start of the source file. *)
+                            (if bTop // 1 then  0 -> inOut  else  maxInt -> inOut  if);  
+                         // blanksSkipped < iStack[top] then
+                            (* Assume that we shall go back to a previous block level.
+                             * Could also be that we have enountered a whole-line-comment.
+                             * Return with the number of blocks exited,
+                             * but negate this number.                                     *)
+                            (for j: top - 1 repeat
+                                 (if blanksSkipped = iStack[top - j] then
+                                     - j -> InOut;
+                                     top - j -> top;
+                                     leave L2
+                                 if)
+                            for);
+                            '\n**** No matching sequence of blanks when indenting: ' -> puttext;
+                            blanksSkipped -> screen.putint;
+                            newline;
+                         // blanksSkipped > iStack[top] then
+                            (* A new block level, put no. of spaces on top of the stack. *)
+                            (* Could also be that we have enountered a whole-line-comment. *)
+                            blanksSkipped -> push;
+                            1 -> InOut
+                        if);
+                   if);
+              if);
+              
+              ('skipBlanks:', inOut, blanksSkipped, firstOnLine,emptyLines) -> lexDbgETIILI;
+              
+             exit inOut 
+                 (* Possible return values:
+                  *     0    - We may have skipped blanks, but there were no line shift.
+                  *     1    - Block-begin, i.e entered a new block.
+                  *  maxInt  - Item separator, i.e. semicolon.
+                  *    -j    - 'j' Block-ends, i.e. exited out of 'j' blocks.'
+                  *)
+             #);
+             
+          iStack: [4] @ integer;
+          top:        @integer;
+          push:
+            (# V: @integer enter V 
+            do (if (top + 1 -> top) > iStack.range then
+                   iStack.range -> iStack.extend
+               if);
+               V -> iStack[top]
+            #);
+          revert:
+            (# ind: @integer
+            enter ind
+            do top + ind -> top
+            #);
+          getLvl:    (# exit top #);         (* return current block level    *)
+          getBlanks: (# exit iStack[top] #); (* return no. of blanks indented *)
+          getStride:
+            (# stride :@ integer;
+            do (if top = 1 then
+                   iStack[top]  ->  stride;
+               else
+                   iStack[top] - iStack[top-1]  ->  stride;
+               if);
+            exit stride
+            #);
+       #);
+       
+     readKeyFatReserved:   (* A percent sign followed by a name and an optional percent sign. *)
+       (#  c: @char;  b: @boolean;  t :^Text;
+       enter c
+       do (if c <> '%'   then  (failure,'readKeyFatReserved: Illegal KeyWord or FatComma.') -> stop; if);
+          ('readNumber',ch) -> lexDbgBC;
+          nextCh;
+          (if not (ch -> ascii.isLetter) then   false -> b;  Leave readKeyFatReserved;  if);
+          readName;   sym[] -> t[]; &text[] -> sym[];  c -> sym.put;  t.reset;  t[] -> sym.append;  symbols.keyword -> symb;
+          (if  ch = '%'  then  ch -> sym.put;  nextCh;   symbols.fatComma -> symb;  if);
+          maybeReserved;
+          true -> b;
+          (symb,sym[],c) -> lexDbgEITC;
+       exit b
+       #);
+
+    stripPercent:
+      (# first  :@ integer;
+         last   :@ integer;
+         lexem  :^ text;
+         txt    :^ text;
+      enter
+         lexem[]
+      do
+         lexem.length -> last;
+         (if (last -> lexem.inxGet) = '%' then last-1 -> last if);
+         1 -> first;
+         (if (first -> lexem.inxGet) = '%' then first+1 -> first if);
+         (first,last) -> lexem.sub -> txt[];
+      exit
+         txt[]
+      #);
+
+    maybePredefined:
+      (#  t :^Text;
+      do  sym.reset;
+          sym[] -> stripPercent -> t[] ;
+          (if   true 
+           //   'bit'       ->  t.equalNCS
+           //   'character' ->  t.equalNCS
+           //   'char'      ->  t.equalNCS
+           //   'float'     ->  t.equalNCS
+           //   'integer'   ->  t.equalNCS
+           //   'logical'   ->  t.equalNCS
+           //   'string'    ->  t.equalNCS
+          then   symbols.predefined -> symb;
+          if);
+      #);
+
+     maybeReserved:
+       (#  t :^Text;
+       do  sym.reset;
+           sym[] -> stripPercent -> t[] ;
+          (if   true 
+           //   'if'       ->  t.equalNCS
+           //   'include'  ->  t.equalNCS
+           //   'inner'    ->  t.equalNCS
+           //   'leave'    ->  t.equalNCS
+           //   'restart'  ->  t.equalNCS
+           //   'resume'   ->  t.equalNCS
+           //   'suspend'  ->  t.equalNCS
+           //   'then'     ->  t.equalNCS
+           //   'this'     ->  t.equalNCS
+          then   symbols.reserved -> symb;
+          if);
+       #);
+
+          (* if true 
+           // 'if'      -> sym.equalNCS then symbols.ifSy      -> symb
+           // 'then'    -> sym.equalNCS then symbols.thenSy    -> symb
+           // 'else'    -> sym.equalNCS then symbols.elseSy    -> symb
+           // 'for'     -> sym.equalNCS then symbols.forSy     -> symb
+           // 'repeat'  -> sym.equalNCS then symbols.repeatSy  -> symb
+           // 'do'      -> sym.equalNCS then symbols.doSy      -> symb
+           // 'enter'   -> sym.equalNCS then symbols.enterSy   -> symb
+           // 'exit'    -> sym.equalNCS then symbols.exitSy    -> symb
+           // 'leave'   -> sym.equalNCS then symbols.leaveSy   -> symb
+           // 'restart' -> sym.equalNCS then symbols.restartSy -> symb              
+           // 'none'    -> sym.equalNCS then symbols.noneSy    -> symb
+           // 'with'    -> sym.equalNCS then symbols.with      -> symb
+           // 'inner'   -> sym.equalNCS then symbols.innerSy   -> symb
+           // 'and'     -> sym.equalNCS then symbols.andd      -> symb
+           // 'or'      -> sym.equalNCS then symbols.orr       -> symb
+           // 'xor'     -> sym.equalNCS then symbols.xorr      -> symb
+           // 'not'     -> sym.equalNCS then symbols.nott      -> symb
+           // 'div'     -> sym.equalNCS then symbols.idiv      -> symb
+           // 'mod'     -> sym.equalNCS then symbols.modd      -> symb
+           // 'this'    -> sym.equalNCS then symbols.thisObj   -> symb
+          if *);
+  
+     readName:
+       (# 
+       do (if not ( (ch -> ascii.isLetter) or (ch = '_') )  then  (failure,'Readname: Illegal name.') -> stop; if);
+          ('readName',ch) -> lexDbgBC;
+          &text[] -> sym[];
+          L: (if (ch->ascii.isLetter) or (ch-> ascii.isDigit) or (ch = '_')  then
+                 ch -> sym.put;  nextCh;  restart L;
+             else  symbols.idf  ->  symb ;
+             if);
+         (symb,sym[],ch) -> lexDbgEITC;
+     #);
+
+     readNumber:
+       (#  floatingPoint: @boolean;
+       do (if not (ch -> ascii.isDigit)   then  (failure,'readNumber: Illegal numeric literal.') -> stop; if);
+          'readNumber' -> lexDbgBegin;
+         &text[] -> sym[];
+       L: (if true
+           // ( ch -> ascii.isDigit ) then  ch -> sym.put;  nextCh;  restart L;
+           // ( ch = '.' )  then 
+                            (if floatingPoint then  (failure,'Decimal separator occurs twice in floating point literal.') -> stop; if);
+                            true -> floatingPoint;
+                            ch -> sym.put;  nextCh;  restart L;
+          else  symbols.literalNumber  -> symb;
+          if);
+          (symb,sym[]) -> lexDbgEIT;
+       #);
+
+     readChar:
+       (# symb: @integer
+       do (if  ch <>  '\''   then  (failure,'Illegal character literal.') -> stop; if);
+          'readChar' -> lexDbgBegin;
+          &text[] -> sym[];
+          nextCh;
+          (if ch = '\\' then  nextch if);
+          ch -> printable -> sym.put;
+          nextCh;
+          (if  ch = '\''  then  symbols.charSy -> symb;  nextCh;
+          else  '\nIllegal character literal: ' -> puttext; ch -> putint; ' ' -> put;  ch -> put; newline;
+                '\nIllegal character literal: ' -> lexDbgBegin; ch -> lexDbgInt;  ch -> lexDbgChr; lexDbgEnd;
+                symbols.illegalCh -> symb;
+                (failure,'Illegal character literal.') -> stop;
+          if);
+          (symb,sym[]) -> lexDbgEIT;
+       exit symb
+       #);
+
+     printable : (# c :@char;  res :@ boolean;
+                 enter  c
+                 do    (if true
+                        // (c <= ascii.us)
+                        // (c >= ascii.del) then
+                           'Illegal character:_' -> screen.puttext; c -> screen.put;
+                                             '_' -> screen.put;     c -> screen.putint; screen.newline;
+                           (failure,'Illegal character.') -> stop;
+                       if);
+                 exit   c
+                 #);
+     
+     readText:
+       (# symb: @integer; 
+       do (if  ch <> '"'  then  (failure,'Illegal text literal.') -> stop;  if);
+          'readText' -> lexDbgBegin;
+         &text[] -> sym[];
+          nextCh;
+       L: (if  ch
+           //  '"'   then  nextCh;  (* end  of  text *)
+           //  '\\'  then  nextCh;  ch -> printable -> sym.put;  nextCh;  restart L                
+          else                      ch -> printable -> sym.put;  nextCh;  restart L
+          if);
+          symbols.string -> symb;
+          (symb,sym[]) -> lexDbgEIT;
+       exit symb
+       #);
+
+     readNewComment :
+       (# symb: @integer; 
+       do    (if  ch <> '@'  then  (failure,'Not a comment.') -> stop;  if);
+             'readComment: ' -> lexDbgTxt; ch -> lexDbgChr;
+             (if cmntPos = firstLexemPos then 'WLC' -> lexDbgTxt; if);
+
+          &text[] -> sym[];
+          nextCh;
+          L: (if ch
+              // '@' then  (* end  of inserted comment *)
+                 symbols.insertComment -> symb;  nextCh;
+              // ascii.newline then  (* end  of comment *)
+                 (if cmntPos // firstLexemPos then (* The comment is the first lexem on this line. *)
+                     symbols.wholeLineComment -> symb;
+                 else 
+                     symbols.insertComment -> symb;
+                 if);
+              // '\\' then (* escape character *)
+                 nextCh;
+                 (if  ch = ascii.newline  then  restart L;  (* end of comment, no multi-line comments *)
+                 else ch -> printable -> sym.put;  nextCh;  restart L;  if);                
+             else
+                 ch -> printable -> sym.put; nextCh;  restart L;
+             if);
+             ch -> lexDbgChr; symb ->lexDbgInt; sym[] -> lexDbgTxt;
+       exit symb
+       #);
+
+     readComment:
+       (# symb: @integer; 
+       do    (if  ch <> '-'  then  (failure,'Not a comment.') -> stop;  if);
+             'readComment: ' -> lexDbgTxt; ch -> lexDbgChr;
+             (if cmntPos = firstLexemPos then 'WLC' -> lexDbgTxt; if);
+
+          &text[] -> sym[];
+          nextCh;
+          L: (if ch
+              // ascii.newline then  (* end  of comment *)
+                 (if cmntPos // firstLexemPos then (* The comment is the first lexem on this line. *)
+                     symbols.wholeLineComment -> symb;
+                 else 
+                     symbols.insertComment -> symb;
+                 if);
+             else
+                 ch -> printable -> sym.put; nextCh;  restart L;
+             if);
+             ch -> lexDbgChr; symb ->lexDbgInt; sym[] -> lexDbgTxt;
+       exit symb
+       #);
+
+
+     special: @
+       (# init:
+            (#
+            do true -> chars['!'];
+               true -> chars['#'];
+               true -> chars['$'];
+               true -> chars['%'];
+               true -> chars['&'];
+               true -> chars['?'];
+               true -> chars['*'];
+               true -> chars['+'];
+               true -> chars['-'];
+               true -> chars['/'];
+               true -> chars['<'];
+               true -> chars['='];
+               true -> chars['>'];
+               true -> chars['<'];
+               true -> chars['\\'];
+               true -> chars['|'];
+            #);
+          in: booleanValue
+            (# ch: @char
+            enter ch
+            do chars[ch] -> value 
+            #);
+          read:
+            (# c: @char
+            enter c
+            do &text[] -> sym[];
+               (if c > 0 then c -> sym.put if);
+               L:
+                 (if (ch -> in) then
+                     ch -> sym.put;
+                     nextCh;
+                     restart L
+                 if);
+               symbols.special -> symb;
+               (*'\nSpecial: ' -> puttext; sym[] -> putline*)
+            #);
+          chars: [256] @boolean
+       #);
+     
+     symbols: @ 
+       (# print: 
+            (# sy: @integer
+            enter sy
+            do sy -> astext -> puttext
+            #);
+          asText:
+            (# sy: @integer; T: @text
+            enter sy
+            do '<<' -> T; sy -> T.putint; '>>' -> T.puttext;
+               (if sy
+                // 0 then '<zero>' -> T                   
+                // begin then '{' -> T
+                // end then '}' -> T
+                // leftBrack then '(' -> T
+                // rightBrack then ')' -> T
+                // constRef then '=' -> T
+                // varRef then '?' -> T
+                // colon then ':' -> T
+                // comma then ',' -> T 
+                // semiColon then ';' -> T
+                // assignRef then ':-' -> T
+
+                // wholeLineComment then  'wholeLineComment' -> T
+                // insertComment    then  'insertComment'    -> T
+                // emptyLine        then  'emptyLine'        -> T
+                // reserved         then  'reserved'         -> T
+                // predefined       then  'predefined'       -> T
+          
+                // dot then '.' -> T
+                // objModule then '/' -> T
+                // value then '->' -> T
+                // leftSquare then '[' -> T          
+                   
+                // virtual then ':<' -> T
+                // further then '::<' -> T
+                // final then '::' -> T
+                // include then '%include' -> T
+                // rightSquare then ']' -> T          
+                // const then 'const' -> T
+                // idf then 'name' -> T
+                // special then 'special' -> T
+                // keyword then 'keyword' -> T
+                // fatComma then 'fatComma' -> T
+                // prim then '%' -> T
+                // innerSy then 'inner' -> T          
+                // charSy then'char' -> T
+                // string then 'text' -> T
+                // alternative then '//' -> T
+                // thisObj then 'this' -> T
+                // comBegin then '(' -> T; '*' -> T.put; (* avoid confusing beta-indent *)
+                // eq then '=' -> T
+                // lt then '<' -> T                   
+                // le then '<= ' -> T
+                // gt then '>' -> T
+                // ge then '>=' -> T
+                // ne then '<>' -> T
+                // add then '+' -> T
+                // sub then '-' -> T
+                // mult then '*' -> T
+                // orr then 'or' -> T
+                // xorr then 'xor' -> T          
+                // rdiv then '/' -> T
+                // idiv then 'div' -> T
+                // modd then 'mod' -> T
+                // andd then 'and' -> T       
+                // nott then 'not' -> T
+                // illegalCh then '???' -> T
+                // eos then  '-eos-' -> T                 
+                else
+                   sy -> T.putint
+               if)
+            exit T[]
+            #);
+
+          begin: (#exit 1 #);
+          end: (#exit 2 #);
+          leftBrack: (#exit 3 #);
+          rightBrack: (#exit 4 #);
+          colon: (#exit 5 #);          
+          constRef: (# exit 6 #);
+          varRef: (# exit 7 #);
+          comma: (#exit 8#);
+          assignRef: (#exit 9#);
+          semiColon: (#exit 10 #);
+          keyword: (# exit 11 #);
+          fatComma: (# exit 12 #);
+
+          wholeLineComment: (# exit 13 #);
+          insertComment:    (# exit 14 #);
+          emptyLine:        (# exit 15 #);
+          
+          dot: (#exit 16 #);
+          objModule: (#exit 67 (* 17 - double use here see rdiv *) #);
+          value: (#exit 18#);
+
+          leftSquare: (#exit 20 #);
+          
+          virtual: (# exit 21 #);
+          further: (# exit 22 #);
+          final: (# exit 26 #);
+          
+          leaveSy: (#exit 23#);
+          restartSy: (#exit 24#);
+          
+          include: (# exit 25 #);
+          
+          rightSquare: (# exit 27 #);
+          
+          reserved:   (# exit 28 #);
+          predefined: (# exit 29 #);
+          
+          special: (#exit 31 #);
+          const: (#exit 32 #);
+          literalNumber: (#exit 32 #);
+          idf: (#exit 33 #);
+          prim: (#exit 34 #);          
+          innerSy: (# exit 35 #);
+          
+          charSy: (# exit 36 #);
+          string: (# exit 37 #);
+          alternative: (# exit 38 #);
+          thisObj: (# exit 39 #);
+          comBegin: (# exit 40 #);
+
+          eq: (#exit 50#);
+          lt: (#exit 51#);
+          le: (#exit 52#);
+          gt: (#exit 53#);
+          ge: (#exit 54#);
+          ne: (#exit 55#);          
+
+          add: (#exit 61#);
+          sub: (#exit 62#);
+
+          orr: (#exit 63#);
+          xorr: (#exit 64 #);
+          
+          mult: (#exit 66 #);
+          rdiv: (#exit 67 #);
+          idiv: (#exit 68 #);
+          modd: (#exit 69#);
+          andd: (#exit 70#);
+          nott: (# exit 71 #);
+          
+          component: (#exit 73 #);
+          strucVar: (#exit 74 #);
+          nonTbegin: (# exit 75 #);
+          nonTend: (# exit 76 #);
+          adr: (#exit 77 #);
+          frag: (# exit 78 #);
+          ptnModule: (# exit 79 #);
+          illegalCh: (# exit 81 #);
+          eos: (# exit 82 #); 
+       #);
+
+     WlcElBuf: @
+       (# cmtBuf: [10] ^text;    (* This buffer will contain whole-line-comments and empty lines. *)
+          indBuf: [10] @integer; (* No. of blanks preceding a whole-line-comment, or minus one.   *)
+          L,R: @ integer;
+          putWLC: (# cmt: ^text; blanks: @integer;
+                  enter(cmt[],blanks)
+                  do (if (R + 1 -> R) > cmtBuf.range then 
+                                                     cmtBuf.range -> cmtBuf.extend;
+                                                     indBuf.range -> indBuf.extend;
+                  if);
+                  cmt[] -> cmtBuf[R][];
+                  blanks -> indBuf[R];
+                  #);
+          putEL:  (# 
+                  do (if (R + 1 -> R) > cmtBuf.range then 
+                                                     cmtBuf.range -> cmtBuf.extend;
+                                                     indBuf.range -> indBuf.extend;
+                     if);
+                  'Empty line' -> cmtBuf[R][];
+                  -1 -> indBuf[R];
+                  #);
+          get: (# cmt: ^text; blanks: @integer;
+               do cmtBuf[L + 1 -> L][] -> cmt[];
+                  indBuf[L] -> blanks;
+               exit(cmt[],blanks)
+               #);
+          isEmpty: booleanValue(#do (if L = R then 0 -> L -> R; true -> value if) #)
+       #);
+
+     tokenBuf: @
+       (# B:   [10] @integer; (* NB: the buffer may contain comments.    *)
+          Sy:  [10] ^text;    (* NB: ignore comments when peeking ahead. *)
+          Bl:  [10] @integer; (* Stride for comments that occupy a whole *)
+                              (* line, otherwise zero.                   *)
+          L,R: @ integer;
+          add:
+            (# T: @integer; S: ^text; blanks: @integer;
+            enter(T,S[],blanks)
+            do
+               ('tokenBuf.add',T,S[],blanks)  ->  lexDbgBITI;    (L,R)  ->  lexDbgEII;
+
+               (if (R + 1 -> R) > B.range then 
+                   B.range -> B.extend;
+                   Sy.range -> Sy.extend;
+                   Bl.range -> Bl.extend;
+               if);
+               T -> B[R];
+               S[] -> Sy[R][];
+               blanks -> Bl[R];
+            #);
+          get:
+            (# T: @integer; S: ^Text; blanks: @integer;
+            do 
+               ('tokenBuf.get',L,R) -> lexDbgBII;
+               B[L + 1 -> L] -> T;
+               Sy[L][] -> S[];
+               Bl[L] -> blanks;
+               (T,S[],blanks) -> lexDbgEITI;
+            exit(T,S[],blanks)
+            #);
+          pop:
+            (# T: @integer; S: ^Text; blanks: @integer;
+            do 
+               ('tokenBuf.pop', L,  R) -> lexDbgBII;
+               (if R = L then
+                   0 -> T;
+                   none -> S[];
+                   0 -> blanks;
+               else
+                   B[R - 1 -> R] -> T;
+                   Sy[R][] -> S[];
+                   Bl[R] -> blanks;
+               if);
+               (T, S[], blanks) -> lexDbgEITI;
+            exit(T,S[],blanks)
+            #);
+          peek:
+            (# T: @integer; S: ^Text; blanks: @integer;
+            do 
+               ('tokenBuf.peek', L, R) -> lexDbgBII;
+               B[L+1] -> T;
+               (if L+1 > R then (failure,'peek: buffer corrupt') -> stop if);
+               Sy[L+1][] -> S[];
+               Bl[L+1] -> blanks;
+               (T, S[], blanks) -> lexDbgEITI;
+            exit(T,S[],blanks)
+            #);
+          peekTokenNo: (* do not count comments, just skip them *)
+            (# c: @integer;
+               n: @integer;
+            enter n
+            do 
+               ('tokenBuf.peekTokenNo', n, L, R) -> lexDbgBIII;
+
+               0 -> c;
+            S: (for j : R-L repeat
+                    (if B[j] 
+                     // symbols.wholeLineComment 
+                     // symbols.insertComment then
+                        c + 1 -> c 
+                    if);
+                    (if n = j-c then leave S if);
+               for);
+
+               (if R = L     then (failure,'peekTokenNo: empty buffer') -> stop if);
+               (if n+c > R-L then (failure,'peekTokenNo: n too large')  -> stop if);
+               (L+n+c, B[L+n+c]) -> lexDbgEII;
+           exit B[L + n + c]
+            #);
+          isEmpty: booleanValue(#do (if L = R then 0 -> L -> R; true -> value if) #)
+       #);
+
+     inDecl,second: @boolean;
+     inAssign:      @boolean;  (* HPD: not in use yet *)
+
+     readNextToken:
+       (# hasComment: @boolean;      
+       do false -> hasComment;
+          (if  (symb<>symbols.insertComment) and (symb<>symbols.wholeLineComment)  then
+               symb -> prev;
+          if);
+          (if inDecl then true -> second if);
+          &text[] -> sym[]; (* just for debugging purposes
+                             * - to ensure that sym is empty
+                             * if lexem is not idf, const, char, text or special
+                             *)
+
+          ('Loop readNextToken',prev,ch) -> lexDbgBIC;
+
+            (if ch
+             // '{'  then  symbols.begin       -> symb;  nextCh
+             // '}'  then  symbols.end         -> symb;  nextCh
+             // '('  then  symbols.leftBrack   -> symb;  nextCh
+             // ')'  then  symbols.rightBrack  -> symb;  nextCh
+             // '['  then  symbols.leftSquare  -> symb;  nextCh
+             // ']'  then  symbols.rightSquare -> symb;  nextCh
+             // ','  then  symbols.comma       -> symb;  nextCh
+             // ';'  then  symbols.semiColon   -> symb;  nextCh
+             // '.'  then  symbols.dot         -> symb;  nextCh
+             // '\'' then  readChar            -> symb;
+             // '"'  then  readText            -> symb;
+             // ':'  then  nextCh;
+                          (if ch 
+                           // '=' 
+                           // '-'  then     symbols.assignRef -> symb;  nextCh;  true -> inAssign
+                           // '<'  then     symbols.virtual -> symb;    nextCh;  true -> inDecl
+                           // ':'  then     nextCh;
+                                            (if ch = '<' then  nextCh; symbols.further -> symb
+                                            else                         symbols.final -> symb  if);
+                                            true -> inDecl
+                           // '?'  then     symbols.varRef -> symb;  nextCh;  true -> inDecl
+                           // ' '  then  L: (if ch = ' ' then nextCh; restart L if); (* skip consecutive blanks *)
+                                            (if ch 
+                                             // '=' then (* static binding *)
+                                                         symbols.constRef -> symb;  nextCh;
+                                             // '?' then (* dynamic binding *)
+                                                         symbols.varRef -> symb;    nextCh;
+                                            else         symbols.colon -> symb;
+                                            if);
+                                            true -> inDecl
+                           else  symbols.colon -> symb; true -> inDecl
+                           if);
+             // '=' then   nextCh;  '=' -> special.read
+             // '@' then   (* Note the start position of the first comment character *)
+                           bTop  -> cmntPos;  readNewComment -> symb;  true -> hasComment;
+             // '-' then   nextCh;
+                           (if ch 
+                            // '>'  then  symbols.value -> symb; nextCh
+                            // '-'  then  (* A comment, note the start position of the first comment character. *)
+                                    bTop - 1 -> cmntPos;  readComment -> symb;  true -> hasComment;
+                           else '-' -> special.read
+                           if);
+             // '%' then   (if ( '%' -> readKeyFatReserved ) then
+                               (if '%include' -> sym.equalNCS then  symbols.include -> symb  if);
+                           else
+                               '%' -> special.read
+                           if);
+             // 255 then   symbols.eos -> symb
+            else
+                (if true
+                 // ( ch -> ascii.isLetter ) or ( ch = '_' ) then  readName;  maybeReserved; maybePredefined;
+                 // ( ch -> ascii.isDigit )                  then  ReadNumber;
+                 // ( ch -> special.in)                      then  special.read
+                else
+                    '\nIllegal ch: ' -> puttext; ch -> putint; ' ' -> put;  ch -> put; newline;
+                    'readNextToken'  -> lexDbgBegin; '\nIllegal ch:'  -> lexDbgTxt;  
+                    ch -> lexDbgInt;  ch -> lexDbgChr; lexDbgEnd;
+                    &text[] -> sym[]; ch -> sym.Put;
+                    symbols.illegalCh -> symb;
+                    nextCh;
+                if);
+            if);
+
+            (if second then false -> second -> inDecl if);
+
+            ('end readNextToken', symb, sym[], ch, hasComment) -> lexDbgETITCL;
+
+       exit hasComment
+       (* This routine sets 'symb' and 'sym' *) 
+       #);
+
+     bufferWlcElTokens :
+       (# cmt: ^text; blanks: @integer;
+          do
+          (if not WlcElBuf.isEmpty then
+              (if prev = symbols.semicolon then tokenBuf.pop if);
+              WlcElBuf.get -> (cmt[],blanks);
+              (if blanks < 0 then   (* an empty line *)
+                             (symbols.emptyLine, cmt[], blanks)      -> tokenBuf.add;
+              else (* a WLC *)
+                             (symbols.wholeLineComment,cmt[],blanks) -> tokenBuf.add;
+              if);
+              (if prev = symbols.semicolon then
+                  (symbols.semicolon,'',0) -> tokenBuf.add;
+              if);
+              restart bufferWlcElTokens;
+          if);
+       #);
+
+     bufferTokens:
+       (# inOut:        @integer;
+          stride:       @integer;
+          anyComments:  @boolean;
+       do
+          indent.skipBlanks -> inOut;
+
+          (for i: indent.emptyLines repeat  WlcElBuf.putEL  for);
+          0 -> indent.emptyLines;
+          
+          readNextToken -> anyComments;
+          
+          (if (inOut <> 0) and anyComments then (* New line followed by comment. *)
+              (* A whole-line-comment, put it aside since it will be succeeded   *)
+              (* by block-begin(s), block-end(s), or item-separator(s).          *)
+              (sym[],indent.blanksSkipped) -> WlcElBuf.putWLC;
+              (if  inOut <> maxInt  then  -inOut -> indent.revert;  if);
+              restart bufferTokens;
+          if);
+
+          (* If we have read and buffered one or more whole-line-comments (WLCs),  *)
+          (* then we must now check if there is a change in indentation of blanks, *)
+          (* comparing the current line to the line preceeding the comments.       *)
+
+          (if inOut  (* CR is short for line shift, i.e. a newline character.      *)
+           // 0 then (* No CR, cannot have read any WLCs, that are followed by a CR. *)
+              (symb,sym[],0) -> tokenBuf.add;  (* Can have read inserted comment.    *)
+           // 1 then          (* increased indentation, i.e. begin block first       *)
+              (* If we have read any WLCs, buffer them before the begin-block token  *)
+              bufferWlcElTokens;
+              (symbols.begin,'',0) -> tokenBuf.add;
+              (symb,sym[],0)       -> tokenBuf.add;
+           // maxInt then     (* same indentation as before, i.e. item separator *)
+              (* If we have read any WLCs, output them before item-separator token *)
+              bufferWlcElTokens;
+              (symbols.semicolon,'',0) -> tokenBuf.add; 
+              (symb,sym[],0) -> tokenBuf.add; 
+          else
+              (* 'inOut' < 0: decreased indentation, i.e. end block(s).          *)        
+              (* "Out-dent" -inOut levels. *)
+              (for i: - inOut repeat (symbols.end,'',0) -> tokenBuf.add for);
+              (* If we have read any WLCs, buffer them after end-block token(s). *)
+              bufferWlcElTokens;
+              (if symb <> symbols.fatComma then
+                  (symbols.semicolon,'',0) -> tokenBuf.add
+              if);
+              (symb,sym[],0) -> tokenBuf.add;
+              if)
+              
+       exit anyComments
+       #) ;
+       
+     peekNextSkipCEL:
+       (* Read and return next non-(comment/empty line) token.
+        * Put all tokens in 'tokenBuf',
+        * but do not count comments.
+        * Keep current value of sym[].
+        * Peeked token sym[] should also be buffered.
+        *)
+       (# anyComments :@ boolean;
+          T: @integer; 
+          currentSymb: @integer;
+          currentSymT: ^text;
+          currentBls:  @integer;
+          n: @integer;
+       enter n
+       do symb -> currentSymb;
+          sym[] -> currentSymT[];
+          blanks -> currentBls;
+          (for i: n repeat 
+               BufferTokens -> anyComments;
+            L: (if anyComments then
+                   BufferTokens -> anyComments;
+                   restart L;
+               if);
+          for);
+          n -> tokenBuf.peekTokenNo -> T;
+          currentSymb -> symb;
+          currentSymT[] -> sym[];
+          currentBls -> blanks;
+       exit T
+       #);
+       
+     LookAhead:
+       (* Read and return next token.
+        * Put all tokens in 'tokenBuf'
+        * Keep current value of sym[].
+        * Peeked token sym[] should also be buffered.
+        *)
+       (# anyComments :@ boolean;
+          T: @integer; 
+          currentSymb: @integer;
+          currentSymT: ^text;
+          currentBls:  @integer;
+       do symb -> currentSymb;
+          sym[] -> currentSymT[];
+          blanks -> currentBls;
+          (if tokenBuf.isEmpty then  BufferTokens  if);
+          tokenBuf.peek -> (symb,sym[],blanks);
+          symb -> T;
+          currentSymb -> symb;
+          currentSymT[] -> sym[];
+          currentBls -> blanks;
+       exit T
+       #);
+       
+    lexDbgBegin : (#  caller : ^text; enter caller[]
+    do (if 4 -> debug then dbgStr.newline; '$$$_' -> dbgStr.puttext;
+           caller[] -> dbgStr.puttext;  ':_' -> dbgStr.puttext;  if);  #);
+
+    lexDbgEnd :
+    (#  do (if 4 -> debug then  '_$$$' -> dbgStr.putline
+    ;  if)  #);
+
+    lexDbgBITI :  (#  i, j : @integer;     s: @text;  t: ^text;   (* Begin,Integer,Text,Integer *)
+    enter (s,i,t[],j) do s[] -> lexDbgBegin; i -> lexDbgInt;  t[] -> lexDbgTxt; j -> lexDbgInt; #);
+
+    lexDbgBIII :  (#  i, j, k: @integer;   s: @text;  (* Begin,Integer,Integer,Integer *)
+    enter (s,i,j,k)   do (s,i,j) -> lexDbgBII ; j -> lexDbgInt;  #);
+
+    lexDbgBII  :  (#  i, j: @integer;      s: @text;  (* Begin,Integer,Integer *)
+    enter (s,i,j)   do s[] -> lexDbgBegin; i -> lexDbgInt;  j -> lexDbgInt;  #);
+
+    lexDbgBIC  :  (#  s: @text;  i: @integer;  c: @char;       (* Begin,Integer,Character *)
+    enter (s,i,c)   do s[] -> lexDbgBegin; i -> lexDbgInt;  c -> lexDbgChr;  #);
+
+    lexDbgBC  :  (#  s: @text;   c: @char;       (* Begin,Character *)
+    enter (s,c)   do s[] -> lexDbgBegin;  c -> lexDbgChr;  #);
+
+    lexDbgETITC :  (#  t1, t2: ^text; i: @integer;  c: @char;  (* End,Text,Integer,Text,Character *)
+    enter (t1[],i,t2[],c)  do t1[] -> lexDbgTxt; i -> lexDbgInt;  t2[] -> lexDbgTxt;  c -> lexDbgChr;  lexDbgEnd;  #);
+
+    lexDbgETITCL :  (#  t1, t2: ^text; i: @integer;  c: @char;  b: @boolean;  (* End,Text,Integer,Text,Character,Logical *)
+    enter (t1[],i,t2[],c,b)  do t1[] -> lexDbgTxt; i -> lexDbgInt;  t2[] -> lexDbgTxt;  c -> lexDbgChr;   b -> lexDbgLog;  lexDbgEnd;  #);
+
+    lexDbgETIILI :  (#  t: ^text; i, j, k: @integer;  b: @boolean;  (* End,Text,Integer,Integer,Logical,Integer *)
+    enter (t[],i,j,b,k)  do t[] -> lexDbgTxt; i -> lexDbgInt;   j -> lexDbgInt;  b -> lexDbgLog;  k -> lexDbgInt;  lexDbgEnd;  #);
+
+    lexDbgETILI :  (#  t: ^text; i, j: @integer;  b: @boolean;  (* End,Text,Integer,Logical,Integer *)
+    enter (t[],i,b,j)  do t[] -> lexDbgTxt; i -> lexDbgInt;   b -> lexDbgLog;  j -> lexDbgInt;  lexDbgEnd;  #);
+
+    lexDbgEITI :  (#  i, j : @integer;  t: ^text;   (* End,Integer,Integer *)
+    enter (i,t[],j)   do  i -> lexDbgInt;   t[] -> lexDbgTxt;  j -> lexDbgInt;  lexDbgEnd;  #);
+
+    lexDbgEITC  :  (#  i, j : @integer;  t: ^text;  c: @char;    (* Integer,Text,Character *)
+    enter (i,t[],c)   do i -> lexDbgInt;  t[] -> lexDbgTxt; j -> lexDbgInt; lexDbgEnd;  #);
+
+    lexDbgEIT :  (#  i : @integer;  t: ^text;   (* End,Integer *)
+    enter (i,t[])   do  i -> lexDbgInt;   t[] -> lexDbgTxt;  lexDbgEnd;  #);
+
+    lexDbgEII  :  (#  i, j : @integer;    (* End,Integer,Integer *)
+    enter (i,j)   do  i -> lexDbgInt;   j -> lexDbgInt;  lexDbgEnd; #);
+
+    lexDbgITI  :  (#  i, j : @integer;  t: ^text;   (* Integer,Text,Integer *)
+    enter (i,t[],j)   do i -> lexDbgInt;  t[] -> lexDbgTxt; j -> lexDbgInt;  #);
+
+    lexDbgChr :   (#    c: @char;   enter c
+    do (if 4 -> debug then  '_$_' -> dbgStr.puttext;  c -> dbgStr.put;  if); #);
+    
+    lexDbgInt :   (#    i: @integer;   enter i
+    do (if 4 -> debug then  '_$_' -> dbgStr.puttext;  i -> dbgStr.putint;  if); #);
+    
+    lexDbgTxt :  (#    t : ^text;
+    enter t[] do (if 4 -> debug then  '_$_' -> dbgStr.puttext;  t[] -> dbgStr.puttext;  if);  #);
+
+    lexDbgLog :  (#  b :@ boolean enter b
+    do  (if 4 -> debug then
+            '_$_' -> dbgStr.puttext;  
+            (if b then 'true' -> dbgStr.puttext else 'false' -> dbgStr.puttext if);
+        if);
+    #);
+
+
+  do
+     (if not tokenBuf.isEmpty then 
+         tokenBuf.get -> (symb,sym[],blanks)
+      else
+         BufferTokens;
+         tokenBuf.get -> (symb,sym[],blanks)
+     if);
+  #)

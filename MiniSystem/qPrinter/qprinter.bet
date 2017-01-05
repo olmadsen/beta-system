@@ -1,0 +1,644 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/MiniSystem/compiler_IF/compiler_IF';
+INCLUDE '~beta/MiniSystem/qbeta/qprimitives';
+INCLUDE '~beta/MiniSystem/qbeta/qprinterlexer';
+INCLUDE '~beta/MiniSystem/qbeta/qprint';
+INCLUDE '~beta/MiniSystem/qbeta/qHTMLprint';
+INCLUDE '~beta/MiniSystem/qbeta/qRTFprint';
+INCLUDE '~beta/MiniSystem/qbeta/qTXTprint';
+
+---- program: descriptor ----
+(# (* qprinter: Pretty printing a qBETA program *)
+
+(* qPrinter command syntax: *)
+   printHelp:
+   (#
+   do
+   '  ' -> screen.putline;
+   'Usage:   qprinter --help  ' -> screen.putline;
+   '   or:   qprinter [options] fileId' -> screen.putline;
+   '  ' -> screen.putline;
+   'where \'fileId\' is the filename without any file extension.' -> screen.putline;
+   'e.g. \'qprinter myBETAfile\'.' -> screen.putline;
+   ' ' -> screen.putline;
+   ' [options]   is zero or more of:' -> screen.putline;
+   ' '           -> screen.putline;   
+   ' --html      The output file is an HTML file.' -> screen.putline;
+   '             The output file extension will be \'.htm\'. ' -> screen.putline;
+   '             No line numbers are printed for HTML output.' -> screen.putline;
+   '             This is the default behaviour.' -> screen.putline;
+   ' '           -> screen.putline;   
+   ' --rtf       The output file is a Rich Text Format file.' -> screen.putline;
+   '             The output file extension will be \'.rtf\'. ' -> screen.putline;
+   ' '           -> screen.putline;   
+   ' --ascii     The output contains only characters from the standard 7-bit ascii character set.' -> screen.putline;
+   '             The default is to not print line numbers for ASCII output.'    -> screen.putline;
+   '             The output file extension will be \'.txt\'. ' -> screen.putline;
+   ' ' ->        screen.putline;   
+   ' --semi      A semicolon (\';\')will be printed between the items (declarations/statements) of a pattern.' -> screen.putline;
+   ' '           -> screen.putline;   
+   ' --curly     Curly brackets (\'{\',\'}\') will be printed at the start and end of a pattern (block).' -> screen.putline;
+   '             A semicolon (\';\')will be printed between the items (declarations/statements) of a pattern.' -> screen.putline;
+   ' '           -> screen.putline;   
+   ' --caps      Reserved words and predefined words are displayed using capital letters.' -> screen.putline;
+   '  '          -> screen.putline;   
+   ' --linenumbers <n>' -> screen.putline;
+   '             Linenumbers will be printed at the start of each line.' -> screen.putline;
+   '             The default value for <n> is 3, if no \'linenumbers\' option is given.' -> screen.putline;
+   '             If <n> is present then each linenumber will be printed using n digits.' -> screen.putline;
+   '             <n> must be a single digit number, i.e. a number between 1 and 9.' -> screen.putline;
+   '             A zero value for <n> causes line numbers not to be printed.' -> screen.putline;
+   '             If <n> is not provided, then the value is set to 4.' -> screen.putline;
+   ' '           -> screen.putline;   
+   ' --landscape' -> screen.putline;
+   '             The output page will be in landscape, as opposed to portrait, which is the default.' -> screen.putline;
+   ' '           -> screen.putline;
+   ' --indent <n>' -> screen.putline;
+   '             Each block level will be indented by <n> spaces (\' \'), i.e.' -> screen.putline;
+   '             each block level will be indented the same number of characters.' -> screen.putline;
+   '             <n> must be a single digit number, i.e. a number between 1 and 9.' -> screen.putline;
+   '             If <n> is not provided, then the value is set to 3.' -> screen.putline;
+   '  '          -> screen.putline;
+   ' --spacy <n>' -> screen.putline; 
+   '             An extra space character is printed to separate some words and symbols.' -> screen.putline;
+   '             <n> can be 0, 1, or 2. The default is 1. A higher value means more space.' -> screen.putline;
+   '             If <n> is not provided, then the value is set to 2.' -> screen.putline;
+   '  '          -> screen.putline;   
+   ' Please note that reserved words are converted to upper case in the output file. '      -> screen.putline;   
+   '  '          -> screen.putline;   
+   #);
+
+
+  lex: ^lexer;
+  print: ^qPrint;
+
+  printTokenStream:
+     (# savedBlkLvl: @integer;
+
+     do
+
+     (* print optional line number for the first line *)
+     outFile[] -> debug_lvl_ind;
+     currentLine -> print.lineNumber;
+
+     Loop:
+        (if true then 
+            lex;
+
+            debug_lexem;
+            outFile[] -> debug_lvl_ind;
+
+            (if lex.symb 
+             // lex.symbols.begin then
+                (* print the block-begin symbol as the first character of the indentation for the new block level *)
+                '{' -> toNewLine;
+                print.doNotAddSpace;
+                outFile[] -> debug_lvl_ind;
+             // lex.symbols.semicolon then
+             L: (if lex.lookAhead = lex.symbols.semicolon then  lex; restart L;  if);  (* Avoid empty lines. *)
+                (* multiple block-end symbols may occur right before the item-separator-symbol *)
+                2 -> print.tryToAddSpace;
+                (if lex.lookAhead = lex.symbols.eos then
+                    (* no line shift if at the end of the input file *)
+                    (* curBlkLvl + 1 -> setCurBlkLvl; *)  (* hack: just to make the output look better *)
+                    (if semiColSym then  print.SemiSymbol  if);
+                    print.tabToEOL;
+                else 
+                    ';' -> toNewLine;   (* the item-separator-symbol will be printed on the next line *)
+                if);
+                print.doNotAddSpace;
+             // lex.symbols.end then
+                (if true
+                 // currentLine = begStack[curBlkLvl] then
+                    (* this level's opening and closing bracket are on the same line *)
+                    (if curliesAndSemi then
+                       (* we shall just print the end-symbol, but no line shift ahead of it *)
+                       (* precede the end-symbol with the blanks of the current indentation level *)
+                       indStack[curBlkLvl] - 1 ->  print.Spaces;
+                       print.EndSymbol;
+                    if);
+                    print.endBlock;
+                    curBlkLvl - 1 -> setCurBlkLvl;
+                    2 -> print.maybeAddSpace;
+                 // print.curliesAndSemi then
+                    (* begin and end on different lines, there will be a line shift now *)
+                    (* current line until right margin belongs to the current block level *)
+                    (* print the block-end symbol as the first character of the indentation for the old block level *)
+                    (* it may be the final end-symbol of this pattern, then a semicolon must follow, possibly after *)
+                    (* any optional blanks lines and comments. *)
+                    2 -> print.tryToAddSpace;
+                    (if curBlkLvl = 2 then  true -> lastCurly; (1 -> lex.peekNextSkipCEL) -> nextSymb  if);
+                    '}' -> toNewLine; (* tab to end of line, print new line, and print indents *)
+                else
+                    (* begin and end on different lines, there will be a line shift later *)
+                    (* we are not printing the end-symbol, not now and not later *)
+                    (* just tab to the end of the line, i.e. to the right margin *)
+                    (* reduce the block level *)
+                    print.tabToEOL;
+                    print.endBlock;
+                    curBlkLvl - 1 -> setCurBlkLvl;
+                if);
+                print.doNotAddSpace;
+                outFile[] -> debug_lvl_ind;
+             (* there is something to actually print *)
+             // lex.symbols.varRef    then   print.variable; 
+             // lex.symbols.constRef  then   print.constant;
+             // lex.symbols.colon     then   print.pattern; (* pattern declaration *)
+             // lex.symbols.virtual   then   print.virtual;
+             // lex.symbols.further   then   print.further;
+             // lex.symbols.final     then   print.final;
+             // lex.symbols.assignRef then   print.assignment;
+             // lex.symbols.idf       then   lex.sym[]  ->  print.identifier;  (* Identifier. *)
+             // lex.symbols.special   then   lex.sym[]  ->  print.special;
+             // lex.symbols.predefined then  lex.sym[]  ->  print.predefined;
+             // lex.symbols.reserved  then   lex.sym[]  ->  print.reserved;
+             // lex.symbols.keyword   then   (if currentLine = keywordLine then  0 -> print.maybeAddSpace if);
+                                                 (* this is not the first keyword on the current line *)
+                                                 (* output a space to separate it from the lexem preceding it *)
+                                             lex.sym[] -> print.keyword;
+                                             currentLine -> keywordLine;
+             // lex.symbols.fatcomma  then   (if '%else%' -> lex.sym.equalNCS then  ' ' -> toNewLine;  if);
+                                             lex.sym[] -> print.fatComma;
+             // lex.symbols.value     then   print.result;
+             // lex.symbols.comma     then   (',',2,2)   ->  print.ChrAddSpace;
+             // lex.symbols.dot       then   ('.',10,10) ->  print.ChrAddSpace;
+             // lex.symbols.leftBrack then   ('(',10,2)  ->  print.ChrAddSpace;
+             // lex.symbols.rightBrack then  (')',2,1)   ->  print.ChrAddSpace;
+             // lex.symbols.innerSy   then   'inner'     ->  print.reserved;
+             // lex.symbols.const     then   (lex.sym[],0,1)   ->  print.TxtAddSpace;
+             // lex.symbols.string    then   lex.sym[]   ->  print.string;
+             // lex.symbols.charSy    then   lex.sym[]   ->  print.charSy;
+             // lex.symbols.include   then   lex.sym[]   ->  print.reserved;
+             // lex.symbols.insertComment then  lex.sym[] -> print.comment;
+             // lex.symbols.wholeLineComment then
+                                             curBlkLvl  -> savedBlkLvl;
+                                             lex.symbols.wholeLineComment -> toNewLine;
+                                             lex.sym[] -> print.comment;
+                                             savedBlkLvl -> setCurBlkLvl;
+             // lex.symbols.emptyLine then   ' '  -> toNewLine;
+             // lex.symbols.eos       then   ;   (* Has reached the end of the program text. *)
+             // lex.symbols.illegalCh then
+                                      '\nIllegal Ch on line number: ' -> screen.puttext; currentLine -> screen.putint; screen.newline;
+                                      print.readableLine; '\nIllegal Ch on line number: ' -> Print.Txt; currentLine -> Print.Int; print.readableLine;
+             else
+                (lex.symb -> lex.symbols.asText, 0, 1)  ->  print.TxtAddSpace;
+             if);
+             lex.symb -> lastSymb;
+             (if lex.symb <> lex.symbols.eos then restart Loop if)
+         if); (* Loop *)
+     #); (* print TokenStream *)
+
+
+      
+   setIndent :
+     (# stride : @integer;
+     do
+        (if (curBlkLvl < 1) then (failure,'Block level out of range [1...]') -> stop if);
+        (lex.indent.iStack[curBlkLvl] - lex.indent.iStack[curBlkLvl-1] ) -> stride;
+        (if curBlkLvl > indStack.range then
+            indStack.range -> indStack.extend
+        if);
+        stride -> indStack[curBlkLvl];
+        (if true
+         // curBlkLvl = 1 then
+            0 -> stride;
+         // semiColSym 
+         // curliesAndSemi then
+            indStack[curBlkLvl-1] -> stride;
+         // html  then
+            indStack[curBlkLvl]   -> stride;
+        else
+            indStack[curBlkLvl-1] -> stride;
+        if);
+        (curBlkLvl,stride)  ->  print.begBlock;
+     #);
+     
+   setBeginLine :
+     (# begLine : @integer;
+      enter
+         begLine
+      do
+         (if curBlkLvl > begStack.range then
+             begStack.range -> begStack.extend
+          if);
+          begLine -> begStack[curBlkLvl];
+     #);
+     
+   toNewLine :
+   (#
+       firstCh : @char;
+       cmtBlanks   : @ integer;
+       cmtBlkLvl   : @ integer;
+       savedBlkLvl : @ integer;
+   enter
+       firstCh
+   do
+      (* tab to end of line, if not done already *)
+      print.tabToEOL;
+
+      (* shift to new line in the formatted output *)
+      (if html and (lastSymb = lex.symbols.end) then
+          (if true
+           // '%else%' -> lex.sym.equal
+           // firstCh = lex.symbols.wholeLineComment
+           // firstCh = '}'
+           // firstCh = ';' then
+              ; (* do not shift to a new line, </div> has already done it. *)
+          else
+              print.lineShift;          
+          if);
+      else
+          print.lineShift;
+      if);
+      print.readableLine;
+      false -> print.tabbedToEOL;
+      currentLine + 1 -> currentLine;
+      0 -> keywordLine;
+
+      (* print optional line numbers *)
+      currentLine -> print.lineNumber ;
+        
+      (* print indents *)
+      (if true
+       // firstCh = '{' then
+          curBlkLvl + 1 -> setCurBlkLvl;
+          setIndent;
+          currentLine -> setBeginLine;
+          (if not curliesAndSemi then ' ' -> firstCh if);
+          firstCh -> doIndents;
+       // firstCh = '}' then
+          '}'  -> doIndents;
+          (if lastCurly then
+              (if nextSymb = lex.symbols.semicolon then
+                  print.SemiSymbol;
+                  lex;
+              if);
+              print.tabToEOL;
+          else (* not at block level one *)
+              print.tabToEOL;
+          if);
+          curBlkLvl - 1 -> setCurBlkLvl;
+          print.endBlock;
+       // firstCh = lex.symbols.wholeLineComment then
+          lex.blanks -> cmtBlanks;
+          (if true
+           // html then
+              cmtBlanks - indStack[curBlkLvl]  ->  print.spaces;
+           // c7bit then
+              cmtBlanks   ->  print.spaces;
+          else (* rtf *)
+              (for i : curBlkLvl repeat
+                   (if cmtBlanks >= indStack[i] then i -> cmtBlkLvl; cmtBlanks - indStack[i] -> cmtBlanks; if);
+              for);
+              cmtBlkLvl  -> setCurBlkLvl;
+              ' '  -> doIndents;
+              cmtBlanks -> print.spaces;
+          if);
+      else
+          (if (firstCh = ';') and (not semiColSym) then ' ' -> firstCh if);
+          firstCh -> doIndents;
+      if);
+      print.doNotAddSpace;
+   #);
+
+   doIndents:
+     (#  blkLvl  :@ integer; 
+         firstCh :@ char; (* begin-symbol, end-symbol, semicolon, ascii.nul, or a space *)
+     enter
+         firstCh
+     do
+         curBlkLvl -> blkLvl; (* needed because setCurBlkLvl changes curBlkLvl *)
+         (* print spaces or tabs, and with background color if RTF or HTML is on  *)
+         (* number of spaces to indent for block level one is always zero *)
+         (if true
+          // c7bit and (stride > 0) then
+             (for i: blkLvl-2 repeat (* indent zero spaces for block level one *)     
+                  stride  ->  print.spaces;
+             for);
+             (if blkLvl > 1 then firstCh -> print.indChr; stride - 1  ->  print.spaces; if);
+          // html then
+             firstCh  -> debug_firstCh;
+             (if true
+              // semiColSym
+              // curliesAndSemi then
+                 (if blkLvl > 1 then firstCh  -> print.indChr if);
+                 indStack[blkLvl]-1 -> print.spaces;
+             if);
+          // rtf and (not curliesAndSemi) then
+             (* print spaces, but shift the background one right *)
+             (for i: blkLvl-1 repeat
+                  i -> setCurBlkLvl;
+                  i-1 -> print.txtBckgr;
+                  indStack[i] -> print.spaces;
+                  print.readableLine;
+             for);
+             firstCh  -> debug_firstCh;
+             blkLvl -> setCurBlkLvl;
+             blkLvl-1 -> print.txtBckgr;
+             (if blkLvl > 1 then firstCh  -> print.indChr if);
+             indStack[blkLvl]-1 -> print.spaces;
+             blkLvl -> print.txtBckgr;
+         else
+             (* print spaces *)
+             (for i: blkLvl-1 repeat
+                  i -> setCurBlkLvl;
+                  indStack[i] -> print.spaces;
+                  print.readableLine;
+             for);
+             firstCh  -> debug_firstCh;
+             blkLvl -> setCurBlkLvl;
+             (if blkLvl > 1 then firstCh  -> print.indChr if);
+             indStack[blkLvl]-1 -> print.spaces;
+         if);
+         print.readableLine;  
+      #);
+
+   debug_lexem:
+   (# t :^ text;
+   do (if 1 -> debug then
+          print.readableLine;  
+          lex.symb -> lex.symbols.asText -> t[];
+          (lex.symb,lex.sym[],t[]) -> print.dbgLexem;
+      if);
+   #);
+   
+   debug_lvl_ind:
+     (#    ofil :^stream;
+     enter ofil[]
+     do
+        (if 2 -> debug then
+            print.readableLine;  
+            '[[[_' -> ofil.puttext;
+            curBlkLvl ->  ofil.putint;
+            ']__' -> ofil.puttext;
+            (for i : curBlkLvl repeat 
+                 indStack[i] ->  ofil.putint;
+                 '_' -> ofil.put;
+            for);
+            '__[' -> ofil.puttext;
+            lex.indent.top -> ofil.putint;
+            ']__' -> ofil.puttext;
+            (for i : lex.indent.top repeat 
+                 lex.indent.iStack[i] -> ofil.putint;
+                 '_' -> ofil.put;
+            for);
+            '_]]]' -> ofil.puttext;
+        if);
+     #);
+
+   debug_lvl:
+     (# do
+        (if 3 -> debug then
+            print.readableLine;  
+            curBlkLvl -> print.dbgInt;
+            indStack[curBlkLvl] -> print.dbgInt;
+        if);
+     #);
+
+   debug_firstCh :
+   (#    c :@ char
+   enter c
+   do
+      (if 7 -> debug then
+          '|||' ->  print.dbgTxt; curBlkLvl -> print.dbgInt; 
+          c ->  print.dbgChr; '|||' ->  print.dbgTxt;
+      if);
+   #);
+
+   debug_line : (# do (if 3 -> debug then print.readableLine if); #);
+     
+   setCurBlkLvl : (# lvl :@ integer enter lvl
+   do lvl -> curBlkLvl -> print.txtBckgr;
+   (if 5 -> debug then print.readableLine; ']' -> print.Chr; lvl -> print.Int; '['  -> print.Chr; print.readableLine; if);
+   #);
+
+   readOptions:  (* could be only 2 arguments *)
+     (# opt :    ^text;
+        argopt : ^text;
+        nxtArg : @integer;
+     do (* neither the input file, nor the output file, has been opened yet *)
+
+        (if nxtArg = 0 then
+            1 -> nxtArg;
+            (if 1 -> debug then 'readOptions:_' -> screen.puttext; noOfArguments - 2 -> screen.putint; screen.newline; if);
+        if);
+        
+  Loop: nxtArg + 1  ->  nxtArg  ->  arguments  ->  opt[];
+        (if nxtArg >= noOfArguments then leave ReadOptions if);
+        (if 1 -> debug then opt.copy -> screen.putline; if);
+
+        (if nxtArg + 1 < noOfArguments then
+            (* in case an option to an argument has been provided *)
+            nxtArg + 1 -> arguments -> argopt[];
+        else
+            none -> argopt[];
+        if);
+        
+        (if true
+         // '--landscape' -> opt.equalNCS then      
+            true -> landscapePage;
+         // '--curly' ->     opt.equalNCS then      
+            true -> curliesAndSemi;
+         // '--semi' ->      opt.equalNCS then      
+            true -> semiColSym;
+         // '--caps' ->      opt.equalNCS then      
+            true -> caps;
+         // '--spacy' ->     opt.equalNCS then   
+            2 -> spacyPrinting;  (* change if no digit after argument *)
+            (if argopt[] // none  then
+            else    (* check if the optional digit has been provided *)
+                (if 1 -> argopt.inxGet -> ascii.isDigit then
+                    argopt.reset;
+                    argopt.getint -> spacyPrinting;
+                    nxtArg + 1 -> nxtArg;
+                if);
+            if);
+            (if spacyPrinting < 0 then 0 -> spacyPrinting if);
+            (if spacyPrinting > 2 then 2 -> spacyPrinting if);
+         // '--linenumbers' -> opt.equalNCS then
+            4 -> lineNumbers;
+            (if argopt[] // none  then
+            else    (* check if the optional width has been provided *)
+                (if 1 -> argopt.inxGet -> ascii.isDigit then
+                    argopt.reset;
+                    argopt.getint -> lineNumbers;
+                    nxtArg + 1 -> nxtArg;
+                if);
+            if);
+         // '--html' -> opt.equalNCS then      
+            false -> c7bit;
+            false -> rtf;
+            true -> html;
+            0 -> lineNumbers;
+          // '--rtf' -> opt.equalNCS then      
+            false -> html;
+            false -> c7bit;
+            true -> rtf;
+         // '--ascii' -> opt.equalNCS then      
+            false -> html;
+            false -> rtf;
+            true -> c7bit;
+            0 -> lineNumbers;
+         // '--indent' ->     opt.equalNCS then   
+            3 -> stride;  (* default value, if no digit after argument *)
+            (if argopt[] // none  then
+            else    (* check if the optional digit has been provided *)
+                (if 1 -> argopt.inxGet -> ascii.isDigit then
+                    argopt.reset;
+                    argopt.getint -> stride;
+                    nxtArg + 1 -> nxtArg;
+                if);
+            if);
+            (if stride < 0 then 0 -> stride if);
+            (if stride > 9 then 9 -> stride if);
+         // '--DeBuG' -> opt.equal then   
+            6 -> dbgInfo; 
+            (if argopt[] // none  then
+            else    (* check if the optional debug level has been provided *)
+                (if 1 -> argopt.inxGet -> ascii.isDigit then
+                    argopt.reset;
+                    argopt.getint -> dbgInfo;
+                    nxtArg + 1 -> nxtArg;
+                if);
+            if);
+        else
+            (failure,'Illegal option') -> stop;
+        if);
+        restart readOptions;
+      #);
+     
+   lineNumbers :@integer ;   (* print the line numbers of the program file *)
+   nextSymb    :@ integer;
+   lastSymb    :@ integer;
+   lastCurly   :@ boolean;
+   line_last_begin :@ integer;     (* remeber lines that contain a begin symbol *)
+   currentLine :@ integer;
+   keywordLine :@ integer;
+   curBlkLvl   :@ integer; (* block level, synchronised with indent level, starting at one *)
+   txt_color   :@ integer;
+   indStack : [10] @integer; (* how many characters to indent at each block level *)
+   begStack : [10] @integer; (* the line number of the last block-begin-symbol on this block level *)
+
+   (* the following are needed, since we have not created the qprint object when command arguments are processed *)
+   html:  @boolean; (* shall we output html? *)
+   rtf:   @boolean; (* shall we output rtf? *)
+   c7bit: @boolean; (* shall we output plain ascii? *)
+          stride:   @integer; (* if > 0, indent all block levels with the same no. of spaces *)
+   landscapePage:   @boolean; (* output should be on a page that is in landscape mode *)
+   curliesAndSemi:  @boolean; (* print curly brackets and semicolons *)
+   semiColSym:      @boolean; (* print semicolons *)
+   caps             :@ boolean;  (* Used when printing reserved and predefined words, *)
+                                 (* and when printing SCAPS in ASCII output. *)
+   spacyPrinting:   @integer; (* add a space character here and there, to get more airy print *)
+
+   fileName:  ^text;
+   inFile:    ^file;
+   outName:   ^text;
+   outFile:   ^file;
+
+   dbgStream: ^stream;
+   dbgInfo: @integer;  (* defines how much debug information to produce *)
+   debug : (# dbg: @integer;  enter dbg  do  exit dbg <= dbgInfo  #);
+
+
+do (* qPrinter *)
+
+   0 -> dbgInfo;
+   1 -> currentLine;
+   0 -> line_last_begin;  
+   0 -> lastSymb;
+   1 -> spacyPrinting;
+   3 -> lineNumbers;
+   true -> html;
+ 
+
+  actionPart :
+    (if true then (* so that actionPart names a sequence of statements *)
+    
+    (if noOfArguments = 1 then printHelp; leave actionPart if); (* no filename, just print the help message *)
+    
+    noOfArguments  -> arguments -> fileName[];
+    (if ('--help' -> fileName.equal) then
+        printHelp;
+        leave actionPart
+    if);
+
+    (* Assume we have a valid file name *)
+    fileName.copy -> outName[];
+
+    (***   Process any other command line options   ***)
+    readOptions;
+
+    (if 5 -> debug then filename[] -> screen.putline; outname[] -> screen.putline if);
+ 
+    (* create the names of the input file and the output file *)
+    '.xbeta' -> fileName.append;
+    (if true
+     // html  then '.htm'  -> outName.append;
+     // rtf   then '.rtf'  -> outName.append;
+     // c7bit then '.txt'  -> outName.append;
+    else '.htm' -> outName.append;
+    if);
+    (if 5 -> debug then filename[] -> screen.puttext; '     ' -> screen.puttext; outname[] -> screen.putline if);
+
+    (* open the files *)
+    &file[] -> inFile[];
+    fileName[]  -> inFile.name;
+    inFile.openRead;
+    &file[] -> outFile[];
+    outName[] -> outFile.name;
+    outFile.openWrite;
+
+    (* creat an object of the right subclass, and transfer any command line options *)
+    (if 5 -> debug then 'Printer object shall be created.'-> screen.putline if);
+    (if true
+     // html  then &qHTMLprint[] -> print[];
+     // rtf   then &qRTFprint[] -> print[];
+     // c7bit then &qTXTprint[] -> print[];
+    else &qHTMLprint[] -> print[];
+    if);
+    (if 5 -> debug then 'Printer object has been created.'-> screen.putline if);
+    
+    1 ->  curBlkLvl -> print.txtBckgr;        (* the outermost program block is at block level 1 *)
+    (if 5 -> debug then 'Block level set to one.'-> screen.putline if);
+    
+    (* output any formatting codes that must precede the actual program text *)
+    ( inFile[],outFile[]) -> print.init;
+
+    (if 5 -> debug then 'Printer object has been initialised.'-> screen.putline if);
+    
+    c7bit  ->  print.c7bit;
+               stride  ->  print.stride;
+    landscapePage  ->  print.landscapePage;
+    semiColSym     ->  print.semiColSym;
+    (if curliesAndSemi then
+        true -> print.curliesAndSemi;
+        true -> semiColSym;
+        true -> print.semiColSym;
+    if);
+    caps  ->  print.caps;
+    spacyPrinting  ->  print.spacyPrinting;
+    (if html then  0 -> lineNumbers  if);
+    lineNumbers    ->  print.LineNumberWidth;
+    (if 5 -> debug then 'Printer object\'s argument variables have been set.'-> screen.putline if);
+
+    (if 5 -> debug then 'Creating the lexer.'-> screen.putline if);
+    &lexer[] -> lex[];
+    (if 5 -> debug then 'Initialising the lexer.'-> screen.putline if);
+    (fileName[],inFile[],outFile[],dbgInfo) -> lex.init;
+
+   
+    (if 8 -> debug then  print.GreyLevels  if);
+
+    outFile[] -> debug_lvl_ind;
+
+    printTokenStream;
+
+    print.finis;
+ 
+    outFile.close;
+    inFile.close;
+
+   if); (* end of actionPart *)
+
+#)(* end of qPrinter *)

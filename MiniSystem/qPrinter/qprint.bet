@@ -1,0 +1,401 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/directory';
+INCLUDE '~beta/sysutils/time';
+INCLUDE '~beta/sysutils/pathhandler';
+---lib:attributes---
+qPrint:
+(# 
+  in:  ^file; 
+  out: ^stream;    (* most probably a file *)
+  inFdir:   ^text; (* current working directory, i.e. the directory where 'qprint' was executed *)
+  inFarg:   ^text; (* file name, i.e. the last argument of the 'qprint' command' *)
+  lastsaved: @integer;  (* time of the last modification *)
+
+(* argument options *)
+  curliesAndSemi  :@boolean ;   (* print curly brackets and semicolons *)
+  semiColSym      :@boolean ;   (* print semicolons *)
+  c7bit           :@boolean ;   (* output only7-bit ascii characters *)
+  spacyPrinting   :@integer ;   (* add a space character before and after, to get more airy print *)
+       addSpace   :@boolean;    (* if spacy, then add a space character before next lexem, if appropriate *)
+  landscapePage:   @boolean; (* output should be on a page that is in landscape mode *)
+  lineNumberWidth: @integer;
+
+  (* remember background and color used in previous print operation *)
+  (* these variables will be used for future printing, also in subpatterns *)
+  txtColor :@ integer;
+  txtBckgr :@ integer;
+ 
+  stride:  @integer; (* no. of spaces to print for each indent level TBD *)
+  rightMarginTabStop : @integer;
+
+  tabbedToEOL :@boolean ; (* necessay if not printing curlies and there are multiple consecutive curlies *)
+
+  caps :@ boolean;  (* Used when printing reserved and predefined words, *)
+                    (* and when printing SCAPS in ASCII output. *)
+
+  init:<   (# enter (in[],out[])
+           do in.entry.path.get -> inFarg[]; 
+              CurrentDirectory  -> inFdir[]; 
+              in.entry.modtime  -> lastSaved;
+              inner;
+              setTabStops
+           #);
+
+  finis:<  (# enter out[] do inner #);
+
+  lineNumber:@
+  (#   previous :@ integer;
+       lineNo: @integer;
+  enter
+      lineNo
+  do  (* print line number at the start of the line *)
+      (if lineNumberWidth > 0 then
+          txtBckgr -> previous;
+          (* use the background of block level one, and the default text color *)
+          0 -> txtBckgr;
+          begBackGround;
+          lineNo -> out.putint (# do lineNumberWidth -> width; true -> zeroPadding #);
+          ' ' -> out.put;
+          endBackGround;
+          previous -> txtBckgr;
+      if);
+  #);
+
+  begBlock :< (# blkLvl, indent :@ integer enter (blkLvl,indent)
+              do
+                 (if blkLvl > 10 then blkLvl/10 -> blkLvl if);
+                 (if blkLvl > 10 then restart begBlock if);
+                 inner;
+              #);
+  
+  endBlock   :< (# do inner #);
+  
+  Background : (# do begBackground; inner; endBackground #);
+      begBackGround :< (#  do  inner  #);  (* Set the grey level of the background *)    
+      endBackGround :< (#  do  inner  #);
+
+  Underline :  (# do begUnderline; inner; endUnderline #);
+      begUnderline :< (#  do  inner  #);    
+      endUnderline :< (#  do  inner  #);
+
+  Bold :       (# do begBold; inner; endBold #);
+      begBold :< (#  do  inner  #);    
+      endBold :< (#  do  inner  #);
+
+  Italics :    (# do begItalics; inner; endItalics #);
+      begItalics :< (#  do  inner  #);    
+      endItalics :< (#  do  inner  #);
+
+  SmallCaps :  (# do begSmallCaps; inner; endSmallCaps #);
+      begSmallCaps :< (#  do  inner  #);    
+      endSmallCaps :< (#  do  inner  #);
+
+ 
+  Color :  (# t :^Text; clr :@ integer;
+                enter (t,clr)  do clr -> begColor; inner; endColor;  #);
+       begColor :< (#  clr :@ integer enter clr do  inner  #);    
+       endColor :< (#  do  inner  #);
+
+  Cmnt : Italics (# do commentColor -> begColor; inner; endColor; #);
+
+
+  BoldUnder    :  Bold      (# do begUnderline; inner; endUnderline #);
+
+  BoldColor    :  Bold      (# clr :@ integer enter clr do clr -> begColor; inner; endColor #);
+
+  ItalicsColor :  Italics   (# clr :@ integer enter clr do clr -> begColor; inner; endColor #);
+
+  BoldCaps     :  SmallCaps (# do begBold; inner; endBold #);
+  
+  Comment :  Cmnt   (* There may be a need to escape some of the comment characters! *)
+             (#  T: ^text  enter  T[]
+             do  (if addSpace and ( spacyPrinting >= 0 ) then ' ' -> Chr else  false -> addSpace if); 
+                 begCmt;
+                 (if T[] // none then 'No Comment' -> out.puttext  else T[] -> Txt if);
+                 endCmt;
+                 (if spacyPrinting >= 1  then true -> addSpace else  false -> addSpace  if);
+             #);
+      begCmt :< (#  do  inner  #);    
+      endCmt :< (#  do  inner  #);
+
+  BeginSymbol :  (# do (if curliesAndSemi then '{' -> chr else ' ' -> chr if) #);
+
+  EndSymbol   :  (# do (if curliesAndSemi then '}' -> chr else ' ' -> chr if) #);
+
+  SemiSymbol  :  (# do (if semiColSym     then ';' -> chr else ' ' -> chr if) #);
+
+
+  constant   :<  AddSpaceBold_1_1  (# do inner #);   (* '\\uc1\\u08694?' *)
+  variable   :<  AddSpaceBold_1_1  (# do inner #);
+  pattern    :<  AddSpaceBold_1_1  (# do inner #);
+  virtual    :<  AddSpaceBold_1_1  (# do inner #);
+  further    :<  AddSpaceBold_1_1  (# do inner #);
+  final      :<  AddSpaceBold_1_1  (# do inner #);
+  assignment :<  AddSpaceBold_1_1  (# do inner #);
+  identifier :   AddSpace_1_1      (#  idf :^ Text  enter idf[]  do  idf[] -> Txt;  #);
+  special    :<  AddSpaceBold_1_1  (# t: ^text  enter t[]  do  inner  #);
+  reserved   :<  AddSpaceSCaps_0_0 (# t: ^text  enter t[]  do  (if caps then t.makeUC if);  inner;  #);
+  predefined :<  AddSpaceSCaps_0_0 (# t: ^text  enter t[] do  inner;  #);
+  keyword    :<  BoldCaps   (# t: ^text  enter t[]  do  inner;  1 -> maybeAddSpace;  #);
+  fatcomma   :<  AddSpaceSCaps_0_0   (# t: ^text  enter t[] do  inner  #);
+  result     :   AddSpaceBold_1_1    (* pattern signature's exit symbol *) 
+                 (# do  '->' -> Txt #);   (* 10511 -> UniChr; *)
+
+          
+  charSy : (# T: ^text; C :@ char;  enter  T[]
+           do (if addSpace and ( spacyPrinting >= 0 ) then ' ' -> Chr else  false -> addSpace if); 
+              '\'' -> Chr;
+              T.reset;  T.get -> C;
+              (if  C  //  '\\'  //  '\''  then  '\\' -> Chr;  if);  (* source escape character *)
+              C -> Chr;
+              '\'' -> Chr;
+              (if spacyPrinting >= 1  then true -> addSpace else  false -> addSpace  if);
+           #);
+            
+  string : (# T: ^text  enter  T[]
+           do (if addSpace and ( spacyPrinting >= 0 ) then ' ' ->Chr else  false -> addSpace if); 
+              '"' -> Chr; T[]-> escapeTxt;  '"' -> Chr;
+              (if spacyPrinting >= 1  then true -> addSpace else  false -> addSpace  if);
+           #);
+
+(* The following  patterns are used to decide if there should be a blank after the lexem. *)
+
+  AddSpace_1_1  :  (# 
+       do (if addSpace and ( spacyPrinting >= 1 ) then ' ' -> Chr else  false -> addSpace if); 
+          inner;
+          (if spacyPrinting >= 1  then true -> addSpace else  false -> addSpace  if);
+       #);
+
+  AddSpaceBold_1_1  :  Bold  (# 
+       do (if addSpace and ( spacyPrinting >= 1 ) then ' ' -> Chr else  false -> addSpace if); 
+          inner;
+          (if spacyPrinting >= 1  then true -> addSpace else  false -> addSpace  if);
+       #);
+
+  AddSpaceSCaps_0_0  :  BoldCaps  (# 
+       do (if addSpace and ( spacyPrinting >= 0 ) then ' ' -> Chr else  false -> addSpace if); 
+          inner;
+          (if spacyPrinting >= 0  then true -> addSpace else  false -> addSpace  if);
+       #);
+
+  TxtAddSpace : (# t: ^Text; before, after :@ integer;
+                 enter (t[],before,after)
+                 do (if addSpace and ( spacyPrinting >= before ) then ' ' -> Chr  else  false -> addSpace if);
+                    t[] -> Txt;
+                    (if spacyPrinting >= after  then true -> addSpace else  false -> addSpace  if);
+                 #);
+
+  ChrAddSpace : (# C: @char; before, after :@ integer;
+                 enter (C,before,after)
+                 do (if addSpace and ( spacyPrinting >= before ) then  ' ' -> Chr  else  false -> addSpace if);
+                    C -> Chr;
+                    (if spacyPrinting >= after  then true -> addSpace else  false -> addSpace  if);
+                 #);
+
+   maybeAddSpace : (# i :@ integer enter i
+       do (if i <= spacyPrinting  then true -> addSpace else  false -> addSpace  if) #);
+
+   tryToAddSpace : (# i :@ integer enter i
+       do (if addSpace and (i <= spacyPrinting) then ' ' -> Chr else  false -> addSpace if) #);
+
+   doNotAddSpace  : (# do  false -> addSpace  #);
+   
+
+  stripPercent:
+   (# first  :@ integer;
+      last   :@ integer;
+      lexem  :^ text;
+      txt    :^ text;
+   enter
+      lexem[]
+   do
+      lexem.length -> last;
+      (if (last -> lexem.inxGet) = '%' then last-1 -> last if);
+      1 -> first;
+      (if (first -> lexem.inxGet) = '%' then first+1 -> first if);
+      (first,last) -> lexem.sub -> txt[];
+   exit
+      txt[]
+   #);
+
+  timeNow: (# tim :^ Text;
+    do (* Convert "Mon Dec 26 15:40:19 2016"  to  "2016-12-26@15:40" *)
+       &Text[] -> tim[];
+       systemTime -> formatTime -> t2t -> tim[];
+    exit
+       tim[]
+    #) (* timeNow *) ;
+
+  timeMod: (# tim :^ Text;
+    do (* Convert "Mon Dec 26 15:40:19 2016"  to  "2016-12-26@15:40" *)
+       &Text[] -> tim[];
+       in.entry.modTime -> formatTime -> t2t -> tim[];
+    exit
+       tim[]
+    #) (* timeNow *) ;
+
+t2t :
+  (# from, to :^ Text;
+     m2m : (# t, v :^ Text
+       enter t[]
+       do
+          (if true
+           // 'Jan' -> t.equalNCS then  '01' -> v[];
+           // 'Feb' -> t.equalNCS then  '02' -> v[];
+           // 'Mar' -> t.equalNCS then  '03' -> v[];
+           // 'Apr' -> t.equalNCS then  '04' -> v[];
+           // 'May' -> t.equalNCS then  '05' -> v[];
+           // 'Jun' -> t.equalNCS then  '06' -> v[];
+           // 'Jul' -> t.equalNCS then  '07' -> v[];
+           // 'Aug' -> t.equalNCS then  '08' -> v[];
+           // 'Sep' -> t.equalNCS then  '09' -> v[];
+           // 'Oct' -> t.equalNCS then  '10' -> v[];
+           // 'Nov' -> t.equalNCS then  '11' -> v[];
+           // 'Dec' -> t.equalNCS then  '12' -> v[];
+          else
+              (failure,'Error in time conversion!') -> Stop;
+          if);
+       exit v[]
+       #);
+     enter from[]
+     do (* Convert "Mon Dec 26 15:40:19 2016"  to  "2016-12-26@15:40" *)
+        (21,24)  -> from.sub -> to[];  (* year *)
+        '-' -> to.put;
+        (5,7)   -> from.sub -> m2m -> to.append; (* month *)
+        '-' -> to.put;
+        (9,10)   -> from.sub -> to.append; (* day *)
+        '@' -> to.put;
+        (12,16)  -> from.sub -> to.append; (* day *)
+     exit to[]
+  #) (* t2t *);
+
+  
+  Spaces  :<  Background   (# count :@ integer  enter count  do inner  #);
+
+  Txt :  (* There may be a need to  escape some of the text characters! *)
+      (# T: ^text  enter  T[]
+      do (if  T[] // none then 'NONE' -> out.puttext
+         else T.reset;  (for i : T.length repeat  T.get -> Chr;  for);
+         if);
+      #);
+
+  escapeTxt :  (* There may be a need to source escape some of the text characters! *)
+      (# T: ^text;  C :@ char;  enter  T[]
+      do (if  T[] // none then 'NONE' -> out.puttext
+         else T.reset;
+              (for i : T.length repeat
+                   T.get -> C;
+                   (if  C  //  '"'  then  '\\' -> Chr;  if);  (* source escape character *)
+                   C -> Chr;
+              for);
+         if);
+      #);
+
+  Int :@  (#  I: @integer  enter  I do  I -> out.putint  #);
+
+  Chr :<  (#  C: @char  enter  C do  inner; #);
+
+  UniChr :<  (* Unicode character *)
+  (#     i :@ integer  enter  i  do inner  #);
+
+  indChr : BackGround (#  C: @char  enter  C do  C -> Chr  #); (* character AND background *)
+
+
+  setLineNumberWidth : (# i: @integer enter  i  do  i -> lineNumberWidth  #);
+
+  setTabStops :<
+  (# tab:@ boolean;
+  enter
+     tab
+  do
+     readableLine;
+     inner;
+     readableLine;
+  #);
+
+  tabToEOL :< Background
+  (* output a tab and a space at the very end of this line *)
+  (#    lvl :@ integer
+  enter lvl
+  do (if not tabbedToEOL then
+         inner;
+         true -> tabbedToEOL;
+     if)
+  #);
+
+  tab :<          (# do  inner  #);
+
+  lineShift :<    (# do  inner  #);
+
+  landscape :<    (# do  inner  #);
+
+  readableLine :< (# do  inner  #);   (* a no-op, only purpose is to make the output more readable *)
+
+  (* the color or grey level used for reserved word, comments, ... *)
+  reservedColor   : (# exit 17 #);
+  predefinedColor : (# exit 12 #);
+  keywordColor    : (# exit 13 #);
+  fatcommaColor   : (# exit 13 #);
+  specialColor    : (# exit 14 #);
+  commentColor    : (# exit 18 #);
+
+  (* Named colors. *)
+  DarkGreen  : (# exit 11 #);
+  myDarkBlue : (# exit 12 #);
+  Brown      : (# exit 13 #);
+  RoyalBlue  : (# exit 14 #);
+  Purple     : (# exit 15 #);
+  SteelBlue  : (# exit 16 #);
+  DarkCyan   : (# exit 17 #);
+  SlateGray  : (# exit 18 #);
+  Chocolate  : (# exit 19 #);
+  Coral      : (# exit 20 #);
+  DarkOrange : (# exit 21 #);
+  MediumBlue : (# exit 22 #);
+
+  GreyLevels :     (* display background color, used when debugging qPrinter *)
+  (# previous :@ integer;
+  do txtBckgr -> previous;
+     1 -> txtBckgr;
+     (for j:30 repeat '*' -> chr for); lineShift;
+     (for i : 10 repeat
+          i -> txtBckgr;
+          (for j:3 repeat (for k :10 repeat (k-1) -> int for) for);
+          lineShift;
+     for);
+     1 -> txtBckgr;
+     (for j:30 repeat '*' -> chr for); lineShift;
+     previous -> txtBckgr;
+  #);
+  
+  dbgLexem:
+    (# i :@ integer; t1, t2 :^ text;
+    enter
+       (i,t1[],t2[])
+    do
+      lineShift;
+      'dbgLexem:_' -> out.puttext;
+      i -> out.putint;
+      '_#_' -> out.puttext;
+      (if t1[] // none then 'NOTEXT'-> out.puttext else  t1[] -> out.puttext if);
+      '_#_' -> out.puttext;
+      (if t2[]// none then 'NOTEXT'-> out.puttext else  t2[] -> out.puttext if);
+      '_###' -> out.putline;
+    #);
+
+  dbgTxt:  (# t :^ text    enter t[]  do   ' ' -> out.put; t[] -> out.puttext #);
+
+  dbgInt:  (# i :@ integer enter i    do   ' ' -> out.put; i -> out.putint  #);
+
+  dbgChr:  (# c :@ char    enter c    do   ' ' -> out.put; c -> out.put     #);
+
+  dbgLog:  (# b :@ boolean enter b    do   ' ' -> out.put;
+           (if b then 'true' -> out.puttext else 'false' -> out.puttext if);  #);
+
+
+do (* qPrint *)
+    0 -> stride;
+    False -> tabbedToEOL;
+
+#)

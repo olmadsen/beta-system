@@ -1,0 +1,214 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/MiniSystem/qbeta/qprint';
+---lib:attributes---
+
+(********************* the sub-pattern used for printing RTF **********************)
+qRTFprint : qPrint
+(#
+
+  begBlock  ::  (# do begBackGround #);
+  endBlock  ::  (# do endBackground #);
+  
+  begBackGround ::
+  (# adjustedBckgr :@ integer;
+  do
+     (* set the  background color to that of the current block level *)
+     (* except for block level one and when printing line numbers *)
+     txtBckgr -> adjustedBckgr;
+     (* if txtBckgr > 1 then  txtBckgr - 1 -> adjustedBckgr  if *);
+     
+     '{\\cf' -> out.puttext;  (* RTF idiosyncacy: must set both foreground and background *) 
+     txtColor -> out.putint;
+     '\\chshdng0\\chcbpat'-> out.puttext;  (* idiosyncacy: how MS sets background *)
+     adjustedBckgr -> out.putint;  (* NB: the grey levels must be the first entries in the color table! *)
+     '\\cb' -> out.puttext;  (* in addition, we must supply it the standard RTF way *)
+     adjustedBckgr -> out.putint; (* background color at block level one is entry zero in the color table, etc *)
+     ' ' -> out.put; (* RTF eats this space character *)
+     (* NB: Do not forget to print the closing '}' after the remaining text of this RTF group *)
+  #);
+
+  endBackGround ::
+  (# do (* We close the use of the current background, by closing the RTF group *)
+     '}' -> out.puttext ; out.newline; (* RTF closing bracket *)
+  #);
+
+  begUnderline ::  (# do '\\ul ' ->  out.puttext #);
+  endUnderline ::  (# do '\\ulnone ' ->  out.puttext #);
+
+  begBold ::  (# do '\\b ' ->   out.puttext #);
+  endBold ::  (# do '\\b0 ' ->  out.puttext #);
+
+  begItalics ::  (# do '\\i ' ->   out.puttext #);
+  endItalics ::  (# do '\\i0 ' ->  out.puttext #);
+
+  begSmallCaps ::  (# do '\\scaps ' ->   out.puttext #);
+  endSmallCaps ::  (# do '\\scaps0 ' ->  out.puttext #);
+
+  begColor ::  (# do '{\\cf' -> out.puttext; clr -> out.putint; ' ' ->  out.put; #);
+  endColor ::  (# do '}' ->  out.put #);
+  
+  (* reduced text size *)
+  begCmt :: (#  do  '{\\fs20' -> out.puttext;  #);    
+  endCmt :: (#  do  '}'   ->   out.puttext;    #);
+
+  constant   ::  (# do ':='  ->   out.puttext #);
+  variable   ::  (# do ':?'  ->   out.puttext #);
+  pattern    ::  (# do ':'   ->   out.puttext #);
+  virtual    ::  (# do ':<'  ->   out.puttext #);
+  further    ::  (# do '::<' ->   out.puttext #);
+  final      ::  (# do '::'  ->   out.puttext #);
+  assignment ::  (# do ':-'  ->   out.puttext #);
+  special    :: (# do specialColor    -> begColor; t[] -> stripPercent -> Txt; endColor; #); 
+  reserved   :: (# do reservedColor   -> begColor; t[] -> stripPercent -> Txt; endColor; #);    
+  preDefined :: (# do predefinedColor -> begColor; t[] -> stripPercent -> Txt; endColor; #); 
+  keyword    :: (# do keywordColor    -> begColor; t[] -> stripPercent -> Txt; endColor; #); 
+  fatcomma   :: (# do fatcommaColor   -> begColor; t[] -> stripPercent -> Txt; endColor; #); 
+  
+
+  Spaces :: (#  do  (for i: count repeat ' ' -> out.put for)  #);
+  
+  Chr    :: (# do (* backslash is the escape character for both BETA and RTF *)
+         (if (C ='{') or (C ='}') or (C ='\\') then
+             (* RTF escape character, using the BETA escape character! *)
+             '\\' -> out.put;
+         if);
+         C -> out.put;
+         #);    
+
+  UniChr ::  (# i :@ integer  enter  i
+             do '\\u' -> out.puttext;  i -> out.putint;  ' ' -> out.put;  #);
+     
+  setTabStops ::
+  (# do
+     '\\deftab' -> out.puttext;
+     rightMarginTabStop -> out.putint; (* hack: set tabstop at the end of the line *)
+     ' ' -> out.put;
+  #);
+   
+  (* output a tab and a space at the very end of this line *)
+  tabToEOL ::  (# do  '\\tab  '-> out.puttext  #);
+
+  tab ::  (# do  '\\tab ' -> out.puttext  #);
+
+  lineShift ::  (# do  '\\line '-> out.puttext  #);
+
+  readableLine:: (# do out.newline #);   (* a no-op, only purpose is to make the output more readable *)
+
+  Landscape ::  (# do
+       RTFlandscape -> RTFpaper;
+       14400 -> rightMarginTabStop;  #);
+  
+
+  (* RTF commands contained in text objects *) 
+    RTFlandscape: @text;
+    RTFpaper: @text;
+    RTFportrait: @text;
+
+       
+init ::
+  (#
+     initColors : (# rgbClr, stride :@ integer;
+                  enter (rgbClr,stride)
+                  do
+                  (for blkLvl : 10 repeat
+                     '\\red' -> out.puttext;
+                     rgbClr  -> out.putint;
+                     '\\green' -> out.puttext;
+                     rgbClr -> out.putint; 
+                     '\\blue' -> out.puttext;
+                     rgbClr -> out.putint;
+                     ';' -> out.putline;
+                     rgbClr - stride -> rgbClr;
+                  for);
+                  #);  do
+     (***   Set up the RTF Header   ***)
+     '{\\rtf1' -> out.putline; (* RTFversion *)
+     '\\ansi\\ansicpg1252' -> out.putline; (* RTF character set *)
+     '\\deff0\\nouicompat\\deflang2057' -> out.putline; (* UK English for RTF default font *)
+     (* Set Gogle's NoTo Mono as default font *)
+     '{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset0 Noto Mono;}}' -> out.putline;
+
+     (***   Set up the color table   ***)
+     '{\\colortbl ;' -> out.putline; (* Color zero is the default color *)
+         (* '\\red255\\green255\\blue255;' -> out.putline; *) (* Color 0: white *) 
+         (* First ten entries are grey colors, from lighter to darker. *)
+          (245,12) -> initColors;
+         '\\red000\\green050\\blue000;' -> out.putline;  (* Color 11: dark green  *) 
+         '\\red000\\green000\\blue130;' -> out.putline;  (* Color 12: dark blue   *)
+         '\\red165\\green042\\blue042;' -> out.putline;  (* Color 13: brown       *)
+         '\\red065\\green105\\blue225;' -> out.putline;  (* Color 14: royal blue  *)
+         '\\red120\\green000\\blue128;' -> out.putline;  (* Color 15: purple      *)
+         '\\red070\\green130\\blue180;' -> out.putline;  (* Color 16: steel blue  *)
+         '\\red000\\green139\\blue139;' -> out.putline;  (* Color 17: dark cyan   *)
+         '\\red050\\green080\\blue080;' -> out.putline;  (* Color 18: slate gray  *)
+         '\\red210\\green105\\blue030;' -> out.putline;  (* Color 19: chocolate   *)
+         '\\red255\\green127\\blue080;' -> out.putline;  (* Color 20: coral       *)
+         '\\red255\\green140\\blue000;' -> out.putline;  (* Color 21: dark orange *)
+         '\\red000\\green000\\blue205;' -> out.putline;  (* Color 221: medium blue *)
+     '}' -> out.putline;
+ 
+     '{\\stylesheet' -> out.putline;
+     '{\\s0\\snext0\\ql\\nowidctlpar\\hyphpar0\\f0\\fs24\\lang1023\\tqr\\tx11400 SourceCode;}'  -> out.putline;
+     '{\\s15\\sbasedon0\\snext15\\f0\\fs20\\tqr\\tx11400\\noline Header;}' -> out.putline;
+     '{\\s16\\sbasedon0\\snext16\\f0\\fs20\\tqr\\tx11400\\noline Footer;}' -> out.putline;
+     '}' -> out.putline;
+
+     '{\\info' -> out.putline;
+     '{\\creatim\\yr0\\mo0\\dy0\\hr0\\min0}' -> out.putline;
+     '{\\revtim\\yr0\\mo0\\dy0\\hr0\\min0}' -> out.putline;
+     '{\\printim\\yr0\\mo0\\dy0\\hr0\\min0}' -> out.putline;
+     '}' -> out.putline;
+
+     (* A4 portrait. Last tab stop at right margin,i.e. 11440 = 12240 - 400 - 400 *)
+     '\\paperh15840\\paperw12240\\margl400\\margr400\\margt400\\margb400 ' -> RTFportrait;
+     '\\gutter0\\tqr\\tx11200 ' -> RTFportrait.append;
+     (* A4 landscape. Last tab stop at right margin,i.e. 15340 = 15840 - 300 - 200 *)
+     '\\landscape' -> RTFlandscape;
+     RTFportrait -> RTFpaper; (* The default paper size *)
+
+
+     RTFpaper[] -> out.putline;  (* Set the paper size. *)
+     
+     (***   Prepare the document section. No widow/orphan control.   ***)
+     
+     (* there is only one paragraph, it will contain all the progrtam text *)
+     '\\pard\\nowidctlpar\\sl000\\slmult1' -> out.putline;
+     '\\marglsxn400\\margrsxn400\\margtsxn400\\margbsxn400\\par ' ->out.putline;
+     
+     (* font size 12 and no nearest representation character in Unicode escape sequences *)
+     '\\f0\\fs24\\uc0\\cb5 ' ->  out.putline;
+     
+     (* set up header and footer *)
+     '{\\header\\pard\\plain\\s15\\ql\\tqr\\tx11400 ' -> out.puttext;
+     inFdir[] -> Txt;
+     '\\tab ' -> out.puttext;
+     inFarg[] -> Txt;
+     '}' -> out.putline;
+   
+     '{\\footer\\pard\\plain\\s16\\ql\\tqr\\tx11400 Printed: ' -> out.puttext;
+     (* '{\\field{\\*\\fldinst DATE \\\\@"yyyy-MM-dd" }{\\fldrslt}}@' -> out.puttext; *)
+     (* '{\\field{\\*\\fldinst TIME \\\\@"HH:mm" }{\\fldrslt}}' -> out.puttext;       *)
+     TimeNow -> out.puttext;
+     '     Last modified: ' -> out.puttext;
+     TimeMod -> out.puttext;
+     '\\tab Page:' -> out.puttext;
+     '{\\field{\\*\\fldinst  PAGE }{\\fldrslt}}}' -> out.putline;
+     '\\headery400\\footery400 ' ->  out.putline;
+
+     (* Hack to set tabstop at the end of the line for A4 portrait. *)
+     11200 -> rightMarginTabStop;
+     setTabStops;
+     begBlock;
+     
+  #); (* end init *)
+
+  finis ::
+  (# do
+     endBlock;
+     '\\par}' -> out.putline; (* The end of the RTF *)
+  #);
+  
+
+
+#);
