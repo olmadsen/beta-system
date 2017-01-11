@@ -1955,7 +1955,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 #endif
 	    B->glsc = 0;
 	    char *fileName = heapAlloc(12);
-	    int n = sprintf (fileName,"traceF%i.s",threadNo);
+	    if (sprintf (fileName,"traceF%i.s",threadNo) < 0) { printf("sprintf error\n");};
 	    //printf("\n%s\n",fileName);
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
