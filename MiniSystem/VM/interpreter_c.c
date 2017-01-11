@@ -351,7 +351,7 @@ char *getString(int inx){
 
 ObjDesc getDesc(int descNo) {
   // returns start address of desctiptor descNo
-  int ix = noOfObjDesc_index + 4 + (descNo - 1) * 4;
+  //int ix = noOfObjDesc_index + 4 + (descNo - 1) * 4;
   int inx = getInt4(noOfObjDesc_index + 4 + (descNo - 1) * 4);
   //if (descNo < 10) {
   //  printf("descNo: %i %i %i %i %i %i\n", descNo,inx,descs[ix+3],descs[ix+2],descs[ix+1],descs[ix+0]);
@@ -812,7 +812,7 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
 char * nameOf(Btemplate *obj){
   if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
-  int i,inx = desc_getInt2(desc,0);
+  int inx = desc_getInt2(desc,0);
   return getString(inx);
 }
 
@@ -834,7 +834,7 @@ int topOfLsc(Btemplate *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];}
 
 void dumpStackX(Btemplate *obj){
   Btemplate *X, *Y;
-  if (X != NULL) {
+  if (obj != NULL) {
     X = obj->rstack[1];
     Y = obj->rstack[2];
     printf("Caller: %s(%i) at: %i thisStack: %s\n"
@@ -1111,7 +1111,7 @@ Event *getEvent(bool first){
 #ifdef linux
 #else
     if (!ReleaseSemaphore(eventProcessed,1,NULL)){ 
-      printf("Errorcode: %i",GetLastError());
+      printf("Errorcode: %i",(int)GetLastError());
       runTimeError("ReleaseSemaphoreError: eventProcessed");
     };
 #endif
@@ -1156,7 +1156,7 @@ Event *allocObj(Btemplate **thisObj,Btemplate **callee, Btemplate **thisStack
 #ifdef TRACE
   fprintf(trace,"callee: %s %i ",nameOf(*callee),(int)*callee);
 #endif
-  Btemplate *Y = *thisObj;
+  //Btemplate *Y = *thisObj;
   rPush(*callee,*thisObj);
   rPush(*callee,*thisStack);
   rPush(*callee,origin);
@@ -1211,7 +1211,8 @@ DWORD WINAPI interpreter(LPVOID B){;
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
   Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
-  Event *invokeObj(int descNo,int staticOff,int vInxSize,int rInxSize){
+
+  void invokeObj(int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
 #endif
@@ -1220,8 +1221,8 @@ DWORD WINAPI interpreter(LPVOID B){;
     fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
     if (staticOff > 0) thisObj->rfields[staticOff] = callee;
-    Btemplate *Y;
-    Y = thisObj;
+    //Btemplate *Y;
+    //Y = thisObj;
     rPush(callee,thisObj);
     rPush(callee,thisStack);
     //rPush(callee,origin);
