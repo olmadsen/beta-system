@@ -29,7 +29,7 @@
    12: mainDescNo
    16: textDescNo
    20: strucRefDescNo
-   24: indexOfStringtable
+   24: indexOfStringtable 
    28: no of Object descriptors
    32: ObjDesc1
    ...: ...
@@ -828,6 +828,9 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
   exit(-1);
 }
 
+int cMyLscTop(Btemplate *obj) { return obj->lscTop; };
+
+int topOfLsc(Btemplate *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
 void dumpStackX(Btemplate *obj){
   Btemplate *X, *Y;
@@ -937,9 +940,6 @@ void cSaveReturn(Btemplate *obj,int descNo, int lsc){
   obj->lscStack[obj->lscTop] = lsc;
 }
 
-int cMyLscTop(Btemplate *obj) { return obj->lscTop; };
-
-int topOfLsc(Btemplate *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
 int cRestoreReturn(Btemplate * obj){
   //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
@@ -1000,7 +1000,7 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
   return E;  
 };
 
-void *mkAllocEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
+void mkAllocEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 		    ,bool isObj,int currentDescNo,int bcPos,bool isIndexed){
   mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
 };
