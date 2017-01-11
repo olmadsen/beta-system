@@ -47,18 +47,19 @@ char * fixExtension(char* fn) {
   printf("fnx: %s\n",fnx);
   return fnx;
 }
-void main(int argc, char *argv[])
+
+int main(int argc, char *argv[])
 { printf("argc: %i\n",argc);
   if (argc < 2) {
     printf("Usage: runbeta file\n");
-    return;
+    return -1;
   }
   char * fn = fixExtension(argv[1]);
 
   FILE* F = fopen(fn, "rb");
   if (F == NULL) {
     printf("No such file: '%s'\n",fn);
-    return;
+    return -1;
   }
   if (fseek(F, 0, SEEK_END)) {
     fclose(F);
@@ -74,13 +75,13 @@ void main(int argc, char *argv[])
 
   fseek(F, 0, SEEK_SET);  //same as rewind(f);
 
-  unsigned char* bc = (char*)malloc(size * sizeof(char));
+  unsigned char* bc = (unsigned char*)malloc(size * sizeof(char));
   if (bc == NULL) printf("Malloc error\n");
   int V = fread(bc, 1, size, F);
   fclose(F); 
   if (V != size){
     printf("File read error: %i %i\n", (int)size,V);
-    return;
+    return -1;
   }
   
 
@@ -91,4 +92,5 @@ void main(int argc, char *argv[])
   //getEvent(first);
   //   first = false;
   //}
+  return 0;
 }
