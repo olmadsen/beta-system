@@ -81,6 +81,7 @@ typedef struct Block {
   int glsc;
   int currentDescNo;
   Btemplate *thisModule,*thisObj,*thisStack,*top, *world;
+  int ID;
   int threadId;
   char *traceFile;
 } Block;
@@ -1153,10 +1154,10 @@ Event *getEvent(bool first){
 #endif
   return E;
 }
-int newId(int *ID, int *threadId) { 
-  *ID = *ID + 4; 
+int newId(Block *ctx) { 
+  ctx->ID = ctx->ID + 4; 
   // printf("\nID:%i %i",*threadId,*ID + *threadId); 
-  return *ID + *threadId;
+  return ctx->ID + ctx->threadId;
 }
 
 Event *allocObj(Block *ctx ,Btemplate **callee,FILE *trace,int *ID
@@ -1164,11 +1165,10 @@ Event *allocObj(Block *ctx ,Btemplate **callee,FILE *trace,int *ID
 #ifdef TRACE
   fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*bc);
 #endif
-  *callee = allocTemplate(newId(ID,&ctx->threadId),descNo,isObj,vInxSize,rInxSize);
+  *callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
   fprintf(trace,"callee: %s %i ",nameOf(*callee),(int)*callee);
 #endif
-  //Btemplate *Y = *thisObj;
   rPush(*callee,ctx->thisObj);
   rPush(*callee,ctx->thisStack);
   rPush(*callee,origin);
@@ -1194,7 +1194,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
   Block *thisBlock = (Block *)B;
   int threadId = thisBlock->threadId;
-  int ID = 1000;
+  thisBlock->ID = 1000;
 
 #ifdef linux
   pthread_t pthreadArray[MAX_THREADS];
@@ -1252,7 +1252,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
-    callee = allocTemplate(newId(&ID,&threadId),descNo,false,vInxSize,rInxSize);
+    callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
     fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
@@ -1285,7 +1285,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
 
-      allocObj(ctx,&callee,trace,&ID,origin,descNo,isObj,rangee,0);
+      allocObj(ctx,&callee,trace,&ctx->ID,origin,descNo,isObj,rangee,0);
 
     } else {
       if (rangee > 132) {
@@ -1293,7 +1293,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
 
-      allocObj(ctx,&callee,trace,&ID,origin,descNo,isObj,0,rangee);
+      allocObj(ctx,&callee,trace,&ctx->ID,origin,descNo,isObj,0,rangee);
     };
     ctx->thisObj->vfields[dinx] = rangee; 
   };
@@ -1306,7 +1306,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     if (isRindexed == 0) {
       // printf("is not Rindexed\n");
       // allocObj(origin,descNo,isObj,rangee,0);
-      callee = allocTemplate(newId(&ID,&ctx->threadId),descNo,isObj,rangee,0);
+      callee = allocTemplate(newId(ctx),descNo,isObj,rangee,0);
     } else {
       if (rangee > 132) {
 	//printf("\n\n**** Ref-rep range: %i\n",rangee);
@@ -1314,7 +1314,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       };
       // allocObj(origin,descNo,isObj,0,rangee);
       //printf("isRindexed\n");
-      callee = allocTemplate(newId(&ID,&ctx->threadId),descNo,isObj,0,rangee);
+      callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
     };
     //printf("After allox\n");
 
@@ -1330,7 +1330,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
 #endif
-    Btemplate * X = allocTemplate(newId(&ID,&ctx->threadId),getStrucRefDescNo(),0,0,0);
+    Btemplate * X = allocTemplate(newId(ctx),getStrucRefDescNo(),0,0,0);
     if (isVirtual) inx = vdtTable(trace,origin,inx);
     X->vfields[1] = inx;
     X->rfields[2] = origin;
@@ -1341,7 +1341,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-    allocObj(ctx,&callee,trace,&ID,obj->rfields[2],obj->vfields[1],0,0,0);
+    allocObj(ctx,&callee,trace,&ctx->ID,obj->rfields[2],obj->vfields[1],0,0,0);
   };
   
   void allocTextObj(Block *ctx,int litInx){
@@ -1865,7 +1865,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	/*return*/ 
 
 	saveContext();
-	allocObj(thisBlock,&callee,trace,&ID,rPop(thisStack),arg1,arg2,0,0);
+	allocObj(thisBlock,&callee,trace,&thisBlock->ID,rPop(thisStack),arg1,arg2,0,0);
 	restoreContext();
 
 	break;
@@ -1988,7 +1988,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	 
 #endif   
-	    X = allocTemplate(newId(&ID,&threadId),threadStubDescNo,true,0,0);
+	    X = allocTemplate(newId(thisBlock),threadStubDescNo,true,0,0);
 #ifdef TRACE
 	    fprintf(trace,"fork C");
 #endif
@@ -2262,7 +2262,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = vdtTable(trace,X,arg1); // descNo
 
 	saveContext();
-	allocObj(thisBlock,&callee,trace,&ID,X,arg2,false,0,0);
+	allocObj(thisBlock,&callee,trace,&thisBlock->ID,X,arg2,false,0,0);
 	restoreContext();
 
 	break;
