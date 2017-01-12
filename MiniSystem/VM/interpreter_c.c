@@ -1159,13 +1159,7 @@ int newId(int *ID, int *threadId) {
   return *ID + *threadId;
 }
 
-Event *allocObj(Block *ctx
-		//,Btemplate **thisObj
-		,Btemplate **callee//, Btemplate **thisStack
-		,FILE *trace//, ObjDesc *bc
-		//,int *currentDescNo, int *glsc
-		, int *ID
-		//, int *threadId
+Event *allocObj(Block *ctx ,Btemplate **callee,FILE *trace,int *ID
 		,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
   fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*bc);
@@ -1291,12 +1285,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
 
-      allocObj(ctx//,&ctx->thisObj
-	       ,&callee//,&ctx->thisStack
-	       ,trace
-	       //,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,
-	       ,&ID//,&ctx->threadId
-	       ,origin,descNo,isObj,rangee,0);
+      allocObj(ctx,&callee,trace,&ID,origin,descNo,isObj,rangee,0);
 
     } else {
       if (rangee > 132) {
@@ -1304,12 +1293,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
 
-      allocObj(ctx//,&ctx->thisObj
-	       ,&callee//,&ctx->thisStack
-	       ,trace
-	       //,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,
-	       ,&ID//,&ctx->threadId
-	       ,origin,descNo,isObj,0,rangee);
+      allocObj(ctx,&callee,trace,&ID,origin,descNo,isObj,0,rangee);
     };
     ctx->thisObj->vfields[dinx] = rangee; 
   };
@@ -1357,12 +1341,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-    allocObj(ctx//,&ctx->thisObj
-	     ,&callee//,&ctx->thisStack
-	     ,trace
-	     //,&ctx->bc,&ctx->currentDescNo,&ctx->glsc
-	     ,&ID//,&ctx->threadId
-	     ,obj->rfields[2],obj->vfields[1],0,0,0);
+    allocObj(ctx,&callee,trace,&ID,obj->rfields[2],obj->vfields[1],0,0,0);
   };
   
   void allocTextObj(Block *ctx,int litInx){
@@ -1886,12 +1865,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	/*return*/ 
 
 	saveContext();
-	allocObj(thisBlock//,&thisObj
-		 ,&callee//,&thisStack
-		 ,trace
-		 //,&bc,&currentDescNo,&glsc
-		 ,&ID //,&threadId
-		 ,rPop(thisStack),arg1,arg2,0,0);
+	allocObj(thisBlock,&callee,trace,&ID,rPop(thisStack),arg1,arg2,0,0);
 	restoreContext();
 
 	break;
@@ -2288,12 +2262,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = vdtTable(trace,X,arg1); // descNo
 
 	saveContext();
-	allocObj(thisBlock//,&thisObj
-		 ,&callee//,&thisStack
-		 ,trace
-		 //,&bc,&currentDescNo,&glsc
-		 ,&ID//,&threadId
-		 ,X,arg2,false,0,0);
+	allocObj(thisBlock,&callee,trace,&ID,X,arg2,false,0,0);
 	restoreContext();
 
 	break;
