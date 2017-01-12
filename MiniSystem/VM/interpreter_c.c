@@ -1221,7 +1221,31 @@ DWORD WINAPI interpreter(LPVOID B){;
   int currentDescNo = thisBlock->currentDescNo;
   Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
 
-  void invokeObj(int descNo,int staticOff,int vInxSize,int rInxSize){
+  void saveContext(){
+    thisBlock->bc = bc;
+    thisBlock->glsc = glsc;
+    thisBlock->currentDescNo = currentDescNo;
+    thisBlock->thisModule = thisModule;
+    thisBlock->thisObj = thisObj;
+    thisBlock->thisStack = thisStack;
+    //thisBlock->top = top;
+    //thisBlock->world = world;
+    thisBlock->threadId = threadId;
+    //thisBlock->traceFile = traceFile;
+  }
+  void restoreContext(){
+    bc = thisBlock->bc;
+    glsc = thisBlock->glsc;
+    currentDescNo = thisBlock->currentDescNo;
+    thisModule = thisBlock->thisModule;
+    thisObj = thisBlock->thisObj;
+    thisStack = thisBlock->thisStack;
+    //top = thisBlock->top;
+    //world = thisBlock->world;
+    threadId = thisBlock->threadId;
+    //traceFile = thisBlock->traceFile;
+  }
+  void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
 #endif
@@ -1229,19 +1253,19 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
 #endif
-    if (staticOff > 0) thisObj->rfields[staticOff] = callee;
+    if (staticOff > 0) ctx->thisObj->rfields[staticOff] = callee;
     //Btemplate *Y;
     //Y = thisObj;
-    rPush(callee,thisObj);
-    rPush(callee,thisStack);
+    rPush(callee,ctx->thisObj);
+    rPush(callee,ctx->thisStack);
     //rPush(callee,origin);
-    cSaveReturn(thisObj,currentDescNo,glsc);
-    currentDescNo = descNo;
+    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+    ctx->currentDescNo = descNo;
     //thisStack = callee;
     //thisObj = thisStack;
-    thisObj = callee;
-    bc = (ObjDesc) myCode(thisObj);
-    glsc = getAllocE(thisObj->desc);
+    ctx->thisObj = callee;
+    ctx->bc = (ObjDesc) myCode(ctx->thisObj);
+    ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
     fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
 	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,(int)bc);
@@ -1359,14 +1383,15 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     //,callee->vfields[0],callee->vfields[1],callee->vfields[2],callee->vfields[3]);
   }
 
-  void  ConvertIndexedAsString() {
-    Btemplate *X; int length;
-    X = rPop(thisStack);
+  void  ConvertIndexedAsString(Block *ctx) {
+    Btemplate *X; 
+    int length;
+    X = rPop(ctx->thisStack);
     length = X->vfields[1];
     // printf("\n*** ConvertIndexedAsString %i\n", length);
     //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
     allocQIndexedObj(0,getTextDescNo(),1,1,length,0);
-    callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
+    callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = length; 
     int i;
     for (i = 0; i <= length; i++) callee->vfields[i] = X->vfields[i];
@@ -1848,7 +1873,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 #ifdef TRACE
 	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
 #endif
-        invokeObj(arg1,arg2,0,0);
+	saveContext();
+        invokeObj(thisBlock,arg1,arg2,0,0);
+	restoreContext();
 	break;
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
@@ -2035,7 +2062,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    rPush(thisStack,thisBlock->top);
 	    break;
 	  case 118: // asString
-	    ConvertIndexedAsString();
+	    saveContext();
+	    ConvertIndexedAsString(thisBlock);
+	    restoreContext;
             break;
 	  default:
 	    printf("\n\n*** prim: missing case %i\n",arg1);
@@ -2534,7 +2563,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 #endif
 	X = thisObj;
-        int i;
+	int i;
 	for (i = 0; i < arg1; i++) { 
 	  //fprintf(trace,"popCallStackA: %s \n",nameOf(X));
 	  X = myCorigin(X);
