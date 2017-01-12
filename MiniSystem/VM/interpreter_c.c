@@ -1159,33 +1159,34 @@ int newId(int *ID, int *threadId) {
   return *ID + *threadId;
 }
 
-Event *allocObj(Btemplate **thisObj,Btemplate **callee, Btemplate **thisStack
+Event *allocObj(Block *ctx
+		,Btemplate **thisObj,Btemplate **callee, Btemplate **thisStack
 		,FILE *trace, ObjDesc *bc
 		,int *currentDescNo, int *glsc, int *ID, int *threadId
 		,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
-  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(*thisObj),*currentDescNo,*glsc,(int)*bc);
+  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*bc);
 #endif
-  *callee = allocTemplate(newId(ID,threadId),descNo,isObj,vInxSize,rInxSize);
+  *callee = allocTemplate(newId(ID,&ctx->threadId),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
   fprintf(trace,"callee: %s %i ",nameOf(*callee),(int)*callee);
 #endif
   //Btemplate *Y = *thisObj;
-  rPush(*callee,*thisObj);
-  rPush(*callee,*thisStack);
+  rPush(*callee,ctx->thisObj);
+  rPush(*callee,ctx->thisStack);
   rPush(*callee,origin);
-  cSaveReturn(*thisObj,*currentDescNo,*glsc);
-  *currentDescNo = descNo;
-  *thisStack = *callee;
-  *thisObj = *thisStack;
-  *bc = (ObjDesc) myCode(*thisObj);
-  *glsc = getAllocE((*thisObj)->desc);
+  cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+  ctx->currentDescNo = descNo;
+  ctx->thisStack = *callee;
+  ctx->thisObj = ctx->thisStack;
+  ctx->bc = (ObjDesc) myCode(ctx->thisObj);
+  ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
   fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
-	  ,nameOf(*thisObj),descNo,*glsc,(int)*thisObj,(int)*bc);
+	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef event
-  mkAllocEvent(alloc_event,Y,*thisObj,origin,isObj,*currentDescNo,*glsc,false);
+  mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,isObj,ctx->currentDescNo,ctx->glsc,false);
 #endif
 };
 
@@ -1286,17 +1287,25 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
     //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
-      allocObj(&ctx->thisObj,&callee,&ctx->thisStack,trace
+
+      saveContext();
+      allocObj(thisBlock,&ctx->thisObj,&callee,&ctx->thisStack,trace
 	       ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
 	       ,origin,descNo,isObj,rangee,0);
+      restoreContext();
+
     } else {
       if (rangee > 132) {
 	printf("\n\n**** Ref-rep range: %i\n",rangee);
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
-      allocObj(&ctx->thisObj,&callee,&ctx->thisStack,trace
+
+      saveContext();
+      allocObj(thisBlock,&ctx->thisObj,&callee,&ctx->thisStack,trace
 	       ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
 	       ,origin,descNo,isObj,0,rangee);
+      restoreContext();
+
     };
     ctx->thisObj->vfields[dinx] = rangee; 
   };
@@ -1344,9 +1353,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-    allocObj(&ctx->thisObj,&callee,&ctx->thisStack,trace
+    saveContext();
+    allocObj(thisBlock,&ctx->thisObj,&callee,&ctx->thisStack,trace
 	     ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
 	     ,obj->rfields[2],obj->vfields[1],0,0,0);
+    restoreContext();
   };
   
   void allocTextObj(Block *ctx,int litInx){
@@ -1874,9 +1885,13 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"alloc %i %i ",arg1,arg2);
 #endif
 	/*return*/ 
-	allocObj(&thisObj,&callee,&thisStack,trace
+
+	saveContext();
+	allocObj(thisBlock,&thisObj,&callee,&thisStack,trace
 		 ,&bc,&currentDescNo,&glsc,&ID,&threadId
 		 ,rPop(thisStack),arg1,arg2,0,0);
+	restoreContext();
+
 	break;
       case invoke:
 	arg1 = op2(bc,&glsc);
@@ -2269,9 +2284,13 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"sendv %i",arg1);
 #endif
 	arg2 = vdtTable(trace,X,arg1); // descNo
-	allocObj(&thisObj,&callee,&thisStack,trace
+
+	saveContext();
+	allocObj(thisBlock,&thisObj,&callee,&thisStack,trace
 		 ,&bc,&currentDescNo,&glsc,&ID,&threadId
 		 ,X,arg2,false,0,0);
+	restoreContext();
+
 	break;
       case send: 
 #ifdef TRACE
