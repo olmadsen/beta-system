@@ -1532,9 +1532,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     rPush(thisStack,callee);
   };
 
-  void StacksToOut()
-    { fprintf(trace,"thisObj= %s ",nameOf(thisObj));
-      fprintf(trace,"thisStack= %s ",nameOf(thisStack));
+  void StacksToOut(Block *ctx)
+    { fprintf(trace,"thisObj= %s ",nameOf(ctx->thisObj));
+      fprintf(trace,"thisStack= %s ",nameOf(ctx->thisStack));
 
     }
   int opCode,arg1,arg2,arg3,dscNo,V;
