@@ -916,6 +916,8 @@ void rPush(Btemplate *stack,Btemplate *R){
   stack->rstack[stack->rtop] = R;
 }
 
+// OBS! Whyx do we test -1 for vPop, rPop and rTopElm - and not 0 (zero)?
+
 int vPop(Btemplate *thisStack){
   if ((thisStack->vtop = thisStack->vtop - 1) < -1) 
     runTimeErrorX("vstack underflow",thisStack,-1);
@@ -927,6 +929,13 @@ Btemplate *rPop(Btemplate *stack){
   // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
   if ((stack->rtop = stack->rtop - 1) < -1) runTimeErrorX("rStack underflow",stack,-1);
   return stack->rstack[stack->rtop + 1];
+}
+
+// 2017/01/12: OBS! For some reason, rTopElm was missing and has been added
+// but is not necessarily correct
+Btemplate *rTopElm(Btemplate*stack,int inx){
+  if ((stack->rtop - inx) < -1) runTimeErrorX("rStack underflow:rTopElm",stack,-1);
+  return stack->rstack[stack->rtop - inx];
 }
 
 void cSaveReturn(Btemplate *obj,int descNo, int lsc){
@@ -1504,7 +1513,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 
     }
   int opCode,arg1,arg2,arg3,dscNo,V;
-  int dinx,isRindexed,rangee,i;
+  int dinx,isRindexed,rangee;
   bool running = true;
   Btemplate *X, *Y;
 
@@ -1729,7 +1738,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
       case swap:
         arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"swap top-1: %i top: %i\n",arg2,arg1);
+#endif
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg2);
 	break;
@@ -1789,7 +1800,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	thisStack = thisObj->rstack[thisObj->rtop];
         break;
       case rpopThisObj:
+#ifdef TRACE
 	fprintf(trace,"rpopThisObj\n");
+#endif
 	thisObj = rPop(thisObj);
         break;
       case toSuper:
@@ -1801,8 +1814,10 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	bc = codeFromDescNo(arg1);
 	glsc = getAllocE(getDesc(arg1));
 	//bc = (ObjDesc) getByteCode(getDesc(arg1));
-	//glsc = getAllocE(getDesc(arg1));               
+	//glsc = getAllocE(getDesc(arg1));             
+#ifdef TRACE  
 	fprintf(trace," bc: %i glsc: %i\n",(int)bc,glsc);
+#endif
 	break;
       case call:
 	/*return*/ doCall(false);
@@ -1932,13 +1947,21 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    fprintf(trace,"fork ");
 #endif
 	    Y = rPop(thisStack);
+#ifdef TRACE
 	    fprintf(trace,"fork A ");
+#endif
 	    Block *B = (Block *)heapAlloc(sizeof(Block));
-	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	    
+#ifdef TRACE
+	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	 
+#endif   
 	    X = allocTemplate(newId(&ID,&threadId),threadStubDescNo,true,0,0);
+#ifdef TRACE
 	    fprintf(trace,"fork C");
+#endif
 	    rPush(X,Y);
+#ifdef TRACE
 	    fprintf(trace,"fork D");
+#endif
 #ifdef TRACE
 	    fprintf(trace,"%s top:%s\n",nameOf(X),nameOf(Y));
 #endif
@@ -1985,8 +2008,8 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	    //printf("cmpAndSwap off: %i new: %i old: %i %s adr: %i\n"
 	    //	    ,arg1,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
 #ifdef TRACE
-	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i"
-		    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
+	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i V: %i"
+		    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1],V);
 #endif
 	    if (V) {V = 0;} else {V = 1;}; 
 #ifdef TRACE  
@@ -2081,7 +2104,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	fprintf(trace,"doEventQ %s\n",nameOf(thisObj));
 #endif
 #ifdef EVENT
-	mkEvent(do_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc,false);
+	mkEvent(do_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 #endif        
         break;
       case saveBETAworld:
@@ -2154,7 +2177,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	  currentDescNo = arg2;
 	  bc = codeFromDescNo(arg2);
 	  glsc = getEnterE(getDesc(arg2));
+#ifdef TRACE
           fprintf(trace,"innera bc: %i glsc: %i",(int)bc,glsc);
+#endif
 	}
 #ifdef TRACE
 	fprintf(trace,"\n");
@@ -2168,7 +2193,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	dscNo = cRestoreReturn(thisObj);
 	currentDescNo = dscNo;
 	bc = codeFromDescNo(dscNo);
+#ifdef TRACE
         fprintf(trace," descNo: %i bc: %i glsc: %i\n",dscNo,(int)bc,glsc);
+#endif
 	break;
       case innerExit:
 	arg1 = op1(bc,&glsc);
@@ -2507,6 +2534,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 #endif
 	X = thisObj;
+        int i;
 	for (i = 0; i < arg1; i++) { 
 	  //fprintf(trace,"popCallStackA: %s \n",nameOf(X));
 	  X = myCorigin(X);
