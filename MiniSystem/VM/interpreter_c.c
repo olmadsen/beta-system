@@ -1349,35 +1349,35 @@ DWORD WINAPI interpreter(LPVOID B){;
 	     ,obj->rfields[2],obj->vfields[1],0,0,0);
   };
   
-  void allocTextObj(int litInx){
+  void allocTextObj(Block *ctx,int litInx){
     // literals[litInx] = length
     Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
     int dinx,rangee,i;
     dinx = 2; // start of repetition
-    rangee = getLiteral(thisObj,litInx);
-    Btemplate *X = thisObj;
+    rangee = getLiteral(ctx->thisObj,litInx);
+    Btemplate *X = ctx->thisObj;
     
     saveContext();
     allocIndexedObj(thisBlock,origin,getTextDescNo(),1,dinx,rangee,0);
     restoreContext();
 
-    thisObj->vfields[1] = rangee; // pos = rangee
+    ctx->thisObj->vfields[1] = rangee; // pos = rangee
     for (i = 0; i < rangee; i++) {
       char ch = getLiteral(X, litInx + i + 1);
-      thisObj->vfields[3 + i] = ch;
+      ctx->thisObj->vfields[3 + i] = ch;
       // fprintf(trace, "Lit %c",ch);
     }
     // fprintf(trace," %i %i %i %i \n"
     //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
   }
   
-  void XallocTextObj(int litInx){
+  void XallocTextObj(Block *ctx,int litInx){
     // literals[litInx] = length
     Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
     int dinx,rangee,i;
     dinx = 1; // start of repetition
-    rangee = getLiteral(thisObj,litInx);
-    Btemplate *X = thisObj;
+    rangee = getLiteral(ctx->thisObj,litInx);
+    Btemplate *X = ctx->thisObj;
     
     saveContext();
     allocQIndexedObj(thisBlock,origin,getTextDescNo(),1,dinx,rangee,0);
@@ -2289,7 +2289,16 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	fprintf(trace,"pushText %i ",arg1);
 #endif
-        if (isXbeta) XallocTextObj(arg1); else { allocTextObj(arg1);};
+        if (isXbeta) {
+	  saveContext();
+	  XallocTextObj(thisBlock,arg1); 
+	  restoreContext();
+	}
+	else { 
+	  saveContext();
+	  allocTextObj(thisBlock,arg1);
+	  restoreContext();
+	};
 	break;
       case exeAlloc:
 	arg1 = op2(bc,&glsc);
