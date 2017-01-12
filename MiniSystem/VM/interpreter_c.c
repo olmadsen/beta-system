@@ -285,13 +285,13 @@ void *heapAlloc(int size) {
       sprintf(S,"malloc failed; size: %i",size);
       runTimeError(S);
     }
-  } else {
-    void *obj = (void *)&heap[heapTop];
+  } else { // never come here since if (true) above
+    /* void *obj = (void *)&heap[heapTop];
     heapTop = heapTop + size;
     if (heapTop > 10000000) {
-      printf("\n\n*** Heapoverflow");
-      stop;
-    };
+      printf("\n\n*** Heap overflow");
+      exit(1);
+      };*/
   };
   return obj;
 }
