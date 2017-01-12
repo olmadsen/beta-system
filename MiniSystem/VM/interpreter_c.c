@@ -1411,58 +1411,58 @@ DWORD WINAPI interpreter(LPVOID B){;
     X->rfields[1] = world->rfields[3]; // origin - hack 
   }
 
-  Event *doCall(bool withEnablingSuspend){
+  Event *doCall(Block *ctx,bool withEnablingSuspend){
     int arg1;
     Btemplate *Y;
-    arg1 = (char) op1(bc,&glsc);
+    arg1 = (char) op1(ctx->bc,&ctx->glsc);
 #ifdef TRACE
     fprintf(trace,"call %c ",arg1);
 #endif
-    callee = rPop(thisStack);
+    callee = rPop(ctx->thisStack);
 #ifdef TRACE
-    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
+    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)bc);
 #endif
     if (withEnablingSuspend) enablee = callee;
-    cSaveReturn(thisObj,currentDescNo,glsc);
+    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
     if (callee->rtop == 0) { 
-      Y = thisObj;
-      rPush(callee,thisObj); 
-      rPush(callee,thisStack);
-      thisObj = callee;
+      Y = ctx->thisObj;
+      rPush(callee,ctx->thisObj); 
+      rPush(callee,ctx->thisStack);
+      ctx->thisObj = callee;
 #ifdef TRACE
       fprintf(trace,"TO %s",nameOf(callee));
 #endif
       switch (arg1)
 	{
 	case 'N':
-	  currentDescNo = descNoOf(thisObj);
-	  bc = myCode(thisObj);
-	  glsc = getEnterE(thisObj->desc);
+	  ctx->currentDescNo = descNoOf(ctx->thisObj);
+	  ctx->bc = myCode(ctx->thisObj);
+	  ctx->glsc = getEnterE(ctx->thisObj->desc);
 #ifdef TRACE
-	  fprintf(trace,"(%i,%i,%i) N\n",currentDescNo,glsc,(int)bc);
+	  fprintf(trace,"(%i,%i,%i) N\n",ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
 	  break;
 	case 'D':
-	  arg1 = topDescNo(thisObj);
-	  currentDescNo = arg1;
-	  bc = codeFromDescNo(arg1);
-	  glsc = getDoE(getDesc(arg1));
+	  arg1 = topDescNo(ctx->thisObj);
+	  ctx->currentDescNo = arg1;
+	  ctx->bc = codeFromDescNo(arg1);
+	  ctx->glsc = getDoE(getDesc(arg1));
 #ifdef TRACE
-	  fprintf(trace,"D(%i,%i,%s) ",currentDescNo,glsc,nameOf(thisStack));
-	  dumpStack(trace,thisStack);
+	  fprintf(trace,"D(%i,%i,%s) ",ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
+	  dumpStack(trace,ctx->thisStack);
 #endif
 #ifdef EVENT
-	  mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,currentDescNo,glsc); // withEnablingSuspend
+	  mkEvent(do_event,Y,ctx->thisObj,myCorigin(ctx->thisObj),false,ctx->currentDescNo,ctx->glsc); // withEnablingSuspend
 #endif
 	  break;
 	case 'X':
-	  arg1 = topDescNo(thisObj);
-	  currentDescNo = arg1;
+	  arg1 = topDescNo(ctx->thisObj);
+	  ctx->currentDescNo = arg1;
 	  //dumpDesc(arg1);
-	  bc = codeFromDescNo(arg1);
-	  glsc = getExitE(getDesc(arg1));
+	  ctx->bc = codeFromDescNo(arg1);
+	  ctx->glsc = getExitE(getDesc(arg1));
 #ifdef TRACE
-	  fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,(int)bc);
+	  fprintf(trace,"(%i,%i,%i) X\n",arg1,ctx->glsc,(int)ctx->bc);
 #endif
 	  break;
 	}}
@@ -1470,45 +1470,45 @@ DWORD WINAPI interpreter(LPVOID B){;
       switch (arg1)
 	{
 	case 'N': // same as for callN
-	  rPush(callee,thisObj);
-	  rPush(callee,thisStack);
-	  thisObj = callee;
-	  currentDescNo = descNoOf(thisObj);
-	  bc = codeFromDescNo(currentDescNo);
-	  glsc = getEnterE(getDesc(currentDescNo));
+	  rPush(callee,ctx->thisObj);
+	  rPush(callee,ctx->thisStack);
+	  ctx->thisObj = callee;
+	  ctx->currentDescNo = descNoOf(ctx->thisObj);
+	  ctx->bc = codeFromDescNo(ctx->currentDescNo);
+	  ctx->glsc = getEnterE(getDesc(ctx->currentDescNo));
 #ifdef TRACE
-	  fprintf(trace, "resumeN %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
+	  fprintf(trace, "resumeN %s(%i,%i)\n",nameOf(callee),ctx->currentDescNo,ctx->glsc);
 #endif
 	  break;
 	case 'D':
 #ifdef TRACE
 	  fprintf(trace, "resumeD %s ",nameOf(callee));
-	  dumpSwapped(trace,callee,thisObj,thisStack);
+	  dumpSwapped(trace,callee,ctx->thisObj,ctx->thisStack);
 #endif
-	  rswap(callee,&thisObj,&thisStack);
+	  rswap(callee,&ctx->thisObj,&ctx->thisStack);
 #ifdef TRACE
-	  dumpSwapped(trace,callee,thisObj,thisStack);
-	  if (thisStack != thisObj) { // external suspend?
-	    fprintf(trace,"thisObj != thisStack %s %s ",nameOf(thisObj),nameOf(thisStack));
+	  dumpSwapped(trace,callee,ctx->thisObj,ctx->thisStack);
+	  if (ctx->thisStack != ctx->thisObj) { // external suspend?
+	    fprintf(trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
 	  };
 #endif
-	  glsc = cRestoreReturn(thisObj);
-	  currentDescNo = cRestoreReturn(thisObj);
-	  bc = codeFromDescNo(currentDescNo);
+	  ctx->glsc = cRestoreReturn(ctx->thisObj);
+	  ctx->currentDescNo = cRestoreReturn(ctx->thisObj);
+	  ctx->bc = codeFromDescNo(ctx->currentDescNo);
 #ifdef TRACE
 	  fprintf(trace,"AT %s(%i,%i,%s) \n"
-		  ,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+		  ,nameOf(ctx>thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
 #endif
 	  break;
 	case 'X': // same as for callX
-	  rPush(callee,thisObj);
-	  rPush(callee,thisStack);
-	  thisObj = callee;
-	  currentDescNo = topDescNo(thisObj);
-	  bc = codeFromDescNo(currentDescNo);
-	  glsc = getExitE(getDesc(currentDescNo));
+	  rPush(callee,ctx->thisObj);
+	  rPush(callee,ctx->thisStack);
+	  ctx->thisObj = callee;
+	  ctx->currentDescNo = topDescNo(ctx->thisObj);
+	  ctx->bc = codeFromDescNo(ctx->currentDescNo);
+	  ctx->glsc = getExitE(getDesc(ctx->currentDescNo));
 #ifdef TRACE
-	  fprintf(trace, "resumeX %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
+	  fprintf(trace, "resumeX %s(%i,%i)\n",nameOf(callee),ctx->currentDescNo,ctx->glsc);
 #endif
 	  break;
 	}
@@ -1852,7 +1852,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	break;
       case call:
-	/*return*/ doCall(false);
+	/*return*/
+
+	saveContext();
+	doCall(thisBlock,false);
+	restoreContext();
+
 	break;
       case susp:
 #ifdef TRACE
@@ -1962,7 +1967,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    suspendEnabled = suspendEnabled + 1;
 	    timeToSuspend = arg2;
 	    //glsc = glsc - 1;
-	    doCall(true);
+
+	    saveContext();
+	    doCall(thisBlock,true);
+	    restoreContext();
+
 	    break;
 	  case 11: // disable
 #ifdef TRACE
