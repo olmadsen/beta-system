@@ -1280,25 +1280,25 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
   };
 
-  void allocIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+  void allocIndexedObj(Block *ctx, Btemplate * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
     fprintf(trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif
     //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
-      allocObj(&thisObj,&callee,&thisStack,trace
-	       ,&bc,&currentDescNo,&glsc,&ID,&threadId
+      allocObj(&ctx->thisObj,&callee,&ctx->thisStack,trace
+	       ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
 	       ,origin,descNo,isObj,rangee,0);
     } else {
       if (rangee > 132) {
 	printf("\n\n**** Ref-rep range: %i\n",rangee);
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
-      allocObj(&thisObj,&callee,&thisStack,trace
-	       ,&bc,&currentDescNo,&glsc,&ID,&threadId
+      allocObj(&ctx->thisObj,&callee,&ctx->thisStack,trace
+	       ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
 	       ,origin,descNo,isObj,0,rangee);
     };
-    thisObj->vfields[dinx] = rangee; 
+    ctx->thisObj->vfields[dinx] = rangee; 
   };
  
 void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
@@ -1357,7 +1357,10 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     rangee = getLiteral(thisObj,litInx);
     Btemplate *X = thisObj;
     
-    allocIndexedObj(origin,getTextDescNo(),1,dinx,rangee,0);
+    saveContext();
+    allocIndexedObj(thisBlock,origin,getTextDescNo(),1,dinx,rangee,0);
+    restoreContext();
+
     thisObj->vfields[1] = rangee; // pos = rangee
     for (i = 0; i < rangee; i++) {
       char ch = getLiteral(X, litInx + i + 1);
@@ -2510,7 +2513,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	  allocQIndexedObj(X,arg1,arg2,dinx,rangee,isRindexed);
 	}
 	  else {
-	    allocIndexedObj(X,arg1,arg2,dinx,rangee,isRindexed);
+	    saveContext();
+	    allocIndexedObj(thisBlock,X,arg1,arg2,dinx,rangee,isRindexed);
+	    restoreContext();
 	  }
 	break;
       case mkStrucRef: 
