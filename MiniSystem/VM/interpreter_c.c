@@ -1280,7 +1280,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
   };
 
-  void allocIndexedObj(Block *ctx, Btemplate * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+  void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
     fprintf(trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif
@@ -1301,7 +1301,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     ctx->thisObj->vfields[dinx] = rangee; 
   };
  
-void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+  void allocQIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
     fprintf(trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif    
@@ -1309,7 +1309,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     if (isRindexed == 0) {
       // printf("is not Rindexed\n");
       // allocObj(origin,descNo,isObj,rangee,0);
-      callee = allocTemplate(newId(&ID,&threadId),descNo,isObj,rangee,0);
+      callee = allocTemplate(newId(&ID,&ctx->threadId),descNo,isObj,rangee,0);
     } else {
       if (rangee > 132) {
 	//printf("\n\n**** Ref-rep range: %i\n",rangee);
@@ -1317,7 +1317,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
       };
       // allocObj(origin,descNo,isObj,0,rangee);
       //printf("isRindexed\n");
-      callee = allocTemplate(newId(&ID,&threadId),descNo,isObj,0,rangee);
+      callee = allocTemplate(newId(&ID,&ctx->threadId),descNo,isObj,0,rangee);
     };
     //printf("After allox\n");
 
@@ -1326,7 +1326,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
     // printf(" dinx = %i %i\n", dinx, rangee);
 
-    rPush(thisStack,callee);
+    rPush(ctx->thisStack,callee);
   };
 
   void allocStrucRefObj(Btemplate *origin,int inx, bool isVirtual){
@@ -1379,7 +1379,10 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     rangee = getLiteral(thisObj,litInx);
     Btemplate *X = thisObj;
     
-    allocQIndexedObj(origin,getTextDescNo(),1,dinx,rangee,0);
+    saveContext();
+    allocQIndexedObj(thisBlock,origin,getTextDescNo(),1,dinx,rangee,0);
+    restoreContext();
+
     callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = rangee; // pos = rangee
     for (i = 0; i < rangee; i++) {
@@ -1396,7 +1399,11 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     int length  = X->vfields[1];
     // printf("\n*** ConvertIndexedAsString %i\n", length);
     //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
-    allocQIndexedObj(0,getTextDescNo(),1,1,length,0);
+
+    saveContext();
+    allocQIndexedObj(thisBlock,0,getTextDescNo(),1,1,length,0);
+    restoreContext();
+
     callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = length; 
     int i;
@@ -2510,7 +2517,9 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	isRindexed = vPop(thisStack);
 	rangee = vPop(thisStack);
 	if (isXbeta) {
-	  allocQIndexedObj(X,arg1,arg2,dinx,rangee,isRindexed);
+	  saveContext();
+	  allocQIndexedObj(thisBlock,X,arg1,arg2,dinx,rangee,isRindexed);
+	  restoreContext();
 	}
 	  else {
 	    saveContext();
