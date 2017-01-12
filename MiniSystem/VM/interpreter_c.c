@@ -1389,10 +1389,8 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
   }
 
   void  ConvertIndexedAsString(Block *ctx) {
-    Btemplate *X; 
-    int length;
-    X = rPop(ctx->thisStack);
-    length = X->vfields[1];
+    Btemplate *X = rPop(ctx->thisStack);; 
+    int length  = X->vfields[1];
     // printf("\n*** ConvertIndexedAsString %i\n", length);
     //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
     allocQIndexedObj(0,getTextDescNo(),1,1,length,0);
@@ -1538,7 +1536,7 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
   };
 
   int opCode,arg1,arg2,arg3,dscNo,V;
-  int dinx,isRindexed,rangee;
+  int dinx,isRindexed,rangee,i;
   bool running = true;
   Btemplate *X, *Y;
 
@@ -1813,7 +1811,6 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 #endif
 	thisStack = thisObj;
 #ifdef TRACE
-	int i;
 	for (i = 0; i < thisStack->rtop; i++) fprintf(trace,"%s ",nameOf(thisStack->rstack[i+1]));
 	fprintf(trace,"]\n");
 #endif
@@ -2563,7 +2560,6 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 #endif
 	X = thisObj;
-	int i;
 	for (i = 0; i < arg1; i++) { 
 	  //fprintf(trace,"popCallStackA: %s \n",nameOf(X));
 	  X = myCorigin(X);
