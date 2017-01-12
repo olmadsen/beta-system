@@ -1329,15 +1329,15 @@ DWORD WINAPI interpreter(LPVOID B){;
     rPush(ctx->thisStack,callee);
   };
 
-  void allocStrucRefObj(Btemplate *origin,int inx, bool isVirtual){
+  void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
 #ifdef TRACE
     fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
 #endif
-    Btemplate * X = allocTemplate(newId(&ID,&threadId),getStrucRefDescNo(),0,0,0);
+    Btemplate * X = allocTemplate(newId(&ID,&ctx->threadId),getStrucRefDescNo(),0,0,0);
     if (isVirtual) inx = vdtTable(trace,origin,inx);
     X->vfields[1] = inx;
     X->rfields[2] = origin;
-    rPush(thisStack,X);
+    rPush(ctx->thisStack,X);
   };
   
   void allocFromStrucRefObj(Btemplate *obj){
@@ -2533,7 +2533,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	fprintf(trace,"mkStrucRef %i %s\n",arg1,nameOf(X));
 #endif
-	allocStrucRefObj(X,arg1,false);
+
+	saveContext();
+	allocStrucRefObj(thisBlock,X,arg1,false);
+	restoreContext();
+
 	//X = thisStack->rstack[thisStack->rtop];
 	//printf("mkStrucRef:Result: %s\n",nameOf(X));
 	break;
@@ -2546,7 +2550,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	      ,nameOf(X)
 	      ,nameOf(myCorigin(X)),descNo(X->desc));
 #endif
-	allocStrucRefObj(myCorigin(X),descNo(X->desc),false);
+
+	saveContext();
+	allocStrucRefObj(thisBlock,myCorigin(X),descNo(X->desc),false);
+	restoreContext();
+
 	//X = thisStack->rstack[thisStack->rtop];
 	//printf("Result-top: %s\n",nameOf(X));
 	//X = thisStack->rstack[thisStack->rtop - 1];
@@ -2558,7 +2566,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	fprintf(trace,"mkVirtualStrucRef %i %s\n",arg1,nameOf(X));
 #endif
-	allocStrucRefObj(X,arg1,true);
+
+	saveContext();
+	allocStrucRefObj(thisBlock,X,arg1,true);
+	restoreContext();
+
 	break;
       case _allocFromStrucRefObj:
 	X = rPop(thisStack);
