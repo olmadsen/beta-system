@@ -816,6 +816,11 @@ char * nameOf(Btemplate *obj){
   return getString(inx);
 }
 
+void StacksToOut(FILE *trace, Block *ctx)
+{ fprintf(trace,"thisObj= %s ",nameOf(ctx->thisObj));
+  fprintf(trace,"thisStack= %s ",nameOf(ctx->thisStack));
+}
+
 int threadStubDescNo; // perhaps a hack?
 void dumpStackX(Btemplate *obj);
 
@@ -1532,11 +1537,6 @@ void allocQIndexedObj(Btemplate * origin, int descNo,bool isObj, int dinx, int r
     rPush(thisStack,callee);
   };
 
-  void StacksToOut(Block *ctx)
-    { fprintf(trace,"thisObj= %s ",nameOf(ctx->thisObj));
-      fprintf(trace,"thisStack= %s ",nameOf(ctx->thisStack));
-
-    }
   int opCode,arg1,arg2,arg3,dscNo,V;
   int dinx,isRindexed,rangee;
   bool running = true;
