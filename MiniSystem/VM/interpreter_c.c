@@ -1252,7 +1252,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   }
   void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
-    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,(int)bc);
+    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
     callee = allocTemplate(newId(&ID,&threadId),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
@@ -1273,10 +1273,10 @@ DWORD WINAPI interpreter(LPVOID B){;
     ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
     fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
-	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,(int)bc);
+	    ,nameOf(ctx->thisObj),descNo,glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef event
-    mkAllocEvent(alloc_event,Y,thisObj,origin,false,currentDescNo,glsc,false);
+    mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,false,ctx->currentDescNo,ctx->glsc,false);
 #endif
   };
 
