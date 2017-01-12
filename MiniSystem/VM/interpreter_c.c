@@ -1340,12 +1340,12 @@ DWORD WINAPI interpreter(LPVOID B){;
     rPush(ctx->thisStack,X);
   };
   
-  void allocFromStrucRefObj(Btemplate *obj){
+  void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-    allocObj(&thisObj,&callee,&thisStack,trace
-	     ,&bc,&currentDescNo,&glsc,&ID,&threadId
+    allocObj(&ctx->thisObj,&callee,&ctx->thisStack,trace
+	     ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
 	     ,obj->rfields[2],obj->vfields[1],0,0,0);
   };
   
@@ -2577,7 +2577,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	fprintf(trace,"allocFromStrucRefObj %s\n",nameOf(X));
 #endif
-	allocFromStrucRefObj(X);
+	saveContext();
+	allocFromStrucRefObj(thisBlock,X);
+	restoreContext();
+
 	break;
       case _break:
 	arg1 = op1(bc,&glsc);
