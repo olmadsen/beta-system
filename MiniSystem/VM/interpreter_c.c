@@ -1160,9 +1160,12 @@ int newId(int *ID, int *threadId) {
 }
 
 Event *allocObj(Block *ctx
-		,Btemplate **thisObj,Btemplate **callee, Btemplate **thisStack
-		,FILE *trace, ObjDesc *bc
-		,int *currentDescNo, int *glsc, int *ID, int *threadId
+		//,Btemplate **thisObj
+		,Btemplate **callee//, Btemplate **thisStack
+		,FILE *trace//, ObjDesc *bc
+		//,int *currentDescNo, int *glsc
+		, int *ID
+		//, int *threadId
 		,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
   fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*bc);
@@ -1288,11 +1291,12 @@ DWORD WINAPI interpreter(LPVOID B){;
     //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
 
-      //saveContext();
-      allocObj(ctx,&ctx->thisObj,&callee,&ctx->thisStack,trace
-	       ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
+      allocObj(ctx//,&ctx->thisObj
+	       ,&callee//,&ctx->thisStack
+	       ,trace
+	       //,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,
+	       ,&ID//,&ctx->threadId
 	       ,origin,descNo,isObj,rangee,0);
-      //restoreContext();
 
     } else {
       if (rangee > 132) {
@@ -1300,12 +1304,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
 
-      //saveContext();
-      allocObj(ctx,&ctx->thisObj,&callee,&ctx->thisStack,trace
-	       ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
+      allocObj(ctx//,&ctx->thisObj
+	       ,&callee//,&ctx->thisStack
+	       ,trace
+	       //,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,
+	       ,&ID//,&ctx->threadId
 	       ,origin,descNo,isObj,0,rangee);
-      //restoreContext();
-
     };
     ctx->thisObj->vfields[dinx] = rangee; 
   };
@@ -1353,11 +1357,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-    //saveContext();
-    allocObj(ctx,&ctx->thisObj,&callee,&ctx->thisStack,trace
-	     ,&ctx->bc,&ctx->currentDescNo,&ctx->glsc,&ID,&ctx->threadId
+    allocObj(ctx//,&ctx->thisObj
+	     ,&callee//,&ctx->thisStack
+	     ,trace
+	     //,&ctx->bc,&ctx->currentDescNo,&ctx->glsc
+	     ,&ID//,&ctx->threadId
 	     ,obj->rfields[2],obj->vfields[1],0,0,0);
-    //restoreContext();
   };
   
   void allocTextObj(Block *ctx,int litInx){
@@ -1368,9 +1373,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     rangee = getLiteral(ctx->thisObj,litInx);
     Btemplate *X = ctx->thisObj;
     
-    //saveContext();
     allocIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
-    //restoreContext();
 
     ctx->thisObj->vfields[1] = rangee; // pos = rangee
     for (i = 0; i < rangee; i++) {
@@ -1390,9 +1393,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     rangee = getLiteral(ctx->thisObj,litInx);
     Btemplate *X = ctx->thisObj;
     
-    //saveContext();
     allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
-    //restoreContext();
 
     callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = rangee; // pos = rangee
@@ -1411,9 +1412,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     // printf("\n*** ConvertIndexedAsString %i\n", length);
     //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
 
-    //saveContext();
     allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
-    //restoreContext();
 
     callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = length; 
@@ -1887,8 +1886,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	/*return*/ 
 
 	saveContext();
-	allocObj(thisBlock,&thisObj,&callee,&thisStack,trace
-		 ,&bc,&currentDescNo,&glsc,&ID,&threadId
+	allocObj(thisBlock//,&thisObj
+		 ,&callee//,&thisStack
+		 ,trace
+		 //,&bc,&currentDescNo,&glsc
+		 ,&ID //,&threadId
 		 ,rPop(thisStack),arg1,arg2,0,0);
 	restoreContext();
 
@@ -2286,8 +2288,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = vdtTable(trace,X,arg1); // descNo
 
 	saveContext();
-	allocObj(thisBlock,&thisObj,&callee,&thisStack,trace
-		 ,&bc,&currentDescNo,&glsc,&ID,&threadId
+	allocObj(thisBlock//,&thisObj
+		 ,&callee//,&thisStack
+		 ,trace
+		 //,&bc,&currentDescNo,&glsc
+		 ,&ID//,&threadId
 		 ,X,arg2,false,0,0);
 	restoreContext();
 
