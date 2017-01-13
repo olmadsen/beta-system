@@ -1160,7 +1160,7 @@ int newId(Block *ctx) {
   return ctx->ID + ctx->threadId;
 }
 
-Event *allocObj(Block *ctx ,Btemplate **callee,FILE *trace
+Event *allocObj(Block *ctx,FILE *trace
 		,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
   fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*bc);
@@ -1284,7 +1284,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
     if (isRindexed == 0) {
 
-      allocObj(ctx,&callee,trace,origin,descNo,isObj,rangee,0);
+      allocObj(ctx,trace,origin,descNo,isObj,rangee,0);
 
     } else {
       if (rangee > 132) {
@@ -1292,7 +1292,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
       };
 
-      allocObj(ctx,&callee,trace,origin,descNo,isObj,0,rangee);
+      allocObj(ctx,trace,origin,descNo,isObj,0,rangee);
     };
     ctx->thisObj->vfields[dinx] = rangee; 
   };
@@ -1340,7 +1340,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-    allocObj(ctx,&callee,trace,obj->rfields[2],obj->vfields[1],0,0,0);
+    allocObj(ctx,trace,obj->rfields[2],obj->vfields[1],0,0,0);
   };
   
   void allocTextObj(Block *ctx,int litInx){
@@ -1868,7 +1868,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	/*return*/ 
 
 	saveContext();
-	allocObj(thisBlock,&callee,trace,rPop(thisStack),arg1,arg2,0,0);
+	allocObj(thisBlock,trace,rPop(thisStack),arg1,arg2,0,0);
 	restoreContext();
 
 	break;
@@ -2265,7 +2265,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = vdtTable(trace,X,arg1); // descNo
 
 	saveContext();
-	allocObj(thisBlock,&callee,trace,X,arg2,false,0,0);
+	allocObj(thisBlock,trace,X,arg2,false,0,0);
 	restoreContext();
 
 	break;
