@@ -80,7 +80,7 @@ typedef struct Block {
   ObjDesc bc;  
   int glsc;
   int currentDescNo;
-  Btemplate *thisModule,*thisObj,*thisStack,*top, *world;
+  Btemplate *thisModule,*thisObj,*thisStack,*callee,*top, *world;
   int ID;
   int threadId;
   char *traceFile;
@@ -1165,16 +1165,16 @@ Event *allocObj(Block *ctx ,Btemplate **callee,FILE *trace
 #ifdef TRACE
   fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*bc);
 #endif
-  *callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
+  ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
-  fprintf(trace,"callee: %s %i ",nameOf(*callee),(int)*callee);
+  fprintf(trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
 #endif
-  rPush(*callee,ctx->thisObj);
-  rPush(*callee,ctx->thisStack);
-  rPush(*callee,origin);
+  rPush(ctx->callee,ctx->thisObj);
+  rPush(ctx->callee,ctx->thisStack);
+  rPush(ctx->callee,origin);
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
   ctx->currentDescNo = descNo;
-  ctx->thisStack = *callee;
+  ctx->thisStack = ctx->callee;
   ctx->thisObj = ctx->thisStack;
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
@@ -1231,6 +1231,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     thisBlock->thisModule = thisModule;
     thisBlock->thisObj = thisObj;
     thisBlock->thisStack = thisStack;
+    thisBlock->callee = callee;
     //thisBlock->top = top;
     //thisBlock->world = world;
     thisBlock->threadId = threadId;
@@ -1243,30 +1244,28 @@ DWORD WINAPI interpreter(LPVOID B){;
     thisModule = thisBlock->thisModule;
     thisObj = thisBlock->thisObj;
     thisStack = thisBlock->thisStack;
+    callee = thisBlock->callee;
     //top = thisBlock->top;
     //world = thisBlock->world;
     threadId = thisBlock->threadId;
     //traceFile = thisBlock->traceFile;
   }
+
   void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
-    callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
+    ctx->callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
-    fprintf(trace,"callee: %s %i ",nameOf(callee),(int)callee);
+    fprintf(trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
 #endif
-    if (staticOff > 0) ctx->thisObj->rfields[staticOff] = callee;
-    //Btemplate *Y;
-    //Y = thisObj;
-    rPush(callee,ctx->thisObj);
-    rPush(callee,ctx->thisStack);
-    //rPush(callee,origin);
+    if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
+
+    rPush(ctx->callee,ctx->thisObj);
+    rPush(ctx->callee,ctx->thisStack);
     cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
     ctx->currentDescNo = descNo;
-    //thisStack = callee;
-    //thisObj = thisStack;
-    ctx->thisObj = callee;
+    ctx->thisObj = ctx->callee;
     ctx->bc = (ObjDesc) myCode(ctx->thisObj);
     ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
