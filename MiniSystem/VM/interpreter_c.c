@@ -1305,7 +1305,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     if (isRindexed == 0) {
       // printf("is not Rindexed\n");
       // allocObj(origin,descNo,isObj,rangee,0);
-      callee = allocTemplate(newId(ctx),descNo,isObj,rangee,0);
+      ctx->callee = allocTemplate(newId(ctx),descNo,isObj,rangee,0);
     } else {
       if (rangee > 132) {
 	//printf("\n\n**** Ref-rep range: %i\n",rangee);
@@ -1313,16 +1313,16 @@ DWORD WINAPI interpreter(LPVOID B){;
       };
       // allocObj(origin,descNo,isObj,0,rangee);
       //printf("isRindexed\n");
-      callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
+      ctx->callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
     };
     //printf("After allox\n");
 
-    callee->vfields[dinx] = rangee; 
+    ctx->callee->vfields[dinx] = rangee; 
     // int i=0;
     // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
     // printf(" dinx = %i %i\n", dinx, rangee);
 
-    rPush(ctx->thisStack,callee);
+    rPush(ctx->thisStack,ctx->callee);
   };
 
   void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
@@ -1371,7 +1371,9 @@ DWORD WINAPI interpreter(LPVOID B){;
     rangee = getLiteral(ctx->thisObj,litInx);
     Btemplate *X = ctx->thisObj;
     
+    saveContext();
     allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
+    restoreContext();
 
     callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = rangee; // pos = rangee
@@ -1390,7 +1392,9 @@ DWORD WINAPI interpreter(LPVOID B){;
     // printf("\n*** ConvertIndexedAsString %i\n", length);
     //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
 
+    saveContext();
     allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
+    restoreContext();
 
     callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
     callee->vfields[1] = length; 
