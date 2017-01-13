@@ -1273,6 +1273,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    ,nameOf(ctx->thisObj),descNo,glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef event
+    // we should probably save ctx->thisObj in Y here: caller
     mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,false,ctx->currentDescNo,ctx->glsc,false);
 #endif
   };
