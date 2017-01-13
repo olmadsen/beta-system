@@ -1187,6 +1187,33 @@ Event *allocObj(Block *ctx,FILE *trace
 #endif
 };
 
+void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
+#ifdef TRACE
+  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
+#endif
+  ctx->callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
+#ifdef TRACE
+  fprintf(trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
+#endif
+  if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
+  
+  rPush(ctx->callee,ctx->thisObj);
+  rPush(ctx->callee,ctx->thisStack);
+  cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+  ctx->currentDescNo = descNo;
+  ctx->thisObj = ctx->callee;
+  ctx->bc = (ObjDesc) myCode(ctx->thisObj);
+  ctx->glsc = getAllocE(ctx->thisObj->desc);
+#ifdef TRACE
+  fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
+	  ,nameOf(ctx->thisObj),descNo,glsc,(int)ctx->thisObj,(int)ctx->bc);
+#endif
+#ifdef event
+  // we should probably save ctx->thisObj in Y here: caller
+  mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,false,ctx->currentDescNo,ctx->glsc,false);
+#endif
+};
+
 #if defined(linux)
 void  *interpreter(void *B){;
 #else
@@ -1251,32 +1278,6 @@ DWORD WINAPI interpreter(LPVOID B){;
     //traceFile = thisBlock->traceFile;
   }
 
-  void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
-#ifdef TRACE
-    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
-#endif
-    ctx->callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
-#ifdef TRACE
-    fprintf(trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
-#endif
-    if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
-
-    rPush(ctx->callee,ctx->thisObj);
-    rPush(ctx->callee,ctx->thisStack);
-    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
-    ctx->currentDescNo = descNo;
-    ctx->thisObj = ctx->callee;
-    ctx->bc = (ObjDesc) myCode(ctx->thisObj);
-    ctx->glsc = getAllocE(ctx->thisObj->desc);
-#ifdef TRACE
-    fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
-	    ,nameOf(ctx->thisObj),descNo,glsc,(int)ctx->thisObj,(int)ctx->bc);
-#endif
-#ifdef event
-    // we should probably save ctx->thisObj in Y here: caller
-    mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,false,ctx->currentDescNo,ctx->glsc,false);
-#endif
-  };
 
   void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
