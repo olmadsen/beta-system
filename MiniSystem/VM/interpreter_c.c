@@ -84,6 +84,7 @@ typedef struct Block {
   int ID;
   int threadId;
   char *traceFile;
+  FILE *trace;
 } Block;
 
 typedef struct Event {
@@ -1087,6 +1088,7 @@ Event *init_interpreter(ObjDesc descs_a, bool isXB) {
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)heapAlloc(sizeof(Block));
+  thisBlock->trace = trace;
   descs = (ObjDesc) heapAlloc(imageSize);
   memcpy(descs,descs_a,imageSize); 
   thisBlock->bc = descs;
@@ -1163,7 +1165,7 @@ int newId(Block *ctx) {
 Event *allocObj(Block *ctx,FILE *trace
 		,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
-  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*bc);
+  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
@@ -1189,11 +1191,11 @@ Event *allocObj(Block *ctx,FILE *trace
 
 void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
-  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
+  fprintf(ctx->trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
-  fprintf(trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
+  fprintf(ctx->trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
 #endif
   if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
   
@@ -1205,8 +1207,8 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
-  fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
-	  ,nameOf(ctx->thisObj),descNo,glsc,(int)ctx->thisObj,(int)ctx->bc);
+  fprintf(ctx->trace,"ALLOC %s(%i,%i,%i,%i)\n"
+	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef event
   // we should probably save ctx->thisObj in Y here: caller
@@ -1242,6 +1244,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   printf("*** C interpreter - threadId:%i\n",threadId);
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
+  thisBlock->trace = trace;
   setbuf(trace, NULL);
   Btemplate *enablee = 0;
   int suspendEnabled = 0;
@@ -1491,7 +1494,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  ctx->bc = codeFromDescNo(ctx->currentDescNo);
 #ifdef TRACE
 	  fprintf(trace,"AT %s(%i,%i,%s) \n"
-		  ,nameOf(ctx>thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
+		  ,nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
 #endif
 	  break;
 	case 'X': // same as for callX
