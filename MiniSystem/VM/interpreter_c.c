@@ -1375,11 +1375,11 @@ DWORD WINAPI interpreter(LPVOID B){;
     allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
     restoreContext();
 
-    callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
-    callee->vfields[1] = rangee; // pos = rangee
+    ctx->callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
+    ctx->callee->vfields[1] = rangee; // pos = rangee
     for (i = 0; i < rangee; i++) {
       char ch = getLiteral(X, litInx + i + 1);
-      callee->vfields[dinx + 1 + i] = ch;
+      ctx->callee->vfields[dinx + 1 + i] = ch;
       // fprintf(trace, "Lit %c",ch);
     }
     //printf(" %i %i %i %i \n"
@@ -1396,10 +1396,10 @@ DWORD WINAPI interpreter(LPVOID B){;
     allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
     restoreContext();
 
-    callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
-    callee->vfields[1] = length; 
+    ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
+    ctx->callee->vfields[1] = length; 
     int i;
-    for (i = 0; i <= length; i++) callee->vfields[i] = X->vfields[i];
+    for (i = 0; i <= length; i++) ctx->callee->vfields[i] = X->vfields[i];
     X->rfields[1] = world->rfields[3]; // origin - hack 
   }
 
