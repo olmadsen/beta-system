@@ -1216,6 +1216,73 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #endif
 };
 
+
+void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+#ifdef TRACE
+  fprintf(ctx->trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+#endif
+  //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+  if (isRindexed == 0) {
+    
+    allocObj(ctx,ctx->trace,origin,descNo,isObj,rangee,0);
+    
+  } else {
+    if (rangee > 132) {
+      printf("\n\n**** Ref-rep range: %i\n",rangee);
+      runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
+    };
+    
+    allocObj(ctx,ctx->trace,origin,descNo,isObj,0,rangee);
+  };
+  ctx->thisObj->vfields[dinx] = rangee; 
+};
+
+void allocQIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+#ifdef TRACE
+  fprintf(tx->trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+#endif    
+  // printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+  if (isRindexed == 0) {
+    // printf("is not Rindexed\n");
+    // allocObj(origin,descNo,isObj,rangee,0);
+    ctx->callee = allocTemplate(newId(ctx),descNo,isObj,rangee,0);
+  } else {
+    if (rangee > 132) {
+      //printf("\n\n**** Ref-rep range: %i\n",rangee);
+      runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
+    };
+    // allocObj(origin,descNo,isObj,0,rangee);
+    //printf("isRindexed\n");
+    ctx->callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
+  };
+  //printf("After allox\n");
+  
+  ctx->callee->vfields[dinx] = rangee; 
+  // int i=0;
+  // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
+  // printf(" dinx = %i %i\n", dinx, rangee);
+  
+  rPush(ctx->thisStack,ctx->callee);
+};
+
+void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
+#ifdef TRACE
+  fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
+#endif
+  Btemplate * X = allocTemplate(newId(ctx),getStrucRefDescNo(),0,0,0);
+  if (isVirtual) inx = vdtTable(ctx->trace,origin,inx);
+  X->vfields[1] = inx;
+  X->rfields[2] = origin;
+  rPush(ctx->thisStack,X);
+};
+
+void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
+#ifdef TRACE
+  fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
+#endif
+  allocObj(ctx,ctx->trace,obj->rfields[2],obj->vfields[1],0,0,0);
+};
+
 #if defined(linux)
 void  *interpreter(void *B){;
 #else
@@ -1282,72 +1349,6 @@ DWORD WINAPI interpreter(LPVOID B){;
   }
 
 
-  void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
-#ifdef TRACE
-    fprintf(trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
-#endif
-    //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
-    if (isRindexed == 0) {
-
-      allocObj(ctx,trace,origin,descNo,isObj,rangee,0);
-
-    } else {
-      if (rangee > 132) {
-	printf("\n\n**** Ref-rep range: %i\n",rangee);
-	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
-      };
-
-      allocObj(ctx,trace,origin,descNo,isObj,0,rangee);
-    };
-    ctx->thisObj->vfields[dinx] = rangee; 
-  };
- 
-  void allocQIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
-#ifdef TRACE
-    fprintf(trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
-#endif    
-    // printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
-    if (isRindexed == 0) {
-      // printf("is not Rindexed\n");
-      // allocObj(origin,descNo,isObj,rangee,0);
-      ctx->callee = allocTemplate(newId(ctx),descNo,isObj,rangee,0);
-    } else {
-      if (rangee > 132) {
-	//printf("\n\n**** Ref-rep range: %i\n",rangee);
-	runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
-      };
-      // allocObj(origin,descNo,isObj,0,rangee);
-      //printf("isRindexed\n");
-      ctx->callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
-    };
-    //printf("After allox\n");
-
-    ctx->callee->vfields[dinx] = rangee; 
-    // int i=0;
-    // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
-    // printf(" dinx = %i %i\n", dinx, rangee);
-
-    rPush(ctx->thisStack,ctx->callee);
-  };
-
-  void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
-#ifdef TRACE
-    fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
-#endif
-    Btemplate * X = allocTemplate(newId(ctx),getStrucRefDescNo(),0,0,0);
-    if (isVirtual) inx = vdtTable(trace,origin,inx);
-    X->vfields[1] = inx;
-    X->rfields[2] = origin;
-    rPush(ctx->thisStack,X);
-  };
-  
-  void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
-#ifdef TRACE
-    fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
-#endif
-    allocObj(ctx,trace,obj->rfields[2],obj->vfields[1],0,0,0);
-  };
-  
   void allocTextObj(Block *ctx,int litInx){
     // literals[litInx] = length
     Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
