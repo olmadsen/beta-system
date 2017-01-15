@@ -1338,74 +1338,7 @@ void  ConvertIndexedAsString(Block *ctx) {
   X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
 }
 
-#if defined(linux)
-void  *interpreter(void *B){;
-#else
-DWORD WINAPI interpreter(LPVOID B){;
-#endif
-  Block *thisBlock = (Block *)B;
-  int threadId = thisBlock->threadId;
-  thisBlock->ID = 1000;
-
-#ifdef linux
-  pthread_t pthreadArray[MAX_THREADS];
-#else
-  HANDLE  hThreadArray[MAX_THREADS];
-#endif
-  int threadNo = 0;
-  bool hasThreads = false;
-
-#ifdef linux
-  // The following calls are supposed to associate each interpreter threah with
-  // a specific CPU - have no idea if it works!?
-  //cpu_set_t mask;
-  //CPU_ZERO(&mask);
-  //CPU_SET(threadId,&mask);
-#endif
-
-  printf("*** C interpreter - threadId:%i\n",threadId);
-  FILE * trace;
-  trace = fopen(thisBlock->traceFile,"w");
-  thisBlock->trace = trace;
-  setbuf(trace, NULL);
-  Btemplate *enablee = 0;
-  int suspendEnabled = 0;
-  int timeToSuspend = 0;
-  ObjDesc bc = thisBlock->bc;
-  int glsc = thisBlock->glsc;
-  int currentDescNo = thisBlock->currentDescNo;
-  Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
-
-  void saveContext(){
-    thisBlock->bc = bc;
-    thisBlock->glsc = glsc;
-    thisBlock->currentDescNo = currentDescNo;
-    thisBlock->thisModule = thisModule;
-    thisBlock->thisObj = thisObj;
-    thisBlock->thisStack = thisStack;
-    thisBlock->callee = callee;
-    thisBlock->enablee = enablee;
-    //thisBlock->top = top;
-    //thisBlock->world = world;
-    thisBlock->threadId = threadId;
-    //thisBlock->traceFile = traceFile;
-  }
-  void restoreContext(){
-    bc = thisBlock->bc;
-    glsc = thisBlock->glsc;
-    currentDescNo = thisBlock->currentDescNo;
-    thisModule = thisBlock->thisModule;
-    thisObj = thisBlock->thisObj;
-    thisStack = thisBlock->thisStack;
-    callee = thisBlock->callee;
-    enablee = thisBlock->enablee;
-    //top = thisBlock->top;
-    //world = thisBlock->world;
-    threadId = thisBlock->threadId;
-    //traceFile = thisBlock->traceFile;
-  }
-
-   Event *doCall(Block *ctx,bool withEnablingSuspend){
+Event *doCall(Block *ctx,bool withEnablingSuspend){
     int arg1;
     Btemplate *Y;
     arg1 = (char) op1(ctx->bc,&ctx->glsc);
@@ -1509,6 +1442,74 @@ DWORD WINAPI interpreter(LPVOID B){;
     }
   }
 
+#if defined(linux)
+void  *interpreter(void *B){;
+#else
+DWORD WINAPI interpreter(LPVOID B){;
+#endif
+  Block *thisBlock = (Block *)B;
+  int threadId = thisBlock->threadId;
+  thisBlock->ID = 1000;
+
+#ifdef linux
+  pthread_t pthreadArray[MAX_THREADS];
+#else
+  HANDLE  hThreadArray[MAX_THREADS];
+#endif
+  int threadNo = 0;
+  bool hasThreads = false;
+
+#ifdef linux
+  // The following calls are supposed to associate each interpreter threah with
+  // a specific CPU - have no idea if it works!?
+  //cpu_set_t mask;
+  //CPU_ZERO(&mask);
+  //CPU_SET(threadId,&mask);
+#endif
+
+  printf("*** C interpreter - threadId:%i\n",threadId);
+  FILE * trace;
+  trace = fopen(thisBlock->traceFile,"w");
+  thisBlock->trace = trace;
+  setbuf(trace, NULL);
+  Btemplate *enablee = 0;
+  int suspendEnabled = 0;
+  int timeToSuspend = 0;
+  ObjDesc bc = thisBlock->bc;
+  int glsc = thisBlock->glsc;
+  int currentDescNo = thisBlock->currentDescNo;
+  Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
+
+  void saveContext(){
+    thisBlock->bc = bc;
+    thisBlock->glsc = glsc;
+    thisBlock->currentDescNo = currentDescNo;
+    thisBlock->thisModule = thisModule;
+    thisBlock->thisObj = thisObj;
+    thisBlock->thisStack = thisStack;
+    thisBlock->callee = callee;
+    thisBlock->enablee = enablee;
+    //thisBlock->top = top;
+    //thisBlock->world = world;
+    thisBlock->threadId = threadId;
+    //thisBlock->traceFile = traceFile;
+  }
+  void restoreContext(){
+    bc = thisBlock->bc;
+    glsc = thisBlock->glsc;
+    currentDescNo = thisBlock->currentDescNo;
+    thisModule = thisBlock->thisModule;
+    thisObj = thisBlock->thisObj;
+    thisStack = thisBlock->thisStack;
+    callee = thisBlock->callee;
+    enablee = thisBlock->enablee;
+    //top = thisBlock->top;
+    //world = thisBlock->world;
+    threadId = thisBlock->threadId;
+    //traceFile = thisBlock->traceFile;
+  }
+
+   
   void doSuspend(Btemplate *callee, bool preemptive){
 #ifdef TRACE
     fprintf(trace," AT %s FROM %s(%i,%i,%s) "
