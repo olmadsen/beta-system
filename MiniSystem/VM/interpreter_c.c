@@ -1508,7 +1508,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   ObjDesc bc = thisBlock->bc;
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
-  Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor,*world;
+  Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor;
 
   void saveContext(){
     thisBlock->bc = bc;
@@ -2017,7 +2017,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    B->bc = myCode(X);
 	    B->currentDescNo = threadStubDescNo;
 	    B->top = Y;
-	    B->world = world;
+	    B->world = thisBlock->world;
 #ifdef TRACE
 	    //printf("\ncurrentDescNo: %i %i %i threadNo: %i\n"
 	    //,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
@@ -2160,7 +2160,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"saveBETAworld\n");
 #endif
 	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
-	thisBlock->world = world = X;
+	thisBlock->world = X;
 	break;
       case doSuper:
 	arg1 = op2(bc,&glsc);
