@@ -1070,7 +1070,7 @@ void allocMain(Block *thisBlock,int descNo){
   thisBlock->thisStack = thisBlock->thisModule;
 };
 
-Event *init_interpreter(ObjDesc descs_a, bool isXB) {
+void init_interpreter(ObjDesc descs_a, bool isXB) {
   int mainDescNo;
   FILE *trace;
   Block *thisBlock;
@@ -1156,20 +1156,20 @@ Event *getEvent(bool first){
 #endif
   return E;
 }
+
 int newId(Block *ctx) { 
   ctx->ID = ctx->ID + 4; 
   // printf("\nID:%i %i",*threadId,*ID + *threadId); 
   return ctx->ID + ctx->threadId;
 }
 
-Event *allocObj(Block *ctx,FILE *trace
-		,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
+void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
-  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
+  fprintf(ctx->trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
-  fprintf(trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
+  fprintf(ctx->trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
 #endif
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
@@ -1181,7 +1181,7 @@ Event *allocObj(Block *ctx,FILE *trace
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
-  fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
+  fprintf(ctx->trace,"ALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef event
@@ -1224,7 +1224,7 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
   //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
   if (isRindexed == 0) {
     
-    allocObj(ctx,ctx->trace,origin,descNo,isObj,rangee,0);
+    allocObj(ctx,origin,descNo,isObj,rangee,0);
     
   } else {
     if (rangee > 132) {
@@ -1232,7 +1232,7 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
       runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
     };
     
-    allocObj(ctx,ctx->trace,origin,descNo,isObj,0,rangee);
+    allocObj(ctx,origin,descNo,isObj,0,rangee);
   };
   ctx->thisObj->vfields[dinx] = rangee; 
 };
@@ -1280,7 +1280,7 @@ void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
 #ifdef TRACE
   fprintf(ctx->trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-  allocObj(ctx,ctx->trace,obj->rfields[2],obj->vfields[1],0,0,0);
+  allocObj(ctx,obj->rfields[2],obj->vfields[1],0,0,0);
 };
  void allocTextObj(Block *ctx,int litInx){
     // literals[litInx] = length
@@ -1338,7 +1338,7 @@ void  ConvertIndexedAsString(Block *ctx) {
   X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
 }
 
-Event *doCall(Block *ctx,bool withEnablingSuspend){
+void doCall(Block *ctx,bool withEnablingSuspend){
     int arg1;
     Btemplate *Y;
     arg1 = (char) op1(ctx->bc,&ctx->glsc);
@@ -1473,7 +1473,7 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 };
 
 #if defined(linux)
-void  *interpreter(void *B){;
+void  interpreter(void *B){;
 #else
 DWORD WINAPI interpreter(LPVOID B){;
 #endif
@@ -1508,7 +1508,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   ObjDesc bc = thisBlock->bc;
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
-  Btemplate *thisModule,*thisObj,*thisStack, *callee, *eventProcessor;
+  Btemplate *thisModule,*thisObj,*thisStack, *callee; // *eventProcessor;
 
   void saveContext(){
     thisBlock->bc = bc;
@@ -1871,7 +1871,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	/*return*/ 
 
 	saveContext();
-	allocObj(thisBlock,trace,rPop(thisStack),arg1,arg2,0,0);
+	allocObj(thisBlock,rPop(thisStack),arg1,arg2,0,0);
 	restoreContext();
 
 	break;
@@ -2268,7 +2268,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = vdtTable(trace,X,arg1); // descNo
 
 	saveContext();
-	allocObj(thisBlock,trace,X,arg2,false,0,0);
+	allocObj(thisBlock,X,arg2,false,0,0);
 	restoreContext();
 
 	break;
