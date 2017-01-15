@@ -1282,6 +1282,61 @@ void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
 #endif
   allocObj(ctx,ctx->trace,obj->rfields[2],obj->vfields[1],0,0,0);
 };
+ void allocTextObj(Block *ctx,int litInx){
+    // literals[litInx] = length
+    Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
+    int dinx,rangee,i;
+    dinx = 2; // start of repetition
+    rangee = getLiteral(ctx->thisObj,litInx);
+    Btemplate *X = ctx->thisObj;
+    
+    allocIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
+
+    ctx->thisObj->vfields[1] = rangee; // pos = rangee
+    for (i = 0; i < rangee; i++) {
+      char ch = getLiteral(X, litInx + i + 1);
+      ctx->thisObj->vfields[3 + i] = ch;
+      // fprintf(trace, "Lit %c",ch);
+    }
+    // fprintf(trace," %i %i %i %i \n"
+    //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
+  }
+  
+void XallocTextObj(Block *ctx,int litInx){
+  // literals[litInx] = length
+  Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
+  int dinx,rangee,i;
+  dinx = 1; // start of repetition
+  rangee = getLiteral(ctx->thisObj,litInx);
+  Btemplate *X = ctx->thisObj;
+  
+  allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
+  
+  ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
+  ctx->callee->vfields[1] = rangee; // pos = rangee
+  for (i = 0; i < rangee; i++) {
+    char ch = getLiteral(X, litInx + i + 1);
+    ctx->callee->vfields[dinx + 1 + i] = ch;
+    // fprintf(trace, "Lit %c",ch);
+  }
+  //printf(" %i %i %i %i \n"
+  //,callee->vfields[0],callee->vfields[1],callee->vfields[2],callee->vfields[3]);
+}
+
+void  ConvertIndexedAsString(Block *ctx) {
+  Btemplate *X = rPop(ctx->thisStack);; 
+  int length  = X->vfields[1];
+  // printf("\n*** ConvertIndexedAsString %i\n", length);
+  //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
+  
+  allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
+  
+  ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
+  ctx->callee->vfields[1] = length; 
+  int i;
+  for (i = 0; i <= length; i++) ctx->callee->vfields[i] = X->vfields[i];
+  X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
+}
 
 #if defined(linux)
 void  *interpreter(void *B){;
@@ -1350,63 +1405,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     //traceFile = thisBlock->traceFile;
   }
 
-  void allocTextObj(Block *ctx,int litInx){
-    // literals[litInx] = length
-    Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
-    int dinx,rangee,i;
-    dinx = 2; // start of repetition
-    rangee = getLiteral(ctx->thisObj,litInx);
-    Btemplate *X = ctx->thisObj;
-    
-    allocIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
-
-    ctx->thisObj->vfields[1] = rangee; // pos = rangee
-    for (i = 0; i < rangee; i++) {
-      char ch = getLiteral(X, litInx + i + 1);
-      ctx->thisObj->vfields[3 + i] = ch;
-      // fprintf(trace, "Lit %c",ch);
-    }
-    // fprintf(trace," %i %i %i %i \n"
-    //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
-  }
-  
-  void XallocTextObj(Block *ctx,int litInx){
-    // literals[litInx] = length
-    Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
-    int dinx,rangee,i;
-    dinx = 1; // start of repetition
-    rangee = getLiteral(ctx->thisObj,litInx);
-    Btemplate *X = ctx->thisObj;
-    
-    allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
-
-    ctx->callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
-    ctx->callee->vfields[1] = rangee; // pos = rangee
-    for (i = 0; i < rangee; i++) {
-      char ch = getLiteral(X, litInx + i + 1);
-      ctx->callee->vfields[dinx + 1 + i] = ch;
-      // fprintf(trace, "Lit %c",ch);
-    }
-    //printf(" %i %i %i %i \n"
-    //,callee->vfields[0],callee->vfields[1],callee->vfields[2],callee->vfields[3]);
-  }
-
-  void  ConvertIndexedAsString(Block *ctx) {
-    Btemplate *X = rPop(ctx->thisStack);; 
-    int length  = X->vfields[1];
-    // printf("\n*** ConvertIndexedAsString %i\n", length);
-    //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
-
-    allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
-
-    ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
-    ctx->callee->vfields[1] = length; 
-    int i;
-    for (i = 0; i <= length; i++) ctx->callee->vfields[i] = X->vfields[i];
-    X->rfields[1] = world->rfields[3]; // origin - hack 
-  }
-
-  Event *doCall(Block *ctx,bool withEnablingSuspend){
+   Event *doCall(Block *ctx,bool withEnablingSuspend){
     int arg1;
     Btemplate *Y;
     arg1 = (char) op1(ctx->bc,&ctx->glsc);
@@ -1417,7 +1416,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)bc);
 #endif
-    if (withEnablingSuspend) enablee = ctx->callee;
+    if (withEnablingSuspend) ctx->enablee = ctx->callee;
     cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
     if (ctx->callee->rtop == 0) { 
       Y = ctx->thisObj;
