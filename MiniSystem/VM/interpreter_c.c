@@ -1339,9 +1339,7 @@ void  ConvertIndexedAsString(Block *ctx) {
 }
 
 void doCall(Block *ctx,bool withEnablingSuspend){
-    int arg1;
-    Btemplate *Y;
-    arg1 = (char) op1(ctx->bc,&ctx->glsc);
+    int arg1 = (char) op1(ctx->bc,&ctx->glsc);
 #ifdef TRACE
     fprintf(ctx->trace,"call %c ",arg1);
 #endif
@@ -1352,7 +1350,9 @@ void doCall(Block *ctx,bool withEnablingSuspend){
     if (withEnablingSuspend) ctx->enablee = ctx->callee;
     cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
     if (ctx->callee->rtop == 0) { 
-      Y = ctx->thisObj;
+#ifdef EVENT
+      Btemplate *Y = ctx->thisObj;
+#endif
       rPush(ctx->callee,ctx->thisObj); 
       rPush(ctx->callee,ctx->thisStack);
       ctx->thisObj = ctx->callee;
