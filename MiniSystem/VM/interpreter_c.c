@@ -18,7 +18,7 @@
 
 #include <string.h>
 
-//#define TRACE
+#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -1239,7 +1239,7 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
 
 void allocQIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
-  fprintf(tx->trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+  fprintf(ctx->trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif    
   // printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
   if (isRindexed == 0) {
@@ -1267,7 +1267,7 @@ void allocQIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int 
 
 void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
 #ifdef TRACE
-  fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
+  fprintf(ctx->trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
 #endif
   Btemplate * X = allocTemplate(newId(ctx),getStrucRefDescNo(),0,0,0);
   if (isVirtual) inx = vdtTable(ctx->trace,origin,inx);
@@ -1278,7 +1278,7 @@ void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
 
 void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
 #ifdef TRACE
-  fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
+  fprintf(ctx->trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
   allocObj(ctx,ctx->trace,obj->rfields[2],obj->vfields[1],0,0,0);
 };
@@ -1343,11 +1343,11 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
     Btemplate *Y;
     arg1 = (char) op1(ctx->bc,&ctx->glsc);
 #ifdef TRACE
-    fprintf(trace,"call %c ",arg1);
+    fprintf(ctx->trace,"call %c ",arg1);
 #endif
     ctx->callee = rPop(ctx->thisStack);
 #ifdef TRACE
-    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)bc);
+    fprintf(ctx->trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
     if (withEnablingSuspend) ctx->enablee = ctx->callee;
     cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
@@ -1357,7 +1357,7 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
       rPush(ctx->callee,ctx->thisStack);
       ctx->thisObj = ctx->callee;
 #ifdef TRACE
-      fprintf(trace,"TO %s",nameOf(ctx->callee));
+      fprintf(ctx->trace,"TO %s",nameOf(ctx->callee));
 #endif
       switch (arg1)
 	{
@@ -1366,7 +1366,7 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
 	  ctx->bc = myCode(ctx->thisObj);
 	  ctx->glsc = getEnterE(ctx->thisObj->desc);
 #ifdef TRACE
-	  fprintf(trace,"(%i,%i,%i) N\n",ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
+	  fprintf(ctx->trace,"(%i,%i,%i) N\n",ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
 	  break;
 	case 'D':
@@ -1375,8 +1375,8 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
 	  ctx->bc = codeFromDescNo(arg1);
 	  ctx->glsc = getDoE(getDesc(arg1));
 #ifdef TRACE
-	  fprintf(trace,"D(%i,%i,%s) ",ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
-	  dumpStack(trace,ctx->thisStack);
+	  fprintf(ctx->trace,"D(%i,%i,%s) ",ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
+	  dumpStack(ctx->trace,ctx->thisStack);
 #endif
 #ifdef EVENT
 	  mkEvent(do_event,Y,ctx->thisObj,myCorigin(ctx->thisObj),false,ctx->currentDescNo,ctx->glsc); // withEnablingSuspend
@@ -1389,7 +1389,7 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
 	  ctx->bc = codeFromDescNo(arg1);
 	  ctx->glsc = getExitE(getDesc(arg1));
 #ifdef TRACE
-	  fprintf(trace,"(%i,%i,%i) X\n",arg1,ctx->glsc,(int)ctx->bc);
+	  fprintf(ctx->trace,"(%i,%i,%i) X\n",arg1,ctx->glsc,(int)ctx->bc);
 #endif
 	  break;
 	}}
@@ -1404,26 +1404,26 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
 	  ctx->bc = codeFromDescNo(ctx->currentDescNo);
 	  ctx->glsc = getEnterE(getDesc(ctx->currentDescNo));
 #ifdef TRACE
-	  fprintf(trace, "resumeN %s(%i,%i)\n",nameOf(ctx->callee),ctx->currentDescNo,ctx->glsc);
+	  fprintf(ctx->trace, "resumeN %s(%i,%i)\n",nameOf(ctx->callee),ctx->currentDescNo,ctx->glsc);
 #endif
 	  break;
 	case 'D':
 #ifdef TRACE
-	  fprintf(trace, "resumeD %s ",nameOf(ctx->callee));
-	  dumpSwapped(trace,ctx->callee,ctx->thisObj,ctx->thisStack);
+	  fprintf(ctx->trace, "resumeD %s ",nameOf(ctx->callee));
+	  dumpSwapped(ctx->trace,ctx->callee,ctx->thisObj,ctx->thisStack);
 #endif
 	  rswap(ctx->callee,&ctx->thisObj,&ctx->thisStack);
 #ifdef TRACE
-	  dumpSwapped(trace,ctx->callee,ctx->thisObj,ctx->thisStack);
+	  dumpSwapped(ctx->trace,ctx->callee,ctx->thisObj,ctx->thisStack);
 	  if (ctx->thisStack != ctx->thisObj) { // external suspend?
-	    fprintf(trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
+	    fprintf(ctx->trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
 	  };
 #endif
 	  ctx->glsc = cRestoreReturn(ctx->thisObj);
 	  ctx->currentDescNo = cRestoreReturn(ctx->thisObj);
 	  ctx->bc = codeFromDescNo(ctx->currentDescNo);
 #ifdef TRACE
-	  fprintf(trace,"AT %s(%i,%i,%s) \n"
+	  fprintf(ctx->trace,"AT %s(%i,%i,%s) \n"
 		  ,nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
 #endif
 	  break;
@@ -1435,7 +1435,7 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
 	  ctx->bc = codeFromDescNo(ctx->currentDescNo);
 	  ctx->glsc = getExitE(getDesc(ctx->currentDescNo));
 #ifdef TRACE
-	  fprintf(trace, "resumeX %s(%i,%i)\n",nameOf(ctx->callee),ctx->currentDescNo,ctx->glsc);
+	  fprintf(ctx->trace, "resumeX %s(%i,%i)\n",nameOf(ctx->callee),ctx->currentDescNo,ctx->glsc);
 #endif
 	  break;
 	}
@@ -1444,15 +1444,15 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
    
 void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 #ifdef TRACE
-  fprintf(trace," AT %s FROM %s(%i,%i,%s) "
+  fprintf(ctx->trace," AT %s FROM %s(%i,%i,%s) "
 	  ,nameOf(callee),nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
-  if (preemptive) fprintf(trace,"preemptive ");
+  if (preemptive) fprintf(ctx->trace,"preemptive ");
 #endif
   
   ctx->thisObj->lsc = ctx->glsc; // is this necessary?
 #ifdef TRACE
   if (ctx->thisObj != ctx->thisStack) // external suspend ??
-    { fprintf(trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
+    { fprintf(ctx->trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
     }
 #endif
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
@@ -1466,7 +1466,7 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
   ctx->glsc = cRestoreReturn(ctx->thisObj);
   ctx->currentDescNo = cRestoreReturn(ctx->thisObj);
 #ifdef TRACE
-  fprintf(trace,"TO %s(%i,%i,%s)\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+  fprintf(ctx->trace,"TO %s(%i,%i,%s)\n",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
 #endif
   ctx->bc = codeFromDescNo(ctx->currentDescNo);
   rPush(ctx->thisStack,callee);
@@ -2077,7 +2077,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  case 118: // asString
 	    saveContext();
 	    ConvertIndexedAsString(thisBlock);
-	    restoreContext;
+	    restoreContext();
             break;
 	  default:
 	    printf("\n\n*** prim: missing case %i\n",arg1);
