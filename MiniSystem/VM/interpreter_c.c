@@ -1510,34 +1510,34 @@ DWORD WINAPI interpreter(LPVOID B){;
   }
 
    
-  void doSuspend(Btemplate *callee, bool preemptive){
+  void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 #ifdef TRACE
     fprintf(trace," AT %s FROM %s(%i,%i,%s) "
-	    ,nameOf(callee),nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+	    ,nameOf(callee),nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
     if (preemptive) fprintf(trace,"preemptive ");
 #endif
     
-    thisObj->lsc = glsc; // is this necessary?
+    ctx->thisObj->lsc = ctx->glsc; // is this necessary?
 #ifdef TRACE
-    if (thisObj != thisStack) // external suspend ??
-      { fprintf(trace,"thisObj != thisStack %s %s ",nameOf(thisObj),nameOf(thisStack));
+    if (ctx->thisObj != ctx->thisStack) // external suspend ??
+      { fprintf(trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
       }
 #endif
-    cSaveReturn(thisObj,currentDescNo,glsc);
+    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
 #ifdef TRACE
-    dumpSwapped(trace,callee,thisObj,thisStack);
+    dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
 #endif
-    rswap(callee,&thisObj,&thisStack); // notice &
+    rswap(callee,&ctx->thisObj,&ctx->thisStack); // notice &
 #ifdef TRACE
-    dumpSwapped(trace,callee,thisObj,thisStack);
+    dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
 #endif
-    glsc = cRestoreReturn(thisObj);
-    currentDescNo = cRestoreReturn(thisObj);
+    ctx->glsc = cRestoreReturn(ctx->thisObj);
+    ctx->currentDescNo = cRestoreReturn(ctx->thisObj);
 #ifdef TRACE
     fprintf(trace,"TO %s(%i,%i,%s)\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 #endif
-    bc = codeFromDescNo(currentDescNo);
-    rPush(thisStack,callee);
+    ctx->bc = codeFromDescNo(ctx->currentDescNo);
+    rPush(ctx->thisStack,callee);
   };
 
   int opCode,arg1,arg2,arg3,dscNo,V;
@@ -1561,7 +1561,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  if (enablee != 0) {
 	    suspendEnabled = suspendEnabled - 1;
 	    if (suspendEnabled > 0) printf("\npSuspend: %i\n",suspendEnabled);
-	    doSuspend(enablee,true);
+
+	    saveContext();
+	    doSuspend(thisBlock,enablee,true);
+	    restoreContext();
 	    enablee = 0;
 	  }
 	}
@@ -1860,7 +1863,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	callee = rPop(thisStack);
 	if ((suspendEnabled == 1) && (callee == enablee)) suspendEnabled = suspendEnabled - 1;
-	doSuspend(callee,false);
+
+	saveContext();
+	doSuspend(thisBlock,callee,false);
+	restoreContext();
+
 	break;
       case alloc:
 	arg1 = op2(bc,&glsc);
