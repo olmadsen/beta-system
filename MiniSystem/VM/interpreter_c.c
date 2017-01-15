@@ -1350,7 +1350,6 @@ DWORD WINAPI interpreter(LPVOID B){;
     //traceFile = thisBlock->traceFile;
   }
 
-
   void allocTextObj(Block *ctx,int litInx){
     // literals[litInx] = length
     Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
@@ -1379,9 +1378,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     rangee = getLiteral(ctx->thisObj,litInx);
     Btemplate *X = ctx->thisObj;
     
-    saveContext();
     allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
-    restoreContext();
 
     ctx->callee->rfields[1] = thisBlock -> world->rfields[3]; // a bloody hack
     ctx->callee->vfields[1] = rangee; // pos = rangee
@@ -1400,9 +1397,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     // printf("\n*** ConvertIndexedAsString %i\n", length);
     //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
 
-    saveContext();
     allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
-    restoreContext();
 
     ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
     ctx->callee->vfields[1] = length; 
