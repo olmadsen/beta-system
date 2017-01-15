@@ -80,7 +80,7 @@ typedef struct Block {
   ObjDesc bc;  
   int glsc;
   int currentDescNo;
-  Btemplate *thisModule,*thisObj,*thisStack,*callee,*enablee,*top, *world;
+  Btemplate *thisModule,*thisObj,*thisStack,*callee,*enablee,*top,*world;
   int ID;
   int threadId;
   char *traceFile;
@@ -1519,10 +1519,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     thisBlock->thisStack = thisStack;
     thisBlock->callee = callee;
     thisBlock->enablee = enablee;
-    //thisBlock->top = top;
-    //thisBlock->world = world;
     thisBlock->threadId = threadId;
-    //thisBlock->traceFile = traceFile;
   }
   void restoreContext(){
     bc = thisBlock->bc;
@@ -1533,10 +1530,7 @@ DWORD WINAPI interpreter(LPVOID B){;
     thisStack = thisBlock->thisStack;
     callee = thisBlock->callee;
     enablee = thisBlock->enablee;
-    //top = thisBlock->top;
-    //world = thisBlock->world;
     threadId = thisBlock->threadId;
-    //traceFile = thisBlock->traceFile;
   }
 
   int opCode,arg1,arg2,arg3,dscNo,V;
