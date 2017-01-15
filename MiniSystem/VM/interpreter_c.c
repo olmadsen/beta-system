@@ -1441,6 +1441,36 @@ Event *doCall(Block *ctx,bool withEnablingSuspend){
 	}
     }
   }
+   
+void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
+#ifdef TRACE
+  fprintf(trace," AT %s FROM %s(%i,%i,%s) "
+	  ,nameOf(callee),nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
+  if (preemptive) fprintf(trace,"preemptive ");
+#endif
+  
+  ctx->thisObj->lsc = ctx->glsc; // is this necessary?
+#ifdef TRACE
+  if (ctx->thisObj != ctx->thisStack) // external suspend ??
+    { fprintf(trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
+    }
+#endif
+  cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+#ifdef TRACE
+  dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
+#endif
+  rswap(callee,&ctx->thisObj,&ctx->thisStack); // notice &
+#ifdef TRACE
+  dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
+#endif
+  ctx->glsc = cRestoreReturn(ctx->thisObj);
+  ctx->currentDescNo = cRestoreReturn(ctx->thisObj);
+#ifdef TRACE
+  fprintf(trace,"TO %s(%i,%i,%s)\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+#endif
+  ctx->bc = codeFromDescNo(ctx->currentDescNo);
+  rPush(ctx->thisStack,callee);
+};
 
 #if defined(linux)
 void  *interpreter(void *B){;
@@ -1508,37 +1538,6 @@ DWORD WINAPI interpreter(LPVOID B){;
     threadId = thisBlock->threadId;
     //traceFile = thisBlock->traceFile;
   }
-
-   
-  void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
-#ifdef TRACE
-    fprintf(trace," AT %s FROM %s(%i,%i,%s) "
-	    ,nameOf(callee),nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
-    if (preemptive) fprintf(trace,"preemptive ");
-#endif
-    
-    ctx->thisObj->lsc = ctx->glsc; // is this necessary?
-#ifdef TRACE
-    if (ctx->thisObj != ctx->thisStack) // external suspend ??
-      { fprintf(trace,"thisObj != thisStack %s %s ",nameOf(ctx->thisObj),nameOf(ctx->thisStack));
-      }
-#endif
-    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
-#ifdef TRACE
-    dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
-#endif
-    rswap(callee,&ctx->thisObj,&ctx->thisStack); // notice &
-#ifdef TRACE
-    dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
-#endif
-    ctx->glsc = cRestoreReturn(ctx->thisObj);
-    ctx->currentDescNo = cRestoreReturn(ctx->thisObj);
-#ifdef TRACE
-    fprintf(trace,"TO %s(%i,%i,%s)\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
-#endif
-    ctx->bc = codeFromDescNo(ctx->currentDescNo);
-    rPush(ctx->thisStack,callee);
-  };
 
   int opCode,arg1,arg2,arg3,dscNo,V;
   int dinx,isRindexed,rangee,i;
