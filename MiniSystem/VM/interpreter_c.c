@@ -1888,7 +1888,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
-        printf("invokeExternal: %i ",arg1);
+        fprintf(trace,"invokeExternal: %i ",arg1);
 	switch (arg1) {
 	case 1:
 	  arg3 = vPop(thisStack);
@@ -1918,14 +1918,22 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  printf("digitalWrite(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
 #endif
-	    break;
+	    break;        
 	case 3:
 	  arg2 = vPop(thisStack);
 #ifdef linux
 	  sleep(arg2);
 #endif
 	  break;
-	  }
+	case 4:
+          arg1 = _getch();
+          fprintf(trace,"ch: %i\n",arg1);
+	  vPush(thisStack,arg1);
+	  break;
+	case 5:
+	  vPush(thisStack,_kbhit());
+	  break;
+	}
 	break;
       case doExit:
 #ifdef TRACE
