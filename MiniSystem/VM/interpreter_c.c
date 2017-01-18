@@ -835,6 +835,21 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
   exit(-1);
 }
 
+dumpVstack(Btemplate *stack){
+  int i;
+  printf("%s vStack\[",nameOf(stack));
+  for (i=0; i < stack->vtop; i++)
+    printf("%i ",stack->vstack[i + 1]);  
+  printf("]\n");
+}
+
+dumpRstack(Btemplate *stack){
+  int i;
+  printf("%s rStack\[",nameOf(stack));
+  for (i=0; i < stack->rtop; i++)
+    printf("%s ",nameOf(stack->rstack[i + 1]));  
+  printf("]\n");
+}
 int cMyLscTop(Btemplate *obj) { return obj->lscTop; };
 
 int topOfLsc(Btemplate *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
@@ -911,7 +926,9 @@ Btemplate *getR(Btemplate *obj,int inx){ return obj->rfields[inx];};
 void vPush(Btemplate *thisStack,int V){
   int i;
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) {
+    printf("\n\nvstack %s [",nameOf(thisStack));
     for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
+    printf("]\n");
     runTimeErrorX("vstack overflow",thisStack,-1);
   }
   thisStack->vstack[thisStack->vtop] = V;
@@ -1888,7 +1905,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
-        fprintf(trace,"invokeExternal: %i ",arg1);
+        fprintf(trace,"invokeExternal: %i \n",arg1);
 	switch (arg1) {
 	case 1:
 	  arg3 = vPop(thisStack);
@@ -2078,7 +2095,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    break;
 	  case 17: 
 #ifdef TRACE
-	    fprintf(trace,"thisCore %s %s\n",nameOf(thisBlock->thisObj),nameOf(thisBlock->top));
+	    fprintf(trace,"thisCore %s ",nameOf(thisBlock->thisObj));
+	    fprintf(trace," %s \n",nameOf(thisBlock->top));
 #endif
 	    rPush(thisStack,thisBlock->top);
 	    break;
