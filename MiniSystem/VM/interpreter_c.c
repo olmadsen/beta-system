@@ -835,20 +835,20 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
   exit(-1);
 }
 
-dumpVstack(Btemplate *stack){
+dumpVstack(FILE *trace,Btemplate *stack){
   int i;
-  printf("%s vStack\[",nameOf(stack));
+  fprintf(trace,"%s:vStack\[",nameOf(stack));
   for (i=0; i < stack->vtop; i++)
-    printf("%i ",stack->vstack[i + 1]);  
-  printf("]\n");
+    fprintf(trace,"%i ",stack->vstack[i + 1]);  
+  fprintf(trace,"] ");
 }
 
-dumpRstack(Btemplate *stack){
+dumpRstack(FILE *trace,Btemplate *stack){
   int i;
-  printf("%s rStack\[",nameOf(stack));
+  fprintf(trace,"%s:rStack\[",nameOf(stack));
   for (i=0; i < stack->rtop; i++)
-    printf("%s ",nameOf(stack->rstack[i + 1]));  
-  printf("]\n");
+    fprintf(trace,"%s ",nameOf(stack->rstack[i + 1]));  
+  fprintf(trace,"] ");
 }
 int cMyLscTop(Btemplate *obj) { return obj->lscTop; };
 
@@ -1044,14 +1044,12 @@ int descNoOf(Btemplate * obj){
 
 void dumpStack(FILE *trace,Btemplate *Z){
   int i;
-  fprintf(trace,"r\[");
-  for (i=0; i < Z->rtop; i++)
-    fprintf(trace,"%s ",nameOf(Z->rstack[i + 1]));
-  fprintf(trace,"]v\[");
-  for (i=0; i < Z->vtop; i++)
-    fprintf(trace,"%i ",Z->vstack[i + 1]);  
-  fprintf(trace,"]\n");
+  fprintf(trace,"\n\t");
+  dumpVstack(trace,Z);
+  dumpRstack(trace,Z);
+  fprintf(trace,"\n");
 }
+
 void dumpSwapped(FILE *trace,Btemplate *X, Btemplate *Y,Btemplate *Z){
   fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s  %s %s["
 	  ,nameOf(X),nameOf(X->rstack[1]),nameOf(X->rstack[2])
@@ -1182,7 +1180,7 @@ int newId(Block *ctx) {
 
 void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
-  fprintf(ctx->trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
+  fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
@@ -1198,7 +1196,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
-  fprintf(ctx->trace,"ALLOC %s(%i,%i,%i,%i)\n"
+  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef event
@@ -1208,7 +1206,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 
 void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
-  fprintf(ctx->trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
+  fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
@@ -1224,7 +1222,7 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
-  fprintf(ctx->trace,"ALLOC %s(%i,%i,%i,%i)\n"
+  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef event
@@ -1362,7 +1360,7 @@ void doCall(Block *ctx,bool withEnablingSuspend){
 #endif
     ctx->callee = rPop(ctx->thisStack);
 #ifdef TRACE
-    fprintf(ctx->trace,"FROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
+    fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
     if (withEnablingSuspend) ctx->enablee = ctx->callee;
     cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
@@ -1804,7 +1802,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
 #ifdef TRACE
-	fprintf(trace,"FROM %s(%i,%i,%s) ",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+	fprintf(trace,"\n\tFROM %s(%i,%i,%s) ",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 #endif
 	X = thisObj;
 	thisStack = rPop(thisObj);
@@ -1897,7 +1895,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg2 = op2(bc,&glsc);
         arg3 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
+	fprintf(trace,"invoke %i %i %i ",arg1,arg2,arg3);
 #endif
 	saveContext();
         invokeObj(thisBlock,arg1,arg2,0,0);
