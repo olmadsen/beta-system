@@ -1903,7 +1903,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	break;
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
+#ifdef TRACE
         fprintf(trace,"invokeExternal: %i \n",arg1);
+#endif
 	switch (arg1) {
 	case 1:
 	  arg3 = vPop(thisStack);
@@ -1942,7 +1944,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  break;
 	case 4:
           arg1 = _getch();
-          fprintf(trace,"ch: %i\n",arg1);
+#ifdef TRACE
+          fprintf(trace,"_getch: %i\n",arg1);
+#endif
 	  vPush(thisStack,arg1);
 	  break;
 	case 5:
