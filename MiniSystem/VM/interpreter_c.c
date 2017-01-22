@@ -1,7 +1,14 @@
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <stdbool.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
+
+#include <stdbool.h>
 
 #ifdef linux
 #include <pthread.h>
@@ -16,9 +23,7 @@
 #include <windows.h>
 #endif
 
-#include <string.h>
-
-//#define TRACE
+#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -181,7 +186,7 @@ enum {
   rtnInner = 36 ,
   innerExit = 37 ,
   sendv = 38, 
-  send = 39 ,     
+  sendx = 39 ,     
   newVrep = 40 ,
   jmpTrue = 41 ,
   pushText = 42 ,
@@ -612,7 +617,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case sendv: 
 	fprintf(trace,"sendv %i",op1(bc,&glsc));
 	break;
-      case send: 
+      case sendx: 
 	fprintf(trace,"send %i",op1(bc,&glsc));
 	break;
       case newVrep:
@@ -1952,6 +1957,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 5:
 	  vPush(thisStack,_kbhit());
 	  break;
+	case 6:
+	  printf("InvokeExternal: new_socket== socket(AF_INET, SOCK_STREAM, 0)\n");
+	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
+	  //vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
+	  vPush(thisStack,100);
+	  break;
 	}
 	break;
       case doExit:
@@ -2300,7 +2311,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	restoreContext();
 
 	break;
-      case send: 
+      case sendx: 
 #ifdef TRACE
 	fprintf(trace,"send %i",op1(bc,&glsc));
 #endif
