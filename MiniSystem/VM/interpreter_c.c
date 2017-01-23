@@ -1,12 +1,14 @@
 #define _GNU_SOURCE
+#include <winsock2.h> // must be included first - for some reason?
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h> 
+
+//#include <unistd.h>
+//#include <string.h>
+//#include <sys/types.h>
+//#include <sys/socket.h>
+//#include <netinet/in.h>
+//#include <netdb.h> 
 
 #include <stdbool.h>
 
@@ -20,8 +22,11 @@
 #define HIGH 5
 #endif
 #else
+
 #include <windows.h>
+#include <ws2tcpip.h>
 #endif
+
 
 //#define TRACE
 //#define EVENT
@@ -1132,6 +1137,16 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   eventReady = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
+ 
+ int iResult;
+ // Initialize Winsock
+ WSADATA wsaData;
+ iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+ if (iResult != 0) {
+   printf("WSAStartup failed: %d\n", iResult);
+   return 1;
+ }
+ printf("INVALID_SOCKET %i\n",INVALID_SOCKET);
 
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 #endif
@@ -1960,7 +1975,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 6:
 	  printf("InvokeExternal: new_socket== socket(AF_INET, SOCK_STREAM, 0)\n");
 	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
-	  //vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
+	  vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
 	  //vPush(thisStack,100);
 	  break;
 	}
