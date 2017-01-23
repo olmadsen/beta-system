@@ -23,7 +23,7 @@
 #include <windows.h>
 #endif
 
-#define TRACE
+//#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
