@@ -1961,7 +1961,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  printf("InvokeExternal: new_socket== socket(AF_INET, SOCK_STREAM, 0)\n");
 	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
 	  //vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
-	  vPush(thisStack,100);
+	  //vPush(thisStack,100);
 	  break;
 	}
 	break;
