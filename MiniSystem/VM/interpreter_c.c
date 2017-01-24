@@ -2012,7 +2012,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack); // socket: sockfd
 	  //mkCstring(Y);
 	  //printf("Host: [%s]\n",mkCstring(Y));
-	  he = gethostbyname(mkCstring(Y));
+          msg = mkCstring(Y);
+	  he = gethostbyname(msg);
 
 	  //Cast the h_addr_list to in_addr ,
 	  //since h_addr_list also has the ip address in long format only
@@ -2022,7 +2023,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    { //Return the first one;
 	      strcpy(ip , inet_ntoa(*addr_list[i]) );
 	    }
-	  printf("Connect: %i %s %s %i \n",arg1,nameOf(Y),ip,arg2);
+	  printf("Connect: %i %s %s %i \n",arg1,msg,ip,arg2);
 	  server.sin_addr.s_addr = inet_addr(ip);
 	  server.sin_family = AF_INET;
 	  server.sin_port = htons(arg3);
@@ -2053,7 +2054,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 10:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack);
-	  closesocket(s);
+	  closesocket(arg1);
 	  break;
 	}
 	break;
