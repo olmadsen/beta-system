@@ -1361,13 +1361,13 @@ void XallocTextObj(Block *ctx,int litInx){
 
 char *mkCstring(Btemplate *T){
   char *B = malloc(T->vtop*sizeof(char));
-  printf("mkCstring: vtop: %i ",T->vtop);
+  // printf("mkCstring: vtop: %i ",T->vtop);
   int i = 0;
   for (i = 2; i < T->vtop; i++) {
-    printf("%i %c ",T->vfields[i],(char)T->vfields[i]);
+    //printf("%i %c ",T->vfields[i],(char)T->vfields[i]);
     B[i - 2] = (char)T->vfields[i];
   }
-  printf("\n");
+  //printf("\n");
   B[T->vtop - 2] = 0;
   return B;
 }
@@ -2011,7 +2011,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  X = rPop(thisStack);    // origin - not used
 	  arg1 = vPop(thisStack); // socket: sockfd
 	  //mkCstring(Y);
-	  printf("Host: [%s]\n",mkCstring(Y));
+	  //printf("Host: [%s]\n",mkCstring(Y));
 	  he = gethostbyname(mkCstring(Y));
 
 	  //Cast the h_addr_list to in_addr ,
@@ -2019,8 +2019,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  addr_list = (struct in_addr **) he->h_addr_list;
 	  
 	  for(i = 0; addr_list[i] != NULL; i++) 
-	    {
-	      //Return the first one;
+	    { //Return the first one;
 	      strcpy(ip , inet_ntoa(*addr_list[i]) );
 	    }
 	  printf("Connect: %i %s %s %i \n",arg1,nameOf(Y),ip,arg2);
