@@ -1347,6 +1347,7 @@ void XallocTextObj(Block *ctx,int litInx){
   
   allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
   
+  ctx->callee->vtop = rangee + dinx + 1;
   ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
   ctx->callee->vfields[1] = rangee; // pos = rangee
   for (i = 0; i < rangee; i++) {
@@ -1356,6 +1357,19 @@ void XallocTextObj(Block *ctx,int litInx){
   }
   //printf(" %i %i %i %i \n"
   //,callee->vfields[0],callee->vfields[1],callee->vfields[2],callee->vfields[3]);
+}
+
+char *mkCstring(Btemplate *T){
+  char *B = malloc(T->vtop*sizeof(char));
+  printf("mkCstring: vtop: %i ",T->vtop);
+  int i = 0;
+  for (i = 2; i < T->vtop; i++) {
+    printf("%i %c ",T->vfields[i],(char)T->vfields[i]);
+    B[i - 2] = (char)T->vfields[i];
+  }
+  printf("\n");
+  B[T->vtop - 2] = 0;
+  return B;
 }
 
 void  ConvertIndexedAsString(Block *ctx) {
@@ -1992,12 +2006,14 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  //vPush(thisStack,100);
 	  break;
 	case 7:
-	  arg3 = vPop(thisStack);
-	  Y = rPop(thisStack); 
-	  X = rPop(thisStack); // origin - not used
-	  printf("Connect args: %s %s\n",nameOf(X),nameOf(Y));
-	  arg1 = vPop(thisStack);
-	  he = gethostbyname("localhost");
+	  arg3 = vPop(thisStack); // port no
+	  Y = rPop(thisStack);    // the name of the server to connect to
+	  X = rPop(thisStack);    // origin - not used
+	  arg1 = vPop(thisStack); // socket: sockfd
+	  //mkCstring(Y);
+	  printf("Host: [%s]\n",mkCstring(Y));
+	  he = gethostbyname(mkCstring(Y));
+
 	  //Cast the h_addr_list to in_addr ,
 	  //since h_addr_list also has the ip address in long format only
 	  addr_list = (struct in_addr **) he->h_addr_list;
@@ -2010,17 +2026,18 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  printf("Connect: %i %s %s %i \n",arg1,nameOf(Y),ip,arg2);
 	  server.sin_addr.s_addr = inet_addr(ip);
 	  server.sin_family = AF_INET;
-	  server.sin_port = htons(3000);
+	  server.sin_port = htons(arg3);
 	  arg3 = connect(arg1 , (struct sockaddr *)&server , sizeof(server));
 	  if (arg3 < 0) printf("Connect error\n");
 	  vPush(thisStack,arg3);
 	  break;
 	case 8:
 	  arg1 = vPop(thisStack);
-	  Y = rPop(thisStack);
+	  X = rPop(thisStack); // The message to be send
 	  Y = rPop(thisStack); // origin - not used
-	  printf("Send: %i %s\n", arg1, nameOf(Y));
+	  printf("Send: %i %s\n", arg1, nameOf(X));
 	  msg = "Hello world\r\n\r\n";
+	  msg = mkCstring(X);
 	  arg3 = send(arg1,msg,strlen(msg),0);
 	  if (arg3 < 0) printf("Send error\n");
 	  vPush(thisStack,arg3);
