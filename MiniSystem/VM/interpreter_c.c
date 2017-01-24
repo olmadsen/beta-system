@@ -2056,6 +2056,22 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  Y = rPop(thisStack);
 	  closesocket(arg1);
 	  break;
+	case 11:
+	  arg2 = vPop(thisStack);
+	  arg1 = vPop(thisStack);
+	  Y = rPop(thisStack); // origin
+	  printf("Bind: %i %i\n",arg1,arg2);
+	  //Prepare the sockaddr_in structure
+	  server.sin_family = AF_INET;
+	  server.sin_addr.s_addr = INADDR_ANY;
+	  server.sin_port = htons( arg2 );
+	  arg1 = bind(arg1 ,(struct sockaddr *)&server , sizeof(server));
+	  if ( arg1 == SOCKET_ERROR)
+	    {
+	      printf("Bind failed with error code : %d" , WSAGetLastError());
+	    }
+	  vPush(thisStack,arg1);
+	  break;
 	}
 	break;
       case doExit:
