@@ -1937,6 +1937,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 1:
 	  arg3 = vPop(thisStack);
 	  arg2 = vPop(thisStack);
+	  Y = rPop(thisStack); // origin - not used
 	  printf("pinMode(%i,%i)\n",arg2,arg3);
 #ifdef linux
 	  mraa_gpio_context pin = mraa_gpio_init(13);
@@ -1952,6 +1953,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 2:
 	  arg3 = vPop(thisStack);
 	  arg2 = vPop(thisStack);
+	  Y = rPop(thisStack); // origin - not used
 	  printf("digitalWrite(%i,%i)\n",arg2,arg3);
 #ifdef linux
 	  if (arg3 == 0) 
@@ -1965,23 +1967,27 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    break;        
 	case 3:
 	  arg2 = vPop(thisStack);
+	  Y = rPop(thisStack); // origin - not used
 #ifdef linux
 	  sleep(arg2);
 #endif
 	  break;
 	case 4:
           arg1 = _getch();
+	  Y = rPop(thisStack); // origin - not used
 #ifdef TRACE
           fprintf(trace,"_getch: %i\n",arg1);
 #endif
 	  vPush(thisStack,arg1);
 	  break;
 	case 5:
+	  Y = rPop(thisStack); // origin - not used
 	  vPush(thisStack,_kbhit());
 	  break;
 	case 6:
 	  printf("InvokeExternal: new_socket== socket(AF_INET, SOCK_STREAM, 0)\n");
 	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
+	  Y = rPop(thisStack); // origin - not used
 	  vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
 	  //vPush(thisStack,100);
 	  break;
@@ -1989,6 +1995,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 
 	  arg3 = vPop(thisStack);
 	  Y = rPop(thisStack);
+	  Y = rPop(thisStack); // origin - not used
 	  arg1 = vPop(thisStack);
 	  he = gethostbyname("localhost");
 	  //Cast the h_addr_list to in_addr ,
@@ -2011,6 +2018,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 8:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack);
+	  Y = rPop(thisStack); // origin - not used
 	  printf("Send: %i %s\n", arg1, nameOf(Y));
 	  msg = "Hello world\r\n\r\n";
 	  arg3 = send(arg1,msg,strlen(msg),0);
@@ -2019,6 +2027,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  break;
 	case 9:
 	  arg1 = vPop(thisStack);
+	  Y = rPop(thisStack); // origin - not used
 	  printf("Receive: %i ",arg1);
           printf("msg: \n");
           rPush(thisStack,NULL);
