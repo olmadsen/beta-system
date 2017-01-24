@@ -2050,6 +2050,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  printf("Receive: %i %i %s\n",arg1,arg2,msg);
           rPush(thisStack,NULL);
 	  break;
+	case 10:
+	  arg1 = vPop(thisStack);
+	  Y = rPop(thisStack);
+	  closesocket(s);
+	  break;
 	}
 	break;
       case doExit:
