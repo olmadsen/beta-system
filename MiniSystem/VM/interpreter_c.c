@@ -1516,6 +1516,13 @@ DWORD WINAPI interpreter(LPVOID B){;
   int threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
 
+  // declarations related to sockets
+  struct hostent *he;
+  struct in_addr **addr_list;
+  char ip[100];
+  struct sockaddr_in server;
+  char *msg;
+
 #ifdef linux
   pthread_t pthreadArray[MAX_THREADS];
 #else
@@ -1977,6 +1984,44 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
 	  vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
 	  //vPush(thisStack,100);
+	  break;
+	case 7:
+
+	  arg3 = vPop(thisStack);
+	  Y = rPop(thisStack);
+	  arg1 = vPop(thisStack);
+	  he = gethostbyname("localhost");
+	  //Cast the h_addr_list to in_addr ,
+	  //since h_addr_list also has the ip address in long format only
+	  addr_list = (struct in_addr **) he->h_addr_list;
+	  
+	  for(i = 0; addr_list[i] != NULL; i++) 
+	    {
+	      //Return the first one;
+	      strcpy(ip , inet_ntoa(*addr_list[i]) );
+	    }
+	  printf("Connect: %i %s %i \n",arg1,ip,arg2);
+	  server.sin_addr.s_addr = inet_addr(ip);
+	  server.sin_family = AF_INET;
+	  server.sin_port = htons(3000);
+	  arg3 = connect(arg1 , (struct sockaddr *)&server , sizeof(server));
+	  if (arg3 < 0) printf("Connect error\n");
+	  vPush(thisStack,arg3);
+	  break;
+	case 8:
+	  arg1 = vPop(thisStack);
+	  Y = rPop(thisStack);
+	  printf("Send: %i %s\n", arg1, nameOf(Y));
+	  msg = "Hello world\r\n\r\n";
+	  arg3 = send(arg1,msg,strlen(msg),0);
+	  if (arg3 < 0) printf("Send error\n");
+	  vPush(thisStack,arg3);
+	  break;
+	case 9:
+	  arg1 = vPop(thisStack);
+	  printf("Receive: %i ",arg1);
+          printf("msg: \n");
+          rPush(thisStack,NULL);
 	  break;
 	}
 	break;
