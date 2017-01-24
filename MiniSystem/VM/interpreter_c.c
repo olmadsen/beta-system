@@ -1992,10 +1992,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  //vPush(thisStack,100);
 	  break;
 	case 7:
-
 	  arg3 = vPop(thisStack);
-	  Y = rPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
+	  Y = rPop(thisStack); 
 	  arg1 = vPop(thisStack);
 	  he = gethostbyname("localhost");
 	  //Cast the h_addr_list to in_addr ,
@@ -2007,7 +2006,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	      //Return the first one;
 	      strcpy(ip , inet_ntoa(*addr_list[i]) );
 	    }
-	  printf("Connect: %i %s %i \n",arg1,ip,arg2);
+	  printf("Connect: %i %s %s %i \n",arg1,nameOf(Y),ip,arg2);
 	  server.sin_addr.s_addr = inet_addr(ip);
 	  server.sin_family = AF_INET;
 	  server.sin_port = htons(3000);
