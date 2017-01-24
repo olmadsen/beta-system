@@ -1993,8 +1993,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  break;
 	case 7:
 	  arg3 = vPop(thisStack);
-	  Y = rPop(thisStack); // origin - not used
 	  Y = rPop(thisStack); 
+	  X = rPop(thisStack); // origin - not used
+	  printf("Connect args: %s %s\n",nameOf(X),nameOf(Y));
 	  arg1 = vPop(thisStack);
 	  he = gethostbyname("localhost");
 	  //Cast the h_addr_list to in_addr ,
