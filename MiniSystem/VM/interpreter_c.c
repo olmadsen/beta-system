@@ -2034,9 +2034,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack);
 	  X = rPop(thisStack); // The message to be send
 	  Y = rPop(thisStack); // origin - not used
-	  printf("Send: %i %s\n", arg1, nameOf(X));
-	  msg = "Hello world\r\n\r\n";
+	  
+	  //msg = "Hello world\r\n\r\n";
 	  msg = mkCstring(X);
+	  printf("Send: %i %s\n", arg1, msg);
 	  arg3 = send(arg1,msg,strlen(msg),0);
 	  if (arg3 < 0) printf("Send error\n");
 	  vPush(thisStack,arg3);
@@ -2044,8 +2045,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 9:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
-	  printf("Receive: %i ",arg1);
-          printf("msg: \n");
+	  arg2 = recv(arg1,msg,2000,0);
+          msg[arg2] = 0;
+	  printf("Receive: %i %i %s\n",arg1,arg2,msg);
           rPush(thisStack,NULL);
 	  break;
 	}
