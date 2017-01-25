@@ -1372,6 +1372,21 @@ char *mkCstring(Btemplate *T){
   return B;
 }
 
+void C2QBstring(Block *ctx,char *S){
+  int length = 0;
+  int i;
+  char ch = -1;
+  /* printf("C2QBstring: %s ",S); */
+  while (ch != 0) {
+    ch = S[length];  
+    length = length + 1;
+    // if (ch != 0) printf(" %c",ch); 
+    }
+  allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
+  for (i = 0; i <= length; i++) ctx->callee->vfields[2 + i] = S[i];
+  ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
+}
+
 void  ConvertIndexedAsString(Block *ctx) {
   Btemplate *X = rPop(ctx->thisStack);; 
   int length  = X->vfields[1];
@@ -1534,7 +1549,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   struct hostent *he;
   struct in_addr **addr_list;
   char ip[100];
-  struct sockaddr_in server;
+  struct sockaddr_in server,client;
   char *msg;
 
 #ifdef linux
@@ -2046,10 +2061,19 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 9:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
+	  printf("Recv: %i\n",arg1);
+	  msg = malloc(sizeof(char) * 2000);
 	  arg2 = recv(arg1,msg,2000,0);
+	  if ( arg2 == SOCKET_ERROR)
+	    {
+	      printf("Recv failed with error code : %d\n" , WSAGetLastError());
+	    }
+          printf("After recv\n");
           msg[arg2] = 0;
 	  printf("Receive: %i %i %s\n",arg1,arg2,msg);
-          rPush(thisStack,NULL);
+	  saveContext();
+	  C2QBstring(thisBlock,msg);
+	  restoreContext();
 	  break;
 	case 10:
 	  arg1 = vPop(thisStack);
@@ -2071,6 +2095,24 @@ DWORD WINAPI interpreter(LPVOID B){;
 	      printf("Bind failed with error code : %d" , WSAGetLastError());
 	    }
 	  vPush(thisStack,arg1);
+	  break;
+	case 12:
+	  arg1 = vPop(thisStack);
+	  Y = rPop(thisStack); // origin
+	  printf("Listen: %i\n",arg1);
+	  listen(arg1,3);
+	  break;
+	case 13:
+	  arg1 = vPop(thisStack);
+	  Y = rPop(thisStack); // origin
+	  arg2 = sizeof(struct sockaddr_in);
+	  printf("Accept: %i\n",arg1);
+	  arg2 = accept(arg1,(struct sockaddr *)&client, &arg2 );
+	  printf("After accept: %i\n",arg2);
+	  if (arg2 ==  INVALID_SOCKET) {
+	    printf("accept failed with error code : %d" , WSAGetLastError());
+	  }
+	  vPush(thisStack,arg2);
 	  break;
 	}
 	break;
