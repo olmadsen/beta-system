@@ -1393,12 +1393,12 @@ void  ConvertIndexedAsString(Block *ctx) {
   // printf("\n*** ConvertIndexedAsString %i\n", length);
   //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
   
-  allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
+  allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length + 1,0);
   
   ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
   ctx->callee->vfields[1] = length; 
   int i;
-  for (i = 0; i <= length; i++) ctx->callee->vfields[i] = X->vfields[i];
+  for (i = 0; i <= length + 1; i++) ctx->callee->vfields[i] = X->vfields[i];
   X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
 }
 
