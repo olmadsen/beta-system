@@ -2099,20 +2099,34 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 12:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
-	  printf("Listen: %i\n",arg1);
-	  listen(arg1,3);
+	  arg2 = listen(arg1,3);
+	  printf("Listen: %i %i\n",arg1,arg2);
 	  break;
 	case 13:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
 	  arg2 = sizeof(struct sockaddr_in);
-	  printf("Accept: %i\n",arg1);
+	  //printf("Accept: %i\n",arg1);
 	  arg2 = accept(arg1,(struct sockaddr *)&client, &arg2 );
-	  printf("After accept: %i\n",arg2);
+	  //printf("After accept: %i\n",arg2);
 	  if (arg2 ==  INVALID_SOCKET) {
-	    printf("accept failed with error code : %d" , WSAGetLastError());
+	    arg3 = WSAGetLastError();
+	    if (arg3 == WSAEWOULDBLOCK) {
+	      //printf("Accept: no request in buffer\n");
+	      arg2 = 1;
+	    }else
+	       printf("accept failed with error code : %d\n" , arg3);
 	  }
 	  vPush(thisStack,arg2);
+	  break;
+	case 14:
+	  arg2 = vPop(thisStack);
+	  arg1 = vPop(thisStack);
+          Y = rPop(thisStack); // origin
+	  u_long iMode = 1;
+	  arg3 = ioctlsocket(arg1, FIONBIO,&iMode);
+	  if (arg3 != NO_ERROR)
+	    printf("ioctlsocket failed with error: %ld\n", arg3);  
 	  break;
 	}
 	break;
