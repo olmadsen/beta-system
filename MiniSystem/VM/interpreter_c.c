@@ -2040,9 +2040,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack); // socket: sockfd
 	  //mkCstring(Y);
 	  //printf("Host: [%s]\n",mkCstring(Y));
-          msg = mkCstring(Y);
 #ifdef linux
 #else
+          msg = mkCstring(Y);
 	  he = gethostbyname(msg);
 #endif
 	  //Cast the h_addr_list to in_addr ,
@@ -2083,21 +2083,21 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 	  printf("Recv: %i\n",arg1);
-	  msg = malloc(sizeof(char) * 2000);
 #ifdef linux
 #else
+	  msg = malloc(sizeof(char) * 2000);
 	  arg2 = recv(arg1,msg,2000,0);
 	  if ( arg2 == SOCKET_ERROR)
 	    {
 	      printf("Recv failed with error code : %d\n" , WSAGetLastError());
 	    }
-#endif
           printf("After recv\n");
           msg[arg2] = 0;
 	  printf("Receive: %i %i %s\n",arg1,arg2,msg);
 	  saveContext();
 	  C2QBstring(thisBlock,msg);
 	  restoreContext();
+#endif
 	  break;
 	case 10:
 	  arg1 = vPop(thisStack);
