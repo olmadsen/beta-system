@@ -1552,12 +1552,15 @@ DWORD WINAPI interpreter(LPVOID B){;
   int threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
 
+#ifdef linux
+#else
   // declarations related to sockets
   struct hostent *he;
   struct in_addr **addr_list;
   char ip[100];
   struct sockaddr_in server,client;
   char *msg;
+#endif
 
 #ifdef linux
   pthread_t pthreadArray[MAX_THREADS];
