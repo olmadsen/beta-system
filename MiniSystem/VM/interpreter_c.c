@@ -1,5 +1,9 @@
 #define _GNU_SOURCE
+#ifdef linux
+#else
 #include <winsock2.h> // must be included first - for some reason?
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -2017,7 +2021,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  printf("InvokeExternal: new_socket== socket(AF_INET, SOCK_STREAM, 0)\n");
 	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
 	  Y = rPop(thisStack); // origin - not used
+#ifdef linux
+#else
 	  vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
+#endif
 	  //vPush(thisStack,100);
 	  break;
 	case 7:
@@ -2028,10 +2035,14 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  //mkCstring(Y);
 	  //printf("Host: [%s]\n",mkCstring(Y));
           msg = mkCstring(Y);
+#ifdef linux
+#else
 	  he = gethostbyname(msg);
-
+#endif
 	  //Cast the h_addr_list to in_addr ,
 	  //since h_addr_list also has the ip address in long format only
+#ifdef linux
+#else
 	  addr_list = (struct in_addr **) he->h_addr_list;
 	  
 	  for(i = 0; addr_list[i] != NULL; i++) 
@@ -2044,6 +2055,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  server.sin_port = htons(arg3);
 	  arg3 = connect(arg1 , (struct sockaddr *)&server , sizeof(server));
 	  if (arg3 < 0) printf("Connect error\n");
+#endif
 	  vPush(thisStack,arg3);
 	  break;
 	case 8:
@@ -2052,10 +2064,13 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  Y = rPop(thisStack); // origin - not used
 	  
 	  //msg = "Hello world\r\n\r\n";
+#ifdef linux
+#else
 	  msg = mkCstring(X);
 	  printf("Send: %i %s\n", arg1, msg);
 	  arg3 = send(arg1,msg,strlen(msg),0);
 	  if (arg3 < 0) printf("Send error\n");
+#endif
 	  vPush(thisStack,arg3);
 	  break;
 	case 9:
@@ -2063,11 +2078,14 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  Y = rPop(thisStack); // origin - not used
 	  printf("Recv: %i\n",arg1);
 	  msg = malloc(sizeof(char) * 2000);
+#ifdef linux
+#else
 	  arg2 = recv(arg1,msg,2000,0);
 	  if ( arg2 == SOCKET_ERROR)
 	    {
 	      printf("Recv failed with error code : %d\n" , WSAGetLastError());
 	    }
+#endif
           printf("After recv\n");
           msg[arg2] = 0;
 	  printf("Receive: %i %i %s\n",arg1,arg2,msg);
@@ -2078,7 +2096,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 10:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack);
+#ifdef linux
+#else
 	  closesocket(arg1);
+#endif
 	  break;
 	case 11:
 	  arg2 = vPop(thisStack);
@@ -2086,6 +2107,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  Y = rPop(thisStack); // origin
 	  printf("Bind: %i %i\n",arg1,arg2);
 	  //Prepare the sockaddr_in structure
+#ifdef linux
+#else
 	  server.sin_family = AF_INET;
 	  server.sin_addr.s_addr = INADDR_ANY;
 	  server.sin_port = htons( arg2 );
@@ -2094,17 +2117,23 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    {
 	      printf("Bind failed with error code : %d" , WSAGetLastError());
 	    }
+#endif
 	  vPush(thisStack,arg1);
 	  break;
 	case 12:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
+#ifdef linux
+#else
 	  arg2 = listen(arg1,3);
+#endif
 	  printf("Listen: %i %i\n",arg1,arg2);
 	  break;
 	case 13:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
+#ifdef linux
+#else
 	  arg2 = sizeof(struct sockaddr_in);
 	  //printf("Accept: %i\n",arg1);
 	  arg2 = accept(arg1,(struct sockaddr *)&client, &arg2 );
@@ -2117,16 +2146,20 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    }else
 	       printf("accept failed with error code : %d\n" , arg3);
 	  }
+#endif
 	  vPush(thisStack,arg2);
 	  break;
 	case 14:
 	  arg2 = vPop(thisStack);
 	  arg1 = vPop(thisStack);
           Y = rPop(thisStack); // origin
+#ifdef linux
+#else
 	  u_long iMode = 1;
 	  arg3 = ioctlsocket(arg1, FIONBIO,&iMode);
 	  if (arg3 != NO_ERROR)
 	    printf("ioctlsocket failed with error: %ld\n", arg3);  
+#endif
 	  break;
 	}
 	break;
