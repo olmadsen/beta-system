@@ -1141,7 +1141,11 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   eventReady = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
+  CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
+#endif
  
+#ifdef linux
+#else
  int iResult;
  // Initialize Winsock
  WSADATA wsaData;
@@ -1151,9 +1155,8 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
    return 1;
  }
  printf("INVALID_SOCKET %i\n",INVALID_SOCKET);
-
-  CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 #endif
+
 }
 
 Event *getEvent(bool first){
