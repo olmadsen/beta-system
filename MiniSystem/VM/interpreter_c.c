@@ -1154,9 +1154,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
    printf("WSAStartup failed: %d\n", iResult);
    return 1;
  }
- printf("INVALID_SOCKET %i\n",INVALID_SOCKET);
 #endif
-
 }
 
 Event *getEvent(bool first){
