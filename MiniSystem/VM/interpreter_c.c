@@ -1135,6 +1135,20 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   thisBlock->threadId = 0;
   thisBlock->traceFile = "trace.s";
   fprintf(trace,"**** Execute:\n\n");
+ 
+#ifdef linux
+#else
+ int iResult;
+ // Initialize Winsock
+ WSADATA wsaData;
+ iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+ printf("\nInitialize Winsock %i\n",iResult);
+ if (iResult != 0) {
+   printf("WSAStartup failed: %d\n", iResult);
+   return 1;
+ }
+#endif
+
 #ifdef linux
   interpreter(thisBlock);
 #else
@@ -1143,18 +1157,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 #endif
- 
-#ifdef linux
-#else
- int iResult;
- // Initialize Winsock
- WSADATA wsaData;
- iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
- if (iResult != 0) {
-   printf("WSAStartup failed: %d\n", iResult);
-   return 1;
- }
-#endif
+
 }
 
 Event *getEvent(bool first){
@@ -2027,7 +2030,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  Y = rPop(thisStack); // origin - not used
 #ifdef linux
 #else
-	  vPush(thisStack,socket(AF_INET, SOCK_STREAM, 0));
+	  arg1 = socket(AF_INET, SOCK_STREAM,0);
+	  if (arg1 == INVALID_SOCKET)
+	    printf("Invalid socket: %d\n", WSAGetLastError());
+	  vPush(thisStack,arg1);
 #endif
 	  //vPush(thisStack,100);
 	  break;
@@ -2085,16 +2091,21 @@ DWORD WINAPI interpreter(LPVOID B){;
 #else
 	  msg = malloc(sizeof(char) * 2000);
 	  arg2 = recv(arg1,msg,2000,0);
-	  if ( arg2 == SOCKET_ERROR)
-	    {
-	      printf("Recv failed with error code : %d\n" , WSAGetLastError());
+	  if (arg2 == SOCKET_ERROR){ 
+	    arg3 = WSAGetLastError();
+	    if (arg3 == WSAEWOULDBLOCK) { 
+	      printf("Recv NON-BLOKC\n");
+	      rPush(thisStack,NULL);
+	    } else {
+	      printf("Recv failed with error code : %d\n" ,arg3);
 	    }
-          printf("After recv\n");
-          msg[arg2] = 0;
-	  printf("Receive: %i %i %s\n",arg1,arg2,msg);
-	  saveContext();
-	  C2QBstring(thisBlock,msg);
-	  restoreContext();
+	  }else {
+	    msg[arg2] = 0;
+	    printf("Receive: %i %i %s\n",arg1,arg2,msg);
+	    saveContext();
+	    C2QBstring(thisBlock,msg);
+	    restoreContext();
+	  }
 #endif
 	  break;
 	case 10:
