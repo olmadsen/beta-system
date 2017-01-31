@@ -32,7 +32,7 @@
 #endif
 
 
-//#define TRACE
+#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -1368,15 +1368,19 @@ void XallocTextObj(Block *ctx,int litInx){
 }
 
 char *mkCstring(Btemplate *T){
-  char *B = malloc(T->vtop*sizeof(char));
-  // printf("mkCstring: vtop: %i ",T->vtop);
+  char *B = malloc(T->vfields[1] * sizeof(char));
+  int length = T->vfields[1];
+  //printf("mkCstring: length: %i ",length);
+  //
   int i = 0;
-  for (i = 2; i < T->vtop; i++) {
+  //for (i = 2; i < T->vtop; i++) {
+  for (i = 2; i <= length + 1; i++) {
     //printf("%i %c ",T->vfields[i],(char)T->vfields[i]);
     B[i - 2] = (char)T->vfields[i];
   }
-  //printf("\n");
-  B[T->vtop - 2] = 0;
+  printf("\n");
+  //B[T->vtop - 2] = 0;
+  B[length] = 0;
   return B;
 }
 
@@ -1398,14 +1402,15 @@ void C2QBstring(Block *ctx,char *S){
 void  ConvertIndexedAsString(Block *ctx) {
   Btemplate *X = rPop(ctx->thisStack);; 
   int length  = X->vfields[1];
-  // printf("\n*** ConvertIndexedAsString %i\n", length);
-  //  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
+  //printf("\n*** ConvertIndexedAsString %i: ", length);
+  int i;
+  //for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
   
   allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length + 1,0);
   
   ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
   ctx->callee->vfields[1] = length; 
-  int i;
+
   for (i = 0; i <= length + 1; i++) ctx->callee->vfields[i] = X->vfields[i];
   X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
 }
@@ -2077,7 +2082,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef linux
 #else
 	  msg = mkCstring(X);
-	  printf("Send: %i %s\n", arg1, msg);
+	  //printf("Send: %i %s\n", arg1, msg);
 	  arg3 = send(arg1,msg,strlen(msg),0);
 	  if (arg3 < 0) printf("Send error\n");
 #endif
@@ -2086,7 +2091,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	case 9:
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
-	  printf("Recv: %i\n",arg1);
+	  //printf("Recv: %i\n",arg1);
 #ifdef linux
 #else
 	  msg = malloc(sizeof(char) * 2000);
@@ -2094,7 +2099,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  if (arg2 == SOCKET_ERROR){ 
 	    arg3 = WSAGetLastError();
 	    if (arg3 == WSAEWOULDBLOCK) { 
-	      printf("Recv NON-BLOKC\n");
+	      //printf("Recv NON-BLOCK\n");
 	      rPush(thisStack,NULL);
 	    } else {
 	      printf("Recv failed with error code : %d\n" ,arg3);
