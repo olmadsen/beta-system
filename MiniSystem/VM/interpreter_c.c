@@ -1385,13 +1385,13 @@ char *mkCstring(Btemplate *T){
 }
 
 void C2QBstring(Block *ctx,char *S){
-  int length = 0;
+  int length = -1;
   int i;
   char ch = -1;
   /* printf("C2QBstring: %s ",S); */
   while (ch != 0) {
-    ch = S[length];  
     length = length + 1;
+    ch = S[length];  
     // if (ch != 0) printf(" %c",ch); 
     }
   allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
@@ -2106,7 +2106,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    }
 	  }else {
 	    msg[arg2] = 0;
-	    printf("Receive: %i %i %s\n",arg1,arg2,msg);
+	    //printf("Receive: %i %i %s\n",arg1,arg2,msg);
 	    saveContext();
 	    C2QBstring(thisBlock,msg);
 	    restoreContext();
