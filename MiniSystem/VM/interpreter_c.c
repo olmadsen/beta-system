@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 //#define __ARDIUNO__  // just my attempt;-)
 #ifdef linux
+
 #elif defined  __CYGWIN__
 #include <winsock2.h> // must be included first - for some reason?
 #endif
@@ -8,12 +9,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-//#include <unistd.h>
-//#include <string.h>
-//#include <sys/types.h>
-//#include <sys/socket.h>
-//#include <netinet/in.h>
-//#include <netdb.h> 
+#ifdef linux
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
+#endif
 
 #include <stdbool.h>
 
@@ -1552,7 +1554,7 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 };
 
 #if defined(linux)
-void  interpreter(void *B){;
+void  *interpreter(void *B){;
 #elif defined  __CYGWIN__
 DWORD WINAPI interpreter(LPVOID B){;
 #endif
@@ -2020,7 +2022,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	  break;
 	case 4:
+#ifdef linux
+#elif defined __CYGWIN__
           arg1 = _getch();
+#endif
 	  Y = rPop(thisStack); // origin - not used
 #ifdef TRACE
           fprintf(trace,"_getch: %i\n",arg1);
@@ -2029,7 +2034,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  break;
 	case 5:
 	  Y = rPop(thisStack); // origin - not used
+#ifdef linux
+#elif defined __CYGWIN__
 	  vPush(thisStack,_kbhit());
+#endif
 	  break;
 	case 6:
 	  printf("InvokeExternal: new_socket== socket(AF_INET, SOCK_STREAM, 0)\n");
@@ -2284,8 +2292,9 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    pthread_attr_t attr;      // not used here - NULL may be
 	    pthread_attr_init(&attr); // for &attr in pthread_create
 	    int iret = 
-	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
 #elif defined  __CYGWIN__
+	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
+
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 #endif
 	    threadNo = threadNo + 1;
