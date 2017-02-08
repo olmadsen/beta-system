@@ -1573,8 +1573,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 
 #ifdef linux
-#elif defined  __CYGWIN__
   pthread_t pthreadArray[MAX_THREADS];
+#elif defined  __CYGWIN__
   HANDLE  hThreadArray[MAX_THREADS];
 #endif
   int threadNo = 0;
