@@ -1573,8 +1573,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 
 #ifdef linux
-  pthread_t pthreadArray[MAX_THREADS];
 #elif defined  __CYGWIN__
+  pthread_t pthreadArray[MAX_THREADS];
   HANDLE  hThreadArray[MAX_THREADS];
 #endif
   int threadNo = 0;
@@ -2289,12 +2289,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
 #ifdef linux
+
 	    pthread_attr_t attr;      // not used here - NULL may be
 	    pthread_attr_init(&attr); // for &attr in pthread_create
 	    int iret = 
-#elif defined  __CYGWIN__
 	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
-
+#elif defined  __CYGWIN__
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 #endif
 	    threadNo = threadNo + 1;
