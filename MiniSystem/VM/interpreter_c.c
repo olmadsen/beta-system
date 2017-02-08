@@ -1,6 +1,6 @@
 #define _GNU_SOURCE
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 #include <winsock2.h> // must be included first - for some reason?
 #endif
 
@@ -19,14 +19,16 @@
 #ifdef linux
 #include <pthread.h>
 #include <sched.h>
+#endif
+
 #ifdef linux
 #include "mraa.h"
 #include "mraa/gpio.h"
 #define LOW 0
 #define HIGH 5
 #endif
-#else
 
+#ifdef __cygwin__
 #include <windows.h>
 #include <ws2tcpip.h>
 #endif
@@ -265,7 +267,7 @@ unsigned char heap[10]; int heapTop; // not in use
 
 #ifdef linux
 pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
-#else
+#elif defined  __CYGWIN__
 HANDLE allocMutex;
 #endif
 
@@ -276,7 +278,7 @@ void *heapAlloc(int size) {
 #ifdef linux
     int ret = pthread_mutex_lock( &mutex1 );
     if (ret > 0) printf("\n\n*** mutex_lock error: %i \n",ret);
-#else
+#elif defined  __CYGWIN__
     switch(WaitForSingleObject(allocMutex,INFINITE)) {
     case WAIT_OBJECT_0:
       break;
@@ -292,7 +294,7 @@ void *heapAlloc(int size) {
 #ifdef linux 
     ret = pthread_mutex_unlock( &mutex1 );
     if (ret > 0) printf("\n\n*** mutex_unlock error: %i \n",ret);
-#else
+#elif defined  __CYGWIN__
     if (!ReleaseSemaphore(allocMutex,1,NULL)) 
       runTimeError("ReleaseSemaphoreError: allocMutex");
 #endif
@@ -997,7 +999,7 @@ int cRestoreReturn(Btemplate * obj){
 }
 
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 HANDLE eventReady,eventTaken,eventProcessed;
 #endif
 
@@ -1019,7 +1021,7 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 
 #ifdef linux
   int res = 0;
-#else
+#elif defined  __CYGWIN__
     int res = WaitForSingleObject(eventTaken,INFINITE);
     switch (res) {
     case WAIT_OBJECT_0: 
@@ -1031,12 +1033,12 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 #endif
 
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
     if (!ReleaseSemaphore(eventReady,1,NULL)) 
         runTimeError("ReleaseSemaphoreError: eventReady");
 #endif
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
     switch(WaitForSingleObject(eventProcessed,INFINITE)) {
     case WAIT_OBJECT_0:
       break;
@@ -1089,7 +1091,7 @@ void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
 
 #ifdef linux
 void *interpreter(void *B);
-#else
+#elif defined  __CYGWIN__
 DWORD WINAPI interpreter(LPVOID B);
 #endif
 
@@ -1110,7 +1112,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   descs = descs_a; // this is necessary for getImageSize() below
   // we must copy from Beta memory to avoid GC problems
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
   int imageSize = getImageSize();
@@ -1137,7 +1139,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   fprintf(trace,"**** Execute:\n\n");
  
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
  int iResult;
  // Initialize Winsock
  WSADATA wsaData;
@@ -1145,13 +1147,12 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
  printf("\nInitialize Winsock %i\n",iResult);
  if (iResult != 0) {
    printf("WSAStartup failed: %d\n", iResult);
-   return 1;
  }
 #endif
 
 #ifdef linux
   interpreter(thisBlock);
-#else
+#elif defined  __CYGWIN__
   eventReady = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
@@ -1163,13 +1164,13 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
 Event *getEvent(bool first){
   Event *E;
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
   DWORD dwWaitResult; 
 #endif
   //printf("\n***run_interpreter");
   if (!first) {
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
     if (!ReleaseSemaphore(eventProcessed,1,NULL)){ 
       printf("Errorcode: %i",(int)GetLastError());
       runTimeError("ReleaseSemaphoreError: eventProcessed");
@@ -1179,7 +1180,7 @@ Event *getEvent(bool first){
 
 #ifdef linux
   E = (Event *)mkEvent(stop_event,0,0,0,0,0,0); 
-#else
+#elif defined  __CYGWIN__
   dwWaitResult = WaitForSingleObject(eventReady,INFINITE);
   //printf("\nGot mutex\n");
   switch (dwWaitResult) 
@@ -1193,7 +1194,7 @@ Event *getEvent(bool first){
     };
 #endif
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
   if (!ReleaseSemaphore(eventTaken,1,NULL))
     runTimeError("ReleaseSemaphoreError: eventTaken");
 #endif
@@ -1551,7 +1552,7 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 
 #if defined(linux)
 void  interpreter(void *B){;
-#else
+#elif defined  __CYGWIN__
 DWORD WINAPI interpreter(LPVOID B){;
 #endif
   Block *thisBlock = (Block *)B;
@@ -1559,7 +1560,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   thisBlock->ID = 1000;
 
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
   // declarations related to sockets
   struct hostent *he;
   struct in_addr **addr_list;
@@ -1570,7 +1571,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 
 #ifdef linux
   pthread_t pthreadArray[MAX_THREADS];
-#else
+#elif defined  __CYGWIN__
   HANDLE  hThreadArray[MAX_THREADS];
 #endif
   int threadNo = 0;
@@ -1990,7 +1991,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
 	  else 
 	    {mraa_gpio_dir(pin,MRAA_GPIO_IN);};
-#else
+#elif defined  __CYGWIN__
 	  printf("pinMode(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
 #endif
@@ -2005,7 +2006,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    {mraa_gpio_write(pin,LOW);}
 	  else 
 	    {mraa_gpio_write(pin,HIGH);};
-#else
+#elif defined  __CYGWIN__
 	  printf("digitalWrite(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
 #endif
@@ -2034,7 +2035,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
 	  Y = rPop(thisStack); // origin - not used
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  arg1 = socket(AF_INET, SOCK_STREAM,0);
 	  if (arg1 == INVALID_SOCKET)
 	    printf("Invalid socket: %d\n", WSAGetLastError());
@@ -2050,14 +2051,14 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  //mkCstring(Y);
 	  //printf("Host: [%s]\n",mkCstring(Y));
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
           msg = mkCstring(Y);
 	  he = gethostbyname(msg);
 #endif
 	  //Cast the h_addr_list to in_addr ,
 	  //since h_addr_list also has the ip address in long format only
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  addr_list = (struct in_addr **) he->h_addr_list;
 	  
 	  for(i = 0; addr_list[i] != NULL; i++) 
@@ -2080,7 +2081,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  
 	  //msg = "Hello world\r\n\r\n";
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  msg = mkCstring(X);
 	  //printf("Send: %i %s\n", arg1, msg);
 	  arg3 = send(arg1,msg,strlen(msg),0);
@@ -2093,7 +2094,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  Y = rPop(thisStack); // origin - not used
 	  //printf("Recv: %i\n",arg1);
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  msg = malloc(sizeof(char) * 2000);
 	  arg2 = recv(arg1,msg,2000,0);
 	  if (arg2 == SOCKET_ERROR){ 
@@ -2117,7 +2118,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack);
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  closesocket(arg1);
 #endif
 	  break;
@@ -2128,7 +2129,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  printf("Bind: %i %i\n",arg1,arg2);
 	  //Prepare the sockaddr_in structure
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  server.sin_family = AF_INET;
 	  server.sin_addr.s_addr = INADDR_ANY;
 	  server.sin_port = htons( arg2 );
@@ -2144,7 +2145,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  arg2 = listen(arg1,3);
 #endif
 	  printf("Listen: %i %i\n",arg1,arg2);
@@ -2153,7 +2154,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  arg2 = sizeof(struct sockaddr_in);
 	  //printf("Accept: %i\n",arg1);
 	  arg2 = accept(arg1,(struct sockaddr *)&client, &arg2 );
@@ -2174,7 +2175,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg1 = vPop(thisStack);
           Y = rPop(thisStack); // origin
 #ifdef linux
-#else
+#elif defined  __CYGWIN__
 	  u_long iMode = 1;
 	  arg3 = ioctlsocket(arg1, FIONBIO,&iMode);
 	  if (arg3 != NO_ERROR)
@@ -2283,7 +2284,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    pthread_attr_init(&attr); // for &attr in pthread_create
 	    int iret = 
 	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
-#else
+#elif defined  __CYGWIN__
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 #endif
 	    threadNo = threadNo + 1;
@@ -2320,7 +2321,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 #ifdef linux
 	    usleep(arg1); // apparently in micro seconds
-#else
+#elif defined  __CYGWIN__
 	    Sleep(arg1); // apparently in milli seconds - no diff if arg1/1000!?
 #endif
 	    break;
@@ -2905,7 +2906,7 @@ DWORD WINAPI interpreter(LPVOID B){;
          pthread_join(pthreadArray[j],NULL);
 	 printf("Join of: %i\n",j);
       }
-#else
+#elif defined  __CYGWIN__
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
 
     for( j=0; j < threadNo; j++)
