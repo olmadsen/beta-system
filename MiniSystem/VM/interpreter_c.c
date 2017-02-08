@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+//#define __ARDIUNO__  // just my attempt;-)
 #ifdef linux
 #elif defined  __CYGWIN__
 #include <winsock2.h> // must be included first - for some reason?
@@ -21,7 +22,7 @@
 #include <sched.h>
 #endif
 
-#ifdef linux
+#ifdef __ARDIUNO__
 #include "mraa.h"
 #include "mraa/gpio.h"
 #define LOW 0
@@ -1985,7 +1986,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 	  printf("pinMode(%i,%i)\n",arg2,arg3);
-#ifdef linux
+#ifdef __ARDIUNO__
 	  mraa_gpio_context pin = mraa_gpio_init(13);
 	  if (arg3 == 0) 
 	    {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
@@ -2001,7 +2002,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 	  printf("digitalWrite(%i,%i)\n",arg2,arg3);
-#ifdef linux
+#ifdef __ARDIUNO__
 	  if (arg3 == 0) 
 	    {mraa_gpio_write(pin,LOW);}
 	  else 
