@@ -37,7 +37,8 @@
 #endif
 
 
-#define TRACE
+#define DUMP
+//#define TRACE
 //#define EVENT
 
 #define MAX_THREADS 5
@@ -418,6 +419,8 @@ int getDoE(ObjDesc obj){
 int getExitE(ObjDesc obj){
   return desc_getInt2(obj,exitE_index) - 1;
 }
+
+#ifdef DUMP
 void dumpStringTable(FILE *trace) {
   int inx, StringsSize,i;
   inx = getStringTableIndex();
@@ -437,6 +440,7 @@ void dumpString(FILE *trace, int inx) { //fprintf(trace,"dumpString %i\n",inx);
   //fprintf(trace," %i:",length);
   for (i=0; i<length; i++) fprintf(trace,"%c",stringTable[4 + inx + 2 + i]);
 }
+#endif
 
 int op1(ObjDesc bc, int *glsc){
   int V = bc[*glsc]; 
@@ -449,6 +453,7 @@ int op2(ObjDesc bc, int *glsc){
   return V;
 };
 
+#ifdef DUMP
 void dumpCode(FILE *trace, ObjDesc desc){
   ObjDesc bc;
   int opCode,arg1,arg2,arg3,bcTop,glsc;
@@ -755,6 +760,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
   };
   fprintf(trace,"\n");
 }
+#endif
 
 int descNo(ObjDesc desc){
   return desc_getInt4(desc,descNo_index);
@@ -768,6 +774,7 @@ int rSize(ObjDesc desc){
   return desc_getInt4(desc,rSize_index);
 }
 
+#ifdef DUMP
 void dumpDesc(FILE *trace, int xdescNo) {
   ObjDesc desc;  
   if ((desc = getDesc(xdescNo)) > 0 ) {
@@ -808,6 +815,7 @@ void dump_image(FILE * trace) {
   dumpStringTable(trace);
   dumpDescriptors(trace);
 }
+#endif
 
 int hSize = 0;
 
@@ -1127,19 +1135,25 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   memcpy(descs,descs_a,imageSize); 
   thisBlock->bc = descs;
 
+#ifdef DUMP
   fprintf(trace,"C interpreter: mainDescNo: %i imageSize: %i\n",mainDescNo,imageSize);
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
+#endif
   allocMain(thisBlock,mainDescNo);
   thisBlock->bc = getByteCode(getDesc(mainDescNo));
   thisBlock->currentDescNo = mainDescNo;
   stringTable = descs + getStringTableIndex();
+#ifdef DUMP
   dump_image(trace);
+#endif
   thisBlock->glsc = 0; 
   thisBlock->threadId = 0;
   thisBlock->traceFile = "trace.s";
+#ifdef DUNP
   fprintf(trace,"**** Execute:\n\n");
+#endif
  
 #ifdef linux
 #elif defined  __CYGWIN__
