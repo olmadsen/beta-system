@@ -18,12 +18,13 @@ checker: Parser
        (# setUpOrigin:: (# do origin[] -> DI.setUpOrigin #);
           check::
             (#
-            do (if verbose then
+            do (if true or verbose then
                    '**** Module: ' -> puttext; DI.sig.doPT -> putline
                if);
                (none,basicScope[],basicScope[],true) -> DI.check;
+               this(Module)[] -> imports.addM
             #);
-          alloc:: (# do IT[] -> DI.alloc #);
+          alloc:: (# do 'Module:alloc: ' -> puttext; moduleName->putline; IT[] -> DI.alloc #);
           desc:: (#do DI.desc -> D[] #);
        #);
      ModuleItem::<
@@ -31,9 +32,21 @@ checker: Parser
           check:: 
             (# 
             do(* 'Check ModuleItem: ' -> puttext; sig.doPT -> putline;*)
-               (none,basicScope[],basicScope[],true) -> MD.check 
+               (if false then
+                   (none,basicScope[],basicScope[],true) -> MD.check
+               if);
+               false -> wasChecked
             #);
-          alloc:: (# do IT[] -> MD.alloc #);
+          alloc:: 
+            (# 
+            do 
+               (if isChecked then 
+                   'ModuleItem:alloc: ' -> puttext; MD.moduleName -> putline;
+                   IT[] -> MD.alloc
+                else
+                   'ModuleItem:alloc:NOT checked ' -> puttext; MD.moduleName -> putline;
+               if)
+            #);
           desc:: (# do MD.desc -> D[] #)
        #);
      Items::<
@@ -138,22 +151,27 @@ checker: Parser
             #);
           alloc::
             (#
-            do (if superApl.ATd[] <> none then
+            do (*'Items:alloc: ' -> puttext; *)
+               (if superApl.ATd[] <> none then
                    superDesc.vsize -> vsize;
                    superDesc.rsize -> rsize;
                    superDesc.dsize -> dsize;
                    (if superApl.isThisBlockLevel and 
                        (not superApl.isImplSuper) and (not superApl.isSingularImplSuper)
                        then
-                       superDesc.originOff -> originOff
+                       superDesc.originOff -> originOff; '?'->put;
                     else
                        rsize + 1 -> rsize -> originOff
                    if)
                 else
                    rsize + 1 -> rsize -> originOff
                if);
+              (* originoff -> putint; ' ' -> put; *)
                (if sig[] <> none then
-                   this(items)[] -> sig.alloc
+                   this(items)[] -> sig.alloc;
+                  (* sig.doPT -> putline
+                else
+                   doPT -> putline*)
                if);
                scanSons(# do this(items)[] -> current.alloc #)
             #);
@@ -175,7 +193,7 @@ checker: Parser
                search:
                  (#
                  do scanSons
-                    (# I: ^Item; AT: ^Decl; MI: ^ModuleItem
+                    (# I: ^Item; AT: ^Decl; MI: ^ModuleItem; MD: ^Module
                     do (*'LocalSearch: ' -> puttext;  CS[] -> putline;*)
                        current[] -> I[]; 
                        (if I.isDecl then
@@ -195,7 +213,8 @@ checker: Parser
                                    (*'!!!! Found ModuleItem (hack): ' -> puttext;
                                    ATd.sig.doPT -> putline;*)
                                    ATd[] -> MI[];
-                                   true -> MI.MD.isAdded -> MI.MD.isIncluded
+                                   (*true -> MI.MD.isAdded -> MI.MD.isIncluded*)
+                                   MI[] -> (theModule->MD[]).imports.add
                                if);
                                Leave search
                     if)if)#);
@@ -362,7 +381,7 @@ checker: Parser
           check::
             (# 
             do (if son[] <> none then
-                   (if traceCheck then 
+                   (if true or traceCheck then 
                        '*** Check include:' -> puttext; doPT -> putline if);
                    basicScope.origin[] -> basicScope[];
                    scanSons
@@ -373,7 +392,14 @@ checker: Parser
                    do current[] -> IV[];
                       (if IV.ATd[] <> none then
                           IV.ATd[] -> MI[];
-                          MI.MD.check;
+                          (NONE,MI.MD.origin[],MI.MD.origin[],true) -> MI.MD.check;
+                          true -> MI.isChecked;
+                          true -> MI.MD.inUse;
+                          'inUse: ' -> puttext; MI.MD.moduleName -> putline;
+                          (if not MI.MD.isAdded then
+                              MI[] -> (encModule).MD.imports.add;
+                              true -> MI.MD.isAdded
+                        if);
                    if)#)
                if)
             #);
@@ -545,7 +571,7 @@ checker: Parser
                   (if current## = ObjectGenerator## then (* a virtual binding *)
                       current[] -> OG[];
                       (if OG.isObjectDesc then
-                         (* '***** Virtual: ' -> putline;
+                         (*'***** Virtual: ' -> putline;
                           current.doPT -> putline;
                           'Fathers: ' -> puttext;
                           current.father.label -> puttext; ' ' -> put;
@@ -712,11 +738,12 @@ checker: Parser
             #);     
           alloc::< 
             (# 
-            do IT[] -> OD.alloc;
+            do IT[] -> OD.alloc; (*'*** Ptn:alloc: ' -> puttext; sig.doPT -> putline;*)
                (if ptnKind 
-                // virtualPtn then
+                // virtualPtn then (*'Virtual ptn: ' -> putline; sig.doPT -> putline;*)
                    IT.dsize + 1-> IT.dsize -> off   
                 // furtherPtn // finalPtn then
+                   (*'Virtual bind: ' -> putline; sig.doPT -> putline;*)
                    OD.super.ATd.off -> off
                if);
                inner 
@@ -1179,7 +1206,6 @@ checker: Parser
        do (if reportQuaCheck then inner if)
        #);
      semanticErrors: @boolean;
-     
   do '**** CHECKER ****' -> putline;
      0 -> newDesc.noOfDescs; (* needed when exe from minienv
                               * we must find a way to compile changed modules
@@ -1190,12 +1216,15 @@ checker: Parser
      (*true -> traceSearch;*)
      
      rootModule.setUpOrigin;
-
+     
+     '>>>> main:origin:' -> putline;
+     main.origin.doPT -> putline;
      rootModule.check;
+     (none,main.origin[],main.origin[],true) -> main (*rootModule*) .check;
      argBuf.check;
      (*main.doPP -> putline;*)
      '**** ALLOC     ****'->putline;
-     rootModule.alloc;
+     rootModule .alloc;
      (*main.doPT -> putline;*)
 
      (if semanticErrors then
