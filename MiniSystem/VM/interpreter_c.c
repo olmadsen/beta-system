@@ -1415,6 +1415,7 @@ void C2QBstring(Block *ctx,char *S){
   allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
   for (i = 0; i <= length; i++) ctx->callee->vfields[2 + i] = S[i];
   ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
+  free(S);
 }
 
 void  ConvertIndexedAsString(Block *ctx) {
@@ -1425,12 +1426,13 @@ void  ConvertIndexedAsString(Block *ctx) {
   //for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
   
   allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length + 1,0);
-  
-  ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
+  while (X->vfields[length + 1] == 0 ) length = length - 1;
+
+  ctx->callee->rfields[1] = ctx->world->rfields[3]; // origin - a bloody hack
   ctx->callee->vfields[1] = length; 
 
-  for (i = 0; i <= length + 1; i++) ctx->callee->vfields[i] = X->vfields[i];
-  X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
+  for (i = 2; i <= length + 1; i++) ctx->callee->vfields[i] = X->vfields[i];
+  //X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
 }
 
 void doCall(Block *ctx,bool withEnablingSuspend){
