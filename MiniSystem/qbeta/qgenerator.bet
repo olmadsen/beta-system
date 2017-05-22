@@ -140,7 +140,14 @@ generator: restrictions
             #)          
        #);
      Signature::
-       (# 
+       (# gen:: 
+            (# 
+            do (* TST/RemoteExp fails at      
+                *    Bar(ch + 2).foo(ch + 2).print
+                * if we call args.gen
+                *)
+               (*(false,0,0) -> args.gen*) 
+            #); 
           storeParameters:
             (#
             do (*cd.setThisStack;*)
@@ -204,6 +211,19 @@ generator: restrictions
             exit D[]
             #)
        #);
+     Arguments::
+       (# gen::
+            (#
+            do scanArgs
+               (#
+               do (if traceGeneric then
+                      current.doPT -> putline;
+                      current.label -> putline;
+                  if);
+                  (false,0,0) -> current.gen 
+               #)
+            #)
+       #);
      ObjectGenerator::
        (# gen::
             (# gdb:: 
@@ -234,35 +254,102 @@ generator: restrictions
                    (OGid,IS.descno,staticOff,true) -> cd.invoke; 
 
                    (if not useReturnValue  then cd.rpop if);
-                   
+
                    (OGid,none,this(ObjectGenerator)[],super[]) -> ObjTmpStack.add
                if);
                cd.bcPos -> endBCP;
             #);
           genClass::
             (#
-            do (N[],sig[],IS.descNo,super[]) -> IS.genClass
+            do 
+               (N[],sig[],IS.descNo,super[],this(ObjectGenerator)) -> IS.genClass
+            #);
+          addBinding: @
+            (# off: @integer; E: ^ObjectGenerator;
+               offsets: [2] @integer;
+               bindingType: [2] @integer; (* 0: inner; 1: ref; 2: value *)
+               bindings: [2] ^ObjectGenerator;
+               top: @integer;
+               copySuper:
+                 (# ptn: ^Pattern
+                 do (if (super[] <> none) and (super.ATd[] <> none) then
+                        super.ATd[] -> ptn[];
+                        (*'copySuper:' ->putline; ptn.OD.addBinding.display;*)
+                        (for i: ptn.OD.addBinding.top repeat 
+                             (*ptn.OD.addBinding.bindings[i].dopt -> putline;*)
+                             (ptn.OD.addBinding.offsets[i]
+                             ,ptn.OD.addBinding.bindings[i][]) 
+                               -> addBinding
+                        for)                             
+                    if)
+                 #);
+               display:
+                 (# T: ^Text
+                 enter T[]
+                 do (if top > 0 then
+                        T[] -> puttext; 
+                        '*** Bindings: descNo: ' -> puttext; 
+                        IS.descNo -> putint; newline;
+                        (for i: top repeat
+                             i -> putint; ':' -> put;
+                             (if bindingType[i]
+                              // 0 then '   inner: ' -> puttext;
+                              // 1 then '   ref: ' -> putline
+                              // 2 then '   value: ' -> putline;
+                              else 
+                                 '   ???' -> putline
+                             if);
+                             (if bindings[i][] <> none then
+                                 bindings[i].doPT -> putline
+                              else 
+                                 'none'->putline
+                             if)
+                    for)if)
+                 #)      
+            enter(off,E[])
+            do (if handleGeneric then
+               (if off > bindings.range then
+                   (off + 2 - bindingType.range) -> bindingType.extend;
+                   (off + 2 - bindings.range) -> bindings.extend;
+                   (off + 2 - offsets.range) -> offsets.extend;
+               if);
+               (if off > top then off -> top if);
+               off -> offsets[off];
+               (*'Add:' -> puttext; E.doPT -> puttext; 
+               ' ' -> put; off -> putint;
+               ' ' -> put; E.primNo -> putint; newline;*)
+               (if E.primNo // integer_prim then 
+                   (* '--value--'->putline;*)
+                   2 -> bindingType[off]
+                else 
+                   1 -> bindingType[off]
+               if);
+               E[] -> bindings[off][];
+               if)
             #)
+
        #);
      items::
        (# genClass:
             (# N: ^text; sig: ^Signature; descNo: @integer; super: ^Invocation;
                T: @text; ptn: ^Pattern;
                vSuperDesc: ^Items;
-               nd: ^Node
-            enter(N[],sig[],descNo,Super[])
+               nd: ^Node;
+               enclosingOG,OD: ^ObjectGenerator
+            enter(N[],sig[],descNo,Super[],OD[])
             do (*'GenClass: ' -> puttext; doPT -> putline;*)
                (if (superDesc[] <> none) then
                    superDesc.father.father -> nd[];
                    nd[] -> ptn[];
                    (if not superDesc.done then
                        (# 
-                       do (ptn.sig.id[],ptn.sig[],superdesc.descNo,ptn.OD.super[]) 
+                       do (ptn.sig.id[],ptn.sig[],superdesc.descNo,ptn.OD.super[],ptn.OD[]) 
                             -> superDesc.genClass
                        #)
                if)if);
                (if not done then
                    true -> done;
+                   OD.addBinding.copySuper;
                    (N[],descNo,false, (topSuper).descNo,originOff) -> cd.class;
                    (* thisObj = the new instance of this class 
                     * thisStack = caller
@@ -389,6 +476,9 @@ generator: restrictions
                    if);
                    (vsize,rsize,1) -> CD.endClass;
                    cd.bcPos -> endBCP
+               if);
+               (if traceGeneric2 then
+                   (father[] -> enclosingOG[]).addBinding.display
                if)
             #);
           goOrigin:
@@ -431,8 +521,10 @@ generator: restrictions
        #);
      Pattern::
        (#  gen:: 
-            (# gdb:: (# do sig.dopt -> lx.puttext #)
-            do (if OD.primNo
+            (# gdb:: (# do sig.dopt -> lx.puttext #);
+               enclosingOG: ^ObjectGenerator
+            do (if sig[] <> none then (false,0,0) -> sig.gen if);
+               (if OD.primNo
                 // 0 
                 // object_prim // string_prim 
                 // indexed_prim // immutable_prim then
@@ -449,27 +541,56 @@ generator: restrictions
                        (if not OD.hasItems (* OD.IS.isEmpty*) then
                            (off,(OD.super.desc).descNo) -> cd.vdtTable;
                            (if traceGeneric then
-                               'Bind1: ' -> puttext;
+                               '*** Bind1: ' -> puttext;
                                off -> putint; ' ' -> put; 
                                (OD.super.desc).descNo -> putint; newline;
-                               dopt -> putline
-                           if)
+                               dopt -> putline;
+                               'Father: ' -> putline;
+                               father.doPT -> putline;
+                           if);
                         else
                            (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add;
                            (off,OD.IS.descNo) -> cd.vdtTable;
-                           'Bind2: ' -> puttext;
-                           off -> putint; ' ' -> put; 
-                           OD.IS.descNo -> putint; newline
-                       if)                            
+                           (if traceGeneric then
+                               '*** Bind2: ' -> puttext;
+                               off -> putint; ' ' -> put; 
+                               OD.IS.descNo -> putint; newline
+                           if)
+                       if);   
+                       (if father.father[] = none then 
+                           'father.father none'->putline;
+                           father.doPT -> putline;
+                           father.label -> putline
+                        else
+                       (if father.father##
+                        // pattern## // ObjectGenerator## then
+                           (*'PTN: ' -> putline;*)
+                           (off, OD[]) 
+                             -> (father.father[]-> enclosingOG[]).addBinding
+                        // Signature## then
+                           (# ptn: ^pattern
+                           do(* 'Signature: ' -> putline;
+                              father.father.doPT -> putline;*)
+                              
+                              (off, OD[]) 
+                                -> (father.father.father[]-> ptn[]).OD.addBinding
+                           #)
+
+                        else                           
+                           'Koks'->putline;
+                           father.father.label -> putline
+                       if)if)
                     // furtherPtn // finalPtn then
                        (sig.id[],sig[],OD[],OD.super[]) -> objTmpStack.add;
                        (off,OD.IS.descNo) -> cd.vdtTable;
                        (if traceGeneric then
-                           'Bind3: ' -> puttext;
+                           '*** Bind3: ' -> puttext;
                            off -> putint; ' ' -> put; 
                            OD.IS.descNo -> putint; newline ;
                            dopt -> putline
-                       if)
+                       if);
+                       (off, OD[]) 
+                         -> (father.father[]-> enclosingOG[]).addBinding
                    if)
                 (*// resume_prim then
                    ('Resume','D') -> cd.call;                   *)
@@ -495,6 +616,7 @@ generator: restrictions
           loadArgs::
             (# gdb:: (# do sig.doPT -> lx.puttext; E.doPT -> lx.puttext #);
                args: [6]^ObjectGenerator; top,i: @integer;
+               enclosingOG: ^ObjectGenerator
             do (if OD.primNo 
                    (* Some of these are handled in invoke below
                     * May be moved to here*)
@@ -514,27 +636,48 @@ generator: restrictions
                    (# D: ^Decl; Ex: ^Exp; OI: ^ObjectInvocation;
                       OG: ^ObjectGenerator; name: ^text; descNo: @integer
                    do i + 1 -> i;
+                     (* 'Arg: ' -> puttext; *)
                       currentArg[] -> D[]; (* can we do current.LoadArg?
                                             * And then perhaps special for virtual
                                             * and primitives, and ptName?
                                             * Virt is of course ptn *)
+                      (* D.doPT -> putline;
+                       args[i].doPT -> putline;
+                       args[i].primno -> putint; ' ' -> put;
+                       (args[i].desc).primno -> putint; *)
+                      (*(if args[i].isSimpleValue then 'S' -> put if);*)
+                      (* args[i].dopp -> putline;*)
+                      (*newline;*)
                       handleVirtArg:
                         (if D.isVirtual then
                             L:
                               args[i].super.scanSons(# do current[] -> Ex[]; leave L #);
                             (if (Ex[] <> none) and (Ex## = ObjectInvocation##) then
-                                (* 'Try: ' -> puttext; Ex.label -> putline; 
+                                (* 'Try: ' -> puttext; Ex.label - >putline; 
                                  * Ex.doPT -> putline; *)
                                 Ex[] -> OI[];
                                 (if (1 -> OI.ptnId.T.inxGet) = '#' then
-                                    'Got ptn id: ' -> puttext; OI.ptnId.doPT -> puttext;
+                                    'Got ptn id: ' -> puttext; 
+                                    OI.ptnId.doPT -> puttext;
                                     (args[i].desc).descNo -> descNo; 
-                                    ' ' -> put; descNo -> putint; newline;
+                                    ' descNo: ' -> puttext; 
+                                    descNo -> putint; ' ' ->put;
+                                    OI.ATd.primNo -> putint; ' ' -> put;
+                                    OD.super.primNo -> putint;
+                                    newline;
                                     E.father.father[] -> OG[]; (* need OG.descNo for VDT *)
                                     (D.off,descno,(OG.desc).descNo) -> cd.vdtTableAt;
-                                    'Bind4: ' -> puttext;
-                                    off -> putint; ' ' -> put; 
-                                    (OD.desc).descNo -> putint; newline;
+                                    (if traceGeneric then
+                                        '*** Bind4: ' -> puttext;
+                                        D.off -> putint; ' descNo: ' -> puttext; 
+                                        (OD.desc).descNo -> putint; 
+                                        ' primno: ' -> puttext;
+                                        args[i].primno -> putint;
+                                        newline
+                                    if);
+                                    (D.off, args[i][])
+                                     -> (E.father.father[]-> enclosingOG[])
+                                    .addBinding;
                                     leave handleVirtArg
                                 if);
                             if);
@@ -572,11 +715,13 @@ generator: restrictions
                              D.sig.doPT -> putline;*)
                             (D.off,descno,(OG.desc).descNo) -> cd.vdtTableAt;
                             (if traceGeneric then
-                                'Bind5: ' -> puttext; 
+                                '*** Bind5: ' -> puttext; 
                                 D.off -> putint; ' ' -> put;
                                 (OG.desc).descNo -> putint; newline;
-                                args[i].doPT -> putline
-                            if)
+                                args[i].doPT -> putline;
+                            if);
+                            (D.off, OD[]) 
+                              -> (father.father[]-> enclosingOG[]).addBinding
                          else
                             (if i > top then
                                 (* Either to few arguments or Super as in
@@ -587,10 +732,11 @@ generator: restrictions
                             if)
                    if)#);
                    handleSuperArgs:
-                   (if i < top then (* a hack - need to scan arguments of super *)
-                       i + 1 -> i;
-                       (true,superAdj,0) -> args[i].gen;
-                       restart handleSuperargs
+                     (if i < top then 
+                         (* a hack - need to scan arguments of super *)
+                         i + 1 -> i;
+                         (true,superAdj,0) -> args[i].gen;
+                         restart handleSuperargs
                    if)
                if)
             #);
