@@ -344,7 +344,6 @@ checker: Parser
           getDescNo:: (# do descNo -> dNo #);
           objDescEq:: (# do  DN = descNo -> value #);
           superApl: ^Apl;
-          (*superDesc: ^Items; in AbstactSyntaxTree *)
           vsize,rsize,dsize,originOff,noOfInner,innerInx: @integer;
           done: @boolean (* codegen done*)
        #);
@@ -756,16 +755,95 @@ checker: Parser
                if)
             #);     
           alloc::< 
-            (# 
+            (# add:
+                 (# enclosingOG: ^ObjectGenerator; ptn: ^pattern; F: ^Node
+                 do father.father[] -> F[];
+                    (if F##
+                     // ObjectGenerator## then
+                        (* 'ObjectGenerator: ' -> putline;
+                         F.dopt->putline;*)
+                        (off, OD[]) -> (F[]-> enclosingOG[]).addBinding
+                     // Signature## then
+                        (*'Signature: ' -> putline; F.father.doPT -> putline;
+                         Ffather.label -> putline;*)
+                        (off, OD[]) -> (F.father[]-> ptn[]).OD.addBinding
+                     else                           
+                        'Koks'->putline;
+                        father.father.label -> putline
+                    if)
+                 #);
             do IT[] -> OD.alloc; (*'*** Ptn:alloc: ' -> puttext; sig.doPT -> putline;*)
                (if ptnKind 
                 // virtualPtn then (*'Virtual ptn: ' -> putline; sig.doPT -> putline;*)
-                   IT.dsize + 1-> IT.dsize -> off   
+                   IT.dsize + 1-> IT.dsize -> off;
+                   add
                 // furtherPtn // finalPtn then
                    (*'Virtual bind: ' -> putline; sig.doPT -> putline;*)
-                   OD.super.ATd.off -> off
+                   OD.super.ATd.off -> off;
+                   add
                if);
                inner 
+            #);
+          handleArgs::
+            (# args: [6]^ObjectGenerator; top: @integer;
+               enclosingOG: ^ObjectGenerator
+            do (*'HandleArgs: ' -> putline; dopt-> putline; 
+                * E.doPT -> putline; '--' -> putline;
+                *)
+               E.args.scanArgs
+               (#
+               do (if (top+1 -> top) > args.range then 
+                      args.range -> args.extend 
+                  if);
+                  current[] -> args[top][];
+                  (*'ActualArg: ' -> puttext; current.dopt -> putline*)
+               #);
+               (if top = 0 then leave handleArgs if);
+               sig.scanArgs
+               (# D: ^Decl; i: @ integer; Ex: ^Exp; 
+                  OI: ^ObjectInvocation; descNo: @integer
+               do  i + 1 -> i;
+                  (*'Arg: ' -> puttext; currentArg.doPT -> putline;*)
+                  currentArg[] -> D[];
+                  handleVirtArg:
+                    (if D.isVirtual then
+                        L:
+                          args[i].super.scanSons(# do current[] -> Ex[]; leave L #);
+                        (if (Ex[] <> none) and (Ex## = ObjectInvocation##) then
+                            (*'Try: ' -> puttext; Ex.label -> putline; 
+                             * Ex.doPT -> putline;  
+                             *)
+                            Ex[] -> OI[];
+                            (if (1 -> OI.ptnId.T.inxGet) = '#' then
+                                'Got ptn id: ' -> puttext; 
+                                OI.ptnId.doPT -> puttext;
+                                (args[i].desc).descNo -> descNo; 
+                                ' descNo: ' -> puttext; 
+                                descNo -> putint; ' ' ->put;
+                                OI.ATd.primNo -> putint; ' ' -> put;
+                                OD.super.primNo -> putint;
+                                newline;
+                                (D.off, args[i][])
+                                  -> (E.father.father[]-> enclosingOG[])
+                                .addBinding;
+                                leave handleVirtArg
+                            if);
+                            (if (E.desc).primNo = indexed_prim then 
+                                (* We ignore bindings of elm in Indexed *)
+                                leave handleVirtArg
+                             else
+                                (if args[i].primNo = integer_prim then
+                                    '\n*** Virtual bound to integer in\n\n\t'->puttext;
+                                    E.doPT -> putline;
+                                    '\n    is ignored by the compiler\n' -> putline;
+                                    leave handleVirtArg
+                                if);
+                            if);
+                            (D.off, OD[]) 
+                              -> (father.father[]-> enclosingOG[]).addBinding;
+                        if)
+                    if)
+               #)
             #);
           desc::<
             (# elm:: items
@@ -915,10 +993,90 @@ checker: Parser
             do IT[] -> super.alloc;
                (if isObjectDesc then 
                    IT[] -> IS.alloc 
-               if)
+               if);
+               addBinding.display
             #);
           hasCode:: (# do true -> value #);
-
+          addBinding: @
+            (# off: @integer; E: ^ObjectGenerator;
+               offsets: [2] @integer;
+               bindingType: [2] @integer; (* 0: inner; 1: ref; 2: value *)
+               bindings: [2] ^ObjectGenerator;
+               top: @integer;
+               copySuper:
+                 (# ptn: ^Pattern
+                 do (if (super[] <> none) and (super.ATd[] <> none) then
+                        super.ATd[] -> ptn[];
+                        (*'copySuper:' ->putline; ptn.OD.addBinding.display;*)
+                        (for i: ptn.OD.addBinding.top repeat 
+                             (*ptn.OD.addBinding.offSets[i] -> putint; ' '-> put;
+                              ptn.OD.addBinding.bindingType[i] -> putint; newline;
+                             (if ptn.OD.addBinding.bindings[i][] <> none then
+                                 ptn.OD.addBinding.bindings[i].dopt -> putline;
+                              else
+                                 'none' -> putline
+                             if);*)
+                             (if ptn.OD.addBinding.offsets[i] > 0 then
+                                 (ptn.OD.addBinding.offsets[i]
+                                 ,ptn.OD.addBinding.bindings[i][]) 
+                                   -> addBinding
+                                 (*else = 0: inner *)
+                             if)
+                        for)                             
+                    if)
+                 #);
+               display:
+                 (# T: ^Text
+                 enter T[]
+                 do (if top > 0 then
+                        T[] -> puttext; 
+                        '*** Bindings: descNo: ' -> puttext; 
+                        IS.descNo -> putint; newline;
+                        (for i: top repeat
+                             i -> putint; ':' -> put;
+                             offsets[i] -> putint; ':'->put;
+                             (if bindingType[i]
+                              // 0 then '   inner: ' -> puttext;
+                              // 1 then '   ref: ' -> putline
+                              // 2 then '   value: ' -> putline;
+                              else 
+                                 '   ???' -> putline
+                             if);
+                             (if bindings[i][] <> none then
+                                 bindings[i].doPT -> putline
+                              else 
+                                 'none'->putline
+                             if)
+                    for)if)
+                 #)      
+            enter(off,E[])
+            do (if handleGeneric then
+                   (if off <= 0 then
+                       '\n*** addBinding: off <= 0: '-> puttext;
+                       off -> putint; newline;
+                       dopt -> putline;
+                       E.doPT -> putline;
+                       leave addBinding
+                   if);
+               (if off > bindings.range then
+                   (off + 2 - bindingType.range) -> bindingType.extend;
+                   (off + 2 - bindings.range) -> bindings.extend;
+                   (off + 2 - offsets.range) -> offsets.extend;
+               if);
+               (if off > top then off -> top if);
+               off -> offsets[off];
+               (*'Add:' -> puttext; E.doPT -> puttext; 
+               ' ' -> put; off -> putint;
+               ' ' -> put; E.primNo -> putint; newline;*)
+               (if E.primNo // integer_prim then 
+                   (* '--value--'->putline;*)
+                   2 -> bindingType[off]
+                else 
+                   1 -> bindingType[off]
+               if);
+               E[] -> bindings[off][];
+               if)
+            #);
           getNameForOff::
             (#do (attOff,descNo,isRef,isIndexed) -> IS.getNameForOff -> NM[] #);
           getDescNo:: (# do IS.descNo -> dNo #);
@@ -1036,10 +1194,11 @@ checker: Parser
           alloc:: 
             (#
             do (if ATd[] = none then 
-                   'Atd is none: '->puttext; label -> putline; doPT-> putline; if);               
+                   'Atd is none: '->puttext; label -> putline; doPT-> putline; 
+               if);               
                (IT[],args[]) -> ATd.isInner ;
                scanSons(#do IT[] -> current.alloc #);
-               
+               this(Exp)[] -> ATd.handleArgs
             #);
        #);
      BracketedExp::<
