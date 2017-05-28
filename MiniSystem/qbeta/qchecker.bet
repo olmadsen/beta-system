@@ -114,7 +114,8 @@ checker: Parser
                        (*newline;*)
                     #)
                  #);
-            do (if traceCheck then '*** Check Items: \n' -> puttext; doPT->putline if);;
+            do (if traceCheck then 
+                   '*** Check Items: \n' -> puttext; doPT->putline if);
                this(items)[] -> basicScope[];
                (if superApl[] = none then
                    'superApl is none' -> putline;
@@ -144,6 +145,7 @@ checker: Parser
                        none -> superDesc[]
                    if)
                if);
+
                (if props[] <> none then 
                    (none,basicScope[],basicScope[],true) -> props.check 
                if);
@@ -172,12 +174,8 @@ checker: Parser
                 else
                    rsize + 1 -> rsize -> originOff
                if);
-              (* originoff -> putint; ' ' -> put; *)
                (if sig[] <> none then
-                   this(items)[] -> sig.alloc;
-                  (* sig.doPT -> putline
-                else
-                   doPT -> putline*)
+                   this(items)[] -> sig.alloc
                if);
                scanSons(# do this(items)[] -> current.alloc #)
             #);
@@ -406,7 +404,11 @@ checker: Parser
                    if)#)
                if)
             #);
-          alloc:: (# do scanSons(#do IT[] -> current.alloc #)#);
+          alloc:: 
+            (# 
+            do 
+               scanSons(#do IT[] -> current.alloc #)
+            #);
           searchInclude:
             (# CS: ^Text; ATd: ^Decl
             enter CS[]
@@ -772,9 +774,11 @@ checker: Parser
                         father.father.label -> putline
                     if)
                  #);
-            do IT[] -> OD.alloc; (*'*** Ptn:alloc: ' -> puttext; sig.doPT -> putline;*)
+            do (* '*** Ptn:alloc: ' -> puttext; sig.doPT -> putline;*)
+               IT[] -> OD.alloc;
                (if ptnKind 
-                // virtualPtn then (*'Virtual ptn: ' -> putline; sig.doPT -> putline;*)
+                // virtualPtn then 
+                   (*'Virtual ptn: ' -> putline; sig.doPT -> putline;*)
                    IT.dsize + 1-> IT.dsize -> off;
                    add
                 // furtherPtn // finalPtn then
@@ -787,9 +791,10 @@ checker: Parser
           handleArgs::
             (# args: [6]^ObjectGenerator; top: @integer;
                enclosingOG: ^ObjectGenerator
-            do (*'HandleArgs: ' -> putline; dopt-> putline; 
-                * E.doPT -> putline; '--' -> putline;
+            do (* 'HandleArgs: ' -> putline; dopt-> putline; 
+                * E.doPT -> putline; '--' -> putline; 
                 *)
+               (if E.args[] = none then leave handleArgs if);
                E.args.scanArgs
                (#
                do (if (top+1 -> top) > args.range then 
@@ -799,6 +804,8 @@ checker: Parser
                   (*'ActualArg: ' -> puttext; current.dopt -> putline*)
                #);
                (if top = 0 then leave handleArgs if);
+               
+               (if sig[] = none then leave handleArgs if);
                sig.scanArgs
                (# D: ^Decl; i: @ integer; Ex: ^Exp; 
                   OI: ^ObjectInvocation; descNo: @integer
@@ -807,12 +814,14 @@ checker: Parser
                   currentArg[] -> D[];
                   handleVirtArg:
                     (if D.isVirtual then
+                        none -> Ex[];
                         L:
                           args[i].super.scanSons(# do current[] -> Ex[]; leave L #);
                         (if (Ex[] <> none) and (Ex## = ObjectInvocation##) then
-                            (*'Try: ' -> puttext; Ex.label -> putline; 
-                             * Ex.doPT -> putline;  
-                             *)
+                            (* 'Try: ' -> puttext; Ex.label -> putline; 
+                            * Ex.doPP -> putline;  
+                            * args[i].doPP -> putline;
+                            *)
                             Ex[] -> OI[];
                             (if (1 -> OI.ptnId.T.inxGet) = '#' then
                                 'Got ptn id: ' -> puttext; 
@@ -820,9 +829,7 @@ checker: Parser
                                 (args[i].desc).descNo -> descNo; 
                                 ' descNo: ' -> puttext; 
                                 descNo -> putint; ' ' ->put;
-                                OI.ATd.primNo -> putint; ' ' -> put;
-                                OD.super.primNo -> putint;
-                                newline;
+                                OI.ATd.primNo -> putint; newline;
                                 (D.off, args[i][])
                                   -> (E.father.father[]-> enclosingOG[])
                                 .addBinding;
@@ -832,7 +839,7 @@ checker: Parser
                                 (* We ignore bindings of elm in Indexed *)
                                 leave handleVirtArg
                              else
-                                (if args[i].primNo = integer_prim then
+                                (if OI.ATd.(*args[i].*)primNo = integer_prim then
                                     '\n*** Virtual bound to integer in\n\n\t'->puttext;
                                     E.doPT -> putline;
                                     '\n    is ignored by the compiler\n' -> putline;
@@ -841,6 +848,8 @@ checker: Parser
                             if);
                             (D.off, OD[]) 
                               -> (father.father[]-> enclosingOG[]).addBinding;
+                         else
+                           (* 'Not OG: ' -> putline; args[i].doPT -> putline*)
                         if)
                     if)
                #)
@@ -989,12 +998,19 @@ checker: Parser
                -> value
             #);          
           alloc::
-            (#
+            (# E:^Exp
             do IT[] -> super.alloc;
-               (if isObjectDesc then 
+               addBinding.copySuper;
+               super.scanSons(# do current[] -> E[] #);
+               (if (E[] <> none) and (E.ATd[] <> none) then 
+                   E[] -> E.ATd.handleArgs 
+               if);
+               (if isObjectDesc then
                    IT[] -> IS.alloc 
                if);
-               addBinding.display
+               (if traceGeneric2 then
+                   addBinding.display
+               if)
             #);
           hasCode:: (# do true -> value #);
           addBinding: @
@@ -1006,11 +1022,21 @@ checker: Parser
                copySuper:
                  (# ptn: ^Pattern
                  do (if (super[] <> none) and (super.ATd[] <> none) then
+                        (if super.ATd## <> pattern## then 
+                            (*'\n *** super is not a pattern'->putline;
+                            super.dopt -> putline;
+                            super.atd.dopt -> putline;
+                            father.dopt -> putline;*)
+                            leave copySuper
+                        if);
                         super.ATd[] -> ptn[];
-                        (*'copySuper:' ->putline; ptn.OD.addBinding.display;*)
+
+                        (* 'copySuper:' ->putline; dopt->putline; 
+                         *  ptn.OD.addBinding.display; *)
                         (for i: ptn.OD.addBinding.top repeat 
                              (*ptn.OD.addBinding.offSets[i] -> putint; ' '-> put;
-                              ptn.OD.addBinding.bindingType[i] -> putint; newline;
+                              ptn.OD.addBinding.bindingType[i] -> putint; 
+                              * newline;
                              (if ptn.OD.addBinding.bindings[i][] <> none then
                                  ptn.OD.addBinding.bindings[i].dopt -> putline;
                               else
@@ -1058,23 +1084,32 @@ checker: Parser
                        E.doPT -> putline;
                        leave addBinding
                    if);
-               (if off > bindings.range then
-                   (off + 2 - bindingType.range) -> bindingType.extend;
-                   (off + 2 - bindings.range) -> bindings.extend;
-                   (off + 2 - offsets.range) -> offsets.extend;
-               if);
-               (if off > top then off -> top if);
-               off -> offsets[off];
-               (*'Add:' -> puttext; E.doPT -> puttext; 
-               ' ' -> put; off -> putint;
-               ' ' -> put; E.primNo -> putint; newline;*)
-               (if E.primNo // integer_prim then 
-                   (* '--value--'->putline;*)
-                   2 -> bindingType[off]
-                else 
-                   1 -> bindingType[off]
-               if);
-               E[] -> bindings[off][];
+                   (if off > bindings.range then
+                       (off + 2 - bindingType.range) -> bindingType.extend;
+                       (off + 2 - bindings.range) -> bindings.extend;
+                       (off + 2 - offsets.range) -> offsets.extend;
+                   if);
+                   (if off > top then off -> top if);
+                   off -> offsets[off];
+                   (*'Add:' -> puttext; E.doPT -> puttext; 
+                    ' ' -> put; off -> putint;
+                    ' ' -> put; E.primNo -> putint; newline;
+                    *)
+                   (if false and (BindingType[off] > 0) then
+                       '---addbinding:overwrite: ' -> puttext;
+                       off -> putint; ' ' -> put; E.doPt -> putline;
+                       '   was: ' -> puttext;
+                       bindingType[off] -> putint; ' ' -> put;
+                       bindings[off].dopt -> putline;
+                       
+                   if);
+                   (if E.primNo // integer_prim then 
+                       (* '--value--'->putline;*)
+                       2 -> bindingType[off]
+                    else 
+                       1 -> bindingType[off]
+                   if);
+                   E[] -> bindings[off][];
                if)
             #);
           getNameForOff::
@@ -1198,7 +1233,8 @@ checker: Parser
                if);               
                (IT[],args[]) -> ATd.isInner ;
                scanSons(#do IT[] -> current.alloc #);
-               this(Exp)[] -> ATd.handleArgs
+               (*'handleArgs'->puttext; dopt->putline;*)
+               (* this(Exp)[] -> ATd.handleArgs *)
             #);
        #);
      BracketedExp::<
