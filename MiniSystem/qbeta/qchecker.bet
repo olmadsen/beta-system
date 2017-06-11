@@ -602,7 +602,7 @@ checker: Parser
                (none,basicScope[],argScope[],true) -> OG.check; 
             #);
           markIfVirtualDataItem::
-            (* MArk if this dataItem is qualified by a a virtual object - i.e. has the form:
+            (* Mark if this dataItem is qualified by a a virtual object - i.e. has the form:
              *    S: ? elm where elm:< Object
              * In this case elm may be bound to a simple value like Integer or
              * a pattern defining 'real' objects
@@ -610,7 +610,7 @@ checker: Parser
             (#
             do (if IT[] <> none then (* IT is none if top module *)
                    (if (OG.super.ATd[] <> none) and (OG.super.ATd.isVirtualObject) then
-                       true -> isVirtualObject -> value
+                       true -> isVirtualObject -> value                       
                if)if)
             #);
           isVirtualObject: @ Boolean;
@@ -980,7 +980,8 @@ checker: Parser
             (#
             do hasItems or (super.hasVirtualArgs and not super.isBasic)
                -> value
-            #);          
+            #);   
+          isObject: booleanValue(# do primNo = object_prim -> value #);
           alloc::
             (# E:^Exp
             do IT[] -> super.alloc;
@@ -995,7 +996,8 @@ checker: Parser
                (if traceGeneric2 then
                    addBinding.display
                if);
-               addBinding.checkForVirtualObject
+               addBinding.checkForVirtualObject;
+               addBinding.checkSuperVariant
             #);
           hasCode:: (# do true -> value #);
           hasVirtualObject: @boolean;
@@ -1006,7 +1008,28 @@ checker: Parser
                vDecl: [2] ^Pattern;
                bindingType: [2] @integer; (* 0: inner; 1: ref; 2: value *)
                bindings: [2] ^ObjectGenerator;
-               top: @integer;
+               vTop: @integer;
+               objectRefs: [2] ^Decl; rTop: @integer;
+               scanBindings:
+                 (# currentVdecl: ^Pattern; 
+                    currentBindingType: @integer;
+                    currentBinding: ^ObjectGenerator;
+                    inx: @integer
+                 do (for i: vTop repeat
+                         i -> inx;
+                         vDecl[i][] -> currentVdecl[];
+                         bindingType[i] -> currentBindingType;
+                         bindings[i][] -> currentBinding[];
+                         inner
+                    for)
+                 #);
+               scanObjectRefs:
+                 (# current: ^Decl
+                 do (for i: rTop repeat
+                         objectRefs[i][] -> current[];
+                         inner
+                    for)
+                 #);
                copySuper:
                  (# ptn: ^Pattern
                  do (if (super[] <> none) and (super.ATd[] <> none) then
@@ -1021,7 +1044,7 @@ checker: Parser
 
                         (* 'copySuper:' ->putline; dopt->putline; 
                          *  ptn.OD.addBinding.display; *)
-                        (for i: ptn.OD.addBinding.top repeat 
+                        (for i: ptn.OD.addBinding.vTop repeat 
                              (*ptn.OD.addBinding.offSets[i] -> putint; ' '-> put;
                               ptn.OD.addBinding.bindingType[i] -> putint; 
                               * newline;
@@ -1036,23 +1059,59 @@ checker: Parser
                                    -> addBinding
                                  (*else = 0: inner *)
                              if)
-                        for)
+                        for);
+                        scanObjectRefs(# do current[] -> addObjRef #)
+                    if)
+                 #);
+               addObjRef:
+                 (# objRef: ^DataItem
+                 enter objRef[]
+                 do (if (rTop + 1 -> rTop) > objectRefs.range then
+                        objectRefs.range -> objectRefs.extend 
+                    if);
+                    objRef[] -> objectRefs[rTop][];
+                    true -> hasVirtualObject
+                 #);
+               checkSuperVariant:
+                 (# ptn: ^Pattern
+                 do (if (super[] <> none) and (super.ATd[] <> none) and (super.ATd## = pattern##) then 
+                        super.ATd[] -> ptn[];
+                        ptn.OD.addBinding.scanBindings
+                        (# head: @boolean
+                        do (if (currentBinding[] <> none) then
+                               (if (currentBinding.isObject) then
+                                   (if not head then
+                                       (*  '*** Variant: ' -> putline;
+                                        doPT -> putline;*)
+                                       true -> head
+                                   if);
+                                   (*currentBinding.doPT -> putline;
+                                    bindings[inx].doPT -> putline;
+                                    bindingType[inx] -> putint;
+                                    newline                 *)                  
+                               if)                            
+                            else
+                               'currentBinding is none' -> putline;
+                               dopt -> putline
+                           if)
+                        #);
                     if)
                  #);
                checkForVirtualObject:
                  (#
                  do L:
-                      (for i: top repeat
+                      (for i: vTop repeat
                            (if bindings[i][] <> none then
                                (if bindings[i].primNo = object_prim then
                                    true -> hasVirtualObject;
-                                   (* '***** HasVirtualObject: ' -> putline; 
-                                   (if sig[] <> none then 
-                                       sig.doPT -> putline;
-                                    else
-                                       doPT -> putline;
-                                       display
-                                   if);*)
+                                   (if traceGeneric2 then
+                                       '***** HasVirtualObject: ' -> putline; 
+                                       (if sig[] <> none then 
+                                           sig.doPT -> putline;
+                                        else
+                                           doPT -> putline;
+                                           display
+                                   if)if);
                                    leave L
                       if)if)for);
                     checkDataItemAsVirtualObject
@@ -1065,7 +1124,7 @@ checker: Parser
                              (if traceGeneric2 then
                                  'Virtual DataItem: ' -> puttext; D.doPT -> putline;
                              if);
-                             true -> hasVirtualObject
+                             D[] -> addBinding.addObjRef
                          if)
                       #);
                  do (if sig[] <> none then
@@ -1080,34 +1139,45 @@ checker: Parser
                  #);
                valueOrObject::
                  (#
-                 do 'AddBinding: valOrObj:'->putline;
+                 do '***** ObjectGenerator:ValueOrObject:'->putline;
+                    dopt -> putline;
                     display;
-                    (for i: top repeat
+                    (for i: vTop repeat
                          (if vDecl[i][] = ptn[] then
                              'bound to: ' -> puttext;
-                             bindingType[i] -> putint; newline;
+                             bindingType[i] -> type; newline;
                              bindings[i].dopt -> putline;
+                             bindingType[i] -> value
                          if)
+                    for);
+                    (for i: rTop repeat
+                         'Decl: ' -> puttext;
+                         objectRefs[i].dopt -> putline
                     for)
+                 #);
+               type:
+                 (# T: @integer
+                 enter T
+                 do  (if T
+                      // 0 then ' inner: ' -> puttext;
+                      // 1 then ' ref: ' -> putline
+                      // 2 then ' value: ' -> putline;
+                      else 
+                         '  ???' -> putline
+                     if);
                  #);
                display:
                  (# T: ^Text
                  enter T[]
-                 do (if top > 0 then
+                 do (if vTop > 0 then
                         T[] -> puttext; 
                         '*** Bindings: descNo: ' -> puttext; 
                         IS.descNo -> putint; newline;
-                        (for i: top repeat
+                        (for i: vTop repeat
                              i -> putint; ':' -> put;
                              vDecl[i].doPT -> putline;
                              vDecl[i].off -> putint; ':'->put;
-                             (if bindingType[i]
-                              // 0 then '   inner: ' -> puttext;
-                              // 1 then '   ref: ' -> putline
-                              // 2 then '   value: ' -> putline;
-                              else 
-                                 '   ???' -> putline
-                             if);
+                             bindingType[i] -> type;
                              (if bindings[i][] <> none then
                                  bindings[i].doPT -> putline
                               else 
@@ -1117,12 +1187,13 @@ checker: Parser
                  #)      
             enter(VD[],E[])
             do (if handleGeneric then
-                   (if (top + 1 -> top ) > bindings.range then
-                       bindings.range -> bindings.extend;
-                       bindingType.range -> bindingType.extend;
-                       vDecl.range -> vDecl.extend
+                   (if VD.off > vTop then
+                       VD.off - bindings.range + 2-> bindings.extend;
+                       VD.off - bindingType.range + 2-> bindingType.extend;
+                       VD.off - vDecl.range + 2 -> vDecl.extend;
                    if);
-                   VD[] -> vDecl[top][];
+                   (if VD.off > vTop then VD.off -> vTop if);
+                   VD[] -> vDecl[VD.off][];
                    (*'Add:' -> puttext; E.doPT -> puttext; 
                     ' ' -> put; off -> putint;
                     ' ' -> put; E.primNo -> putint; newline;
@@ -1137,11 +1208,11 @@ checker: Parser
                    if);*)
                    (if E.primNo // integer_prim then 
                        (* '--value--'->putline;*)
-                       2 -> bindingType[top]
+                       2 -> bindingType[VD.off]
                     else 
-                       1 -> bindingType[top]
+                       1 -> bindingType[VD.off]
                    if);
-                   E[] -> bindings[top][];
+                   E[] -> bindings[VD.off][];
                if);
             #);
           getNameForOff::
