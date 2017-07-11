@@ -1,13 +1,20 @@
-#define _GNU_SOURCE
+//#define _GNU_SOURCE
 //#define __ARDIUNO__  // just my attempt;-)
+//#define usewinsock2
+//#define usekbhit
 #ifdef linux
 
 #elif defined  __CYGWIN__
+#ifdef usewinsock2
 #include <winsock2.h> // must be included first - for some reason?
+#endif
+#include <windows.h>
+//#include <ws2tcpip.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #ifdef linux
 #include <string.h>
@@ -15,11 +22,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> 
-#endif
-
-#include <stdbool.h>
-
-#ifdef linux
 #include <pthread.h>
 #include <sched.h>
 #endif
@@ -30,12 +32,6 @@
 #define LOW 0
 #define HIGH 5
 #endif
-
-#ifdef __cygwin__
-#include <windows.h>
-#include <ws2tcpip.h>
-#endif
-
 
 #define DUMP
 //#define TRACE
@@ -57,7 +53,7 @@
    Format of ObjDesc:
    0: index of name in stringtable
    2: descNo 
-   6: topDescNo 
+   6: topDescNo  
    10: vSize - size of value fields
    14: rSize - size of reference fields
    18: originOff
@@ -1157,6 +1153,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
  
 #ifdef linux
 #elif defined  __CYGWIN__
+#ifdef usewinsock2
  int iResult;
  // Initialize Winsock
  WSADATA wsaData;
@@ -1165,6 +1162,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
  if (iResult != 0) {
    printf("WSAStartup failed: %d\n", iResult);
  }
+#endif
 #endif
 
 #ifdef linux
@@ -1580,12 +1578,14 @@ DWORD WINAPI interpreter(LPVOID B){;
 
 #ifdef linux
 #elif defined  __CYGWIN__
+#ifdef usewinsock2
   // declarations related to sockets
   struct hostent *he;
   struct in_addr **addr_list;
   char ip[100];
   struct sockaddr_in server,client;
   char *msg;
+#endif
 #endif
 
 #ifdef linux
@@ -2038,6 +2038,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	  break;
 	case 4:
+#ifdef usekbhit
 #ifdef linux
 #elif defined __CYGWIN__
           arg1 = _getch();
@@ -2047,15 +2048,23 @@ DWORD WINAPI interpreter(LPVOID B){;
           fprintf(trace,"_getch: %i\n",arg1);
 #endif
 	  vPush(thisStack,arg1);
+#else
+	  runTimeError("_getch not included (Cygwin) or implemented (Linux)");
+#endif
 	  break;
 	case 5:
+#ifdef usekbhit
 	  Y = rPop(thisStack); // origin - not used
 #ifdef linux
 #elif defined __CYGWIN__
 	  vPush(thisStack,_kbhit());
 #endif
+#else
+	  runTimeError("_kbhit not included (Cygwin) or implemented (Linux)");
+#endif
 	  break;
 	case 6:
+#ifdef usewinsock2
 	  printf("InvokeExternal: new_socket== socket(AF_INET, SOCK_STREAM, 0)\n");
 	  //arg1 = socket(AF_INET, SOCK_STREAM, 0);
 	  Y = rPop(thisStack); // origin - not used
@@ -2066,9 +2075,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    printf("Invalid socket: %d\n", WSAGetLastError());
 	  vPush(thisStack,arg1);
 #endif
+	  printf("No winsock2 library included - check #define usewinsock2\n");
+#endif
 	  //vPush(thisStack,100);
 	  break;
 	case 7:
+#ifdef usewinsock2
 	  arg3 = vPop(thisStack); // port no
 	  Y = rPop(thisStack);    // the name of the server to connect to
 	  X = rPop(thisStack);    // origin - not used
@@ -2098,8 +2110,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  if (arg3 < 0) printf("Connect error\n");
 #endif
 	  vPush(thisStack,arg3);
+#endif
 	  break;
 	case 8:
+#ifdef usewinsock2
 	  arg1 = vPop(thisStack);
 	  X = rPop(thisStack); // The message to be send
 	  Y = rPop(thisStack); // origin - not used
@@ -2113,8 +2127,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  if (arg3 < 0) printf("Send error\n");
 #endif
 	  vPush(thisStack,arg3);
+#endif
 	  break;
 	case 9:
+#ifdef useqinsock2
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 	  //printf("Recv: %i\n",arg1);
@@ -2138,16 +2154,20 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    restoreContext();
 	  }
 #endif
+#endif
 	  break;
 	case 10:
+#ifdef usewinsock2
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack);
 #ifdef linux
 #elif defined  __CYGWIN__
 	  closesocket(arg1);
 #endif
+#endif
 	  break;
 	case 11:
+#ifdef usewinsock2
 	  arg2 = vPop(thisStack);
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
@@ -2165,8 +2185,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    }
 #endif
 	  vPush(thisStack,arg1);
+#endif
 	  break;
 	case 12:
+#ifdef usewinsock2
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
 #ifdef linux
@@ -2174,8 +2196,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg2 = listen(arg1,3);
 #endif
 	  printf("Listen: %i %i\n",arg1,arg2);
+#endif
 	  break;
 	case 13:
+#ifdef usewinsock2
 	  arg1 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin
 #ifdef linux
@@ -2194,8 +2218,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  }
 #endif
 	  vPush(thisStack,arg2);
+#endif
 	  break;
 	case 14:
+#ifdef usewinsock2
 	  arg2 = vPop(thisStack);
 	  arg1 = vPop(thisStack);
           Y = rPop(thisStack); // origin
@@ -2205,6 +2231,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg3 = ioctlsocket(arg1, FIONBIO,&iMode);
 	  if (arg3 != NO_ERROR)
 	    printf("ioctlsocket failed with error: %ld\n", arg3);  
+#endif
 #endif
 	  break;
 	}

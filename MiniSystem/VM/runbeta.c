@@ -1,4 +1,9 @@
-#include <stdio.h>
+// One or mor of the following files should not be included 
+// before winsock2 is inclued in interpreter_c.c
+//#include <stdio.h>
+//#include <windows.h>
+//#include <stdbool.h>
+//#include <stdlib.h>
 #include "interpreter_c.c"
 char * fixExtension(char* fn) {
   // fn = foo
