@@ -3,52 +3,118 @@ ORIGIN 'qabstractSyntaxTree'
 OGsequence:
   (# DOG: ^ObjectGenerator;
      pred: ^OGsequence;
+     isRemote: @boolean;
+     isNest: @Boolean;
      pathToSuper:
-       (# OGs: ^ObjectGenerator; on,pn: @integer; E: ^Exp; ptn: ^Pattern
-       do DOG.super.scanSons
+       (# OGs: ^ObjectGenerator; on,pn: @integer; E: ^Exp; ptn: ^Pattern;
+          i: @integer;
+          isRemote: @boolean
+       do '*** pathToSuper:'->puttext;
+          DOG.super.dopt -> puttext;
+          ' ' -> put; DOG.super.length -> putint; newline;
+
+          DOG.super.scanSons
           (# 
-          do current[] -> E[]
+          do current[] -> E[];
+             i + 1 -> i
           #);
+          i > 1 -> isRemote;          
           E.ATd[] -> ptn[];
           (if ptn[] <> none then
               ptn.OG[] -> OGs[];
               E.on -> on; E.pn -> pn
           if);
-       exit(OGs[],on,pn)
+       exit(OGs[],on,pn,isRemote)
        #);
      ENC:
-       (# S: ^OGsequence; OGs: ^ObjectGenerator; onx,pnx: @integer
-       do (if pred[] = none then (* head *)
+       (# S: ^OGsequence; 
+          OGs: ^ObjectGenerator; onx,pnx: @integer; isRemote: @boolean
+       do (if isNest then
+              pred[] -> S[]
+           else
+          (if pred[] = none then (* head *)
               DOG.origin.father[] -> OGsequence -> S[];
               this(OGsequence)[] -> S.pred[]
            else
-              pathToSuper -> (OGs[],onx,pnx);
+              pathToSuper -> (OGs[],onx,pnx,isRemote);
+              (* thisOGS = [D1,D2,...,Dn-1,Dn], Dn = DOG *)
               pred.ENC -> S[];
-              (for i: onx repeat S.ENC -> S[] for);
-              (for i: pnx  repeat S.PRE -> S[] for);
-          if)
+              (* S = ENC([D1,D2,...,Dn-1]) *)
+              (if false and isRemote then
+                  (* Dn-1: R.P{...}, where R.P = Dn 
+                   * onx = 0, pnx >= 0                  
+                   *)
+               else
+                  (for i: onx repeat S.ENC -> S[] for);
+                  (for i: pnx  repeat '**pre loop'->putline;
+                       S.PRE -> S[]; '***end pre-loop' -> putline for);
+                  '***KOKS:'->putline;
+                  S.print
+              if);
+          if)if)
        exit S[]
        #);
      PRE:
-       (# S: ^OGsequence; OGs: ^ObjectGenerator; onx,pnx: @integer
-       do pathToSuper -> (OGs[],onx,pnx);
-          OGs[] -> OGsequence -> S[];
-          this(OGsequence)[] -> S.pred[]
+       (# S,Sx: ^OGsequence; 
+          OGs,OGx: ^ObjectGenerator; onx,pnx: @integer; isRemote: @boolean;
+          ptn: ^Pattern
+       do '*** PRE:'->putline;
+          pathToSuper -> (OGs[],onx,pnx,isRemote);
+          (if isRemote then
+              '*** isRemote: ' -> puttext; 
+              this(OGsequence)[] -> S[];
+              DOG.super.scanSons
+              (# E: ^Exp; D: ^DataItem
+              do current[] -> E[]; current.dopt -> putline;
+                 (if isLast then
+                     E.ATd[] -> ptn[];
+                     PTN.OG[] -> OGx[]
+                  else                     
+                     E.ATd[] -> D[];
+                     (if D.OG.hasItems then
+                         D.OG[] -> OGx[]
+                      else
+                         (D.OG.super.desc).father[] -> OGx[]
+                 if)if);
+                 OGx[] -> OGsequence -> Sx[];
+                 true -> Sx.isNest;
+                 S[] -> Sx.pred[];                 
+                 Sx[] -> S[];
+                 '***Remote-PRE:'->putline;
+                 S.print
+              #);              
+           else
+              OGs[] -> OGsequence -> S[]; 
+              this(OGsequence)[] -> S.pred[]
+          if);
+          '***end:PRE'->putline;
+          S.print
        exit S[]
        #);
+       
      FB: 
        (# qual: ^ObjectGenerator
-       do (if pred[] <> none then
-              pred.FB -> qual[]
-           else
+       do (if isNest then
               DOG[] -> qual[]
-          if)
+           else
+              (if pred[] <> none then
+                  pred.FB -> qual[]
+               else
+                  DOG[] -> qual[]
+          if)if)
        exit qual[]
        #);
      print:
        (#
-       do '*** OGsequence:'->putline;
-          DOG.dopt -> putline;
+       do '*** OGsequence:'->puttext;
+          (if isRemote then 'isRemote:'->puttext if);
+          (if isNest then 'isNest:'->puttext if);
+          newline;
+          (if DOG[] <> none then
+              DOG.dopt -> putline;
+           else
+              'none'->putline
+          if);
           (if pred[] <> none then
               pred.print
           if)
@@ -84,11 +150,13 @@ OGPath: SuperPath
               pred.computeOGseq -> S[];
               (for i: on repeat S.ENC -> S[] for);
               (for i: pn repeat S.PRE -> S[] for);
+              '***computeOGseq'->putline;
+              S.print
            else
               OG[] -> OGx[];
               (for i: on repeat OGx.origin.father[] -> OGx[] for);
               OGx[] -> OGsequence -> S[];
-              (for i: pn repeat S.PRE -> S[] for)
+              (for i: pn repeat S.PRE -> S[] for);
           if)
        exit S[]
        #);
@@ -138,6 +206,7 @@ OGPath: SuperPath
        (# OGx: ^ObjectGenerator; qual: ^ObjectGenerator
        enter OGx[]
        do '*** find binding in : ' -> putline;
+          OGx.doPT -> putline;
           L:
             (#
             do OGx.IS.scanDecls
@@ -157,7 +226,9 @@ OGPath: SuperPath
                    OGx.IS.superDesc.father[] -> OGx[];
                    restart L
                 else
-                   'findBinding: super is none - no binding found'->putline
+                   'findBinding: super is none - no binding found:using vDcl'
+                     ->putline;
+                   vDcl.OG[] -> qual[]
                if)
             #)
        exit qual[]
