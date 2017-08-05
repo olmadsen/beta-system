@@ -1,0 +1,317 @@
+#define MAX_THREADS 5
+/* Format of ObjDescs
+   0: -xBeta--
+   8: image size
+   12: mainDescNo
+   16: textDescNo
+   20: strucRefDescNo
+   24: indexOfStringtable 
+   28: no of Object descriptors
+   32: ObjDesc1
+   ...: ...
+    
+   Format of ObjDesc:
+   0: index of name in stringtable
+   2: descNo 
+   6: topDescNo  
+   10: vSize - size of value fields
+   14: rSize - size of reference fields
+   18: originOff
+   20: procE
+   22: alloE
+   24: enterE
+   26: doE
+   28: exitE
+   30: labStart = 30 + 12 + vdtTable.range * 4
+   34: literalStart
+   38: BCstart
+   42: vdtTable
+   labStart: ...
+   : ...
+   literalStart: ...
+   : ...
+   BCstart: size of BC
+   : bytecodes ...
+*/
+bool isXbeta;
+
+//for Arduino, typdef apparently must be in the beginning of the file!?
+typedef unsigned char * ObjDesc;
+
+typedef struct Btemplate {
+  ObjDesc desc;
+  int id;
+  bool isObj;
+  int vstack[16];  
+  struct Btemplate *rstack[16];
+  int vtop; int rtop;
+  int lscStack[16];
+  int lscTop;
+  int lsc;
+  struct Btemplate *rfields[64];
+  int vfields[];
+} Btemplate;
+
+typedef struct Block {
+  ObjDesc bc;  
+  int glsc;
+  int currentDescNo;
+  Btemplate *thisModule,*thisObj,*thisStack,*callee,*enablee,*top,*world;
+  int ID;
+  int threadId;
+  char *traceFile;
+  FILE *trace;
+} Block;
+
+typedef struct Event {
+  int type;
+  Btemplate *caller,*thisObj,*org;
+  int isObj;
+  int descNo;
+  int bcPos;
+} Event;
+
+enum{
+  imageSize_index = 8,
+  mainDescInx_index = 12,
+  textDescNo_index = 16,
+  strucRefDescNo_index = 20,
+  stringTable_index = 24,
+  noOfObjDesc_index = 28,
+};
+
+enum {
+  name_index = 0,
+  descNo_index = 2,
+  topDescNo_index = 6,
+  vSize_index = 10,
+  rSize_index = 14,
+  originOff_index = 18,
+  procE_index = 20,
+  alloE_index = 22,
+  enterE_index = 24,
+  doE_index = 26,
+  exitE_index = 28,
+  labIndex = 30,
+  literal_index = 34,
+  BC_index = 38,
+  vdtTable_index = 42,
+};
+
+
+enum {
+  dummy_event = 0,
+  start_event = 1,
+  alloc_event = 2,
+  do_event = 3,
+  doExit_event = 4,
+  rtn_event = 5,
+  resume_event = 6,
+  suspend_event = 7,
+  break_event = 8,
+  vPush_event = 9,
+  rPushEvent = 10,
+  store_event = 11,
+  rStore_event = 12,
+  binOp_event =13,
+  unOp_event = 14,
+  jmpGT_event= 15,
+  pop_event = 16,
+  error_event = 17,
+  stop_event = 18
+};
+
+// opcodes
+enum {
+  pushthis  = 1,
+  pushC = 2,
+  push = 3,
+  rpush = 4,
+  pushg = 5,
+  rpushg = 6,
+  xpush = 7,
+  xpushg = 8,     
+  store = 9,
+  rstore = 10,
+  storeg = 11,
+  rstoreg =12,    
+  xstore = 13,
+  xstoreg = 14,     
+  _double = 15,          
+  rdouble = 16,
+  rtn = 17,
+  mvStack = 18,
+  stop = 19,
+  susp = 20,
+  call = 21,
+  alloc = 22,
+  doExit = 24,
+  rtnExit = 25,
+  prim = 26,     
+  jmp = 27,
+  jmpFalse = 28,
+  jmpGT = 30,     
+  pushNone = 31,
+  doSuper = 34 ,
+  innerx = 35 ,
+  rtnInner = 36 ,
+  innerExit = 37 ,
+  sendv = 38, 
+  sendx = 39 ,     
+  newVrep = 40 ,
+  jmpTrue = 41 ,
+  pushText = 42 ,
+  exeAlloc = 43 ,
+  rtnc = 44 ,
+  rpop = 45 ,
+  vpop= 46,
+  eq = 50,
+  lt = 51,
+  le = 52,
+  gt = 53,
+  ge = 54,
+  ne = 55,
+  req = 56,
+  rne = 57,
+  seq = 58,
+  sne = 59,
+
+  plus = 61,
+  minus = 62,
+  
+  orr = 63,
+  xorr = 64 ,
+  nott = 65 ,
+  
+  mult = 66 ,
+  rdiv = 67 ,
+  idiv = 68 ,
+  modd = 69,
+  andd =  70,
+  
+  uminus = 71,
+  pushc2 = 72,
+  allocIndexed = 73 ,
+  saveBETAworld = 74 ,
+  mkStrucRef = 75 ,
+  mkVirtualStrucRef = 76 ,
+  _allocFromStrucRefObj = 77 ,
+  rtnEvent = 78 ,
+  _break = 79,
+  mkObjStrucRef = 80,
+  xrpush = 81,
+  xrstore = 82,
+  xrpushg = 83,
+  xrstoreg = 84,
+  swap = 85,
+  _rswap = 86,
+  setThisStack = 87,
+  toSuper = 88,
+  innera = 89,
+  invoke = 90,
+  invokev = 91,
+  innerP = 92,
+  rpopThisObj = 93,
+  rtnEventQ = 94,
+  doEventQ = 95,
+  allocEventQ = 96,
+  invokeExternal = 97
+};
+
+
+ObjDesc descs;
+
+unsigned char * stringTable;
+
+// NB! The byte order is inconsistent - sometimes big somtimes little endian
+unsigned int getInt2(int inx) {
+  return descs[inx] * 256 + descs[inx + 1];
+};
+
+int getInt4(int inx){
+  return descs[inx+3] * 256 * 256 * 256 + descs[inx + 2] * 256 * 256 
+    + descs[inx + 1] * 256 + descs[inx];
+}; 
+
+
+int desc_getInt2(ObjDesc desc,int inx) {
+  return desc[inx] * 256 + desc[inx + 1];
+};
+
+int desc_getInt4(ObjDesc desc,int inx){
+  return desc[inx+3] * 256 * 256 * 256 + desc[inx + 2] * 256 * 256 
+    + desc[inx + 1] * 256 + desc[inx];
+}; 
+
+int getImageSize(){
+  return getInt4(imageSize_index);
+}
+
+int getMainDescInx(){
+  return getInt4(mainDescInx_index);
+}
+int getTextDescNo(){
+  return getInt4(textDescNo_index);
+};
+
+int getStrucRefDescNo(){
+  return getInt4(strucRefDescNo_index);
+};
+
+int getStringTableIndex(){
+  return getInt4(stringTable_index);
+};
+
+char *getString(int inx){
+  //fprintf(trace,"inx: %i %c %s",inx, stringTable[inx], (char *)stringTable+inx);
+  return (char *) stringTable + inx + 3;
+}
+
+ObjDesc getDesc(int descNo) {
+  // returns start address of desctiptor descNo
+  //int ix = noOfObjDesc_index + 4 + (descNo - 1) * 4;
+  int inx = getInt4(noOfObjDesc_index + 4 + (descNo - 1) * 4);
+  //if (descNo < 10) {
+  //  printf("descNo: %i %i %i %i %i %i\n", descNo,inx,descs[ix+3],descs[ix+2],descs[ix+1],descs[ix+0]);
+
+  //}
+  //printf("descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
+  if (inx > 0) {
+    return descs + inx; }
+  else 
+    return 0;
+}
+
+int getBCtop(ObjDesc desc){
+  int BCstart = desc_getInt4(desc,BC_index);
+  // fprintf(trace,"getBCtop %i %i\n",BCstart,desc_getInt2(desc,BCstart));
+  return desc_getInt2(desc,BCstart);
+}
+ObjDesc getByteCode(ObjDesc desc) {
+  //return (ObjDesc) ((int) desc + getBcStart(desc) + BC_index + 2);
+  int BCstart = desc_getInt4(desc,BC_index);
+  // fprintf(trace,"getByteCode %i %i %i %i %i %i\n", BCstart
+  //  ,desc[BCstart],desc[BCstart+1],desc[BCstart+2],desc[BCstart+3],desc[BCstart+4]);
+  return (ObjDesc) desc + BCstart + 2;
+}
+
+
+int alloE(ObjDesc desc){ 
+  //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
+  return desc_getInt2(desc,alloE_index); 
+}
+
+int getAllocE(ObjDesc obj){
+  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,alloE_index) -1);
+  return desc_getInt2(obj,alloE_index) - 1;
+}
+int getEnterE(ObjDesc obj){
+  return desc_getInt2(obj,enterE_index) - 1;
+}
+int getDoE(ObjDesc obj){
+  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,doE_index));
+  return desc_getInt2(obj,doE_index) - 1;
+}
+int getExitE(ObjDesc obj){
+  return desc_getInt2(obj,exitE_index) - 1;
+}
