@@ -349,3 +349,57 @@ char * nameOf(Btemplate *obj){
   int inx = desc_getInt2(desc,0);
   return getString(inx);
 }
+
+
+int topDescNo(Btemplate *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
+
+Btemplate *myCorigin(Btemplate *obj){ 
+  int inx;
+  inx = desc_getInt2(obj->desc,originOff_index);
+  Btemplate * origin = 0;
+  if (inx > 0) origin = obj->rfields[inx];
+  return origin;
+}
+
+
+ObjDesc myCode(Btemplate *obj){
+  return getByteCode(obj->desc);
+}
+
+ObjDesc mySuperCode(Btemplate *obj){
+  return(myCode(obj));
+}
+
+ObjDesc codeFromDescNo(int descNo){
+  ObjDesc D = getByteCode(getDesc(descNo));
+  return D;
+}
+
+int xlabs(int descNo,int labNo){
+  ObjDesc desc = getDesc(descNo);
+  int labStart = desc_getInt4(desc,labIndex);
+  //int i;
+  //for (i = 0; i < 50; i++) fprintf(trace," %i: %i\n",i,desc[labStart + i] );
+  int lab = desc_getInt2(desc,labStart + (labNo - 1) * 2);
+  //fprintf(trace,"xlabs descNo: %i labNo: %i lab: %i\n",descNo,labNo,lab);
+  return lab;
+}
+
+int vdtTable(FILE *trace,Btemplate *obj,int inx){
+#ifdef TRACE
+  fprintf(trace," vdtTable[%i] = %i "
+	  ,inx,desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4));
+#endif
+  return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
+}
+
+int getLiteralStart(Btemplate *obj){
+  return desc_getInt4(obj->desc,literal_index);
+};
+
+int getLiteral(Btemplate *obj,int inx){
+  int lit = desc_getInt2(obj->desc,getLiteralStart(obj) + (inx-1) *2);
+  //fprintf(trace,"getLiteral %i %i \n",inx,lit);
+  return lit;
+}
+
