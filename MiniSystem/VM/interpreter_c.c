@@ -42,7 +42,7 @@ typedef void *FILE;
 #define HIGH 5
 #endif
 
-#define DUMP
+//#define DUMP
 //#define TRACE
 //#define EVENT
 
@@ -415,7 +415,10 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   thisBlock->trace = trace;
   descs = (ObjDesc) heapAlloc(imageSize);
+#ifdef __arm__
+#else
   memcpy(descs,descs_a,imageSize); 
+#endif
   thisBlock->bc = descs;
 
 #ifdef DUMP
