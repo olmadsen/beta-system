@@ -392,44 +392,40 @@ void allocMain(Block *thisBlock,int descNo){
   thisBlock->thisStack = thisBlock->thisModule;
 };
 
-void init_interpreter(ObjDesc descs_a, int imageS, bool isXB) {
-  int mainDescNo;
-  FILE *trace;
-  Block *thisBlock;
-
-  isXbeta = isXB;
+FILE *trace_t;
 #ifdef __arm__
 #else
+// Only called from betaVM and runbeta.c
+void init_interpreter(ObjDesc descs_a, int imageS) {
+  FILE *trace;
+
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
-#endif
-  descs = descs_a; // this is necessary for getImageSize() below
-  // we must copy from Beta memory to avoid GC problems
+  trace_t = trace; // hack
 #ifdef linux
 #elif defined  __CYGWIN__
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
 
-#ifdef __arm__
-#else
-  //int imageSize = getImageSize();
-  //printf("ImageSize: %i\n",imageSize);
   descs = (ObjDesc) heapAlloc(imageS);
   memcpy(descs,descs_a,imageS); 
-#endif
 }
+#endif
 
-void run_interpreter(){
+void run_interpreter(bool isXB){
   int mainDescNo;
-  FILE *trace;
+  FILE *trace = trace_t;;
   Block *thisBlock;
+  isXbeta = isXB;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)heapAlloc(sizeof(Block));
+  // OBS trace not defined here!
   thisBlock->trace = trace;
   thisBlock->bc = descs;
 
 #ifdef DUMP
+  int imageS = getImageSize();
   fprintf(trace,"C interpreter: mainDescNo: %i imageS: %i\n",mainDescNo,imageS);
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
