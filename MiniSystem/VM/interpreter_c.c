@@ -273,7 +273,6 @@ void cSaveReturn(Btemplate *obj,int descNo, int lsc){
   obj->lscStack[obj->lscTop] = lsc;
 }
 
-
 int cRestoreReturn(Btemplate * obj){
   //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
   if (obj->lscTop < 0) runTimeErrorX("\n**** ERROR:  lscStack underflow\n",obj,-1);
