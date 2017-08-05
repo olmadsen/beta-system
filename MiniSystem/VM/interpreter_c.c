@@ -49,6 +49,8 @@ typedef void *FILE;
 
 #include "interpreter_image.c"
 
+#define MAX_THREADS 5
+
 void runTimeError(char *msg){
 #ifdef __arm__
 #warning "No printf for arm"

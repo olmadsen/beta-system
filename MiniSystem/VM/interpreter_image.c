@@ -3,7 +3,6 @@
  * files for defining format and accessor functions for bytecode image
  ***********************************************************************/
 
-#define MAX_THREADS 5
 /* Format of ObjDescs
    0: -xBeta--
    8: image size
