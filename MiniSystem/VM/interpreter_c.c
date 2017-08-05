@@ -20,7 +20,7 @@
 typedef void *FILE;
 #else
 #include <stdio.h>
-#endif
+#endif 
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -127,34 +127,9 @@ void releaseHeap(void *S){
 }
 
 
-
 #ifdef DUMP
 #include "interpreter_dump.c"
 #endif
-
-int op1(ObjDesc bc, int *glsc){
-  int V = bc[*glsc]; 
-  *glsc = *glsc + 1; 
-  return V;
-};
-int op2(ObjDesc bc, int *glsc){ 
-  int V = bc[*glsc] * 256 + bc[*glsc + 1];
-  *glsc = *glsc + 2;
-  return V;
-};
-
-int descNo(ObjDesc desc){
-  return desc_getInt4(desc,descNo_index);
-}
-
-int vSize(ObjDesc desc){
-  return desc_getInt4(desc,vSize_index);
-}
-
-int rSize(ObjDesc desc){
-  return desc_getInt4(desc,rSize_index);
-}
-
 
 int hSize = 0;
 

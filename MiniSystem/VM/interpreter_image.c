@@ -1,3 +1,8 @@
+/* ********************************************************************
+ * qBeta interpreter: 
+ * files for defining format and accessor functions for bytecode image
+ ***********************************************************************/
+
 #define MAX_THREADS 5
 /* Format of ObjDescs
    0: -xBeta--
@@ -295,7 +300,6 @@ ObjDesc getByteCode(ObjDesc desc) {
   return (ObjDesc) desc + BCstart + 2;
 }
 
-
 int alloE(ObjDesc desc){ 
   //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
   return desc_getInt2(desc,alloE_index); 
@@ -315,3 +319,27 @@ int getDoE(ObjDesc obj){
 int getExitE(ObjDesc obj){
   return desc_getInt2(obj,exitE_index) - 1;
 }
+
+int op1(ObjDesc bc, int *glsc){
+  int V = bc[*glsc]; 
+  *glsc = *glsc + 1; 
+  return V;
+};
+int op2(ObjDesc bc, int *glsc){ 
+  int V = bc[*glsc] * 256 + bc[*glsc + 1];
+  *glsc = *glsc + 2;
+  return V;
+};
+
+int descNo(ObjDesc desc){
+  return desc_getInt4(desc,descNo_index);
+}
+
+int vSize(ObjDesc desc){
+  return desc_getInt4(desc,vSize_index);
+}
+
+int rSize(ObjDesc desc){
+  return desc_getInt4(desc,rSize_index);
+}
+

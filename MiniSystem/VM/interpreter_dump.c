@@ -1,3 +1,6 @@
+/*****************************************************
+ * qBeta interpreter: files for dumping bytecode image
+ *****************************************************/
 void dumpStringTable(FILE *trace) {
   int inx, StringsSize,i;
   inx = getStringTableIndex();
