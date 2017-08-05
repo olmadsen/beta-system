@@ -392,7 +392,7 @@ void allocMain(Block *thisBlock,int descNo){
   thisBlock->thisStack = thisBlock->thisModule;
 };
 
-void init_interpreter(ObjDesc descs_a, bool isXB) {
+void init_interpreter(ObjDesc descs_a, int imageS, bool isXB) {
   int mainDescNo;
   FILE *trace;
   Block *thisBlock;
@@ -409,20 +409,28 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
 #elif defined  __CYGWIN__
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
-  int imageSize = getImageSize();
+
+#ifdef __arm__
+#else
+  //int imageSize = getImageSize();
+  //printf("ImageSize: %i\n",imageSize);
+  descs = (ObjDesc) heapAlloc(imageS);
+  memcpy(descs,descs_a,imageS); 
+#endif
+}
+
+void run_interpreter(){
+  int mainDescNo;
+  FILE *trace;
+  Block *thisBlock;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   thisBlock->trace = trace;
-  descs = (ObjDesc) heapAlloc(imageSize);
-#ifdef __arm__
-#else
-  memcpy(descs,descs_a,imageSize); 
-#endif
   thisBlock->bc = descs;
 
 #ifdef DUMP
-  fprintf(trace,"C interpreter: mainDescNo: %i imageSize: %i\n",mainDescNo,imageSize);
+  fprintf(trace,"C interpreter: mainDescNo: %i imageS: %i\n",mainDescNo,imageS);
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
@@ -434,9 +442,11 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
 #ifdef DUMP
   dump_image(trace);
 #endif
+
   thisBlock->glsc = 0; 
   thisBlock->threadId = 0;
   thisBlock->traceFile = "trace.s";
+
 #ifdef DUMP
   fprintf(trace,"**** Execute:\n\n");
 #endif
@@ -454,6 +464,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
  }
 #endif
 #endif
+
 
 #ifdef linux
   interpreter(thisBlock);

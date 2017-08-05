@@ -9,7 +9,7 @@ int main(int argc, char *argv[])
 
   //  int V = fread(bc, 1, size, F);
 
-  init_interpreter((ObjDesc)BC,1); // isXB = 1 
+  init_interpreter((ObjDesc)BC,0,1); // isXB = 1 
   bool first = true;
   getEvent(first); 
   // for (i=0; i <1000000; i++ ){
