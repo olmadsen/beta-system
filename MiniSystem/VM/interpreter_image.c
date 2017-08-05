@@ -342,3 +342,10 @@ int rSize(ObjDesc desc){
   return desc_getInt4(desc,rSize_index);
 }
 
+
+char * nameOf(Btemplate *obj){
+  if (obj == 0) return "none";
+  ObjDesc desc = obj->desc;
+  int inx = desc_getInt2(desc,0);
+  return getString(inx);
+}

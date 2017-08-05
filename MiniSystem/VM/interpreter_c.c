@@ -154,12 +154,6 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   return obj;
 }
 
-char * nameOf(Btemplate *obj){
-  if (obj == 0) return "none";
-  ObjDesc desc = obj->desc;
-  int inx = desc_getInt2(desc,0);
-  return getString(inx);
-}
 
 #ifdef DUMP
 void StacksToOut(FILE *trace, Block *ctx)
