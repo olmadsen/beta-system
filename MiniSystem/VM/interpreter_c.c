@@ -5,14 +5,23 @@
 #ifdef linux
 
 #elif defined  __CYGWIN__
-#ifdef usewinsock2
-#include <winsock2.h> // must be included first - for some reason?
-#endif
-#include <windows.h>
-//#include <ws2tcpip.h>
+   #ifdef usewinsock2
+   #include <winsock2.h> // must be included first - for some reason?
+   #endif
+   #include <windows.h>
+   //#include <ws2tcpip.h>
+
+#elif defined __arm__
+   #warning "ARM!"
+   #include "arm/arm.c"
 #endif
 
+#ifdef __arm__
+typedef void *FILE;
+#else
 #include <stdio.h>
+#endif
+
 #include <stdlib.h>
 #include <stdbool.h>
 
@@ -33,7 +42,7 @@
 #define HIGH 5
 #endif
 
-#define DUMP
+//#define DUMP
 //#define TRACE
 //#define EVENT
 
@@ -75,7 +84,7 @@
 */
 bool isXbeta;
 
-//for Arduino, typdef apparently must be in the beginning od tje file!?
+//for Arduino, typdef apparently must be in the beginning of the file!?
 typedef unsigned char * ObjDesc;
 
 typedef struct Btemplate {
@@ -259,7 +268,19 @@ enum {
 };
 
 void runTimeError(char *msg){
+#ifdef __arm__
+#warning "No printf for arm"
+#else
   printf("\n\n*** Run-time error: %s\n\n",msg);
+#endif
+  exit(-1);
+}
+
+void RTE2(char *msg, int errNo){
+#ifdef __arm__
+#else
+  printf("\n\n*** Run-time error: %s %i\n",msg,errNo);
+#endif
   exit(-1);
 }
 
@@ -277,7 +298,7 @@ void *heapAlloc(int size) {
   if (true) { 
 #ifdef linux
     int ret = pthread_mutex_lock( &mutex1 );
-    if (ret > 0) printf("\n\n*** mutex_lock error: %i \n",ret);
+    if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
 #elif defined  __CYGWIN__
     switch(WaitForSingleObject(allocMutex,INFINITE)) {
     case WAIT_OBJECT_0:
@@ -288,26 +309,28 @@ void *heapAlloc(int size) {
 #endif
     ZZ = ZZ + 1;
     if (ZZ > 1) runTimeError("Two or more in malloc");
+#ifdef __arm
+#else
     obj = malloc(size);
-    if (obj == NULL) printf("Malloc failure\n");
+#endif
+    if (obj == NULL) runTimeError("Malloc failure\n");
     ZZ = ZZ - 1;
 #ifdef linux 
     ret = pthread_mutex_unlock( &mutex1 );
-    if (ret > 0) printf("\n\n*** mutex_unlock error: %i \n",ret);
+    if (ret > 0) RTE2("\n\n*** mutex_unlock error: ",ret);
 #elif defined  __CYGWIN__
     if (!ReleaseSemaphore(allocMutex,1,NULL)) 
       runTimeError("ReleaseSemaphoreError: allocMutex");
 #endif
        
     if (obj == NULL) {
-      sprintf(S,"malloc failed; size: %i",size);
-      runTimeError(S);
+      RTE2("malloc failed; size: ",size);
     }
   } else { // never come here since if (true) above
     /* void *obj = (void *)&heap[heapTop];
     heapTop = heapTop + size;
     if (heapTop > 10000000) {
-      printf("\n\n*** Heap overflow");
+      runTimeError("\n\n*** Heap overflow");
       exit(1);
       };*/
   };
@@ -315,7 +338,10 @@ void *heapAlloc(int size) {
 }
 
 void releaseHeap(void *S){
+#ifdef __arm__
+#else
   free(S);
+#endif
 }
 
 
@@ -841,18 +867,21 @@ char * nameOf(Btemplate *obj){
   return getString(inx);
 }
 
+#ifdef DUMP
 void StacksToOut(FILE *trace, Block *ctx)
 { fprintf(trace,"thisObj= %s ",nameOf(ctx->thisObj));
   fprintf(trace,"thisStack= %s ",nameOf(ctx->thisStack));
 }
+#endif
 
 int threadStubDescNo; // perhaps a hack?
 void dumpStackX(Btemplate *obj);
 
 void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
- 
+#ifdef __arm__
+#else
   printf("\n\n*** Run-time error: %s\n\nObject: %s(%i) at: %i\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
-
+#endif
   dumpStackX(thisObj);
 
   exit(-1);
@@ -860,18 +889,24 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
 
 dumpVstack(FILE *trace,Btemplate *stack){
   int i;
+#ifdef __arm__
+#else
   fprintf(trace,"%s:vStack\[",nameOf(stack));
   for (i=0; i < stack->vtop; i++)
     fprintf(trace,"%i ",stack->vstack[i + 1]);  
   fprintf(trace,"] ");
+#endif
 }
 
 dumpRstack(FILE *trace,Btemplate *stack){
   int i;
+#ifdef __arm__
+#else
   fprintf(trace,"%s:rStack\[",nameOf(stack));
   for (i=0; i < stack->rtop; i++)
     fprintf(trace,"%s ",nameOf(stack->rstack[i + 1]));  
   fprintf(trace,"] ");
+#endif
 }
 int cMyLscTop(Btemplate *obj) { return obj->lscTop; };
 
@@ -882,8 +917,11 @@ void dumpStackX(Btemplate *obj){
   if (obj != NULL) {
     X = obj->rstack[1];
     Y = obj->rstack[2];
+#ifdef __arm__
+#else
     printf("Caller: %s(%i) at: %i thisStack: %s\n"
 	   ,nameOf(X),topOfLsc(X,-1),topOfLsc(X,0),nameOf(Y));
+#endif
     if (descNo(X->desc) != threadStubDescNo) dumpStackX(X);
   }
 }
@@ -949,9 +987,12 @@ Btemplate *getR(Btemplate *obj,int inx){ return obj->rfields[inx];};
 void vPush(Btemplate *thisStack,int V){
   int i;
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) {
-    printf("\n\nvstack %s [",nameOf(thisStack));
+#ifdef __arm__
+#else
+    printf("\n\nvstack %s [",nameOf(thisStack)); // <<<<<<< OBS FIX
     for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
     printf("]\n");
+#endif
     runTimeErrorX("vstack overflow",thisStack,-1);
   }
   thisStack->vstack[thisStack->vtop] = V;
@@ -1065,6 +1106,8 @@ int descNoOf(Btemplate * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
 
+#ifdef __arm__
+#else
 void dumpStack(FILE *trace,Btemplate *Z){
   int i;
   fprintf(trace,"\n\t");
@@ -1082,6 +1125,7 @@ void dumpSwapped(FILE *trace,Btemplate *X, Btemplate *Y,Btemplate *Z){
     fprintf(trace,"%s ",nameOf(Z->rstack[i + 1]));
   fprintf(trace,"]\n");
 }
+#endif
 
 void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
   //fprintf(trace,"***rswap %s %s %i\n",nameOf(*R),nameOf(*S),obj->rtop);
@@ -1092,7 +1136,12 @@ void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
   *R = Rx;
   *S = Sx;
   if (obj->rtop == 0) obj->rtop = 2; // first call - we push 2 values
-  if (*R == 0) { printf("*R == 0\n"); obj->rtop = 0;} // 
+  if (*R == 0) { 
+#ifdef __arm__
+#else
+    printf("*R == 0\n"); 
+#endif
+    obj->rtop = 0;} // 
 }
 
 
@@ -1114,8 +1163,11 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   Block *thisBlock;
 
   isXbeta = isXB;
+#ifdef __arm__
+#else
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
+#endif
   descs = descs_a; // this is necessary for getImageSize() below
   // we must copy from Beta memory to avoid GC problems
 #ifdef linux
@@ -1147,7 +1199,7 @@ void init_interpreter(ObjDesc descs_a, bool isXB) {
   thisBlock->glsc = 0; 
   thisBlock->threadId = 0;
   thisBlock->traceFile = "trace.s";
-#ifdef DUNP
+#ifdef DUMP
   fprintf(trace,"**** Execute:\n\n");
 #endif
  
@@ -1287,7 +1339,7 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
     
   } else {
     if (rangee > 132) {
-      printf("\n\n**** Ref-rep range: %i\n",rangee);
+      RTE2("\n\n**** Ref-rep range: %i\n",rangee);
       runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
     };
     
@@ -1384,7 +1436,11 @@ void XallocTextObj(Block *ctx,int litInx){
 }
 
 char *mkCstring(Btemplate *T){
+#ifdef __arm__
+  char *B;
+#else
   char *B = malloc(T->vfields[1] * sizeof(char));
+#endif
   int length = T->vfields[1];
   //printf("mkCstring: length: %i ",length);
   //
@@ -1394,7 +1450,7 @@ char *mkCstring(Btemplate *T){
     //printf("%i %c ",T->vfields[i],(char)T->vfields[i]);
     B[i - 2] = (char)T->vfields[i];
   }
-  printf("\n");
+  //printf("\n");
   //B[T->vtop - 2] = 0;
   B[length] = 0;
   return B;
@@ -1413,7 +1469,10 @@ void C2QBstring(Block *ctx,char *S){
   allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
   for (i = 0; i <= length; i++) ctx->callee->vfields[2 + i] = S[i];
   ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
+#ifdef __arm__
+#else
   free(S);
+#endif
 }
 
 void  ConvertIndexedAsString(Block *ctx) {
@@ -1569,8 +1628,12 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 
 #if defined(linux)
 void  *interpreter(void *B){;
+
 #elif defined  __CYGWIN__
 DWORD WINAPI interpreter(LPVOID B){;
+
+#elif defined __arm__
+void  *interpreter(void *B){;
 #endif
   Block *thisBlock = (Block *)B;
   int threadId = thisBlock->threadId;
@@ -1604,11 +1667,17 @@ DWORD WINAPI interpreter(LPVOID B){;
   //CPU_SET(threadId,&mask);
 #endif
 
+#ifdef __arm__
+#else
   printf("*** C interpreter - threadId:%i\n",threadId);
+#endif
   FILE * trace;
+#ifdef __arm__
+#else
   trace = fopen(thisBlock->traceFile,"w");
   thisBlock->trace = trace;
   setbuf(trace, NULL);
+#endif
   Btemplate *enablee = 0;
   int suspendEnabled = 0;
   int timeToSuspend = 0;
@@ -1660,7 +1729,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	if (timeToSuspend <= 0) {
 	  if (enablee != 0) {
 	    suspendEnabled = suspendEnabled - 1;
-	    if (suspendEnabled > 0) printf("\npSuspend: %i\n",suspendEnabled);
+	    if (suspendEnabled > 0) RTE2("\npSuspend: %i\n",suspendEnabled);
 
 	    saveContext();
 	    doSuspend(thisBlock,enablee,true);
@@ -2003,14 +2072,16 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg3 = vPop(thisStack);
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
-	  printf("pinMode(%i,%i)\n",arg2,arg3);
+
 #ifdef __ARDIUNO__
+	  printf("pinMode(%i,%i)\n",arg2,arg3);
 	  mraa_gpio_context pin = mraa_gpio_init(13);
 	  if (arg3 == 0) 
 	    {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
 	  else 
 	    {mraa_gpio_dir(pin,MRAA_GPIO_IN);};
 #elif defined  __CYGWIN__
+	  printf("pinMode(%i,%i)\n",arg2,arg3);
 	  printf("pinMode(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
 #endif
@@ -2019,7 +2090,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  arg3 = vPop(thisStack);
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
+#ifdef __arm__
+#else
 	  printf("digitalWrite(%i,%i)\n",arg2,arg3);
+#endif
 #ifdef __ARDIUNO__
 	  if (arg3 == 0) 
 	    {mraa_gpio_write(pin,LOW);}
@@ -2075,7 +2149,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    printf("Invalid socket: %d\n", WSAGetLastError());
 	  vPush(thisStack,arg1);
 #endif
+#ifdef __arm__
+#else
 	  printf("No winsock2 library included - check #define usewinsock2\n");
+#endif
 #endif
 	  //vPush(thisStack,100);
 	  break;
@@ -2195,7 +2272,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 #elif defined  __CYGWIN__
 	  arg2 = listen(arg1,3);
 #endif
+#ifdef __arm__
+#else
 	  printf("Listen: %i %i\n",arg1,arg2);
+#endif
 #endif
 	  break;
 	case 13:
@@ -2214,7 +2294,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	      //printf("Accept: no request in buffer\n");
 	      arg2 = 1;
 	    }else
-	       printf("accept failed with error code : %d\n" , arg3);
+	       printfs("accept failed with error code : %d\n" , arg3);
 	  }
 #endif
 	  vPush(thisStack,arg2);
@@ -2263,7 +2343,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 #ifdef TRACE
 	    fprintf(trace,"put \'%c\'\n",(char)arg2);
 #endif
+#ifdef __arm__
+#warning "No implememntation of put for ARM"
+#else
 	    printf("%c",(char)arg2);
+#endif
 	    break;
 	  case 10: // attach
 	    arg2 = vPop(thisStack);
@@ -2327,7 +2411,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 #endif
 	    B->glsc = 0;
 	    char *fileName = heapAlloc(12);
+#ifdef __arm__
+#else
 	    if (sprintf (fileName,"traceF%i.s",threadNo) < 0) { printf("sprintf error\n");};
+#endif
 	    //printf("\n%s\n",fileName);
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
@@ -2353,7 +2440,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
 	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
 	    //printf("[");
+#if defined  __CYGWIN__ || linux
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
+#elif __arm__
+
+#endif
 	    //printf("]");
 	    //printf("cmpAndSwap off: %i new: %i old: %i %s adr: %i\n"
 	    //	    ,arg1,arg2,arg3,nameOf(X),(int)&X->vfields[arg1,V]);
@@ -2391,7 +2482,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    restoreContext();
             break;
 	  default:
-	    printf("\n\n*** prim: missing case %i\n",arg1);
+	    RTE2("\n\n*** prim: missing case %i\n",arg1);
 	    runTimeError("prim: missing case");
 	  }
 	break;
@@ -2944,14 +3035,25 @@ DWORD WINAPI interpreter(LPVOID B){;
 	//threadNo = threadNo - 1;
 	break;
       default:
+#ifdef TRACE
 	fprintf(trace,"Op: %i ",bc[glsc]);
+#endif
+#ifdef __arm__
+#else
 	printf("glsc: %i, op: %i",glsc,bc[glsc - 1]);
+#endif
 	runTimeError("Illegal byte code");
 	break;
       }
     };
+#ifdef TRACE
   fclose(trace);
+#endif
+#ifdef __arm__
+#else
   printf("\nStop: threadId: %i \n",threadId); if (hasThreads) printf("TRUE\n");
+#endif
+
   if (threadNo > 0) {
     int j;
 #ifdef linux
@@ -2967,7 +3069,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	CloseHandle(hThreadArray[j]);
       };
 #endif
+#ifdef __arm__
+#else
     printf("After Wait\n");
+#endif
   };
   if (threadId == 0) mkEvent(stop_event,0,0,0,0,0,0); 
   return 0;

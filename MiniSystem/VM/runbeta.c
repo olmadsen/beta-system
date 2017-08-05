@@ -31,7 +31,10 @@ char * fixExtension(char* fn) {
       // fn = foo.bc
     }}
   if (pos == 0) {
+#ifdef __arm__
+#else
       printf("FN: %i %s\n",len,fn); 
+
       // strip possible '.' in 'foo.' or 'foo..'
       pos = len;
       for (i = 1; i <= 2; i++) {
@@ -39,28 +42,47 @@ char * fixExtension(char* fn) {
 	if (fn[len - i] == '.') { pos = pos - 1; } else { break;}
       }
       printf("len: %i pos: %i\n",len,pos);
+#endif
     }
+
   // fn[0:pos - 1] = 'foo'
   // add extension '..bc'
+#ifdef __arm__
+#else
   fnx = malloc(sizeof(char) * (pos + 4));
+#endif
   for (i = 0; i < pos; i++) fnx[i] = fn[i];
   fnx[pos + 0] = '.';
   fnx[pos + 1] = '.';
   fnx[pos + 2] = 'b';
   fnx[pos + 3] = 'c';
   // fnx = foo..bc
+#ifdef __arm__
+#else
   printf("fnx: %s\n",fnx);
+#endif
   return fnx;
 }
 
 int main(int argc, char *argv[])
-{ printf("argc: %i\n",argc);
+{ 
+#ifdef __arm__
+#else
+printf("argc: %i\n",argc);
+
+
   if (argc < 2) {
     printf("Usage: runbeta file\n");
     return -1;
   }
+#endif
   char * fn = fixExtension(argv[1]);
 
+#ifdef __arm__
+  //FILE* F;
+  int size,isXB;
+  unsigned char* bc;
+#else
   FILE* F = fopen(fn, "rb");
   if (F == NULL) {
     printf("No such file: '%s'\n",fn);
@@ -89,6 +111,7 @@ int main(int argc, char *argv[])
     return -1;
   }
   
+#endif
 
   init_interpreter((ObjDesc)bc,isXB);
   bool first = true;
