@@ -13,7 +13,7 @@
 
 #elif defined __arm__
    #warning "ARM!"
-   #include "arm/arm.c"
+   #include "arm/rpi-gpio.h"
 #endif
 
 #ifdef __arm__
@@ -93,10 +93,10 @@ void *heapAlloc(int size) {
 #endif
     ZZ = ZZ + 1;
     if (ZZ > 1) runTimeError("Two or more in malloc");
-#ifdef __arm
-#else
+    //#ifdef __arm
+    //#else
     obj = malloc(size);
-#endif
+    //#endif
     if (obj == NULL) runTimeError("Malloc failure\n");
     ZZ = ZZ - 1;
 #ifdef linux 
@@ -681,11 +681,11 @@ void XallocTextObj(Block *ctx,int litInx){
 }
 
 char *mkCstring(Btemplate *T){
-#ifdef __arm__
-  char *B;
-#else
+  //#ifdef __arm__
+  //char *B;
+  //#else
   char *B = malloc(T->vfields[1] * sizeof(char));
-#endif
+  //#endif
   int length = T->vfields[1];
   //printf("mkCstring: length: %i ",length);
   //

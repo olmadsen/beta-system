@@ -2,7 +2,8 @@
 //#include <stdbool.h>
 #include "interpreter_c.c"
 #include "Hello_bc.c"
-int main(int argc, char *argv[])
+//int main(int argc, char *argv[])
+void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
 { 
 
   //unsigned char* bc;  //= (unsigned char*)malloc(size * sizeof(char));
@@ -18,5 +19,10 @@ int main(int argc, char *argv[])
   //getEvent(first);
   //   first = false;
   //}
-  return 0;
+  //return 0;
+  while (1) ;
+}
+
+void exit(int no){
+  while (1) ;
 }
