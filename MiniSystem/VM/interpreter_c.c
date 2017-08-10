@@ -13,7 +13,7 @@
 
 #elif defined __arm__
    #warning "ARM!"
-   #include "arm/rpi-gpio.h"
+   #include "arm/rpi-gpio.h"   
 #endif
 
 #ifdef __arm__
@@ -175,7 +175,7 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
   exit(-1);
 }
 
-dumpVstack(FILE *trace,Btemplate *stack){
+void dumpVstack(FILE *trace,Btemplate *stack){
   int i;
 #ifdef __arm__
 #else
@@ -186,7 +186,7 @@ dumpVstack(FILE *trace,Btemplate *stack){
 #endif
 }
 
-dumpRstack(FILE *trace,Btemplate *stack){
+void dumpRstack(FILE *trace,Btemplate *stack){
   int i;
 #ifdef __arm__
 #else
