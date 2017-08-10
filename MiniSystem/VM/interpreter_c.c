@@ -53,7 +53,6 @@ typedef void *FILE;
 
 void runTimeError(char *msg){
 #ifdef __arm__
-#warning "No printf for arm"
 #else
   printf("\n\n*** Run-time error: %s\n\n",msg);
 #endif
@@ -412,6 +411,13 @@ void init_interpreter(ObjDesc descs_a, int imageS) {
 }
 #endif
 
+void set_descs(ObjDesc BC){
+  descs = BC;
+#ifdef linux
+#elif defined  __CYGWIN__
+  allocMutex = CreateSemaphore(NULL,1,1,NULL);
+#endif
+}
 void run_interpreter(bool isXB){
   int mainDescNo;
   FILE *trace = trace_t;;
@@ -1589,7 +1595,6 @@ void  *interpreter(void *B){;
 	    fprintf(trace,"put \'%c\'\n",(char)arg2);
 #endif
 #ifdef __arm__
-#warning "No implememntation of put for ARM"
 #else
 	    printf("%c",(char)arg2);
 #endif
