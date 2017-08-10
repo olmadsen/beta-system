@@ -5,13 +5,10 @@
 #include "Hello_bc.c"
 //int main(int argc, char *argv[])
 void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
-{ //unsigned char* bc;  //= (unsigned char*)malloc(size * sizeof(char));
-  //  int V = fread(bc, 1, size, F);
-  //init_interpreter((ObjDesc)BC,0); 
-
+{ 
+  set_descs(BC);
   run_interpreter(1); // isXB = 1 
-  bool first = true;
-  getEvent(first); 
+  getEvent(true); 
   while (1) ;
 }
 
