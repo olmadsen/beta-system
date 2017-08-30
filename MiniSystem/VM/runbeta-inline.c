@@ -1,6 +1,6 @@
 #include <stdbool.h>
 #include "interpreter_c.c"
-#include "Hello_bc.c"
+#include "qbeta_image.c"
 //int main(int argc, char *argv[])
 int main(int argc, char *argv[])
 { printf("runbeta-X\n");

@@ -12,8 +12,8 @@
    //#include <ws2tcpip.h>
 
 #elif defined __arm__
-   #warning "ARM!"
    #include "arm/rpi-gpio.h"   
+   #include "arm/led.c"
 #endif
 
 #ifdef __arm__
@@ -1342,6 +1342,8 @@ void  *interpreter(void *B){;
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
+	  arg3 = set_led();
+	  rPush(thisStack,Y); // just a dummy
 #else
 	  printf("digitalWrite(%i,%i)\n",arg2,arg3);
 #endif
@@ -1353,13 +1355,14 @@ void  *interpreter(void *B){;
 #elif defined  __CYGWIN__
 	  printf("digitalWrite(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
+	  rPush(thisStack,Y); // just a dummy
 #endif
 	    break;        
 	case 3:
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 #ifdef linux
-	  sleep(arg2);
+	  sleep(arg2); 
 #endif
 	  break;
 	case 4:

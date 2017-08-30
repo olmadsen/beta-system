@@ -2,10 +2,11 @@
 //#include <stdbool.h>
 #include "interpreter_c.c"
 #include "arm/blink.c"
-#include "Hello_bc.c"
-//int main(int argc, char *argv[])
+#include "qbeta_image.c"
+
 void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
-{ 
+{ set_led();
+  while (1);
   set_descs(BC);
   run_interpreter(1); // isXB = 1 
   getEvent(true); 
