@@ -383,6 +383,8 @@ void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
 void *interpreter(void *B);
 #elif defined  __CYGWIN__
 DWORD WINAPI interpreter(LPVOID B);
+#elif defined __arm__
+void *interpreter(void *B);
 #endif
 
 void allocMain(Block *thisBlock,int descNo){ 
@@ -418,10 +420,12 @@ void set_descs(ObjDesc BC){
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
 }
+
 void run_interpreter(bool isXB){
   int mainDescNo;
   FILE *trace = trace_t;;
   Block *thisBlock;
+
   isXbeta = isXB;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
@@ -475,6 +479,8 @@ void run_interpreter(bool isXB){
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
+#elif defined __arm__
+  interpreter(thisBlock);
 #endif
 
 }
@@ -965,6 +971,8 @@ void  *interpreter(void *B){;
   bool running = true;
   Btemplate *X, *Y;
 
+  int cnt = 0;
+
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
  
@@ -992,7 +1000,13 @@ void  *interpreter(void *B){;
 #ifdef TRACE
       fprintf(trace,"%i:\t",glsc);
 #endif
-      opCode = bc[glsc]; glsc = glsc + 1; 
+      opCode = bc[glsc]; glsc = glsc + 1;
+      if (cnt == 0) {
+	//blink();
+	// pinMode(4,1);
+	// digitalWrite(4,0);
+      };
+      cnt = cnt + 1;
       switch (opCode) {
       case pushthis:
 #ifdef TRACE
@@ -1320,10 +1334,13 @@ void  *interpreter(void *B){;
 #endif
 	switch (arg1) {
 	case 1:
-	  arg3 = vPop(thisStack);
-	  arg2 = vPop(thisStack);
+	  arg3 = vPop(thisStack); // mode
+	  arg2 = vPop(thisStack); // pinno
 	  Y = rPop(thisStack); // origin - not used
-
+#ifdef __arm__
+	  pinMode(arg2,arg3);
+	  rPush(thisStack,Y); // just a dummy
+#endif
 #ifdef __ARDIUNO__
 	  printf("pinMode(%i,%i)\n",arg2,arg3);
 	  mraa_gpio_context pin = mraa_gpio_init(13);
@@ -1332,9 +1349,9 @@ void  *interpreter(void *B){;
 	  else 
 	    {mraa_gpio_dir(pin,MRAA_GPIO_IN);};
 #elif defined  __CYGWIN__
-	  printf("pinMode(%i,%i)\n",arg2,arg3);
 	  printf("pinMode(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
+
 #endif
 	  break;
 	case 2:
@@ -1342,10 +1359,9 @@ void  *interpreter(void *B){;
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
-	  arg3 = set_led();
+	  //arg3 = set_led();
+	  arg3 = digitalWrite(arg2,arg3);
 	  rPush(thisStack,Y); // just a dummy
-#else
-	  printf("digitalWrite(%i,%i)\n",arg2,arg3);
 #endif
 #ifdef __ARDIUNO__
 	  if (arg3 == 0) 
@@ -1353,8 +1369,7 @@ void  *interpreter(void *B){;
 	  else 
 	    {mraa_gpio_write(pin,HIGH);};
 #elif defined  __CYGWIN__
-	  printf("digitalWrite(%i,%i) not implemented for this platform\n"
-		 ,arg2,arg3);
+	  printf("digitalWrite(%i,%i) not implemented for this platform\n",arg2,arg3);
 	  rPush(thisStack,Y); // just a dummy
 #endif
 	    break;        
