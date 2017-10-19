@@ -22,7 +22,7 @@ int digitalWrite(int pin, int val){
   }
 }
 
-void blink()
+void blink(int noOfBlink)
 {
   int loop,cnt;
   unsigned int* counters;
@@ -42,7 +42,7 @@ void blink()
       counters[loop] = 0;
     
     /* Never exit as there is no OS to exit to! */
-    while(1)
+    for (loop = 0; loop < noOfBlink; loop++)
       {
 	/* Light the LED */
 	// gpio[10] = ( 1 << 4 ); //LED_ON();

@@ -13,6 +13,7 @@
 
 #elif defined __arm__
    #include "arm/rpi-gpio.h"   
+   #include "arm/armc-uart.c"
    #include "arm/led.c"
 #endif
 
@@ -917,7 +918,7 @@ void  *interpreter(void *B){;
   bool hasThreads = false;
 
 #ifdef linux
-  // The following calls are supposed to associate each interpreter threah with
+  // The following calls are supposed to associate each interpreter threadh with
   // a specific CPU - have no idea if it works!?
   //cpu_set_t mask;
   //CPU_ZERO(&mask);
@@ -930,6 +931,7 @@ void  *interpreter(void *B){;
 #endif
   FILE * trace;
 #ifdef __arm__
+  init_uart();
 #else
   trace = fopen(thisBlock->traceFile,"w");
   thisBlock->trace = trace;
@@ -1613,6 +1615,7 @@ void  *interpreter(void *B){;
 	    fprintf(trace,"put \'%c\'\n",(char)arg2);
 #endif
 #ifdef __arm__
+	    putch(arg2);
 #else
 	    printf("%c",(char)arg2);
 #endif
