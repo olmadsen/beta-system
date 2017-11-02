@@ -53,6 +53,10 @@ void putstr(const char *s)
 { while (*s) putch(*s++);
 }
 
+void beta_fork()
+{
+  putstr("beta_fork\n");
+}
 
 
 

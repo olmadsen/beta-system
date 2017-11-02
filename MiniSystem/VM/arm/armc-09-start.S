@@ -38,9 +38,55 @@ _start:
     // ldr     sp, =0x8000
     ldr     sp, =(64 * 1024 * 1024)
 
-    // Run the c startup function - should not return and will call kernel_main
+// Run the c startup function - should not return and will call kernel_main
     b       _cstartup
 
 _inf_loop:
     b       _inf_loop
+
+.globl start1
+start1:
+    ldr r0,=start_cpu1
+    mov r1,#0x40000000
+    str r0,[r1,#0x9C]
+    bx lr
+
+start_cpu1:
+    mrc p15, 0, r0, c0, c0, 5
+    mov r1,#0x40
+    str r0,[r1]
+	ldr sp, =(128 * 1024 * 1024)
+	push {lr}
+	ldr r0,=#97
+	bl raw_putc
+	pop {lr}
+	
+    bl beta_fork	
+    b start_cpu1
+
+.globl start2
+start2:
+    ldr r0,=start_cpu2
+    mov r1,#0x40000000
+    str r0,[r1,#0xAC]
+    bx lr
+
+start_cpu2:
+    mrc p15, 0, r0, c0, c0, 5
+    mov r1,#0x40
+    str r0,[r1]
+    b start_cpu2
+
+.globl start3
+start3:
+    ldr r0,=start_cpu3
+    mov r1,#0x40000000
+    str r0,[r1,#0xBC]
+    bx lr
+
+start_cpu3:
+    mrc p15, 0, r0, c0, c0, 5
+    mov r1,#0x40
+    str r0,[r1]
+    b start_cpu3
 

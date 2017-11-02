@@ -4,6 +4,8 @@
 //#include "arm/blink.c"
 #include "qbeta_image.c"
 
+extern void start1();
+
 void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
 { int loop,cnt;
   unsigned int* counters;
@@ -23,6 +25,9 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
       while(1);
   */
 
+  init_uart();
+  beta_fork();
+  start1();
   set_descs(BC);
   run_interpreter(1); // isXB = 1 
   getEvent(true); 
