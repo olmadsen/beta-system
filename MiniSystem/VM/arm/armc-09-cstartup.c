@@ -70,12 +70,15 @@ void Bfork(void * interpreter, void * B, int coreNo)
   switch (coreNo)
     {
     case 1:
+      put32(0x60,128000000);
       startCore(0x9C);
       break;
     case 2:
+      put32(0x60,256000000);
       startCore(0xAC);
       break;
     case 3:
+      put32(0x60,384000000);
       startCore(0xBC);
       break;
     default:

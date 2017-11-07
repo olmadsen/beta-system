@@ -124,7 +124,9 @@ startCore:
 	bx lr
 
 start_cpu:
-	ldr sp, =(128 * 1024 * 1024)
+	//ldr sp, =(128 * 1024 * 1024)
+	mov r2,#0x60  // SP start
+	ldr sp,[r2]
 	push {lr}
 	ldr r0,=#97
 	bl raw_putc
