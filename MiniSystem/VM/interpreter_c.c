@@ -1683,6 +1683,8 @@ void  *interpreter(void *B){;
 	    B->glsc = 0;
 	    char *fileName = heapAlloc(12);
 #ifdef __arm__
+	    extern void qbeta_fork(void *,void *,int);
+	    qbeta_fork(B,interpreter,threadNo);
 #else
 	    if (sprintf (fileName,"traceF%i.s",threadNo) < 0) { printf("sprintf error\n");};
 #endif
@@ -1711,10 +1713,19 @@ void  *interpreter(void *B){;
 	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
 	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
 	    //printf("[");
+	    // if &X->vfields[arg1] = 0 then 
+            //    &X->vfields[arg1] := arg2 
+            //    return 1
+            // else
+            //    return 0
+            // for some reason, we have reversed the return value? 
+            // we return 1 if failure and 0 if succes?
+            // see if below!?
 #if defined  __CYGWIN__ || linux
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
 #elif __arm__
-
+	    extern int cmpAndSwap(int adr, int old, int new); 
+	    V = cmpAndSwap((int)&X->vfields[arg1],0,arg2);
 #endif
 	    //printf("]");
 	    //printf("cmpAndSwap off: %i new: %i old: %i %s adr: %i\n"

@@ -60,3 +60,26 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
         /* EMPTY! */
     }
 }
+
+extern void put32(int adr, int val);
+extern void startCore(int adr);
+
+void Bfork(void * interpreter, void * B, int coreNo)
+{ put32(0x50,(int)interpreter);
+  put32(0x40,(int) B);
+  switch (coreNo)
+    {
+    case 1:
+      startCore(0x9C);
+      break;
+    case 2:
+      startCore(0xAC);
+      break;
+    case 3:
+      startCore(0xBC);
+      break;
+    default:
+      break;
+    }
+  
+}
