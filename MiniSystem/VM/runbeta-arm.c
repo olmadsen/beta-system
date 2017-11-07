@@ -12,6 +12,14 @@ void hello(char *S)
 { putstr("Here we are!\n");
   putstr(S);
 }
+void yes(char *S)
+{
+  putstr(S);
+}
+void bingo(char *S)
+{
+  putstr(S);
+}
 void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
 { int loop,cnt;
   unsigned int* counters;
@@ -48,7 +56,13 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   */
   //beta_fork();
   //start1();
+  int i;
   Bfork(hello,"Hello world\n",1);
+  for (i=0; i<100000;i++);
+  Bfork(yes,"Yes we can!\n",2);
+  for (i=0; i<100000;i++);
+  Bfork(bingo,"Bingo!\n",3);
+
   set_descs(BC);
   run_interpreter(1); // isXB = 1 
   getEvent(true); 
