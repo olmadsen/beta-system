@@ -63,13 +63,17 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
 
 extern void put32(int adr, int val);
 extern void startCore(int adr);
+extern void putstr(char *S);
+extern void raw_putc(char c);
 
 void Bfork(void * interpreter, void * B, int coreNo)
 { put32(0x50,(int)interpreter);
   put32(0x40,(int) B);
+  raw_putc(100+coreNo);
   switch (coreNo)
     {
     case 1:
+      putstr("Bfork core1\n");
       put32(0x60,128000000);
       startCore(0x9C);
       break;
@@ -82,6 +86,7 @@ void Bfork(void * interpreter, void * B, int coreNo)
       startCore(0xBC);
       break;
     default:
+      putstr("coreNo not in 1,2,3\n");
       break;
     }
   

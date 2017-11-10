@@ -1683,8 +1683,7 @@ void  *interpreter(void *B){;
 	    B->glsc = 0;
 	    char *fileName = heapAlloc(12);
 #ifdef __arm__
-	    extern void qbeta_fork(void *,void *,int);
-	    qbeta_fork(B,interpreter,threadNo);
+
 #else
 	    if (sprintf (fileName,"traceF%i.s",threadNo) < 0) { printf("sprintf error\n");};
 #endif
@@ -1699,6 +1698,9 @@ void  *interpreter(void *B){;
 	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
 #elif defined  __CYGWIN__
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
+#elif __arm__
+	    extern void Bfork(void *,void *,int);
+	    Bfork(interpreter,B,threadNo + 1);
 #endif
 	    threadNo = threadNo + 1;
 	    hasThreads = true;

@@ -54,14 +54,16 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
   putstr("Hmm!?\n");
   */
-  //beta_fork();
+  //beta_fork(l);
   //start1();
+  /*
   int i;
   Bfork(hello,"Hello world\n",1);
   for (i=0; i<100000;i++);
   Bfork(yes,"Yes we can!\n",2);
   for (i=0; i<100000;i++);
   Bfork(bingo,"Bingo!\n",3);
+  */
 
   set_descs(BC);
   run_interpreter(1); // isXB = 1 
