@@ -77,6 +77,7 @@ HANDLE allocMutex;
 #endif
 
 int ZZ = 0;
+
 void *heapAlloc(int size) {
   void *obj; char S[50];
   if (true) { 
@@ -387,6 +388,7 @@ DWORD WINAPI interpreter(LPVOID B);
 #elif defined __arm__
 void *interpreter(void *B);
 #endif
+
 
 void allocMain(Block *thisBlock,int descNo){ 
   thisBlock->thisModule = allocTemplate(1000,descNo,true,0,0);
@@ -931,7 +933,7 @@ void  *interpreter(void *B){;
 #endif
   FILE * trace;
 #ifdef __arm__
-  init_uart();
+  //init_uart();
 #else
   trace = fopen(thisBlock->traceFile,"w");
   thisBlock->trace = trace;

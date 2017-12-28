@@ -13,7 +13,7 @@
 #define GPPUD   (*(volatile unsigned *)(GP_BASE + 0x94))
 #define GPPUDCLK0   (*(volatile unsigned *)(GP_BASE + 0x98))
 
-static void init_uart(void)
+void init_uart(void)
 { int i;
 
   AUX_ENB |= 1;     /* Enable mini-uart */
@@ -45,6 +45,28 @@ void putch(char c)
 { if ( c == '\n')
     raw_putc('\r');
   raw_putc(c);
+}
+void puthex(int V)
+{ int X;
+  char d[8];
+  int i; 
+  for (i = 0; i < 8; i++) d[i] = '0';
+  putch('0');
+  putch('x');
+  if (V > 0) 
+    { i = 8;
+      while (V > 0)
+	{ X = V % 16;
+	  i = i - 1;
+	  if (X < 10) { d[i] = '0' + X;}
+	  else
+	    { d[i] = 'A' - 10 + X;
+	    };
+	  V = V / 16;
+	};
+    };
+  for (i = 0; i < 8; i++) {putch(d[i]);}
+  putch('\n');
 }
 #include <string.h>
 #include <stdlib.h>

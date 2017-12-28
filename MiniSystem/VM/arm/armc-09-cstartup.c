@@ -31,6 +31,8 @@
 extern int __bss_start__;
 extern int __bss_end__;
 
+//#include "armc-uart.c"
+//extern void init_uart(void);
 extern void init_mmu();
 
 extern void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags );
@@ -53,7 +55,8 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
     while( bss < bss_end )
         *bss++ = 0;
 
-    init_mmu();
+    //init_uart();
+    //init_mmu();
 
     /* We should never return from main ... */
     kernel_main( r0, r1, r2 );
@@ -67,7 +70,7 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
 
 extern void put32(int adr, int val);
 extern void startCore(int adr);
-extern void putstr(char *S);
+extern void putstr(const char *S);
 extern void raw_putc(char c);
 
 void Bfork(void * interpreter, void * B, int coreNo)
