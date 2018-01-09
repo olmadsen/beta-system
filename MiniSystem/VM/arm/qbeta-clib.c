@@ -10,6 +10,7 @@ extern void putstr(const char *S);
 extern void raw_putc(char c);
 extern void init_uart();
 extern void init_mmu();
+extern void init_mmu_x();
 extern void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags );
 
 

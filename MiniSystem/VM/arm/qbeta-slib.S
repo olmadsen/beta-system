@@ -22,23 +22,31 @@ cmpAndSwap:
 	// r0 = adr of mem loc
 	// r1 = old value
 	// r2 = new value
-	push {r0,r1,r2,r3,lr}
+	/*push {r0,r1,r2,r3,lr}
 	bl puthex
 	pop {r0,r1,r2,r3,lr}
-	
-	ldrex r3,[r0]
+
+	ldr r3,[r0]
 
 	push {r0,r1,r2,r3,lr}
 	mov r0,r3
 	bl puthex
-	pop {r0,r1,r2,r3,lr}
+	pop {r0,r1,r2,r3,lr}*/
+	
+	//mcr P15, 0, r0, C7, C10, 5
+	ldrex r4,[r0]
+
+	/*push {r0,r1,r2,r3,lr}
+	mov r0,r3
+	bl puthex
+	pop {r0,r1,r2,r3,lr}*/
 	
 	push {r0,r1,r2,r3,lr}
 	ldr r0,=#98
 	bl raw_putc
 	pop {r0,r1,r2,r3,lr}
 	
-	cmpne r1,r3
+	cmpne r1,r4
 	beq fail
 	strexne r3,r2,[r0]
 	cmpne r3,#1

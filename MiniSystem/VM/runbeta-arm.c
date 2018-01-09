@@ -44,7 +44,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
       while(1);
   */
   unsigned int *P;
-  int X,V,Q;
+  volatile int X,V,Q;
   X = 0;
   V = 0;
   P = (unsigned int*)0x10200408; //0x40201008;
@@ -82,6 +82,10 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   //V = __ldrex(&X);  // generates LDREX
   putstr("Try cmpAndSwap\n");
   X = 0;
+  //V =__sync_val_compare_and_swap(&X,0,1);
+  
+  if (V) {putstr("OBS! Got lock 1st!\n");} else {putstr("OBS! Did not get lock 1st!\n");}
+
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 1st!\n");} else {putstr("Did not get lock 1st!\n");}
   V = cmpAndSwap((int)&X,0,1);

@@ -1730,6 +1730,8 @@ void  *interpreter(void *B){;
 #elif __arm__
 	    extern int cmpAndSwap(int adr, int old, int new); 
 	    V = cmpAndSwap((int)&X->vfields[arg1],0,arg2);
+            V = 0x8899;
+	    V = __sync_val_compare_and_swap(&X->vfields[arg1],0,arg2);
 #endif
 	    //printf("]");
 	    //printf("cmpAndSwap off: %i new: %i old: %i %s adr: %i\n"
