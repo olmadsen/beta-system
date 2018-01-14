@@ -53,6 +53,8 @@ void puthex(int V)
   for (i = 0; i < 8; i++) d[i] = '0';
   putch('0');
   putch('x');
+  /*
+  if (V < 0) V = - V;
   if (V > 0) 
     { i = 8;
       while (V > 0)
@@ -65,6 +67,15 @@ void puthex(int V)
 	  V = V / 16;
 	};
     };
+  */
+  for (i = 0; i < 8; i++) {
+      X = V & 0xF;
+      V = V >> 4;
+      if (X < 10) { d[7 - i] = '0' + X;}
+      else
+	{ d[7 - i] = 'A' - 10 + X;
+	};
+    }
   for (i = 0; i < 8; i++) {putch(d[i]);}
   putch('\n');
 }

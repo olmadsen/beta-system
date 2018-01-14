@@ -282,36 +282,47 @@ QQQQ:
 	// Secure, global, full accessibility,
 	// executable.
 	// Domain 0, Shareable, Normal cacheable memory
-	LDR R3, =4095
+	LDR R3, =4096
 	//LDR R3, =1024 // executes the loop 1024 times to set up
 	// 1024 descriptors to cover 0-1GB memory.
-
+/*
 	push {R0,R1,R2,R3,lr}
 	ldr r0,=#68 // 'D'
 	bl raw_putc
 	pop {R0,R1,R2,R3,lr}
 
 	push {R0,R1,R2,R3,lr}	
-	mov R0, R3
 	bl puthex
 	pop {R0,R1,R2,R3,lr}
-	
+	push {R0,R1,R2,R3,R4,lr}	
+	mov R0, R2
+	bl puthex
+	pop {R0,R1,R2,R3,R4,lr}	*/
 loop:
 	STR R2, [R0], #4 // Build a page table section entry.
 	ADD R2, R2, R4 // Update address part for next descriptor.
 
-	push {R0,R2,R3,lr}
-	mov r0,R2
+	/*
+	push {R0,R1,R2,R3,R4,lr}
+	mov r0,R0
 	bl puthex
-	pop {R0,R2,R3,lr}
-	push {R0,R2,R3,lr}	
-	mov R0, R3
+	pop {R0,R1,R2,R3,R4,lr}
+	push {R0,R1,R2,R3,R4,lr}	
+	mov R0, R2
 	bl puthex
-	pop {R0,R2,R3,lr}
-
+	pop {R0,R1,R2,R3,R4,lr}*/
+	
 	SUBS R3, #1	
 	BNE loop
-
+	
+	/*push {R0,R1,R2,R3,lr}	
+	bl puthex
+	pop {R0,R1,R2,R3,lr}*/
+	push {R0,R1,R2,R3,lr}	
+	mov R0, R2
+	bl puthex
+	pop {R0,R1,R2,R3,lr}
+	
 	push {lr}
 	ldr r0,=#69 // 'E'
 	bl raw_putc
@@ -366,6 +377,7 @@ final:
 yyy:
 
 .align 14
+.globl ttb0_base
 ttb0_base:
 	.space 1024 * 4 * 4
 	

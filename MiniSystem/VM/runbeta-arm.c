@@ -11,6 +11,7 @@ extern void init_mmu();
 extern void init_mmu_s();
 extern int __bss_start;
 extern int __data_start;
+extern int ttb0_base;
 
 void hello(char *S)
 { putstr("Here we are!\n");
@@ -44,7 +45,9 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
       while(1);
   */
   unsigned int *P;
+  unsigned int *A;
   volatile int X,V,Q;
+  int i;
   X = 0;
   V = 0;
   P = (unsigned int*)0x10200408; //0x40201008;
@@ -53,14 +56,21 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   //init_mmu_s();
   putstr("\nmmu initiated\n");
   puthex(Q);
-
+  putstr("TTL: \n");
+  puthex((int)&ttb0_base);
+  A = (unsigned int*) &ttb0_base;
+  for (i = 0; i < 4095; i++) {
+    if ((i < 10) || (4085 < i)) {
+      puthex((int)&A[i]);
+      puthex(A[i]);
+    }
+    if (A[i] == 0) goto L;
+  }
+ L:
   putstr("qbeta is here\n");
-  puthex(0); 
-  puthex(100);
-  puthex(0x01AF);
-
   puthex((int)&__bss_start);
   puthex((int)&__data_start);
+
   puthex(64 * 1024 * 1024);
 
   P = (unsigned int*)0x10200000;
