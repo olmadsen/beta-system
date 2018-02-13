@@ -54,41 +54,48 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   Q = P[0];
   //init_uart();
   //init_mmu_s();
-  putstr("\nmmu initiated\n");
-  puthex(Q);
-  putstr("TTL: \n");
+  //putstr("\nAfter init-mmu\n");
+  //puthex(Q);
+  putstr("\nTTL: \nttb0_base: ");
   puthex((int)&ttb0_base);
+  putch('\n');
   A = (unsigned int*) &ttb0_base;
-  for (i = 0; i < 4095; i++) {
-    if ((i < 10) || (4085 < i)) {
+  for (i = 0; i < 4096; i++) {
+    if ((i < 3) || (4092 < i)) {
       puthex((int)&A[i]);
+      putch(':');
       puthex(A[i]);
+      putch('\n');
     }
-    if (A[i] == 0) goto L;
+    if (i == 4) putstr("...\n");
   }
- L:
   putstr("qbeta is here\n");
-  puthex((int)&__bss_start);
+  putstr("__bss_start: ");
+  puthex((int)&__bss_start); 
+  putch('\n');
+  putstr("__data_start: ");
   puthex((int)&__data_start);
-
-  puthex(64 * 1024 * 1024);
-
+  putch('\n');
+  /*
   P = (unsigned int*)0x10200000;
   puthex((int)&P[0]);
   puthex(P[0]);
-
   P = (unsigned int*)0x102000fc;
   puthex((int)&P[0]);
   puthex(P[0]);
-
   P = (unsigned int*)0x10200408; //0x40201008;
   puthex((int)&P[0]);
   puthex(P[0]);
-  
+  */
   X = 0x1234;
+  putstr("&X,X, X[0]: ");
   puthex((int)&X);
+  putch(',');
   puthex(X);
+  putch(',');
   puthex((&X)[0]);
+  putch('\n');
+  /*
   //V = __ldrex(&X);  // generates LDREX
   putstr("Try cmpAndSwap\n");
   X = 0;
@@ -104,7 +111,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
   putstr("Hmm!?\n");
-  
+  */
   //beta_fork(l);
   //start1();
   /*

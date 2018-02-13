@@ -1,3 +1,117 @@
+.globl init_mmu
+init_mmu:
+	// Disable L1 Caches.	
+	MRC P15, 0, R1, C1, C0, 0 // Read SCTLR.
+	BIC R1, R1, #(0x1 << 2) // Disable D Cache.
+	MCR P15, 0, R1, C1, C0, 0 // Write SCTLR.
+	// Invalidate Data cache to create general-purpose code. Calculate the
+	// cache size first and loop through each set + way.
+	MOV R0, #0x0 // R0 = 0x0 for L1 dcache 0x2 for L2 dcache.
+	MCR P15, 2, R0, C0, C0, 0 // CSSELR Cache Size Selection Register.
+	MRC P15, 1, R4, C0, C0, 0 // CCSIDR read Cache Size.
+	AND R1, R4, #0x7
+	ADD R1, R1, #0x4 // R1 = Cache Line Size.
+	LDR R3, =0x7FFF
+	AND R2, R3, R4, LSR #13 // R2 = Cache Set Number – 1.
+	LDR R3, =0x3FF
+	AND R3, R3, R4, LSR #3 // R3 = Cache Associativity Number – 1.
+	CLZ R4, R3 // R4 = way position in CISW instruction.
+
+	MOV R5, #0 // R5 = way loop counter.
+way_loop:
+	MOV R6, #0 // R6 = set loop counter.
+set_loop:
+	ORR R7, R0, R5, LSL R4    // Set way.
+	ORR R7, R7, R6, LSL R1    // Set set.
+	MCR P15, 0, R7, C7, C6, 2 // DCCISW R7.
+	ADD R6, R6, #1            // Increment set counter.
+	CMP R6, R2                // Last set reached yet?
+	BLE set_loop 		  // If not, iterate set_loop,
+	ADD R5, R5, #1 		  // else, next way.
+	CMP R5, R3 		  // Last way reached yet?
+	BLE way_loop 		  // if not, iterate way_loop.
+
+
+	// Initialize TTBCR.
+	MOV R0, #0 		  // Use short descriptor.
+	MCR P15, 0, R0, C2, C0, 2 // Base address is 16KB aligned.
+				  // Perform translation table walk for TTBR0.
+
+	// Initialize DACR.
+	LDR R1, =0x55555555 	  // Set all domains as clients.
+	MCR P15, 0, R1, C3, C0, 0 // Accesses are checked against the
+				  // permission bits in the translation tables.
+
+	// Initialize SCTLR.AFE.
+	MRC P15, 0, R1, C1, C0, 0  // Read SCTLR.
+	BIC R1, R1, #(0x1 <<29)   // Set AFE to 0 and disable Access Flag.
+	MCR P15, 0, R1, C1, C0, 0 // Write SCTLR.
+		
+	// Initialize TTBR0.
+	LDR R0, =ttb0_base	  // ttb0_base must be a 16KB-aligned address.
+	MOV R1, #0x2B  		  // The translation table walk is normal, inner
+	ORR R1, R0, R1 		  // and outer cacheable, WB WA, and inner
+	MCR P15, 0, R1, C2, C0, 0 // shareable.
+	
+	// Set up translation table entries in memory
+	LDR R4, =0x00100000 // Increase 1MB address each time.
+	//Full access, domain 0, no cache, page table entry
+	LDR R2, =0x00015C06 	// Set up translation table descriptor with
+				// Secure, global, full accessibility,
+				// executable.
+				// Domain 0, Shareable, Normal cacheable memory
+	LDR R3, =4096	// executes the loop 4096 times to set up
+			// 4096 descriptors to cover 0-1GB memory.
+
+loop:
+	STR R2, [R0], #4 // Build a page table section entry.
+	ADD R2, R2, R4 // Update address part for next descriptor.
+	SUBS R3, #1	
+	BNE loop
+
+// SMP is implemented in the CPUECTLR register.
+	MRRC P15, 1, R0, R1, C15 // Read CPUECTLR.
+	ORR R0, R0, #(0x1 << 6) // Set SMPEN.
+	MCRR P15, 1, R0, R1, C15 // Write CPUECTLR.
+	
+// Enable caches and the MMU.
+	MRC P15, 0, R1, C1, C0, 0 // Read SCTLR.
+	ORR R1, R1, #(0x1 << 2) // The C bit (data cache).
+	ORR R1, R1, #(0x1 << 12) // The I bit (instruction cache).
+	ORR R1, R1, #0x1 // The M bit (MMU).
+	MCR P15, 0, R1, C1, C0, 0 // Write SCTLR.
+	DSB
+	ISB
+
+	push {lr}
+	ldr r0,=#65 // 'A'
+	bl raw_putc
+	pop {lr}
+	
+	LDR R1, =mutex
+	LDR R0,[R1]
+	
+	//ldr r0,=#66 // 'B'
+	push {lr}	
+	bl raw_putc	
+	pop {lr}
+	
+	bx lr
+
+.align 2
+mutex:
+	.word 66 // 'B'
+	
+// constant pool
+.align 2
+	.ltorg
+	
+.align 14
+.globl ttb0_base
+ttb0_base:
+	.space 1024 * 4 * 4
+
+////////////////////////////
 .globl init_mmu_x
 init_mmu_x:
 // Example 4.1. Setting up caches, MMU, and branch predictors
@@ -30,18 +144,18 @@ init_mmu_x:
 	.ltorg
 cp1:
 	MOV r1, #0 				// r1 = way counter way_loop.
-way_loop:
+way_loop_x:
 	MOV r3, #0 				// r3 = set counter set_loop.
-set_loop:
+set_loop_x:
 	MOV r2, r1, LSL #30
 	ORR r2, r3, LSL #5 		// r2 = set/way cache operation format.
 	MCR p15, 0, r2, c7, c6, 2	// Invalidate the line described by r2.
 	ADD r3, r3, #1 			// Increment set counter.
 	CMP r0, r3 			// Last set reached yet?
-	BGT set_loop 			// If not, iterate set_loop, 
+	BGT set_loop_x 			// If not, iterate set_loop, 
 	ADD r1, r1, #1 			// else, next.
 	CMP r1, #4 			// Last way reached yet?
-	BNE way_loop 			// if not, iterate way_loop.
+	BNE way_loop_x 			// if not, iterate way_loop.
 
 	// Invalidate TLB
 	MCR p15, 0, r1, c8, c7, 0
@@ -192,8 +306,8 @@ val1020:
 	.word 0x10280c02
 
 
-.globl init_mmu
-init_mmu:
+.globl init_mmu_q
+init_mmu_q:
 	push {lr}
 	ldr r0,=#65 // 'A'
 	bl raw_putc
@@ -278,6 +392,8 @@ QQQQ:
 	//LDR R2, =0x40010C02
 	//LDR R2, =0x00015C0E // Cacheable bit set
 	//LDR R2, =0x00010C0A
+	//LDR R2, =0x00005C06
+	//LDR R2, =0x0001000C
 	LDR R2, =0x00015C06 // Set up translation table descriptor with
 	// Secure, global, full accessibility,
 	// executable.
@@ -298,7 +414,7 @@ QQQQ:
 	mov R0, R2
 	bl puthex
 	pop {R0,R1,R2,R3,R4,lr}	*/
-loop:
+loop_y:
 	STR R2, [R0], #4 // Build a page table section entry.
 	ADD R2, R2, R4 // Update address part for next descriptor.
 
@@ -313,7 +429,7 @@ loop:
 	pop {R0,R1,R2,R3,R4,lr}*/
 	
 	SUBS R3, #1	
-	BNE loop
+	BNE loop_y
 	
 	/*push {R0,R1,R2,R3,lr}	
 	bl puthex
@@ -328,7 +444,7 @@ loop:
 	bl raw_putc
 	pop {lr}
 
-	b final
+	b final_z
 	
 	LDR R2, =0x40010C02 // Set up translation table descriptors with
 			// secure, global, full accessibility,
@@ -346,7 +462,7 @@ loop2:
 	bl raw_putc
 	pop {lr}
 	
-final:	
+final_z:	
 // SMP is implemented in the CPUECTLR register.
 	MRRC P15, 1, R0, R1, C15 // Read CPUECTLR.
 	ORR R0, R0, #(0x1 << 6) // Set SMPEN.
@@ -371,13 +487,4 @@ final:
 
 	bx lr
 
-	B yyy
-	.align 2
-	.ltorg
-yyy:
 
-.align 14
-.globl ttb0_base
-ttb0_base:
-	.space 1024 * 4 * 4
-	
