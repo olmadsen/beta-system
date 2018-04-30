@@ -1,6 +1,6 @@
 // Interpreter main program for ARm on RaspberryPi
 //#include <stdbool.h>
-#include "interpreter_c.c"
+#include "../interpreter_c.c"
 //#include "arm/blink.c"
 #include "qbeta_image.c"
 
@@ -93,7 +93,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   putch(',');
   puthex(X);
   putch(',');
-   puthex((&X)[0]);
+  puthex((&X)[0]);
   putch('\n');
   /*
   //V = __ldrex(&X);  // generates LDREX
