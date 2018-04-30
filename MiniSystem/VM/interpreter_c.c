@@ -155,11 +155,18 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   return obj;
 }
 
+void dumpRstack(FILE *trace,Btemplate *stack);
+void dumpVstack(FILE *trace,Btemplate *stack);
 
 #ifdef DUMP
-void StacksToOut(FILE *trace, Block *ctx)
-{ fprintf(trace,"thisObj= %s ",nameOf(ctx->thisObj));
-  fprintf(trace,"thisStack= %s ",nameOf(ctx->thisStack));
+void StacksToOut(FILE *trace,Btemplate *thisObj, Btemplate *thisStack)//, Block *ctx)
+{ fprintf(trace,"\n\tthisObj = %s ",nameOf(thisObj));
+  dumpRstack(trace,thisObj);
+  dumpVstack(trace,thisObj);
+  fprintf(trace,"\n\tthisStack = %s ",nameOf(thisStack));
+  dumpRstack(trace,thisStack);
+  dumpVstack(trace,thisStack);
+  fprintf(trace,"\n");
 }
 #endif
 
@@ -180,7 +187,8 @@ void dumpVstack(FILE *trace,Btemplate *stack){
   int i;
 #ifdef __arm__
 #else
-  fprintf(trace,"%s:vStack\[",nameOf(stack));
+  //fprintf(trace,"%s:vStack\[",nameOf(stack));
+  fprintf(trace,"[");
   for (i=0; i < stack->vtop; i++)
     fprintf(trace,"%i ",stack->vstack[i + 1]);  
   fprintf(trace,"] ");
@@ -191,7 +199,8 @@ void dumpRstack(FILE *trace,Btemplate *stack){
   int i;
 #ifdef __arm__
 #else
-  fprintf(trace,"%s:rStack\[",nameOf(stack));
+  //fprintf(trace,"%s:rStack\[",nameOf(stack));
+  fprintf(trace,"[");
   for (i=0; i < stack->rtop; i++)
     fprintf(trace,"%s ",nameOf(stack->rstack[i + 1]));  
   fprintf(trace,"] ");
@@ -544,11 +553,51 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 #endif
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
-  rPush(ctx->callee,origin);
+  rPush(ctx->callee,origin); // OBS - cf invokeObj
+
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+  
   ctx->currentDescNo = descNo;
-  ctx->thisStack = ctx->callee;
-  ctx->thisObj = ctx->thisStack;
+  //ctx->thisStack = ctx->callee;
+  //ctx->thisObj = ctx->thisStack;
+  ctx->thisObj = ctx->callee;
+  ctx->thisStack = ctx->thisObj; // OBS - cf invodeObj
+  ctx->bc = (ObjDesc) myCode(ctx->thisObj);
+  ctx->glsc = getAllocE(ctx->thisObj->desc);
+#ifdef TRACE
+  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
+	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
+#endif
+#ifdef event
+  mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,isObj,ctx->currentDescNo,ctx->glsc,false);
+#endif
+};
+
+void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
+  // OBS! for isXbeta calls of allocObj may have to be replaced by allocQObj
+#ifdef TRACE
+  fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
+#endif
+  ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
+#ifdef TRACE
+  fprintf(ctx->trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
+#endif
+  rPush(ctx->callee,ctx->thisObj);
+  rPush(ctx->callee,ctx->thisStack);
+  if (isXbeta){
+    rPush(ctx->thisStack,origin); // OBS - cf invokeObj
+  }else{
+    rPush(ctx->callee,origin); // OBS - cf invokeObj
+  }
+  cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+  
+  ctx->currentDescNo = descNo;
+  if (isXbeta) {
+      ctx->thisObj = ctx->callee;
+    }else{
+      ctx->thisObj = ctx->callee;
+      ctx->thisStack = ctx->thisObj; // OBS - cf invodeObj
+    }
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
@@ -572,12 +621,14 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
+
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+
   ctx->currentDescNo = descNo;
   ctx->thisObj = ctx->callee;
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
-#ifdef TRACE
+#ifdef TRACEc
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
@@ -1253,12 +1304,14 @@ void  *interpreter(void *B){;
 	break;
       case mvStack:
 #ifdef TRACE
-	fprintf(trace,"mvStack %s -> %s [",nameOf(thisObj),nameOf(thisStack));
+	//fprintf(trace,"mvStack %s -> %s [",nameOf(thisObj),nameOf(thisStack));
+	fprintf(trace,"mvStack");
 #endif
 	thisStack = thisObj;
 #ifdef TRACE
-	for (i = 0; i < thisStack->rtop; i++) fprintf(trace,"%s ",nameOf(thisStack->rstack[i+1]));
-	fprintf(trace,"]\n");
+	//for (i = 0; i < thisStack->rtop; i++) fprintf(trace,"%s ",nameOf(thisStack->rstack[i+1]));
+	//fprintf(trace,"]\n");
+	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	break;
       case setThisStack:
@@ -1956,11 +2009,16 @@ void  *interpreter(void *B){;
 	fprintf(trace,"sendv %i",arg1);
 #endif
 	arg2 = vdtTable(trace,X,arg1); // descNo
-
+#ifdef TRACE
+	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
+#endif
 	saveContext();
-	allocObj(thisBlock,X,arg2,false,0,0);
+	allocQObj(thisBlock,X,arg2,false,0,0);
 	restoreContext();
 
+#ifdef TRACE
+	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
+#endif
 	break;
       case sendx: 
 #ifdef TRACE
