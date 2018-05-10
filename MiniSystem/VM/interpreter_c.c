@@ -2350,6 +2350,7 @@ void  *interpreter(void *B){;
       case _break:
 	arg1 = op1(bc,&glsc);
 	arg2 = op2(bc,&glsc);
+	arg3 = op2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 #endif
@@ -2359,6 +2360,9 @@ void  *interpreter(void *B){;
 	  X = myCorigin(X);
 	}
 	//fprintf(trace,"popCallStackB: %s \n",nameOf(X));
+	/* We need to test for none if the stack does not contain X
+	 * Same  for traversing super
+	 */
       popCallStack:
 	if (thisObj != X) {
 	  //fprintf(trace,"popCallStackC %s \n",nameOf(thisObj));
@@ -2369,6 +2373,13 @@ void  *interpreter(void *B){;
 	//fprintf(trace,"popCallStackD %s\n",nameOf(Y));
 	glsc = cRestoreReturn(thisObj);
 	currentDescNo = cRestoreReturn(thisObj);
+      findActualSuper:
+	if (currentDescNo != arg3) {
+	  glsc = cRestoreReturn(thisObj);
+	  currentDescNo = cRestoreReturn(thisObj);
+	  thisObj = rPop(thisObj);
+	  goto findActualSuper;
+	}
 	bc = codeFromDescNo(currentDescNo);
 	glsc = xlabs(currentDescNo,arg2) - 1;
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
