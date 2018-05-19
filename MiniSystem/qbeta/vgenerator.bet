@@ -9,7 +9,29 @@ generator: restrictions
      
      Module::
        (# Qalloc:: (#do DI.Qgen #);
-          Qgen:: (# do DI.Qgen #);          
+          Qgen:: 
+            (# encModule:
+                 (# org: ^Items; M: ^Module; MI: ^ModuleItem
+                 do (if origin[] <> none then
+                        'encModule-a:'->puttext;
+                        (origin[] -> org[]).theModule -> M[];
+                        (if M[] = none then
+                            'M is none'->putline
+                         else
+                            'M is not none'->putline
+                        if)
+                    if)
+                 exit M[]
+                 #);
+            do ('Comp',newDesc.noOfDescs) -> cd.newComponent;
+               (if not DI.OG.IS.isEmpty then
+                   (DI.sig.id[],none,DI.OG[],DI.OG.super[],none) -> ObjTmpStack.add;
+                   (if encModule <> none then
+                       'EncModule: ' -> puttext; 
+                       DI.sig.id[] -> putline;
+                       (encModule).Qgen
+                if) if)
+            #);          
           gen::
             (#
             do ('Comp',newDesc.noOfDescs) -> cd.newComponent;
@@ -18,7 +40,20 @@ generator: restrictions
           findNextImp:: (# do bcp -> DI.OG.IS.findNextImp -> impx[] #);
        #);
      ModuleItem::
-       (# gen::
+       (# Qgen::
+            (#
+            do (if MD.isIncluded then
+                   (if traceModules then
+                       'Module included: ' -> puttext; sig.doPT -> putline;
+                   if);
+                   ('ModuleItem:gen',sig.dopt) -> cd.com2;
+                   (useReturnValue,superAdj,staticOff) -> MD.DI.Qgen
+                else
+                   (if traceModules then
+                       'Module not included: ' -> puttext; sig.doPT -> putline
+               if)if)
+            #);
+          gen::
             (#
             do (if MD.isIncluded then
                    (if traceModules then
@@ -53,7 +88,54 @@ generator: restrictions
        (# Qalloc:: (#do #);
           Qgen:: 
             (#
-            do OG.Qgen
+            do (if true 
+                // OG.isSimpleValue then
+                   (* C1,C2,V1,V2 *)
+                   (if true 
+                    // 'Function' -> ((OG.super.last).label).equal
+                    // 'Binary' -> ((OG.super.last).label).equal
+                    // 'Const:' -> ((OG.super.last).label).equal
+                    // 'String:' -> ((OG.super.last).label).equal
+                       then
+                       (* pretty ad hoc - to handle 
+                        * X: = integer(7)
+                        * X: ? 7
+                        * X: = a + b
+                        * and avoid calling OG.Qgen for 
+                        * X: = integer
+                        * Cf the discussion of #foo versus foo 
+                        *)
+                       (true,0,this(DataItem).off) -> OG.Qgen;
+                       cd.pushThis;
+                       (sig.id[],this(DataItem).off) -> cd.storeg
+                   if);
+                // (OG.primNo = String_prim) and isConst then
+                   (* Could be  V: = elm where elm:< Object *)
+                   (true,0,this(DataItem).off) -> OG.Qgen;
+                   cd.pushThis;
+                   (sig.id[],this(DataItem).off) -> cd.rstoreg
+                else
+                   (* C3,C4,V3,V4 *)
+                   (if isConst or not OG.IS.isEmpty then
+                       (* Singular T: = P{...} *)
+                       (* C3,C4,V4 *)
+                       (if origin[] <> none then 
+                           cd.bcPos -> beginBCP;
+                           (false,0,this(DataItem).off) -> OG.Qgen;
+                           cd.bcPos -> endBCP;
+                        else 
+                           (* A module object - why special handling? 
+                            * Apparenly cd.bcPos is not defined here!?
+                            *)
+                           (if not OG.IS.isEmpty then
+                               (sig.id[],none,OG[],OG.super[],none) -> ObjTmpStack.add
+                           if)   
+                       if) 
+                       (* else V3 - just a qualifcation; 
+                        * see also the discussion of #foo versus foo *)
+                       (* Could be S: ?elm where elm:< Object -- no code gen *)
+                   if)
+               if)
             #);
           gen::
             (# gdb:: (# do sig.doPT -> lx.puttext #);
@@ -162,7 +244,15 @@ generator: restrictions
             #)          
        #);
      Signature::
-       (# gen:: 
+       (# Qgen::
+            (# 
+            do (* TST/RemoteExp fails at      
+                *    Bar(ch + 2).foo(ch + 2).print
+                * if we call args.gen
+                *)
+               (false,0,0) -> args.Qgen
+            #); 
+          gen:: 
             (# 
             do (* TST/RemoteExp fails at      
                 *    Bar(ch + 2).foo(ch + 2).print
@@ -230,7 +320,18 @@ generator: restrictions
             #)
        #);
      Arguments::
-       (# gen::
+       (# Qgen::
+            (#
+            do scanArgs
+               (#
+               do (if traceGeneric then
+                      current.doPT -> putline;
+                      current.label -> putline;
+                  if);
+                  (false,0,0) -> current.Qgen 
+               #)
+            #);
+          gen::
             (#
             do scanArgs
                (#
@@ -248,14 +349,55 @@ generator: restrictions
             do
             #);
           Qgen::
-            (# I: ^Items; OG: ^ObjectGenerator
+            (# genOrigin:
+                 (# OG: ^ObjectGenerator
+                 do (if origin[] <> none then
+                        origin.father[] -> OG[];
+                        OG.Qgen
+                    if)
+                 #);
+                gdb:: 
+                 (#
+                 do 'super: ' -> lx.puttext; super.doPT -> lx.puttext;
+                    (if IS.isEmpty then 
+                        ':IS-empty: ' -> lx.puttext 
+                     else
+                        ':singular:' -> lx.puttext
+                    if);
+                    'staticOff: '-> lx.puttext; staticOff -> lx.putint
+                 #);
+               name: ^text
             do (if not genIsDone then
                    father.doPT -> putline;
                    true -> genIsDone;
-                   (if origin[] <> none then
-                       origin[] -> I[]; I.father[] -> OG[];
-                       OG.Qgen
-               if)if)
+                   (*genOrigin;*)
+                   cd.bcPos -> beginBCP;
+                   (if CC[] <> none then
+                       this(ObjectGenerator)[] -> CC.add -> CC[];
+                   if);
+                   (if IS.isEmpty 
+                       and not super.hasVirtualArgs 
+                       or (super.isBasic and IS.isEmpty) then
+                       (* check this - called when R.foo *)
+                       
+                       (useReturnValue,superAdj,staticOff) -> super.Qgen
+                    else
+                       (* Singular object like R.foo{ }
+                        * includes pattern invocations with 
+                        * virtual arguments like %if .. %then% ... %else ...
+                        *)
+                       cd.pushThis; (* origin for a singular object *)
+                       
+                       (* Invoke the singular object *)
+                       (OGid,IS.descno,staticOff,true) -> cd.invoke; 
+                       
+                       (if not useReturnValue then cd.rpop if);
+                       
+                       (OGid,none,this(ObjectGenerator)[],super[],CC[])
+                         -> ObjTmpStack.add
+                   if);
+                   cd.bcPos -> endBCP;     
+               if)
             #);
           gen::
             (# gdb:: 
@@ -561,13 +703,13 @@ generator: restrictions
                     else cd.mvStack
                    if);
                    (if sig[] <> none then
-                       (false,0,0,CC[]) -> sig.gen
+                       (false,0,0) -> sig.Qgen
                    if);
                    scanSons
                    (# I: ^Item
                    do current[] -> I[];
                       (if I.isDecl then 
-                          (false,0,0,CC[]) -> current.gen if) 
+                          (false,0,0) -> current.Qgen if) 
                    #);
                    (if innerInx > 0 then innerInx -> cd.innerA if);
                    (if (superDesc[] <> none) and not superDesc.isBasic  then
@@ -588,7 +730,7 @@ generator: restrictions
                    scanSons
                    (# I: ^Item; 
                    do current[] -> I[];
-                      (if not I.isDecl then (false,0,0,CC[]) -> current.gen if) 
+                      (if not I.isDecl then (false,0,0) -> current.Qgen if) 
                    #);
                    leaveLab -> cd.defLab;
                    (* we must push return values *)
@@ -662,7 +804,89 @@ generator: restrictions
             #)            
        #);
      Pattern::
-       (#  gen:: 
+       (# Qgen::
+             (# gdb:: (# do sig.dopt -> lx.puttext #);
+               enclosingOG: ^ObjectGenerator;
+               DN: @integer
+            do (if OG.primNo
+                // 0 
+                // object_prim // string_prim 
+                // indexed_prim // immutable_prim then
+                   (if OG.IS.isExternal > 0 then
+                       (*'Pattern:gen: ' -> puttext; 
+                       OG.primNo -> putint; ' ' -> put;
+                       doPT->putline;*)
+                       leave Qgen 
+                   if);
+                   (if ptnKind 
+                    // plainPtn then
+                       (sig.id[],sig[],OG[],OG.super[],CC[]) -> objTmpStack.add 
+                    // virtualPtn then
+                       (if not OG.hasItems (* OG.IS.isEmpty*) then
+                           (off,(OG.super.desc).descNo) -> cd.vdtTable;
+                           (if traceGeneric then
+                               '*** Bind1: ' -> puttext;
+                               off -> putint; ' ' -> put; 
+                               (OG.super.desc).descNo -> putint; newline;
+                               dopt -> putline;
+                           if);
+                        else
+                           (sig.id[],sig[],OG[],OG.super[],CC[]) -> objTmpStack.add;
+                           (off,OG.IS.descNo) -> cd.vdtTable;
+                           (if traceGeneric then
+                               '*** Bind2: ' -> puttext;
+                               off -> putint; ' ' -> put; 
+                               OG.IS.descNo -> putint; newline
+                           if)
+                       if);   
+                       (if father.father##
+                        // ObjectGenerator## then
+                           (* 'ObjectGenerator: ' -> putline;
+                           father.father.dopt->putline;*)
+                           (off, OG[]) 
+                             -> (father.father[]-> enclosingOG[]).XaddB
+                        // Signature## then
+                           (# ptn: ^pattern
+                           do (*'Signature: ' -> putline;
+                              father.father.father.doPT -> putline;
+                              father.father.father.label -> putline;*)
+                              (off, OG[]) 
+                                -> (father.father.father[]-> ptn[]).OG.XaddB
+                           #)
+                        else                           
+                           'Koks'->putline;
+                           father.father.label -> putline
+                       if)
+                    // furtherPtn // finalPtn then
+                       (*'>>>> Binding: ' -> puttext;
+                       OG.IS.descNo -> putint; ' ' -> put;
+                       dopt -> puttext;*)
+                       (if OG.IS.isEmpty then 
+                          (* ' :IS.isEmpty: getDescNo: ' -> puttext;
+                           OG.getDescNo -> putint;
+                           ' :vDescNo: ' -> puttext;
+                           OG.vDescNo -> putint;
+                           newline;*)
+                           OG.vDescNo -> DN
+                        else
+                           (*newline;*)
+                           OG.getDescNo -> DN;
+                           (sig.id[],sig[],OG[],OG.super[],CC[]) -> objTmpStack.add;
+                       if);
+                       (off,DN(*OG.getDescNo*)) -> cd.vdtTable;
+                       (if traceGeneric then
+                           '*** Bind3: ' -> puttext;
+                           off -> putint; ' ' -> put; 
+                           OG.IS.descNo -> putint; newline ;
+                           dopt -> putline
+                       if);
+                       (off, OG[]) -> (father.father[]-> enclosingOG[]).XaddB
+                   if);
+                (*// resume_prim then
+                   ('Resume','D') -> cd.call;                   *)
+               if)
+            #);
+          gen:: 
             (# gdb:: (# do sig.dopt -> lx.puttext #);
                enclosingOG: ^ObjectGenerator;
                DN: @integer
@@ -887,14 +1111,14 @@ generator: restrictions
                                  *    foo{ ... }
                                  * where foo has arguments - to be fixed! *)
                              else
-                                (true,superAdj,0,CC[]) -> args[i].gen
+                                (true,superAdj,0) -> args[i].Qgen
                             if)
                    if)#);
                    handleSuperArgs:
                      (if i < top then 
                          (* a hack - need to scan arguments of super *)
                          i + 1 -> i;
-                         (true,superAdj,0,CC[]) -> args[i].gen;
+                         (true,superAdj,0) -> args[i].Qgen;
                          restart handleSuperargs
                    if)
                if)
@@ -941,10 +1165,10 @@ generator: restrictions
                       (if N
                        // 1 // 3 then
                        // 2 then 
-                          (true,0,staticOff,CC[]) -> current.gen;
+                          (true,0,staticOff) -> current.Qgen;
                           exitlab -> cd.jmpFalse;
                        // 4 then
-                          (false,0,staticOff,CC[]) -> current.gen;
+                          (false,0,staticOff) -> current.Qgen;
                           exitLab -> cd.defLab;
                        else
                           'invoke:%if%then: too many arguments' -> putline;
@@ -1157,7 +1381,16 @@ generator: restrictions
         * perhaps same problem for keyWord
         * We must reconsider parsing/AST and/or gen below
         *)
-       (# gen:: 
+       (# Qgen:: 
+            (# gdb:: (# do doPT -> lx.puttext #);
+               rec,E: ^Exp; T: ^Text
+            do cd.bcPos -> beginBCP;
+               (useReturnValue,staticOff,superAdj,CC[]) -> loadOrigin -> (rec[],E[]);
+               (superAdj,CC[]) -> E.loadArgs;
+               (rec[],E[],useReturnValue,staticOff,CC[]) -> E.invoke;
+               cd.bcPos -> endBCP
+            #);
+          gen:: 
             (# gdb:: (# do doPT -> lx.puttext #);
                rec,E: ^Exp; T: ^Text
             do cd.bcPos -> beginBCP;
@@ -1315,7 +1548,12 @@ generator: restrictions
         * E1.(E2)
         * E1.(E2).E3
         *)
-       (# gen:: 
+       (# Qgen:: 
+            (# gdb:: (# do doPT -> lx.puttext #);
+            do (* we dont come here *)
+               (useReturnValue,superAdj,staticOff) -> IV.Qgen 
+            #);
+          gen:: 
             (# gdb:: (# do doPT -> lx.puttext #);
             do (* we dont come here *)
                (useReturnValue,superAdj,staticOff,CC[]) -> IV.gen 
@@ -1334,7 +1572,8 @@ generator: restrictions
             (# #);
        #);
      Const::
-       (# gen:: (# do invoke #);
+       (# Qgen:: (# do invoke #);
+          gen:: (# do invoke #);
           invoke:: (# do T.setpos; T.getInt -> cd.pushConst #);
        #);
      CharObj::
@@ -1526,7 +1765,7 @@ generator: restrictions
          'done'->putline
       else         
          rootModule.gen;
-
+     if);
      
      ObjTmpStack.next;
          
@@ -1550,7 +1789,7 @@ generator: restrictions
      
      cd.descs[] -> descs[]; (* descs is transferred to betaVM ?*)    
 
-     if);
+
      
      cd.close;
      BC.close
