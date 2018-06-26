@@ -43,8 +43,8 @@ typedef void *FILE;
 #define HIGH 5
 #endif
 
-//#define DUMP
-//#define TRACE
+#define DUMP
+#define TRACE
 //#define EVENT
 
 
@@ -104,7 +104,7 @@ void *heapAlloc(int size) {
     ret = pthread_mutex_unlock( &mutex1 );
     if (ret > 0) RTE2("\n\n*** mutex_unlock error: ",ret);
 #elif defined  __CYGWIN__
-    if (!ReleaseSemaphore(allocMutex,1,NULL)) 
+    if (!ReleaseSemaphore(allocMutex,1,NULL))
       runTimeError("ReleaseSemaphoreError: allocMutex");
 #endif
        
@@ -129,15 +129,41 @@ void releaseHeap(void *S){
 #endif
 }
 
-
+ 
 #ifdef DUMP
 #include "interpreter_dump.c"
 #endif
 
 int hSize = 0;
 
+
+int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
+
+Btemplate *getR(Btemplate *obj,int inx){ 
+  if (newAlloc){
+    if ((0 < inx) && (inx <= 64)) {
+      return (Btemplate *)obj->vfields[inx];
+    } else {
+      printf("getR: index error %i\n",inx);
+    }
+  }else{
+    return obj->rfields[inx];
+  }
+};
+void putR(Btemplate *obj,int inx, Btemplate *X){  
+  if (newAlloc) {
+    if ((0 < inx) && (inx <= 64)) {
+      obj->vfields[inx] = (int)X;
+    }else{
+      printf("putR: index error %i\n",inx);
+    }
+  }else{
+    obj->rfields[inx] = X;
+  }
+};
+
 Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
-  int i = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int);// + 1000;
+  int i = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;// + 1000;
   hSize = hSize + i;
   //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   Btemplate *obj = (Btemplate*)heapAlloc(i);
@@ -149,8 +175,8 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   obj->rtop = 0;
   obj->lscTop = -1;
   obj->lsc = 0;
-  for (i = 0; i < 16; i++) obj->vfields[i] = 0; 
-  for (i = 0; i < 24; i++) obj->rfields[i] = 0;
+  for (i = 1; i < 16; i++) obj->vfields[i] = 0; 
+  for (i = 1; i < 24; i++) putR(obj,i,NULL);
   // bc 
   return obj;
 }
@@ -190,8 +216,8 @@ void dumpVstack(FILE *trace,Btemplate *stack){
   //fprintf(trace,"%s:vStack\[",nameOf(stack));
   fprintf(trace,"[");
   for (i=0; i < stack->vtop; i++)
-    fprintf(trace,"%i ",stack->vstack[i + 1]);  
-  fprintf(trace,"] ");
+    fprintf(trace,"%i ",stack->vstack[i + 1]);     
+  fprintf(trace,"] "); 
 #endif
 }
 
@@ -240,9 +266,7 @@ void vPush(Btemplate *thisStack,int V){
 
 bool getIsObj(Btemplate *obj) {return obj->isObj; };
 
-int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 
-Btemplate *getR(Btemplate *obj,int inx){ return obj->rfields[inx];};
 
 void rPush(Btemplate *stack,Btemplate *R){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
@@ -405,11 +429,13 @@ void allocMain(Block *thisBlock,int descNo){
   thisBlock->thisStack = thisBlock->thisModule;
 };
 
+
+
 FILE *trace_t;
 #ifdef __arm__
 #else
 // Only called from betaVM and runbeta.c
-void init_interpreter(ObjDesc descs_a, int imageS) {
+void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
   FILE *trace;
 
   trace = fopen("code.s","w");
@@ -422,6 +448,7 @@ void init_interpreter(ObjDesc descs_a, int imageS) {
 
   descs = (ObjDesc) heapAlloc(imageS);
   memcpy(descs,descs_a,imageS); 
+  newAlloc = newAlc;
 }
 #endif
 
@@ -617,7 +644,8 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
 #endif
-  if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
+  //if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
+  if (staticOff > 0) putR(ctx->thisObj,staticOff,ctx->callee);
   
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
@@ -661,7 +689,7 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
 
 void allocQIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
-  fprintf(ctx->trace,"allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+  fprintf(ctx->trace,"allocQIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
   // printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
   if (isRindexed == 0) {
@@ -694,7 +722,8 @@ void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
   Btemplate * X = allocTemplate(newId(ctx),getStrucRefDescNo(),0,0,0);
   if (isVirtual) inx = vdtTable(ctx->trace,origin,inx);
   X->vfields[1] = inx;
-  X->rfields[2] = origin;
+  //X->rfields[2] = origin;
+  putR(X,2,origin);
   rPush(ctx->thisStack,X);
 };
 
@@ -702,7 +731,8 @@ void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
 #ifdef TRACE
   fprintf(ctx->trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-  allocObj(ctx,obj->rfields[2],obj->vfields[1],0,0,0);
+  //allocObj(ctx,obj->rfields[2],obj->vfields[1],0,0,0);
+  allocObj(ctx,getR(obj,2),obj->vfields[1],0,0,0);
 };
  void allocTextObj(Block *ctx,int litInx){
     // literals[litInx] = length
@@ -733,17 +763,23 @@ void XallocTextObj(Block *ctx,int litInx){
   Btemplate *X = ctx->thisObj;
   
   allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
-  
+
   ctx->callee->vtop = rangee + dinx + 1;
-  ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
+
+  putR(ctx->callee,1,getR(ctx -> world,3)); // a bloody hack
+
+  //ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
   ctx->callee->vfields[1] = rangee; // pos = rangee
+
   for (i = 0; i < rangee; i++) {
     char ch = getLiteral(X, litInx + i + 1);
     ctx->callee->vfields[dinx + 1 + i] = ch;
-    // fprintf(trace, "Lit %c",ch);
+    //printf("%c  %i\n",ch,ch);
+    // fprintf(trace, "Lit %c",ch); 
   }
-  //printf(" %i %i %i %i \n"
-  //,callee->vfields[0],callee->vfields[1],callee->vfields[2],callee->vfields[3]);
+  //printf("\nfinal string:  range=%i %i %i %i %i \n", rangee
+  //,ctx->callee->vfields[0],ctx->callee->vfields[1],ctx->callee->vfields[2]
+  //,ctx->callee->vfields[3]);
 }
 
 char *mkCstring(Btemplate *T){
@@ -779,7 +815,8 @@ void C2QBstring(Block *ctx,char *S){
     }
   allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
   for (i = 0; i <= length; i++) ctx->callee->vfields[2 + i] = S[i];
-  ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
+  putR(ctx->callee,1,getR(ctx->world,3)); // a bloody hack
+  //ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
 #ifdef __arm__
 #else
   free(S);
@@ -795,8 +832,8 @@ void  ConvertIndexedAsString(Block *ctx) {
   
   allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length + 1,0);
   while (X->vfields[length + 1] == 0 ) length = length - 1;
-
-  ctx->callee->rfields[1] = ctx->world->rfields[3]; // origin - a bloody hack
+  putR(ctx->callee,1,getR(ctx->world,3)); // origin - a bloody hack
+  //ctx->callee->rfields[1] = ctx->world->rfields[3]; // origin - a bloody hack
   ctx->callee->vfields[1] = length; 
 
   for (i = 2; i <= length + 1; i++) ctx->callee->vfields[i] = X->vfields[i];
@@ -1089,7 +1126,8 @@ void  *interpreter(void *B){;
 	break;
       case rpush:
 	arg1 = op1(bc,&glsc);
-	X = thisObj->rfields[arg1];
+	X = getR(thisObj,arg1);
+	//X = thisObj->rfields[arg1];
 #ifdef TRACE
 	fprintf(trace,"rpush %s[%i] = %s \n",nameOf(thisObj),arg1,nameOf(X));
 #endif
@@ -1109,7 +1147,8 @@ void  *interpreter(void *B){;
 	arg1 = op1(bc,&glsc);
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
-	Y = X->rfields[arg1];
+	Y = getR(X,arg1);
+	//Y = X->rfields[arg1];
 	rPush(thisStack,Y);
 #ifdef TRACE
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
@@ -1127,7 +1166,8 @@ void  *interpreter(void *B){;
       case xrpush:
 	arg1 = op1(bc,&glsc); // off
 	arg2 = vPop(thisStack); // inx
-	X = thisObj->rfields[arg1 + arg2];
+	X = getR(thisObj,arg1 + arg2);
+	//X = thisObj->rfields[arg1 + arg2];
 	rPush(thisStack,X);
 #ifdef TRACE
 	fprintf(trace,"xrpush %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
@@ -1150,7 +1190,8 @@ void  *interpreter(void *B){;
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
-	Y = X->rfields[arg1 + arg2]; // need range check - and do we adjust for range?
+	Y = getR(X,arg1 + arg2); // need range check - do we adjust for range?
+	//Y = X->rfields[arg1 + arg2]; // need range check - and do we adjust for range?
 #ifdef TRACE
 	fprintf(trace,"xrpushg %s[%i+%i] = %s/%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
@@ -1170,7 +1211,8 @@ void  *interpreter(void *B){;
 	fprintf(trace,"rstore ");
 #endif
 	X = rPop(thisStack);
-	thisObj->rfields[arg1] = X;
+	putR(thisObj,arg1,X);
+	//thisObj->rfields[arg1] = X;
 #ifdef TRACE
 	//printf("rstore: %s %i %s\n",nameOf(X),arg1,nameOf(thisObj));
 	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
@@ -1193,7 +1235,8 @@ void  *interpreter(void *B){;
 	  runTimeErrorX("Reference is none",thisObj,glsc);
 	};
 	Y = rPop(thisStack);
-	X->rfields[arg1] = Y;
+	//X->rfields[arg1] = Y;
+	putR(X,arg1,Y);
 #ifdef TRACE
 	fprintf(trace,"rstoreg %s[%i] = %s \n",nameOf(X),arg1,nameOf(Y));
 #endif
@@ -1214,7 +1257,8 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"xrstore %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
 #endif
-	thisObj->rfields[arg1 + arg2] = X;
+	//thisObj->rfields[arg1 + arg2] = X;
+	putR(thisObj,arg1 + arg2,X);
 	break;
       case xstoreg:
 	arg1 = op1(bc,&glsc);
@@ -1236,7 +1280,8 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"xrstoreg %s[%i+%i] = %s(%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
-	X->rfields[arg1 + arg2] = Y;
+	//X->rfields[arg1 + arg2] = Y;
+	putR(X,arg1 + arg2,Y);
 	break;
       case _double:
 	arg1 = vPop(thisStack);
@@ -2162,12 +2207,16 @@ void  *interpreter(void *B){;
 	//printf("\nseq:struc: %s %s\n",nameOf(X),nameOf(Y));
 	arg1 = X->vfields[1];
 	arg2 = Y->vfields[1];
-	X = X->rfields[2];
-	Y = Y->rfields[2];
+
+	//X = X->rfields[2];
+	//Y = Y->rfields[2];
+	X = getR(X,2);
+	Y = getR(Y,2);
 #ifdef TRACE
 	fprintf(trace,"seq %s %i %s %i\n",nameOf(X),arg1,nameOf(Y),arg2);
 #endif
-	vPush(thisStack,(arg1 == arg2) && (X->rfields[2] == Y->rfields[2]));
+	//vPush(thisStack,(arg1 == arg2) && (X->rfields[2] == Y->rfields[2]));
+	vPush(thisStack,(arg1 == arg2) && getR(X,2) == getR(Y,2));
 	//printf("vTop: %i\n",thisStack->vstack[thisStack->vtop]);
 	break;
       case sne:
@@ -2176,7 +2225,8 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"sne %i != %i\n",(int)X,(int)Y);
 #endif
-	vPush(thisStack,(X->vfields[1] != Y->vfields[1]) || (X->rfields[2] != Y->rfields[2]));
+	//vPush(thisStack,(X->vfields[1] != Y->vfields[1]) || (X->rfields[2] != Y->rfields[2]));
+	vPush(thisStack,(X->vfields[1] != Y->vfields[1]) || getR(X,2) != getR(Y,2));
 	break;
       case plus:
 	arg1 = vPop(thisStack);

@@ -15,6 +15,24 @@ void dumpStringTable(FILE *trace) {
   fprintf(trace,"\n");
 };
 
+void dumpLiterals(FILE *trace,ObjDesc desc){
+  int start = desc_getInt4(desc,literal_index);
+  int end = desc_getInt4(desc,BC_index);
+  int i,v;
+
+  fprintf(trace,"Literals: ");
+  /* This function is incomplete
+   * The size of a literal (e.g. String) is written before the elements 
+   * Of the literal. This is not handled below.
+   * In addition, i should increment with 2 in each iteration
+/
+  for (i = start; i < end; i++) {
+    v = desc_getInt2(desc,start + (i - start) * 2);
+    fprintf(trace, "%c %i ",v,v);
+  };
+  fprintf(trace,"\n");
+};
+
 void dumpString(FILE *trace, int inx) { //fprintf(trace,"dumpString %i\n",inx);
   int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
   //fprintf(trace," %i:",length);
@@ -351,6 +369,7 @@ void dumpDesc(FILE *trace, int xdescNo) {
     }
 
     if (RS >= 32) runTimeError("rSize too big");
+    dumpLiterals(trace,desc);
     dumpCode(trace,desc);
   }
 }

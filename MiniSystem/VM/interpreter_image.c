@@ -38,6 +38,7 @@
    : bytecodes ...
 */
 bool isXbeta;
+bool newAlloc = false;
 
 //for Arduino, typdef apparently must be in the beginning of the file!?
 typedef unsigned char * ObjDesc;
@@ -357,7 +358,11 @@ Btemplate *myCorigin(Btemplate *obj){
   int inx;
   inx = desc_getInt2(obj->desc,originOff_index);
   Btemplate * origin = 0;
-  if (inx > 0) origin = obj->rfields[inx];
+  if (newAlloc){
+    if (inx > 0) origin =(Btemplate *) obj->vfields[inx];
+  }else{
+    if (inx > 0) origin = obj->rfields[inx];
+  };
   return origin;
 }
 
@@ -399,7 +404,7 @@ int getLiteralStart(Btemplate *obj){
 
 int getLiteral(Btemplate *obj,int inx){
   int lit = desc_getInt2(obj->desc,getLiteralStart(obj) + (inx-1) *2);
-  //fprintf(trace,"getLiteral %i %i \n",inx,lit);
+  //printf("getLiteral %i %ch %i\n",inx,lit,lit);
   return lit;
 }
 
