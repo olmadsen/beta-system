@@ -25,7 +25,7 @@ void dumpLiterals(FILE *trace,ObjDesc desc){
    * The size of a literal (e.g. String) is written before the elements 
    * Of the literal. This is not handled below.
    * In addition, i should increment with 2 in each iteration
-/
+   */
   for (i = start; i < end; i++) {
     v = desc_getInt2(desc,start + (i - start) * 2);
     fprintf(trace, "%c %i ",v,v);

@@ -449,6 +449,7 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
   descs = (ObjDesc) heapAlloc(imageS);
   memcpy(descs,descs_a,imageS); 
   newAlloc = newAlc;
+  if (newAlloc) newAllocOff = 1;
 }
 #endif
 
@@ -687,9 +688,9 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
   ctx->thisObj->vfields[dinx] = rangee; 
 };
 
-void allocQIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
-  fprintf(ctx->trace,"allocQIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
+  fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
   // printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
   if (isRindexed == 0) {
@@ -754,28 +755,31 @@ void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
     //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
   }
   
-void XallocTextObj(Block *ctx,int litInx){
-  // literals[litInx] = length
-  Btemplate *origin = 0; // FIX - in beta impl., the text object is used as its own origin
-  int dinx,rangee,i;
-  dinx = 1; // start of repetition
-  rangee = getLiteral(ctx->thisObj,litInx);
+void QallocTextObject(Block *ctx,int litInx){
+  /* New layout for newAlloc: "abc..."
+   * vfields[0] =
+   * vfields[1] = origin
+   * vfields[2] = rangee
+   * vfields[3} = 'a'
+   * vfields[4] = ...
+   */
+  int dinx = 1; // start of repetition
+  int rangee = getLiteral(ctx->thisObj,litInx); // literals[litInx] = rangee
+  Btemplate *origin = getR(ctx -> world,3);     // a bloody hack
   Btemplate *X = ctx->thisObj;
   
-  allocQIndexedObj(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
+  QallocIndexed(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
 
   ctx->callee->vtop = rangee + dinx + 1;
 
-  putR(ctx->callee,1,getR(ctx -> world,3)); // a bloody hack
+  putR(ctx->callee,1,origin); // store origin, but a hack, see origin above
 
-  //ctx->callee->rfields[1] = ctx -> world->rfields[3]; // a bloody hack
   ctx->callee->vfields[1] = rangee; // pos = rangee
 
+  int i;
   for (i = 0; i < rangee; i++) {
     char ch = getLiteral(X, litInx + i + 1);
     ctx->callee->vfields[dinx + 1 + i] = ch;
-    //printf("%c  %i\n",ch,ch);
-    // fprintf(trace, "Lit %c",ch); 
   }
   //printf("\nfinal string:  range=%i %i %i %i %i \n", rangee
   //,ctx->callee->vfields[0],ctx->callee->vfields[1],ctx->callee->vfields[2]
@@ -813,7 +817,7 @@ void C2QBstring(Block *ctx,char *S){
     ch = S[length];  
     // if (ch != 0) printf(" %c",ch); 
     }
-  allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length,0);
+  QallocIndexed(ctx,0,getTextDescNo(),1,1,length,0);
   for (i = 0; i <= length; i++) ctx->callee->vfields[2 + i] = S[i];
   putR(ctx->callee,1,getR(ctx->world,3)); // a bloody hack
   //ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
@@ -830,7 +834,7 @@ void  ConvertIndexedAsString(Block *ctx) {
   int i;
   //for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
   
-  allocQIndexedObj(ctx,0,getTextDescNo(),1,1,length + 1,0);
+  QallocIndexed(ctx,0,getTextDescNo(),1,1,length + 1,0);
   while (X->vfields[length + 1] == 0 ) length = length - 1;
   putR(ctx->callee,1,getR(ctx->world,3)); // origin - a bloody hack
   //ctx->callee->rfields[1] = ctx->world->rfields[3]; // origin - a bloody hack
@@ -2092,7 +2096,7 @@ void  *interpreter(void *B){;
 #endif
         if (isXbeta) {
 	  saveContext();
-	  XallocTextObj(thisBlock,arg1); 
+	  QallocTextObject(thisBlock,arg1); 
 	  restoreContext();
 	}
 	else { 
@@ -2333,7 +2337,7 @@ void  *interpreter(void *B){;
 	rangee = vPop(thisStack);
 	if (isXbeta) {
 	  saveContext();
-	  allocQIndexedObj(thisBlock,X,arg1,arg2,dinx,rangee,isRindexed);
+	  QallocIndexed(thisBlock,X,arg1,arg2,dinx,rangee,isRindexed);
 	  restoreContext();
 	}
 	  else {

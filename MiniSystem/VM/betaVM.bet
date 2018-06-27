@@ -239,6 +239,7 @@ betaVM:
      runJavaServices, (* Java services does not wok on Linux, so we don't start then *)
      
      isXbeta: @boolean;
+     newAllocOff: @integer;
      
      runMode: @integer;
      
@@ -570,16 +571,22 @@ betaVM:
                for);   
             exit X[]
             #);
-          XmkTextObject:
+          QallocTextObject:
+            (* New layout for newAlloc: "abc..."
+             * vfields[0] =
+             * vfields[1] = origin
+             * vfields[2] = rangee
+             * vfields[3} = 'a'
+             * vfields[4] = ...
+             *)
             (# X: ^ObjDesc.template;
                length: @integer; 
                ch: @char
             enter length
-            do 
-               (if descs.OD[descs.textDescNo][] = none then
+            do (if descs.OD[descs.textDescNo][] = none then
                    'descs.OD[descs.textDescNo][] = none'->putline
                if);
-               (length+1,1,0) 
+               (length (*+ 1 + newAllocOff*),1 + newAllocOff,0) 
                  -> descs.OD[descs.textDescNo].template 
                  -> X[] 
                  -> thisStack.rpush;
@@ -600,25 +607,37 @@ betaVM:
                if);
                (* seems to be a hack 
                 * 3 = LIB = origin *)
-               length -> X.vfields[1]; (* pos *)
+               length -> X.vfields[1 + newAllocOff]; (* pos *)
                (*length + 100 -> X.vfields[2];  range *)
                (for i: length  repeat
                     inner;
-                    ch -> X.vfields[i + 1];
+                    ch -> X.vfields[i + 1 + newAllocOff];
                for);   
-               ('XmkTextObject',true,out[]) -> X.dump               
+               (*newline;
+                ('vfields.range: ' ->puttext; 
+                * X.vfields.range -> putint; newline;
+               (for i: length + 1 + newAllocOff repeat
+                    X.vfields[i] -> putint;
+                    ' ' -> put
+               for);
+               newline;*)
+               ('QallocTextObject',true,out[]) -> X.dump               
             exit X[]
             #);    
           ConvertIndexedToString:
             (# X,Y: ^ObjDesc.template; length: @integer
             do thisStack.rpop -> X[];
-               X.vfields[1] -> length;
+               X.vfields[1 + newAllocOff] -> length;
                (* X.vfields[1] = length = range
                 * X.vfields[2] = indexed[1]
                 * ...
                 * X.vfields[length + 1] = indexed[length]
                 *)
                (* ('Indexed',true,screen[]) -> X.dump;*)
+               (*(for i: X.vfields.range repeat
+                    X.vfields[i] -> putint; ' '->put
+               for);
+               newline;*)
                L:
                  cycle
                  (#
@@ -629,7 +648,7 @@ betaVM:
                  if)#);
                (if true then
                    (* should perhpas use allocTemplate§?*)
-                   (length+1,1,0) 
+                   (length,1 + newAllocOff,0) 
                      -> descs.OD[descs.textDescNo].template 
                      -> Y[] 
                      -> thisStack.rpush;
@@ -645,9 +664,9 @@ betaVM:
                 else
                    world.rfields[3][] -> Y.rfields[1][]; (* origin - hack *)
                if);
-               length -> Y.vfields[1];
+               (*Y.vfields.range -> putint; newline;*)
                (for i: length repeat
-                    X.vfields[i + 1] -> Y.vfields[i + 1]
+                    X.vfields[i + 1 + newAllocOff] -> Y.vfields[i + 1 + newAllocOff]
                for);
                (*('String',true,screen[]) -> X.dump;*)
             #);
@@ -799,17 +818,17 @@ betaVM:
                      -> allocEvent
                if);               
             #);
-          AllocQ_Indexed:
+          QallocIndexed:
             (# callee,Y: ^objDesc.template;
                origin: ^objDesc.template;
                descInx,isObj,dinx,rangee,isRindexed: @integer
             enter(origin[],descInx,isObj,dinx,rangee,isRindexed)
-            do (rangee,dinx,isRindexed) -> descs.OD[descInx].template -> callee[];
+            do (rangee,dinx + newAllocOff,isRindexed) -> descs.OD[descInx].template -> callee[];
                descs.OD[descInx].OSDvisibility -> callee.OSDvisibility;
                descInx -> callee.myDescInx;
                callee[] -> descs.ObjPool;
                callee[] -> thisStack.rPush;
-               ('AllocQ_indexed:',true,out[]) -> callee.dump;
+               ('QallocIndexed:',true,out[]) -> callee.dump;
             #);
           
           asObjEnabled: @boolean;
@@ -897,6 +916,7 @@ betaVM:
                enablee: ^ObjDesc.template;
                first: @boolean
             do true -> isRunning; (*screen[] -> out[];*)
+               (if descs.newAlloc then 1 -> newAllocOff if);
                false -> doTerminate;
                (if descs.OD[1][] = none then (* not used any more*)
                    'Allocating dummy template in OD[1] for repetitions'
@@ -1259,7 +1279,7 @@ betaVM:
                         (*  thisStack.rpop -> X[]; - not used *)
                         op1 -> off;
                         thisStack.vpop -> inx;
-                        off + inx 
+                        off + inx + newAllocOff
                           -> thisObj.get 
                           -> thisStack.vpush;
                         (* '\nxpush: off: ' -> puttext; off -> putint;
@@ -1272,7 +1292,7 @@ betaVM:
                         op1 -> off;
                         thisStack.vpop -> inx;
                         (if true then
-                            off + inx -> thisObj.rget -> X[]
+                            off + inx + newAllocOff -> thisObj.rget -> X[]
                          else
                             thisObj.rfields[off + inx][] -> X[];
                         if);
@@ -1287,18 +1307,18 @@ betaVM:
                         X[] -> R[];
                         (*'inx: ' -> puttext; inx -> putint; newline;*)
                         (*('xpushg:',true,screen[]) -> X.dump;*)
-                        off + inx 
+                        off + inx + newAllocOff
                           -> R.get 
                           -> value
                           -> thisStack.vpush;
                         (*'\nxpushg: off: ' -> puttext; off -> putint;
                          ' inx: ' -> puttext; inx -> putint; newline;*)
-                        (R[],off + inx,value) -> VtoOut;
+                        (R[],off + inx + newAllocOff,value) -> VtoOut;
                         ('xpushg:',true,out[]) -> R.dump;
                         (thisObj[],R[],true,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent  
                         
-                        // codes.xrpushg then
+                     // codes.xrpushg then
                         'xrpushg' -> exe;
                         thisStack.rpop -> X[];
                         op1 -> off;
@@ -1307,7 +1327,7 @@ betaVM:
                         (*'inx: ' -> puttext; inx -> putint; newline;*)
                         (*('xpushg:',true,screen[]) -> X.dump;*)
                         (if true then
-                            off + inx -> R.rget -> thisStack.rpush
+                            off + inx + newAllocOff-> R.rget -> thisStack.rpush
                          else
                             R.rfields[off + inx][] -> thisStack.rpush
                         if);
@@ -1378,7 +1398,7 @@ betaVM:
                         (* thisStack.rpop -> X[]; - not used *)
                         op1 -> off;
                         thisStack.vpop -> inx;
-                        (thisStack.vpop -> value,off + inx)
+                        (thisStack.vpop -> value,off + inx + newAllocOff)
                           -> thisObj.assign;
                         ' ' -> out.put; value -> out.putint; 
                         '->' -> out.puttext; 
@@ -1395,7 +1415,7 @@ betaVM:
                         thisStack.vpop -> inx;
                         thisStack.rpop -> X[];
                         (if true then
-                            (off + inx, X[]) -> thisObj.rput
+                            (off + inx + newAllocOff, X[]) -> thisObj.rput
                          else
                             X[] -> thisObj.rfields[off + inx][]
                         if);
@@ -1407,8 +1427,8 @@ betaVM:
                         op1 -> off;
                         X[] -> R[];
                         thisStack.vpop -> inx;
-                        (thisStack.vpop -> value,off + inx) -> R.assign;
-                        (X[],off + inx,value) -> VtoOut;
+                        (thisStack.vpop -> value,off + inx + newAllocOff) -> R.assign;
+                        (X[],off + inx + newAllocOff,value) -> VtoOut;
                         ('xstoreg:',true,out[]) -> R.dump;
                         (thisObj[],thisStack[],true,R[],off,true,inx,thisCode.descInx,glsc,value) -> vStoreEvent
                         
@@ -1420,7 +1440,7 @@ betaVM:
                         thisStack.vpop -> inx;
                         thisStack.rpop -> Y[];
                         (if true then
-                            (off + inx,Y[]) -> R.rput
+                            (off + inx + newAllocOff,Y[]) -> R.rput
                          else
                             Y[] -> R.rfields[off + inx][]
                         if);
@@ -1474,7 +1494,7 @@ betaVM:
                         thisStack.vpop -> rangee;
                         (if isXbeta then
                             (X[],descInx,isObj,dinx,rangee,isRindexed) 
-                              -> AllocQ_Indexed
+                              -> QallocIndexed
                          else
                             (X[],descInx,isObj,dinx,rangee,isRindexed) 
                               -> AllocIndexed
@@ -1836,7 +1856,7 @@ betaVM:
                         op1 -> inx; 
                         (if isXbeta then
                             (thisObj.myObjDesc).literals[inx] 
-                              -> XmkTextObject
+                              -> QallocTextObject
                             (# i: @integer
                             do i + 1 -> i; 
                                (thisObj.myObjDesc).literals[inx+i] -> ch
