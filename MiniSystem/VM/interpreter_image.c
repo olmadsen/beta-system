@@ -55,7 +55,7 @@ typedef struct Btemplate {
   int lscTop;
   int lsc;
   struct Btemplate *rfields[64];
-  int vfields[];
+  int vfields[]; // lexible array
 } Btemplate;
 
 typedef struct Block {
