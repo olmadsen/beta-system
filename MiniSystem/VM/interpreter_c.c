@@ -43,8 +43,8 @@ typedef void *FILE;
 #define HIGH 5
 #endif
 
-#define DUMP
-#define TRACE
+//#define DUMP
+//#define TRACE
 //#define EVENT
 
 
@@ -700,7 +700,7 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
     };
     ctx->callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
   };
-  putR(ctx->callee,1,origin); // store origin, but a hack, see origin above
+  putR(ctx->callee,1,origin); // store origin
   ctx->callee->vfields[dinx + newAllocOff] = rangee; 
   // int i=0;
   // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
@@ -756,17 +756,12 @@ void QallocTextObject(Block *ctx,int litInx){
    * vfields[3} = 'a'
    * vfields[4] = ...
    */
-  int dinx = 1; // start of repetition
+  int dinx = 1; // start of repetition: adjust for newAllocOff in QallocIndexed
   int rangee = getLiteral(ctx->thisObj,litInx); // literals[litInx] = rangee
   Btemplate *origin = getR(ctx -> world,3);     // a bloody hack
   
   QallocIndexed(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
 
-  //ctx->callee->vtop = rangee + dinx + 1;
-
-  //putR(ctx->callee,1,origin); // store origin, but a hack, see origin above
-
-  //ctx->callee->vfields[1 + newAllocOff] = rangee; // pos = rangee
   Btemplate *X = ctx->thisObj;
   int i;
   for (i = 0; i < rangee; i++) {
