@@ -692,22 +692,15 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
 #ifdef TRACE
   fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
-  // printf("allocQIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
   if (isRindexed == 0) {
-    // printf("is not Rindexed\n");
-    // allocObj(origin,descNo,isObj,rangee,0);
     ctx->callee = allocTemplate(newId(ctx),descNo,isObj,rangee,0);
   } else {
     if (rangee > 132) {
-      //printf("\n\n**** Ref-rep range: %i\n",rangee);
       runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
     };
-    // allocObj(origin,descNo,isObj,0,rangee);
-    //printf("isRindexed\n");
     ctx->callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
   };
-  //printf("After allox\n");
-  
+  putR(ctx->callee,1,origin); // store origin, but a hack, see origin above
   ctx->callee->vfields[dinx + newAllocOff] = rangee; 
   // int i=0;
   // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
@@ -766,16 +759,15 @@ void QallocTextObject(Block *ctx,int litInx){
   int dinx = 1; // start of repetition
   int rangee = getLiteral(ctx->thisObj,litInx); // literals[litInx] = rangee
   Btemplate *origin = getR(ctx -> world,3);     // a bloody hack
-  Btemplate *X = ctx->thisObj;
   
   QallocIndexed(ctx,origin,getTextDescNo(),1,dinx,rangee,0);
 
-  ctx->callee->vtop = rangee + dinx + 1;
+  //ctx->callee->vtop = rangee + dinx + 1;
 
-  putR(ctx->callee,1,origin); // store origin, but a hack, see origin above
+  //putR(ctx->callee,1,origin); // store origin, but a hack, see origin above
 
-  ctx->callee->vfields[1 + newAllocOff] = rangee; // pos = rangee
-
+  //ctx->callee->vfields[1 + newAllocOff] = rangee; // pos = rangee
+  Btemplate *X = ctx->thisObj;
   int i;
   for (i = 0; i < rangee; i++) {
     char ch = getLiteral(X, litInx + i + 1);
