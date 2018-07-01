@@ -250,8 +250,10 @@ generator: variants
             #);
        #);
      ObjectGenerator::
-       (#
-          Qgen::
+       (# Qgen::
+            (* Qgen is only called for singular Objects and pushewd on stack
+             * For patterns OG is pushed on stack and later genClass is called
+             *)
             (# gdb:: 
                  (#
                  do 'super: ' -> lx.puttext; super.doPT -> lx.puttext;
@@ -263,41 +265,55 @@ generator: variants
                     'staticOff: '-> lx.puttext; staticOff -> lx.putint
                  #);
                name: ^text; head: @boolean; Px: ^OGpath;
-               ATd: ^Decl; on,pn: @integer
+               ATd: ^Decl; on,pn: @integer;
+               var: ^Qvariants.variant;
+               trace: (# exit false #);
             do (if not genIsDone 
                    (* We should check if code has already
                     * been generated for this variant
                     *)
                    then
                    true -> genIsDone;
-                   IS.scanSons
-                   (# I: ^Item; D: ^Decl
-                   do  current[] -> I[];
-                       (if I.isDecl then 
-                           I[] -> D[];
-                           D.qoff[1] -> putint; ' ' -> put; D.doPT -> putline
-                       if)
-                   #);
+                   (if trace then
+                       IS.scanSons
+                       (# I: ^Item; D: ^Decl
+                       do  current[] -> I[];
+                          (if I.isDecl then 
+                              I[] -> D[];
+                              D.qoff[1] -> putint; ' ' -> put; D.doPT -> putline
+                          if)
+                   #)if);
+                   (* OG.Qgen is called for a singular object
+                    * We thus only have one variant
+                    * This variant will propagate to superpatterns
+                    *)
+                   Qvariants.new -> var[];
                    addBinding.scanObjectRefs
                    (# DI: ^DataItem; OGx,qual: ^ObjectGenerator; org: ^Items
-                   do (if not head then                          
+                   do (if trace and not head then                          
                           '\n**** ObjectGenerator:Qgen:'->putline; 
                           dopt -> putline;
                           true -> head
                       if);
-                      '>>>> DataItem:with:ObjectQ:\n    ' -> puttext;
-                      current.doPT -> putline;
+                      (if trace then
+                          '>>>> DataItem:with:ObjectQ:\n    ' -> puttext;
+                          current.doPT -> putline;
+                      if);
                       current[] -> DI[];
                       (* DI = R: ? elm where elm :< Object 
                        * Find actual binding of elm in the context of this OG
                        * Execute getV_qual(Invocation(R)) in this(OG)
                        *)
-                      '>>>> theOG: ' -> putline;
-                      this(ObjectGenerator).doPT -> putline;
+                      (if trace then
+                          '>>>> theOG: ' -> putline;
+                          this(ObjectGenerator).doPT -> putline;
+                      if);
                       (DI.sig.id[],true) -> IS.search -> (ATd[],on,pn);
-                      'Search: ' -> puttext; DI.sig.id[] -> puttext;
-                      ' '-> put; on -> putint; 
-                      ' ' -> put; pn -> putint; newline;
+                      (if trace then
+                          'Search: ' -> puttext; DI.sig.id[] -> puttext;
+                          ' '-> put; on -> putint; 
+                          ' ' -> put; pn -> putint; newline;
+                      if);
                       (* the code below is the same as in
                        * Invocation:getV_qual
                        * Should be unified
@@ -307,9 +323,12 @@ generator: variants
                         -> DI.OG.super.ATd.pathToDcl 
                         -> px[];
                       px.qual[] -> qual[];
-                      (DI.OG.super.ATd[],qual.father[]) -> Qvariants.add;
-                      '>>>> Qual:'->puttext; qual.doPT -> putline; newline;
+                      (DI.OG.super.ATd[],qual.father[]) -> var.add;
+                      (if trace then
+                          '>>>> Qual:'->puttext; qual.doPT -> putline; newline;
+                      if)
                    #);
+                   Qvariants.print;
                    
                    cd.bcPos -> beginBCP;
                    (if CC[] <> none then
@@ -483,10 +502,8 @@ generator: variants
                             dopt -> putline;*)
                             leave BindVirtuals
                         if);
-                        (*'*** Handle VB: '->puttext; 
-                         dopt -> putline;*)
-                        (* 'E: ' -> puttext;
-                         E.doPT -> putline;*)
+                        (*'*** Handle VB: '->puttext; dopt -> putline;*)
+                        (* 'E: ' -> puttext; E.doPT -> putline;*)
                         (if E.args[] <> none then
                             E.args.scanArgs
                             (#
@@ -519,7 +536,8 @@ generator: variants
                  #);               
                CC: ^CallChain
             enter(N[],sig[],descNo,Super[],OG[],CC[])
-            do (* 'GenClass: ' -> puttext; 
+            do (* We must know the actual vriant being generated for *)
+               (* 'GenClass: ' -> puttext; 
                (if N[] <> none then
                    N[] -> putline
                 else
@@ -535,6 +553,10 @@ generator: variants
                    superDesc.father.father -> nd[];
                    nd[] -> ptn[];
                    (if not superDesc.done then
+                       (* the actual variant begeing generated here must be
+                        * propagated to super possibly implying that a new
+                        * variant of super must be generated
+                        *)
                        (# 
                        do (ptn.sig.id[],ptn.sig[],superdesc.descNo,ptn.OG.super[],ptn.OG[],CC[]) 
                             -> superDesc.genClass
