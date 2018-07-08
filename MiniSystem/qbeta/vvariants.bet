@@ -53,27 +53,13 @@ variants: restrictions
      ObjectGenerator::<
        (# Qvariants: @
             (# var: [1] ^Variant; top: @integer; 
-              
-             (*  varExists: booleanValue
-                 (# VD,BD: ^Pattern
-                 enter(VD[],BD[])
-                 do L:
-                      (for i: top repeat
-                           (if VD[] = Var[i].vDcl[] then
-                               ( * already a binding of VD * )
-                               (if BD[] <> var[i].binding[] then
-                                   '\n*** inconsitent virtual binding' 
-                                     -> putline
-                           if)if);
-                           leave L
-                                 
-              #);*)
                new:
                  (# V: ^Variant
                  do (if (top + 1 -> top) > var.range then
                         var.range -> var.extend
                     if);
                     Variant -> var[top][] -> V[];
+                    top -> V.varNo
                  exit V[]
                  #);
                add:
@@ -84,6 +70,18 @@ variants: restrictions
                     if);
                     Variant -> var[top][];*)
                     (VD[],BD[]) -> var[top].add
+                 #);
+               topVarExists: booleanValue
+                 (* Check if var[top] is in var[1], ..., var[top - 1 *)
+                 (#
+                 do (*(if top > 0 then '\n*** topVarExists:' -> putline if);*)
+                    (for i : top - 1 repeat
+                         (if (var[i][] -> var[top].equal -> value) then
+                             (*'var alreday exists'->putline;*)
+                             top - 1 -> top;
+                             leave topVarExists
+                    if)for);
+                    (*' new var'->putline;*)
                  #);
                propagateToSuper:
                  (# ptn: ^Pattern; superOG: ^ObjectGenerator; 
@@ -102,15 +100,31 @@ variants: restrictions
                                  * father.father.dopt -> putline;
                                  *)
                              // Pattern## then
+                                '\n** propagateToSuper: ' -> putline;
                                 super.ATd[] -> ptn[];
+                                ptn.doPT -> printhead;
                                 ptn.OG[] -> superOG[];
                                 superOG.Qvariants.new -> superVar[];
                                 (for i: var[top].top repeat
                                      (var[top].vDcl[i][],var[top].binding[i][]) 
                                        -> superVar.add
                                 for);
-                                superOG.Qvariants.propagateToSuper
+                                (*superOG.Qvariants.topVarExists;*)
+                                superOG.Qvariants.checkIfTopIsNew
                     if)if)if)
+                 #);
+               checkIfTopIsNew:
+                 (#
+                 do (if not topVarExists then
+                        'Added new variant' -> putline;
+                        (* We should add this variant to the ObjTmpStack 
+                         * But declared in vgenerator
+                         * And we should do it for each superclass
+                         *)
+                        propagateToSuper
+                     else
+                        'Variant already exists' -> putline
+                    if)
                  #);
                print:
                  (#
@@ -130,12 +144,22 @@ variants: restrictions
                    E[] -> E.ATd.handleArgs  (* !!!*)
                if);
                (if isObjectDesc then
+                   this(ObjectGenerator)[] -> QnewDesc -> IS.QdescNo[varNo];
                    (varNo,IT[]) -> IS.Qalloc 
                if);               
             #);
        #);
      items::<
-       (# Qalloc:: 
+       (# newDescNo:
+            (# dNo: @integer
+            do (if false and newAlloc then
+                   QdescNo[1] -> dNo
+                else
+                   descNo -> dNo
+               if)
+            exit dNo 
+            #);          
+          Qalloc:: 
             (#
             do (if varNo > noOfVar then
                    1 -> qsize.extend;
@@ -196,7 +220,8 @@ variants: restrictions
      CharObj::< (# #);
      StringObj::< (# #);
      Variant:
-       (# vDcl: [1]  ^Pattern; top: @integer;
+       (# varNo: @integer;
+          vDcl: [1]  ^Pattern; top: @integer;
           type: [1] @ integer;
           size: [1] @ integer;
           binding: [1] ^Pattern;
@@ -226,6 +251,42 @@ variants: restrictions
                      BD[] -> binding[top][]
                  if)
             #); 
+          noMatch: booleanValue
+            (# B1,B2: ^Pattern
+            enter(B1[],B2[])
+            do (* instead of integer_prim we must check if value-type *)
+               (if B1.OG.primNo = integer_prim then
+                   B2.OG.primNo <>  integer_prim -> value
+                else
+                   B2.OG.primNo = integer_prim -> value
+               if)
+            #);
+          equal: booleanValue
+            (# V: ^Variant
+            enter V[]
+            do (if top > 0 then
+                   '\nVariant: equal: ' -> putline;
+                   print;
+                   '-----' -> putline;
+                   V.print;
+                   '====='->putline;
+               if);
+               (for i: top repeat
+                    (for j: V.top repeat
+                         (if vDcl[i][] = V.vDcl[j][] then
+                             '>>>' -> puttext; 
+                             binding[i].dopt -> puttext; ' == ' -> puttext;
+                             V.binding[i].dopt -> putline;
+                             (if ((binding[i][],V.binding[j][])) -> noMatch 
+                                 then
+                                 (*' noMatch: ' ->putline;*)
+                                 false -> value;
+                                 leave equal
+                              else
+                                 (*' match'->putline*)
+               if)if)for)for);
+               true -> value
+            #);
           print:
             (#
             do 'Variant: ' -> putline;
@@ -236,6 +297,33 @@ variants: restrictions
             #);
        exit this(Variant)[]
        #);
+     QnewDesc: @
+       (# getOD: 
+            (* only used from minienv *)
+            (# dNo: @integer; anODx: ^ObjectGenerator
+            enter dNo 
+            do (if dNo > 0 then 
+                   OD[dNo][] -> anODx[]
+                else
+                   (* probably a valueRep - a hack *)
+                   (* repetitionDesc[] -> anODx[]*)
+                   '\n!!! newDesc:getOD:no repetitionDesc:'->putline
+               if)
+            exit anODx[]
+            #);
+          OD: [16] ^ObjectGenerator; 
+          noOfDescs: @integer;
+          anOD: ^ObjectGenerator;          
+       enter anOD[] (* Note: since newDesc is a static item,
+                     * no enter-part as in genMain
+                     * implies that an OD has the value from the previous call
+                     *)
+       do (if (noOfDescs + 1 -> noOfDescs) > OD.range then
+              OD.range -> OD.extend
+          if);
+          anOD[] -> OD[noOfDescs][];
+       exit noOfDescs
+       #); 
   do 
 
      inner
