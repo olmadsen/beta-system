@@ -149,14 +149,19 @@ generator: variants
             #);
           store::
             (* Called from Signature::StoreParameters *)
-            (# 
-            do (if OG.isSimpleValue then 
-                   'dataitem:store:' -> cd.comment;
+            (# OGx: ^ObjectGenerator
+            do 'dataitem:store:' -> cd.comment;
+               (if dynAlloc and 
+                   (father.father## = ObjectGenerator##) and
+                   ((father.father[] -> OGx[]).IS.newDescNo = 0) then
+                   'descNo = 0' -> cd.comment;
+                   (1,none) -> OGx.Qalloc
+               if);
+               (if OG.isSimpleValue then 
                    (sig.id[],NewOff) -> cd.storeg
                 else
                    (if not noSwap then cd.rswap if); 
-                   (* Could be S. ?elm where elm:< Object *)
-                   
+                   (* Could be S. ?elm where elm:< Object *)                   
                    (sig.id[],NewOff) -> cd.rstoreg
                if)
             #);
@@ -289,50 +294,49 @@ generator: variants
                     * We thus only have one variant
                     * This variant will propagate to superpatterns
                     *)
-                  (* '\n***** ObjectGenerator: Qgen:Computing variants:' -> putline;
-                   doPT -> printhead ;
-                   * *)
                    Qvariants.new -> var[];
-                   addBinding.scanObjectRefs
-                   (# DI: ^DataItem; OGx,qual: ^ObjectGenerator; org: ^Items
-                   do (if trace and not head then                          
-                          '\n**** ObjectGenerator:Qgen:'->putline; 
-                          dopt -> putline;
-                          true -> head
-                      if);
-                      (if trace then
-                          '>>>> DataItem:with:ObjectQ:\n    ' -> puttext;
-                          current.doPT -> putline;
-                      if);
-                      current[] -> DI[];
-                      (* DI = R: ? elm where elm :< Object 
-                       * Find actual binding of elm in the context of this OG
-                       * Execute getV_qual(Invocation(R)) in this(OG)
-                       *)
-                      (if trace then
-                          '>>>> theOG: ' -> putline;
-                          this(ObjectGenerator).doPT -> putline;
-                      if);
-                      (DI.sig.id[],true) -> IS.search -> (ATd[],on,pn);
-                      (if trace then
-                          'Search: ' -> puttext; DI.sig.id[] -> puttext;
-                          ' '-> put; on -> putint; 
-                          ' ' -> put; pn -> putint; newline;
-                      if);
-                      (* the code below is the same as in
-                       * Invocation:getV_qual
-                       * Should be unified
-                       *)
-                      (this(ObjectGenerator)[],0,pn,none) 
-                        -> OGpath
-                        -> DI.OG.super.ATd.pathToDcl 
-                        -> px[];
-                      px.qual[] -> qual[];
-                      (DI.OG.super.ATd[],qual.father[]) -> var.add;
-                      (if trace then
-                          '>>>> Qual:'->puttext; qual.doPT -> putline; newline;
-                      if)
-                   #);
+                   var[] -> Qvariants.scanObjectRefs;
+                   (if false then 
+                       addBinding.scanObjectRefs
+                       (# DI: ^DataItem; OGx,qual: ^ObjectGenerator; org: ^Items
+                       do (if trace and not head then                          
+                              '\n**** ObjectGenerator:Qgen:'->putline; 
+                              dopt -> putline;
+                              true -> head
+                          if);
+                          (if trace then
+                              '>>>> DataItem:with:ObjectQ:\n    ' -> puttext;
+                              current.doPT -> putline;
+                          if);
+                          current[] -> DI[];
+                          (* DI = R: ? elm where elm :< Object 
+                           * Find actual binding of elm in the context of this OG
+                           * Execute getV_qual(Invocation(R)) in this(OG)
+                           *)
+                          (if trace then
+                              '>>>> theOG: ' -> putline;
+                              this(ObjectGenerator).doPT -> putline;
+                          if);
+                          (DI.sig.id[],true) -> IS.search -> (ATd[],on,pn);
+                          (if trace then
+                              'Search: ' -> puttext; DI.sig.id[] -> puttext;
+                              ' '-> put; on -> putint; 
+                              ' ' -> put; pn -> putint; newline;
+                          if);
+                          (* the code below is the same as in
+                           * Invocation:getV_qual
+                           * Should be unified
+                           *)
+                          (this(ObjectGenerator)[],0,pn,none) 
+                            -> OGpath
+                            -> DI.OG.super.ATd.pathToDcl 
+                            -> px[];
+                          px.qual[] -> qual[];
+                          (DI.OG.super.ATd[],qual.father[]) -> var.add;
+                          (if trace then
+                              '>>>> Qual:'->puttext; qual.doPT -> putline; newline;
+                          if)
+                   #);if);
                    (* We have a Variant of OG; 
                     * if var.top = 0, there are no data-items depending on 
                     * virtual Object (Later to be replaced by Any)
@@ -341,17 +345,18 @@ generator: variants
                    Qvariants.checkIfTopIsNew;
                    
                    cd.bcPos -> beginBCP;
-                   (if CC[] <> none then
+                   (if CC[] <> none then (* not used? *)
                        this(ObjectGenerator)[] -> CC.add -> CC[];
                    if);
                    (if IS.isEmpty 
                        and not super.hasVirtualArgs 
                        or (super.isBasic and IS.isEmpty) then
-                       (* check this - called when R.foo *)
-                       
+                       (* Implies thta super.OG is pushed on objTmpStack
+                        * So should we pass the variant of this OG to Qgen?
+                        *)
                        (useReturnValue,superAdj,staticOff) -> super.Qgen
                     else
-                       (*Perhaps move chek for virtula to here!? *)
+                       (* Perhaps move check for virtuals to here!? *)
                        (* Singular object like R.foo{ }
                         * includes pattern invocations with 
                         * virtual arguments like %if .. %then% ... %else ...
@@ -359,12 +364,17 @@ generator: variants
                        cd.pushThis; (* origin for a singular object *)
                        
                        (* Invoke the singular object *)
-                       (OGid,IS.newDescNo(*IS.descno*),staticOff,true) -> cd.invoke; 
-                       
-                       (if not useReturnValue then cd.rpop if);
+                       (if not dynAlloc then
+                           (OGid,IS.newDescNo(*IS.descno*),staticOff,true) -> cd.invoke;                        
+                           (if not useReturnValue then cd.rpop if);
+                       if);
                        
                        (OGid,none,this(ObjectGenerator)[],super[],CC[],var[])
-                         -> ObjTmpStack.add
+                         -> ObjTmpStack.add;
+                       (if dynAlloc then
+                           (OGid,IS.newDescNo,staticOff,true) -> cd.invoke; 
+                           (if not useReturnValue then cd.rpop if);
+                       if)
                    if);
                    cd.bcPos -> endBCP;     
                if)
@@ -502,6 +512,16 @@ generator: variants
                                      (OG.super.on,OG.super[]) -> goOrigin;
                                  if);
                                  cd.com(#do OG.super.on->I; OG.getDescNo->I #);
+                                 (if OG.getDescNo = 0 then
+                                     (*'\n*** OBS! OG.descNo = 0: ' -> puttext;
+                                     '*** OBS! OG.descNo = 0: ' -> cd.comment;
+                                     OG.doPT -> putline;*)
+                                     (# ptn: ^Pattern
+                                     do OG.super.ATd[] -> ptn[];
+                                        (1,none) -> ptn.OG.Qalloc;
+                                        OG.getDescNo -> putint; newline
+                                     #);
+                                 if);
                                  (id[],OG.getDescNo,0,true) -> cd.invoke;
                                  'D' -> cd.rtn;
                                  (* The vdtTableAt here overrides the one in 
@@ -559,7 +579,7 @@ generator: variants
                 * The actual variant should have info about: 
                 * actual descNo and actual storage layout 
                 *)
-               (if not OG.Qvariants.isEmpty then
+               (if true or not OG.Qvariants.isEmpty then
                    '\n***** GenClass: ' -> puttext; 
                    (if N[] <> none then
                        N[] -> putline
@@ -570,7 +590,8 @@ generator: variants
                    OG.Qvariants.print;
                if);
                (if (superDesc[] <> none) then
-                   superDesc.father.father -> ptn[];
+                   superDesc.father.father -> ptn[]; (* ptn is the super pattern
+                                                      * of this OG *)
                    (if not superDesc.done then
                        (* the actual variant begeing generated here must be
                         * propagated to super possibly implying that a new
@@ -580,11 +601,29 @@ generator: variants
                         * codegen (on objTmpStack) or should we do it here?
                         *)
                        (# 
-                       do (ptn.sig.id[],ptn.sig[]
-                          ,superdesc.newDescNo(*descNo*)
-                          ,ptn.OG.super[]
-                          ,ptn.OG[],CC[],var[]) 
-                            -> superDesc.genClass
+                       do (if dynAlloc then
+                              (* Should be done in Variants::QAlloc *)
+                              (if superDesc.newDescNo = 0 then
+                                  (1,none) -> ptn.OG.Qalloc;
+                              if);
+                              (ptn.sig.id[],ptn.sig[]
+                              ,superdesc.newDescNo(*descNo*)
+                              ,ptn.OG.super[]
+                              ,ptn.OG[],CC[],var[]) 
+                                -> superDesc.genClass;
+                              (* Perhaps vdtTableCopy below does not work
+                               * if we have not called genClass!?
+                               *
+                              (ptn.sig.id[],ptn.sig[],ptn.OG[],ptn.OG.super[],
+                               CC[],var[]) -> objTmpStack.add
+                               *)
+                           else
+                              (ptn.sig.id[],ptn.sig[]
+                              ,superdesc.newDescNo(*descNo*)
+                              ,ptn.OG.super[]
+                              ,ptn.OG[],CC[],var[]) 
+                                -> superDesc.genClass
+                          if);
                        #)
                if)if);
                (if not done then
@@ -611,7 +650,11 @@ generator: variants
                        cd.com(#do 'vdt:b'-> T #);
                        superDesc.newDescNo(*descNo*) -> cd.vdtTableCopy;
                        (if superDesc.innerInx > 0 then
-                           cd.com(#do 'vdt:c'-> T #);
+                           cd.com(#
+                                 do 'vdt:c:inner'-> T; 
+                                    superDesc.innerInx -> I;
+                                    newDescno -> I 
+                                 #);
                            (superDesc.innerInx,newDescno) -> cd.vdtTable;
                            true -> hasSuperAndInner
                        if);
@@ -633,7 +676,7 @@ generator: variants
                                 * - newOriginOff for loadArgs as below
                                 *)
                                (ptn.OG.super.on,none) -> vSuperDesc.goOrigin
-                           if)                                   
+                           if)                               
                         else
                            (# E,rec: ^Exp
                            do (*'GenItems:' -> puttext;
@@ -746,6 +789,10 @@ generator: variants
                    (if basicNo = ifthen_prim then
                        (on,NA[])  -> (origin[]->org[]).goOrigin -> org[]
                     else
+                       (if OT.IS.newOriginOff = 0 then
+                           'originOff = 0 ' -> cd.comment;
+                           (1,none) -> OT.Qalloc
+                       if);
                        (T[],newOriginOff) -> cd.rpushg;
                        (if origin[] <> none then
                            (on - 1,NA[]) -> (origin[]->org[]).goOrigin -> org[]
@@ -796,7 +843,18 @@ generator: variants
                               -> objTmpStack.add 
                          // virtualPtn then
                             (if not OG.hasItems (* OG.IS.isEmpty*) then
-                                 cd.com(#do 'vdt:d'-> T #);
+                                cd.com(#do 'vdt:d'-> T #);
+                                (if (OG.super.desc).newDescNo = 0 then
+                                    '(OG.super.desc).newDescN0 = 0' -> cd.comment;
+                                     (# ptn: ^Pattern
+                                     do OG.super.ATd[] -> ptn[];
+                                        (1,none) -> ptn.OG.Qalloc;
+                                        cd.com(#
+                                              do (OG.super.desc).newDescNo -> I
+                                              #);
+
+                                     #);
+                                if);
                                 (off,(OG.super.desc).newDescNo) -> cd.vdtTable;
                                 (if traceGeneric then
                                     '*** Bind1: ' -> puttext;
@@ -808,6 +866,9 @@ generator: variants
                                 (sig.id[],sig[],OG[],OG.super[],CC[],none)
                                   -> objTmpStack.add;
                                 cd.com(#do 'vdt:e'-> T #);
+                                (if OG.IS.newDescNo = 0 then
+                                    'OG.IS.descNo..newDescN0 = 0' -> cd.comment;
+                                if);
                                 (off,OG.IS.newDescNo) -> cd.vdtTable;
                                 (if traceGeneric then
                                     '*** Bind2: ' -> puttext;
@@ -852,14 +913,16 @@ generator: variants
                                 #);
                              else
                                 (*newline;*)
-                                OG.getDescNo -> DN;
+
                                 (sig.id[],sig[],OG[],OG.super[],CC[],none) 
                                   -> objTmpStack.add;
-                                cd.com(#do 'vdt:f'-> T #);
+                                OG.getDescNo -> DN;                                
+                                cd.com(#do 'vdt:f'-> T; DN -> I #);
                                 (off,DN) -> cd.vdtTable;
                             if);
-                                (*cd.com(#do 'vdt:f'-> T #);
-                                 (off,DN(*OG.getDescNo* )) -> cd.vdtTable;*)
+                            (* cd.com(#do 'vdt:F'-> T #);
+                             * (off,DN) -> cd.vdtTable;
+                             *)
                             (if traceGeneric then
                                 '*** Bind3: ' -> puttext;
                                 off -> putint; ' ' -> put; 
@@ -898,7 +961,7 @@ generator: variants
                     * May be moved to here*)
                 // inner_prim // this_prim // ifThen_prim
                 // restart_prim // leave_prim then
-               
+                   (* skip *)
                 else
                    E.args.scanArgs
                    (#
@@ -918,13 +981,10 @@ generator: variants
                                             * And then perhaps special for virtual
                                             * and primitives, and ptName?
                                             * Virt is of course ptn *)
-                      (* 'Arg: ' -> puttext; 
-                       D.doPT -> putline;
-                       args[i].doPT -> putline;
-                       args[i].primno -> putint; ' ' -> put;
+                      (* 'Arg: ' -> puttext; D.doPT -> putline;
+                       args[i].doPT -> putline;args[i].primno -> putint; ' ' -> put;
                        (args[i].desc).primno -> putint; 
-                       (if args[i].isSimpleValue then 'S' -> put if);
-                       newline;*)
+                       (if args[i].isSimpleValue then 'S' -> put if);newline;*)
                       handleVirtArg:
                         (if D.isVirtual then
                             (if primNo = indexed_prim then
@@ -933,11 +993,14 @@ generator: variants
                             L:
                               args[i].super.scanSons(#do current[] -> Ex[]; leave L #);
                             (if (Ex[] <> none) and (Ex.isObjectInvocation) then
-                                (* 'Try: ' -> puttext; Ex.label - >putline; 
-                                 * Ex.doPT -> putline; *)
                                 Ex[] -> OI[];
                                 (if (1 -> OI.ptnId.T.inxGet) = '#' then
                                     OI.ATd[] -> PtnQ.add;
+                                    (if args[i].IS.newDescNo = 0 then
+                                        ' descNo = ' -> cd.comment;
+                                        (* SHould be moved to vvariants *)
+                                        (1,none) -> args[i].Qalloc
+                                    if);
                                     (args[i].desc).newDescNo -> descNo; 
                                     
                                     (* descNo: ' -> puttext; 
@@ -946,7 +1009,12 @@ generator: variants
                                      * OG.super.primNo -> putint
                                      * newline;
                                      *)                                     
-                                    E.father.father[] -> OG[]; (* need OG.descNo for VDT *)
+                                    (* Perhaps OG below is enclosingOG as
+                                     * also used below?
+                                     * need OG.descNo for VDT *)
+                                    E.father.father[] -> OG[]; 
+
+                                    
                                     (* '>>>> ArgBinding: ' -> puttext;
                                      args[i].getDescNo -> putint; ' ' -> put;
                                      args[i].doPT -> puttext;
@@ -956,7 +1024,13 @@ generator: variants
                                      * generation og vStub in 
                                      * BindVirtuals::handleDecl
                                      *)
-                                    cd.com(#do 'vdt:g'-> T #);
+                                    (# inx: @integer
+                                    do i -> inx;
+                                    cd.com(#
+                                          do 'vdt:g'-> T;
+                                             args[inx].vDescNo -> I;
+                                             (OG.desc).newDescNo -> I
+                                          #)#);
                                     (D.Off,args[i].vDescNo,(OG.desc).newDescNo) 
                                       -> cd.vdtTableAt;
                                     (if traceGeneric then
@@ -976,7 +1050,25 @@ generator: variants
                             if);
                             D.sig.id.copy -> name[];
                             '#SB#' -> name.append;
+                            (if args[i].IS.newDescNo = 0 then
+                               (* SHould be moved to vvariants *)
+                               ' descNo = 0' -> cd.comment;
+                               (1,none) -> args[i].Qalloc
+                           if); 
                             (args[i].desc).newDescno -> descNo -> name.putint;
+                            (# inx: @integer
+                                 do i -> inx;
+                            cd.com(#og: ^ObjectGenerator
+                                  do 'handleVirtArg:args[i]'-> T;
+                                     args[inx].dopt -> T;
+                                     args[inx].label -> T;
+                                     descNo -> I;
+                                     'E:'->T; E.dopt -> T; '::'->T;
+                                     E.father.father.dopt -> T; '::'->T;
+                                     ((E.father.father-> OG[]).desc).newdescno -> I;
+                                     OG.label -> T
+                                  #);
+                            #);
                             (if (E.desc).primNo = indexed_prim then 
                                 (* We ignore bindings of elm in Indexed *)
                                 leave handleVirtArg
@@ -1006,7 +1098,11 @@ generator: variants
                              (OG.desc).newDescNo -> putint; newline;
                              OG.doPT -> putline;
                              D.sig.doPT -> putline;*)
-                            cd.com(#do 'vdt:h'-> T #);
+                            cd.com(#
+                                  do 'vdt:h'-> T;
+                                     descno -> I;
+                                     (OG.desc).newDescNo -> I;
+                                  #);
                             (D.off,descno,(OG.desc).newDescNo) -> cd.vdtTableAt;
                             (if traceGeneric then
                                 '*** Bind5: ' -> puttext; 
@@ -1074,6 +1170,10 @@ generator: variants
                this(Pattern)[] -> PtnQ.add;
                (if OG.primNo
                 // assign_prim then
+                   (if dynAlloc and ((rec.ATd.desc).newDescNo = 0) then
+                       'descNo = 0'-> cd.comment;
+                       rec.ATD.dopt -> cd.comment
+                   if);
                    rec.ATd.store;                   
                 // ifthen_prim then
                    exitLab.new;                   
@@ -1261,6 +1361,22 @@ generator: variants
                                (sig.id[],off) -> cd.sendVirtual
                             else
                                (if not isBasicPtn then
+                                   (if OG.IS.newDescNo = 0 then
+                                       (*(# ptn: ^Pattern
+                                       do OG.super.ATd[] -> ptn[];
+                                          (if ptn[] <> none then
+                                              (1,none) -> ptn.OG.Qalloc;
+                                              cd.com(# do 'Qalloc: ' -> T;
+                                              OG.getDescNo -> I#)if)
+                                        #);*)
+                                       (* Why does Og.Qalloc wokr here and not 
+                                        * for vStub above?'*)
+                                       (1,none) -> OG.Qalloc
+                                   if);
+                                   cd.com
+                                   (#
+                                   do 'Ptn:Invoke:' -> T; OG.IS.newDescno -> I
+                                   #);
                                    (sig.id[],OG.IS.newDescno,staticOff,not OG.IS.doHasCode) 
                                      -> cd.invoke;
                                if)
@@ -1464,7 +1580,7 @@ generator: variants
                (useReturnValue,superAdj,staticOff) -> IV.Qgen 
             #);
           pushThis:: 
-            (* Skip, since loadOrigin below includes pushThis *)  
+<            (* Skip, since loadOrigin below includes pushThis *)  
             (# #);
           loadOrigin:: 
             (# gdb:: (# do doPT -> lx.puttext #)
@@ -1576,7 +1692,10 @@ generator: variants
                    OTL.range -> OTL.extend;;
                    done.range -> done.extend
                if);
-               (N[],sig[],OT[],super[],CC[],var[]) -> item -> OTL[top][]
+               (N[],sig[],OT[],super[],CC[],var[]) -> item -> OTL[top][];
+               (if dynAlloc and (OT.IS.newDescNo = 0) then
+                   (1,none) -> OT.Qalloc;
+               if);
             #);          
           next:
             (# inx: @integer; B: @boolean
@@ -1589,6 +1708,7 @@ generator: variants
                         (if not done[inx ] then 
                             true -> B;                            
                             true -> done[inx];
+
                             (OTL[inx].N[],OTL[inx].sig[],OTL[inx].super[]
                             ,OTL[inx].CC[],OTL[inx].var[]) 
                               -> OTL[inx].OT.genClass;
@@ -1732,19 +1852,34 @@ generator: variants
      BC[] -> cd.init;
      'QBETA'-> cd.comment;
      
-     (if descs[] = none then
-         'descs[] = none then' -> putline
-     if);
      newAlloc -> cd.descs.newAlloc;
+     
      labelHandler.init;
      0-> ObjTmpStack.top;
      main[] -> markIncludes;
      
-     (1,none) -> rootModule.Qalloc;
+     (* Perhpas we should juts push main og objT,mpStack and then
+      * trigger Qalloc and Qgen/genclass?
+      * However, main is a module!?
+      * And its seems that Module::Qgen does put on ObjTmpStack!?
+      *)
+     (if dynAlloc then 
+         '\n*** DynAlloc'->putline;
+         (* Pattern Object is special and not reached during a by-need scan *)
+         (1,none) -> rootModule.DI.OG.Qalloc;
+         (1,none) -> objectDecl.Qalloc;
+
+         '\n*** Object.descNo = ' -> puttext; 
+         (# ptn: ^Pattern
+         do (objectDecl[]->ptn[]).OG.IS.newDescNo -> putint; newline
+         #);
+      else
+         (1,none) -> rootModule.Qalloc;
+     if);
      
      (if true then
          main.Qgen;
-      else         
+      else
          rootModule.gen;
      if);
      L:

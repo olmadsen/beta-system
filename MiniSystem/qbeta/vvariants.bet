@@ -10,7 +10,9 @@ variants: restrictions
      ModuleItem::<
        (# Qalloc:: 
             (# 
-            do (if isChecked then (varNo,IT[]) -> MD.Qalloc if)
+            do (* '\n***ModuleItem:Qalloc: ' -> putline;
+               doPT -> printHead;*)
+               (if isChecked then (varNo,IT[]) -> MD.Qalloc if)
             #);          
        #);
      Value::< 
@@ -22,7 +24,9 @@ variants: restrictions
                    IT.qsize[varNo] + 1 -> IT.qsize[varNo] -> qoff[varNo];
                if);
                (varNo,IT[]) -> sig.Qalloc;
-               (varNo,IT[]) -> OG.Qalloc
+               (if not dynAlloc then
+                   (varNo,IT[]) -> OG.Qalloc
+               if)
             #);
           NewOff:
             (# V: @integer
@@ -56,14 +60,64 @@ variants: restrictions
             (# var: [1] ^Variant; top: @integer; 
                new:
                  (# V: ^Variant
-                 do (if (top + 1 -> top) > var.range then
+                 do (* '\n***** ObjectGenerator: Qgen:Computing variants:' 
+                     * -> putline; doPT -> printhead ; *)
+                    (if (top + 1 -> top) > var.range then
                         var.range -> var.extend
                     if);
                     Variant -> var[top][] -> V[];
-                    top -> V.varNo
+                    top -> V.varNo;
+                    (*V[] -> scanObjectRefs*)
                  exit V[]
                  #);
-               add:
+               scanObjectRefs:
+                 (# trace: (# exit false #);
+                    head: @boolean;         
+                    ATd: ^Decl; on,pn: @integer; Px: ^OGpath;
+                    V: ^Variant
+                 enter V[]
+                 do addBinding.scanObjectRefs
+                    (# DI: ^DataItem; OGx,qual: ^ObjectGenerator; org: ^Items
+                    do (if trace and not head then                          
+                          '\n**** ObjectGenerator:Qgen:'->putline; 
+                          dopt -> putline;
+                          true -> head
+                      if);
+                      (if trace then
+                          '>>>> DataItem:with:ObjectQ:\n    ' -> puttext;
+                          current.doPT -> putline;
+                      if);
+                      current[] -> DI[];
+                      (* DI = R: ? elm where elm :< Object 
+                       * Find actual binding of elm in the context of this OG
+                       * Execute getV_qual(Invocation(R)) in this(OG)
+                       *)
+                      (if trace then
+                          '>>>> theOG: ' -> putline;
+                          this(ObjectGenerator).doPT -> putline;
+                      if);
+                      (DI.sig.id[],true) -> IS.search -> (ATd[],on,pn);
+                      (if trace then
+                          'Search: ' -> puttext; DI.sig.id[] -> puttext;
+                          ' '-> put; on -> putint; 
+                          ' ' -> put; pn -> putint; newline;
+                      if);
+                      (* the code below is the same as in
+                       * Invocation:getV_qual
+                       * Should be unified
+                       *)
+                      (this(ObjectGenerator)[],0,pn,none) 
+                        -> OGpath
+                        -> DI.OG.super.ATd.pathToDcl 
+                        -> px[];
+                      px.qual[] -> qual[];
+                      (DI.OG.super.ATd[],qual.father[]) -> V.add;
+                      (if trace then
+                          '>>>> Qual:'->puttext; qual.doPT -> putline; newline;
+                      if)
+                   #);
+                 #);
+               Xadd:
                  (# VD,BD: ^Pattern
                  enter(VD[],BD[])
                  do (*(if (top + 1 -> top) > var.range then
@@ -147,15 +201,27 @@ variants: restrictions
                  #)     
             #);
           Qalloc::
-            (# E:^Exp
-            do (varNo,IT[]) -> super.Qalloc;
+            (* Should be called when genClass for this OG is called *)
+            (# E:^Exp; ptn: ^Pattern
+            do '\n***OG:Qalloc:'->putline; label -> putline;
+               doPT -> printHead;
+               (if dynAlloc then
+                   (if (IS.superDesc[] <> none) and (IS.superDesc.newDescNo = 0) then
+                       IS.superDesc.father.father[] -> ptn[];
+                       (if ptn[] <> objectDecl[] then
+                           (1,none) -> ptn.OG.Qalloc;
+                   if)if)
+                else
+                   (varNo,IT[]) -> super.Qalloc;
+               if);
                (* some addBinding in checker:OG:alloc *)
                super.scanSons(# do current[] -> E[] #);
                (if (E[] <> none) and (E.ATd[] <> none) then 
                    E[] -> E.ATd.handleArgs  (* !!!*)
                if);
-               (if isObjectDesc then
+               (if isObjectDesc then '*** isObjectDesc:'->puttext;
                    this(ObjectGenerator)[] -> QnewDesc -> IS.QdescNo[varNo];
+                   IS.QdescNo[varNo]->putint; newline;
                    (varNo,IT[]) -> IS.Qalloc 
                if);               
             #);
@@ -179,6 +245,7 @@ variants: restrictions
                
                (* 'Items:Qalloc: varNo: ' -> puttext; varNo -> putint;*)
                (if super.ATd[] <> none then
+                   '\n*** HasSuper:\n'->puttext; dopt -> printhead;
                    (if superDesc[] = none then
                        'Items:alloc: ' -> puttext; dopt ->putline
                    if);
@@ -191,7 +258,8 @@ variants: restrictions
                        superDesc.qOriginOff[varNo] -> qOriginOff[varNo] 
                     else
                        qsize[varNo] + 1 -> qsize[varNo] -> qOriginOff[varNo] 
-                   if)
+                   if);
+                   '***originOff:'->puttext; qOriginOff[varNo] -> putint; ; newline
                 else
                    qsize[varNo] + 1 -> qsize[varNo] -> qOriginOff[varNo] 
                if);
@@ -215,13 +283,36 @@ variants: restrictions
           noOfVar: @integer;
        #);
      Pattern::<
-       (# Qalloc:: (# do (varNo,IT[]) -> OG.Qalloc (* more stuff in checker:ptn:alloc *) #);
+       (# Qalloc:: 
+            (# 
+            do (if dynAlloc then
+                   (if isBasic then
+                       '\n*** pattern:qalloc: ' -> putline;
+                       doPT -> printHead;
+                       (if OG.IS.newDescNo = 0 then
+                           (varNo,IT[]) -> OG.Qalloc; 
+                           (* more stuff in checker:ptn:alloc *)
+                       if);
+                       (if IT[] <> none then
+                           'descNo: ' -> puttext; IT.newDescNo -> putint; newline
+                       if)
+                   if)
+                else
+                   (varNo,IT[]) -> OG.Qalloc (* more stuff in checker:ptn:alloc *) 
+               if)
+            #);
        #);
      Invocation::<
-       (# Qalloc:: (# do scanSons(# do (varNo,IT[]) -> current.Qalloc #) #);
+       (# Qalloc:: 
+            (# 
+            do '\n*** Invocation:Qalloc:' -> puttext; dopt -> putline;
+               scanSons(# do (varNo,IT[]) -> current.Qalloc #) #);
        #);
      ObjectInvocation::<
-       (# Qalloc:: (# do scanSons(#do (varNo,IT[]) -> current.Qalloc #) #);
+       (# Qalloc:: 
+            (# 
+            do '\n*** ObjectInvocation:Qalloc:' -> puttext; dopt -> putline;
+               scanSons(#do (varNo,IT[]) -> current.Qalloc #) #);
        #);
      BracketedExp::<
        (# Qalloc:: (# do (varNo,IT[]) -> IV.Qalloc #);
@@ -276,11 +367,11 @@ variants: restrictions
             (# V: ^Variant
             enter V[]
             do (if top > 0 then
-                   '\nVariant: equal: ' -> putline;
+                  (* '\nVariant: equal: ' -> putline;
                    print;
                    '-----' -> putline;
                    V.print;
-                   '====='->putline;
+                   '====='->putline;*)
                if);
                (for i: top repeat
                     (for j: V.top repeat
