@@ -300,7 +300,7 @@ generator: variants
                        addBinding.scanObjectRefs
                        (# DI: ^DataItem; OGx,qual: ^ObjectGenerator; org: ^Items
                        do (if trace and not head then                          
-                              '\n**** ObjectGenerator:Qgen:'->putline; 
+                              '\n**** ObjectGenerator,Qgen,'->putline; 
                               dopt -> putline;
                               true -> head
                           if);
@@ -392,7 +392,7 @@ generator: variants
                            display
                if)if)if);
                variants.print;
-               (N[],sig[],IS.newDescNo(*IS.descNo*),super[],this(ObjectGenerator),CC[],var[])
+               (N[],sig[],IS.newDescNo,super[],this(ObjectGenerator),CC[],var[])
                  -> IS.genClass
             #);
           XaddB: @
@@ -573,28 +573,54 @@ generator: variants
                        if)if)
                     #)
                  #);               
-               CC: ^CallChain
+               CC: ^CallChain; superVar: ^Variant
             enter(N[],sig[],descNo,Super[],OG[],CC[],var[])
             do (* Is called with descNo = NewDescNo *)
                (* We must know the actual variant being generated for
                 * The actual variant should have info about: 
                 * actual descNo and actual storage layout 
                 *)
+               (*'\n*** genclass, '->putline;
+               (if var[] = none then ' var is none' -> putline
+                else
+                   var.thisVarNo -> putint; 
+                   (if var.genDone then ' genDone '->putline if)
+               if);
+               dopt-> printHead;*)
+               
+               (if (var[] <> none) and (var.thisVarNo > 1) then
+                   'genClass,varNo = '-> puttext; var.thisVarNo -> putint;
+                   newline;
+                   dopt -> printHead;
+               if);
+               (if (var[] <> none) then true -> var.genDone if);
                (if not OG.Qvariants.isEmpty then
-                   '\n***** GenClass: ' -> puttext; 
-                   (if N[] <> none then
-                       N[] -> putline
-                    else
-                       'N is none' -> putline
-                   if);
+                   '\n***** GenClass,N: ' -> puttext; 
+                   N[] -> printNotNone;
                    (if sig[] <> none then sig.doPT -> putline if);
                    OG.Qvariants.print;
                if);
                (if (superDesc[] <> none) then
                    superDesc.father.father -> ptn[]; (* ptn is the super pattern
                                                       * of this OG *)
+                   (if (var[] <> none) then
+                       (if var.thisVarNo > 0 then
+                           '\n*** genClass for varNo =' -> puttext;
+                           (* we should find the corresponding var in super 
+                            * perhaps we should use the same object?
+                            *)
+                           var[] -> ptn.OG.Qvariants.findSuperVar -> superVar[];
+                           (if superVar[] = none then
+                               'superVar none'-> putline
+                            else
+                               '\n>>> superVarNo: ' -> puttext;
+                               supervar.thisvarNo -> putint; newline;
+                           if);
+                           dopt -> printHead;                           
+                       if);
+                   if);
                    (if not superDesc.done then
-                       (* the actual variant begeing generated here must be
+                       (* the actual variant beging generated here must be
                         * propagated to super possibly implying that a new
                         * variant of super must be generated;
                         * we have actually propagated the actual var to the
@@ -610,7 +636,12 @@ generator: variants
                               (ptn.sig.id[],ptn.sig[]
                               ,superdesc.newDescNo(*descNo*)
                               ,ptn.OG.super[]
-                              ,ptn.OG[],CC[],var[]) 
+                              ,ptn.OG[],CC[]
+                              (* this is var of this OG, must be used to find
+                               * the corresponding var for super
+                               * thisOG.varNo is not necessarily superVarno
+                               *)
+                              ,var[]) 
                                 -> superDesc.genClass;
                               (* Perhaps vdtTableCopy below does not work
                                * if we have not called genClass!?
@@ -638,7 +669,7 @@ generator: variants
                    cd.bcPos -> beginBCP;
                    (* store parameters + origin *)
                    (if sig[] <> none then sig.storeParameters if);
-                   (*'GenClass:items: ' -> puttext; N[] -> puttext;
+                   (*'GenClass,items, ' -> puttext; N[] -> puttext;
                     ' ' -> put; newOriginOff -> putint; newline;*)
                    ('origin',newOriginOff) -> cd.rstore;
                    not doHasCode -> cd.allocEventQ;
@@ -753,6 +784,7 @@ generator: variants
                     * - otherwise push variables in -> 
                     *)
                    (if (superDesc[] <> none) and not superDesc.isBasic then
+                       cd.rtnInner
                     else
                        0 -> cd.rtnEventQ;
                        (if sig[] <> none then 
@@ -761,12 +793,7 @@ generator: variants
                            (* ad hoc *)
                            cd.setThisStack;
                            cd.pushThis
-                   if)if);
-
-                   (if (superDesc[] <> none) and not superDesc.isBasic then
-                       cd.rtnInner
-                    else
-                       (*0 -> cd.rtnEventQ;*)
+                       if);
                        'D' -> cd.rtn;
                    if);
                    (vsize,rsize,1) -> CD.endClass;
@@ -790,7 +817,7 @@ generator: variants
                    (if basicNo = ifthen_prim then
                        (on,NA[])  -> (origin[]->org[]).goOrigin -> org[]
                     else
-                       (if OT.IS.newOriginOff = 0 then
+                       (if OT.IS.newOriginOff = 0 then father.dopt -> putline;
                            (* move to vvariants.bet'*)
                            'originOff = 0 ' -> cd.comment;
                            (1,none) -> OT.Qalloc
@@ -870,7 +897,7 @@ generator: variants
                             if);   
                             (if father.father##
                              // ObjectGenerator## then
-                                (* 'ObjectGenerator: ' -> putline;
+                                (* 'ObjectGenerator, ' -> putline;
                                  father.father.dopt->putline;*)
                                 (off, OG[]) 
                                   -> (father.father[]-> enclosingOG[]).XaddB
@@ -1696,13 +1723,25 @@ generator: variants
                  (#
                  do inx + 1 -> inx;
                     (if inx <= top then
-                        (if not done[inx ] then 
-                            true -> B;                            
-                            true -> done[inx];
-
-                            (OTL[inx].N[],OTL[inx].sig[],OTL[inx].super[]
-                            ,OTL[inx].CC[],OTL[inx].var[]) 
-                              -> OTL[inx].OT.genClass;
+                        (if OTL[inx].var[] = none then     
+                           (* '\n*** varNO is none: ' -> putline;
+                            OTL[inx].OT.doPT -> printhead;*)
+                            (if not done[inx ] then 
+                                true -> B;             
+                                (* just a tmp test since var may be none 
+                                 * - must be fixed *)
+                                true -> done[inx];
+                                (OTL[inx].N[],OTL[inx].sig[],OTL[inx].super[]
+                                ,OTL[inx].CC[],OTL[inx].var[]) 
+                                  -> OTL[inx].OT.genClass;
+                            if);
+                         else
+                            (if not  OTL[inx].var.genDone then
+                                true -> OTL[inx].var.genDone;
+                                (OTL[inx].N[],OTL[inx].sig[],OTL[inx].super[]
+                                ,OTL[inx].CC[],OTL[inx].var[]) 
+                                  -> OTL[inx].OT.genClass;
+                            if)
                         if);
                         restart Loop                        
                     if);
