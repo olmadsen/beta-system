@@ -16,10 +16,11 @@ generator: variants
                     if)
                  exit M[]
                  #);
-               M: ^Module
+               M: ^Module; var: ^Variant
             do (DI.sig.id[],newDesc.noOfDescs) -> cd.newComponent;
                (if not DI.OG.IS.isEmpty then
-                   (DI.sig.id[],none,DI.OG[],DI.OG.super[],none,none)
+                   DI.OG.computeVariant -> var[];
+                   (DI.sig.id[],none,DI.OG[],DI.OG.super[],none,var[])
                      -> ObjTmpStack.add;
                    (if (encModule -> M[]) <> none then
                        M.Qgen
@@ -108,7 +109,7 @@ generator: variants
                             * Apparenly cd.bcPos is not defined here!?
                             *)
                            (if not OG.IS.isEmpty then                              
-                               (sig.id[],none,OG[],OG.super[],none,none) 
+                               (sig.id[],none,OG[],OG.super[],none,OG.computeVariant) 
                                  -> ObjTmpStack.add
                            if)   
                        if) 
@@ -257,7 +258,22 @@ generator: variants
             #);
        #);
      ObjectGenerator::
-       (# Qgen::
+       (# computeVariant:
+            (* OG.Qgen is called for a singular object
+             * We thus only have one variant
+             * This variant will propagate to superpatterns
+             *)
+            (# var: ^Variant
+            do Qvariants.new -> (*var[] -> *)Qvariants.scanObjectRefs;               
+               (* We have a Variant of OG; 
+                * if var.top = 0, there are no data-items depending on 
+                * virtual Object (Later to be replaced by Any)
+                *)
+               Qvariants.print;
+               Qvariants.checkIfTopIsNew -> var[]
+            exit var[]
+            #);          
+          Qgen::
             (* Qgen is only called for singular Objects and pushed on stack
              * For patterns OG is pushed on stack and later genClass is called
              *)
@@ -290,59 +306,12 @@ generator: variants
                               D.qoff[1] -> putint; ' ' -> put; D.doPT -> putline
                           if)
                    #)if);
-                   (* OG.Qgen is called for a singular object
-                    * We thus only have one variant
-                    * This variant will propagate to superpatterns
-                    *)
-                   Qvariants.new -> var[];
-                   var[] -> Qvariants.scanObjectRefs;
-                   (if false then 
-                       addBinding.scanObjectRefs
-                       (# DI: ^DataItem; OGx,qual: ^ObjectGenerator; org: ^Items
-                       do (if trace and not head then                          
-                              '\n**** ObjectGenerator,Qgen,'->putline; 
-                              dopt -> putline;
-                              true -> head
-                          if);
-                          (if trace then
-                              '>>>> DataItem:with:ObjectQ:\n    ' -> puttext;
-                              current.doPT -> putline;
-                          if);
-                          current[] -> DI[];
-                          (* DI = R: ? elm where elm :< Object 
-                           * Find actual binding of elm in the context of this OG
-                           * Execute getV_qual(Invocation(R)) in this(OG)
-                           *)
-                          (if trace then
-                              '>>>> theOG: ' -> putline;
-                              this(ObjectGenerator).doPT -> putline;
-                          if);
-                          (DI.sig.id[],true) -> IS.search -> (ATd[],on,pn);
-                          (if trace then
-                              'Search: ' -> puttext; DI.sig.id[] -> puttext;
-                              ' '-> put; on -> putint; 
-                              ' ' -> put; pn -> putint; newline;
-                          if);
-                          (* the code below is the same as in
-                           * Invocation:getV_qual
-                           * Should be unified
-                           *)
-                          (this(ObjectGenerator)[],0,pn,none) 
-                            -> OGpath
-                            -> DI.OG.super.ATd.pathToDcl 
-                            -> px[];
-                          px.qual[] -> qual[];
-                          (DI.OG.super.ATd[],qual.father[]) -> var.add;
-                          (if trace then
-                              '>>>> Qual:'->puttext; qual.doPT -> putline; newline;
-                          if)
-                   #);if);
-                   (* We have a Variant of OG; 
-                    * if var.top = 0, there are no data-items depending on 
-                    * virtual Object (Later to be replaced by Any)
-                    *)
-                   Qvariants.print;
-                   Qvariants.checkIfTopIsNew;
+
+                   computeVariant -> var[];
+                   (if 'Workspace' -> (OGid).equalNCS then
+                       '\n***Variants for Workspace:'->putline;
+                       Qvariants.printAll
+                   if);
                    
                    cd.bcPos -> beginBCP;
                    (if CC[] <> none then (* not used? *)
@@ -365,7 +334,7 @@ generator: variants
                        
                        (* Invoke the singular object *)
                        (if not newAlloc then
-                           (OGid,IS.newDescNo(*IS.descno*),staticOff,true) -> cd.invoke;                        
+                           (OGid,IS.newDescNo,staticOff,true) -> cd.invoke;
                            (if not useReturnValue then cd.rpop if);
                        if);
                        
@@ -381,7 +350,7 @@ generator: variants
             #);
           genClass::
             (# var: ^Variant
-            enter var[]
+            enter var[] (* super has more arguments *)
             do (if hasVirtualObject then
                    (if traceGeneric3 then
                        '***** HasVirtualObject: ' -> putline; 
@@ -392,6 +361,7 @@ generator: variants
                            display
                if)if)if);
                variants.print;
+               (* Move IS.genclass to here? *)
                (N[],sig[],IS.newDescNo,super[],this(ObjectGenerator),CC[],var[])
                  -> IS.genClass
             #);
@@ -593,33 +563,48 @@ generator: variants
                    newline;
                    dopt -> printHead;
                if);
-               (if (var[] <> none) then true -> var.genDone if);
+
                (if not OG.Qvariants.isEmpty then
                    '\n***** GenClass,N: ' -> puttext; 
-                   N[] -> printNotNone;
-                   (if sig[] <> none then sig.doPT -> putline if);
+                   N[] -> printNotNone; newline;
+                   (if sig[] <> none then sig.doPT -> puttext; if);
+                   ' varNo = ' -> puttext;
+                   (if var[] <> none then var.thisVarNo -> putint if);
+                   ' genDone = '->puttext;
+                   (if var.genDone then 'True ' -> puttext if);
+                   newline;
                    OG.Qvariants.print;
                if);
+
                (if (superDesc[] <> none) then
                    superDesc.father.father -> ptn[]; (* ptn is the super pattern
                                                       * of this OG *)
                    (if (var[] <> none) then
                        (if var.thisVarNo > 0 then
-                           '\n*** genClass for varNo =' -> puttext;
+                           '\n>>> genClass for ' -> puttext; N[] ->printNotNone;
+                           ' varNo = ' -> puttext;
+                           var.thisVarNo -> putint; 
                            (* we should find the corresponding var in super 
                             * perhaps we should use the same object?
                             *)
                            var[] -> ptn.OG.Qvariants.findSuperVar -> superVar[];
-                           (if superVar[] = none then
-                               'superVar none'-> putline
-                            else
+                           (if superVar[] <> none then
                                '\n>>> superVarNo: ' -> puttext;
-                               supervar.thisvarNo -> putint; newline;
+                               supervar.thisvarNo -> putint; 
+                               ' genDone='->puttext;
+                               (if superVar.genDone then 'True' -> puttext if);
                            if);
+                           newline;
                            dopt -> printHead;                           
                        if);
+                    else
+                       '\n>>> genClass (var = none) for ' -> puttext; 
+                       N[] ->printNotNone; newline;
+                       dopt -> printHead;
                    if);
-                   (if not superDesc.done then
+                   (if (superVar[] <> none) and not superVar.genDone 
+                       or 
+                       (superVar[] = none) and not superDesc.done then
                        (* the actual variant beging generated here must be
                         * propagated to super possibly implying that a new
                         * variant of super must be generated;
@@ -628,7 +613,8 @@ generator: variants
                         * codegen (on objTmpStack) or should we do it here?
                         *)
                        (# 
-                       do (if newAlloc then
+                       do 
+                          (if newAlloc then
                               (* Should be done in Variants::QAlloc *)
                               (if superDesc.newDescNo = 0 then
                                   (1,none) -> ptn.OG.Qalloc;
@@ -641,7 +627,7 @@ generator: variants
                                * the corresponding var for super
                                * thisOG.varNo is not necessarily superVarno
                                *)
-                              ,var[]) 
+                              ,superVar[]) 
                                 -> superDesc.genClass;
                               (* Perhaps vdtTableCopy below does not work
                                * if we have not called genClass!?
@@ -658,8 +644,16 @@ generator: variants
                           if);
                        #)
                if)if);
-               (if not done then
+               (if true 
+                // (var[] = none) then done -> printBoolean 
+                // var[] <> none then var.genDone -> printBoolean
+               if);
+               (if (var[] = none) and not done or 
+                   (var[] <> none) and not var.genDone then
+                   
                    true -> done;
+                   (if (var[] <> none) then true -> var.genDone if);
+                   
                    OG.XaddB.copySuper;
                    (N[],newDescNo,false,(topSuper).newDescNo,newOriginOff) -> cd.class;
                    (* thisObj = the new instance of this class 
@@ -755,7 +749,7 @@ generator: variants
                                   (false,0,0) -> current.Qgen if) 
                    if)if)#);
                    (if innerInx > 0 then innerInx -> cd.innerA if);
-                   (if (superDesc[] <> none) and not superDesc.isBasic  then
+                   (if (superDesc[] <> none) and not superDesc.isBasic then
                        cd.rtnInner 
                     else
                        (if doHasCode then 
@@ -868,7 +862,7 @@ generator: variants
                         if);
                         (if ptnKind 
                          // plainPtn then
-                            (sig.id[],sig[],OG[],OG.super[],CC[],none) 
+                            (sig.id[],sig[],OG[],OG.super[],CC[],OG.computeVariant)
                               -> objTmpStack.add 
                          // virtualPtn then
                             (if not OG.hasItems (* OG.IS.isEmpty*) then
@@ -1179,7 +1173,7 @@ generator: variants
                     if)
                  #);   
                exNo: @integer; N:^ Node
-            do (*'OG:'->puttext; OG.OGid-> putline;*)
+            do '\n***** Pattern:invoke:'->puttext; OG.OGid-> putline;
                (*OG.doPT -> putline;*)
                (*
                (if not OG.IS.isEmpty then
@@ -1663,7 +1657,8 @@ generator: variants
           add:
             (# ptn: ^Pattern; I: ^item
             enter ptn[]
-            do
+            do (*'\n>>> PtnQ:add: ' -> puttext; ptn.genIsDone -> printBoolean;
+               ' '->put; ptn.sig.id[] -> putline;*)
                (if not ptn.genIsDone then (*
                    ptn.doPt -> putline;*)
                    ptn[] -> item -> I[];
@@ -1684,13 +1679,13 @@ generator: variants
                      restart L
             if)#);
           handle:
-            (# B: @boolean
+            (# B: @boolean; S: ^item
             do (*'Handle:'->putline;*)
-               (if head[] <> none then
+               (if (head[] -> S[]) <> none then
                    true -> B;
-                   (*'PtnQ:callQgen:'->putline; head.ptn.doPT -> putline;*)
-                   (false,0,0) -> head.ptn.Qgen;
-                   head.next[] -> head[]
+                   (*'\n>>>PtnQ:callQgen: '->puttext; head.ptn.sig.id[] -> putline;*)
+                   head.next[] -> head[];
+                   (false,0,0) -> S.ptn.Qgen;
                if)
             exit B
             #);
@@ -1706,7 +1701,23 @@ generator: variants
             (# N: ^text; sig: ^Signature; OT: ^ObjectGenerator; super: ^Invocation; 
                CC: ^CallChain; var: ^Variant
             enter(N[],sig[],OT[],super[],CC[],var[])
-            do (if (top+1-> top) > OTL.range then 
+            do (*'\n***ObjTmpStack:add:'-> puttext;
+                N[] -> putline;
+                * *)
+               (if 'Workspace' -> N.equalNCS then
+                   '\n***ObjTmpStack:add:'-> puttext; N[] -> puttext;
+                   ' ' -> put; 
+                   (if var[] = none then
+                       'var is none: ' -> putline
+                    else
+                       'var not none: ' -> puttext;
+                       var.genDone -> printBoolean; 
+                       ' varNo: ' -> puttext; var.thisVarNo -> putint;
+                       newline
+                   if);
+                   (dumpStack,'*** ObjTmpStack:Workspace added') -> stop
+               if);
+               (if (top+1-> top) > OTL.range then 
                    OTL.range -> OTL.extend;;
                    done.range -> done.extend
                if);
@@ -1714,6 +1725,10 @@ generator: variants
                (if newAlloc and (OT.IS.newDescNo = 0) then
                    (1,none) -> OT.Qalloc;
                if);
+               (*(if OT.IS.newDescNo // 0 // 80 // 85 then
+                   '\n***added:'-> puttext;
+                   N[] -> putline;
+               if); *)
             #);          
           next:
             (# inx: @integer; B: @boolean
@@ -1736,8 +1751,8 @@ generator: variants
                                   -> OTL[inx].OT.genClass;
                             if);
                          else
-                            (if not  OTL[inx].var.genDone then
-                                true -> OTL[inx].var.genDone;
+                            (if not OTL[inx].var.genDone then
+                                (*true -> OTL[inx].var.genDone;*)
                                 (OTL[inx].N[],OTL[inx].sig[],OTL[inx].super[]
                                 ,OTL[inx].CC[],OTL[inx].var[]) 
                                   -> OTL[inx].OT.genClass;
@@ -1917,7 +1932,7 @@ generator: variants
           PtnQ.handle -> B;
           
           ObjTmpStack.next or B -> B;
-          (if B then restart L if)
+          (if B (*or (ObjTmpStack.inx < ObjTmpStack.top)*) or (PtnQ.head[]  <> none) then restart L if)
        #);
      genStubs;
      
