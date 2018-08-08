@@ -1,6 +1,7 @@
 ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'vvariants';
-INCLUDE '../VM/objectcode'
+INCLUDE '../VM/objectcode';
+BODY 'vgeneratorBody'
 ---lib:attributes---
 generator: variants
   (# traceModules: (# exit false #);
@@ -1234,6 +1235,7 @@ generator: variants
                         if)
                     if)
                  #);   
+               handlePrimitives: BooleanValue(#<<SLOT handlePrimitives:doPart>> #);
                exNo: @integer; N:^ Node; di: ^DataItem
             do (*'\n***** Pattern:invoke:'->puttext; OG.OGid-> putline;*)
                (*OG.doPT -> putline;*)
@@ -1243,251 +1245,66 @@ generator: variants
                 if);*)
                
                this(Pattern)[] -> PtnQ.add;
-               (if OG.primNo
-                // assign_prim then
-                   (if newAlloc and ((rec.ATd.desc).newDescNo = 0) then
-                       'descNo = 0'-> cd.comment;
-                       rec.ATD.dopt -> cd.comment
+               (if handlePrimitives then
+                   (* We should ensure that a code variant for Ptn 
+                    * corresponding to
+                    * the enclosing OG is generated
+                    * List:
+                    *    lelm:< Object
+                    *    R: ?elm
+                    *    insert(V: ?lelm):
+                    *       R := V
+                    * Ilist: = List{ lelm:: Integer}
+                    * Ilist.insert(7)
+                    * Consider 'insert', the origin of insert is Ilist
+                    * The super List of Ilist may have variants
+                    * And Ilist calls the relevant super variant of List
+                    * We may need to generate a new variant for 
+                    * insert corresponding to
+                    * the relevant variant of Ilist and List
+                    * The receiver (rec) is known
+                    * May be a constant dataItem like Ilist above
+                    * May be a variable dataItem 
+                    * - here we forbid assigment of subpatterns with variants?
+                    *)
+                   '\n***ObjectInvocation:invoke: ' -> puttext; rec.dopt -> puttext;
+                   ' . ' -> puttext;  E.dopt -> putline;
+                   (if rec.ATd## = dataItem## then
+                       rec.ATd[] -> DI[];
+                       '\n---Receiver:'->puttext;
+                       DI.OG.Qvariants.print; newline;
                    if);
-                   rec.ATd.store;                   
-                // ifthen_prim then
-                   exitLab.new;                   
-                   E.args.scanSons
-                   (# N: @integer
-                   do N + 1 -> N;
-                      (if N
-                       // 1 // 3 then
-                       // 2 then 
-                          (true,0,staticOff) -> current.Qgen;
-                          exitlab -> cd.jmpFalse;
-                       // 4 then
-                          (false,0,staticOff) -> current.Qgen;
-                          exitLab -> cd.defLab;
-                       else
-                          'invoke:%if%then: too many arguments' -> putline;
-                          E.doPt -> putline
-                      if)
-                   #); 
-                // restart_Prim then 
-                   restart_Prim -> doBreak
-                // leave_Prim then 
-                   leave_Prim -> doBreak                   
-                // inner_prim then
-                   (if E.args.length > 0 then
-                       E.args.scanArgs
-                       (# A: ^ObjectGenerator; org: ^Items
-                       do current[] -> A[]; 
-                          cd.pushThis;
-                          (A.super.on - 1,A.super[]) -> (E.origin[]->org[]).goOrigin -> org[]; 
-                          (if org.basicNo = ifthen_prim then
-                              (* we need to clean-up goOrigin *)
-                              org.origin[] -> org[]
-                          if);
-                          org.innerInx -> cd.innerP; 
-                          cd.rpopThisObj
-                       #)
+                   E.doPT ->puttext;
+                   OG.Qvariants.print;
+                   
+                   cd.com(#do 'pattern:invoke:rec:' -> T; rec.dopt -> T #);
+                   
+                   (if ptnKind // virtualPtn // furtherPtn // finalPtn then
+                       (sig.id[],off) -> cd.sendVirtual
                     else
-                       E.origin[] -> org[];
-                       org.innerInx -> cd.innerx; 
-                   if)
-
-                // none_prim then 
-                   cd.pushNone
-                // suspend_prim then
-                   cd.suspendd
-                // resume_prim then
-                   ('Resume','D') -> cd.call;
-                   cd.rpop
-                // disable_prim then
-                   ('disable',disable_prim) -> cd.callPrim
-                // enable_prim then  
-                   ('enable',enable_prim) -> cd.callPrim   
-                // put_prim then 
-                   ('put',OG.primNo) -> cd.Callprim
-                // attach_prim then
-                   ('attach',OG.primNo) -> cd.callPrim;
-                   cd.rPop;
-                // cmpAndSwap_prim then
-                   (# I: ^Invocation
-                   do E.father -> I[];
-                      L:
-                        I.scanSons
-                        (# R: ^Exp
-                        do current[] -> R[];
-                           cd.swap;
-                           ('cmpAndSwap',OG.primNo ) -> cd.callPrim;
-                           leave L
-                        #)
-                   #)
-                // fork_prim then
-                   ('fork',OG.primNo ) -> cd.callPrim
-                // sleep_prim then
-                   ('sleep',OG.primNo ) -> cd.callPrim;
-                // indexedPut_prim then (* Can indexedPut and other primtives
-                                         * just be opcodes? May simplify things*)
-                   (# D: ^DataItem; isRef: @boolean
-                   do rec.ATd[] -> D[];
-                      D.OG.scanActualArgs
-                      (# i: @integer
-                      do (if (i + 1 -> i) = 2 then
-                             current.dopt -> cd.comment;
-                             (if current.isBasic then
-                                 'basic' -> cd.comment;
-                              else 
-                                 'ref' -> cd.comment;
-                                 true -> isRef;
-                         if)if);
-                      #);
-                      (if isRef then
-                          cd.rswap;
-                          ('inx',1) -> cd.xrstoreg
-                       else
-                          ('inx',1) -> cd.xstoreg  
-                      if)
-                   #)
-                 
-                // indexedGet_prim then
-                   (if false then
-                       (if (OG.primNo =  indexedGet_prim) then
-                           'indexedGet_prim: \n'->puttext; dopt -> putline;;
-                           E.dopt -> putline;
-                           'rec: ' -> puttext; rec.doPT -> putline;
-                           'indexedGet_prim:' -> cd.comment;
-                           (E.father.dopt,rec.doPT) -> cd.com2;
-                           rec.ATd.dopt -> cd.comment;
-                           (# T: @text
-                           do rec.ATd.primNo -> T.putint; T[] -> cd.comment;
-                           #);
-                   if)if);
-                   (* check if rec is value or ref indexed *)
-                   (# D: ^DataItem; isRef: @boolean
-                   do (if rec.ATd.primNo = indexedGet_prim then
-                          (* The case for indexed::length *)
-                          ('inx',1) -> cd.xpushg
-                       else
-                          rec.ATd[] -> D[];
-                          D.OG.scanActualArgs
-                          (# i: @integer
-                          do (if (i + 1 -> i) = 2 then
-                                 current.dopt -> cd.comment;
-                                 (if current.isBasic then 
-                                     'value' -> cd.comment;
-                                  else 
-                                     'ref' -> cd.comment;
-                                     true -> isRef
-                             if)if)
-                          #);
-                          (if isRef then
-                              ('inx',1) -> cd.xrpushg
-                           else
-                              ('inx',1) -> cd.xpushg
-                          if);
-                      if)
-                   #)
-                // stringGet_prim then
-                   ('inx',1) -> cd.xpushg  
-                // indexed_prim then
-                   (*'\ninvoke:Indexed: ' -> putline;
-                   dopt-> putline;
-                   E.dopt -> putline;*)
-                   E.args.scanArgs
-                   (# OG: ^ObjectGenerator; i: @integer
-                   do (*current.dopt -> puttext; ' ' -> put;*)
-                      i + 1 -> i;
-                      (if i = 2 then
-                          current[] -> OG[];
-                          (if Og.primNo = integer_prim then
-                              (*'Got value' -> puttext;*)
-                              0 -> cd.pushConst;   (* not isRindexed *)
-                           else
-                              (*'Got ref' -> puttext;*)
-                              1 -> cd.pushConst;   (* isRindexed *)
-                      if)if)
-                   #); 
-                   (*newline;*)
-
-                   OG.IS.rsize -> cd.pushConst; (* dinx *)
-                   ('StaticRep',OG.IS.newDescNo,false (*not used*),true) 
-                     -> cd.allocIndexed;
-                   (if staticOff > 0 then
-                       cd.pushThis;
-                       ('indexed',staticOff) -> cd.rstoreg
-                   if)
-                // asString_prim then
-                   ('asString',primNo) -> cd.callPrim
-                // thisCore_prim then
-                else
-                   (if (sig.type ## = Sig.Binary##) and (OG.primNo > 0) 
-                       or 
-                       (sig.type ## = Sig.Unary##) and (OG.primNo = 65) then
-                       OG.primNo -> cd.op
-                    else     
-                       (if (OG.IS.isExternal -> exNo) > 0 then
-                           (* Origin is on rStack here, but is not used
-                            * is poppe by interpreter_c.c - not good,
-                            * should avoid generating code for loadOrigin *)
-                           (sig.id[],exNo) -> cd.invokeExternal
-                        else
-                           (* We should ensure that a code variant for Ptn 
-                            * corresponding to
-                            * the enclosing OG is generated
-                            * List:
-                            *    lelm:< Object
-                            *    R: ?elm
-                            *    insert(V: ?lelm):
-                            *       R := V
-                            * Ilist: = List{ lelm:: Integer}
-                            * Ilist.insert(7)
-                            * Consider 'insert', the origin of insert is Ilist
-                            * The super List of Ilist may have variants
-                            * And Ilist calls the relevant super variant of List
-                            * We may need to generate a new variant for 
-                            * insert corresponding to
-                            * the relevant variant of Ilist and List
-                            * The receiver (rec) is known
-                            * May be a constant dataItem like Ilist above
-                            * May be a variable dataItem 
-                            * - here we forbid assigment of subpatterns with variants?
-                            *)
-                           '\n***ObjectInvocation:invoke: ' -> puttext; rec.dopt -> puttext;
-                           ' . ' -> puttext;  E.dopt -> putline;
-                           (if rec.ATd## = dataItem## then
-                               rec.ATd[] -> DI[];
-                               '\n---Receiver:'->puttext;
-                               DI.OG.Qvariants.print; newline;
+                       (if not isBasicPtn then
+                           (if OG.IS.newDescNo = 0 then
+                               (*(# ptn: ^Pattern
+                                do OG.super.ATd[] -> ptn[];
+                                (if ptn[] <> none then
+                                (1,none) -> ptn.OG.Qalloc;
+                                cd.com(# do 'Qalloc: ' -> T;
+                                OG.getDescNo -> I#)if)
+                                #);*)
+                               (* Why does OG.Qalloc work here and not 
+                                * for vStub above?*)
+                               (1,none) -> OG.Qalloc
                            if);
-                           E.doPT ->puttext;
-                           OG.Qvariants.print;
+                           cd.com
+                           (#
+                           do 'Ptn:Invoke:' -> T; OG.IS.newDescno -> I
+                           #);
                            
-                           cd.com(#do 'pattern:invoke:rec:' -> T; rec.dopt -> T #);
-                           
-                           (if ptnKind // virtualPtn // furtherPtn // finalPtn then
-                               (sig.id[],off) -> cd.sendVirtual
-                            else
-                               (if not isBasicPtn then
-                                   (if OG.IS.newDescNo = 0 then
-                                       (*(# ptn: ^Pattern
-                                       do OG.super.ATd[] -> ptn[];
-                                          (if ptn[] <> none then
-                                              (1,none) -> ptn.OG.Qalloc;
-                                              cd.com(# do 'Qalloc: ' -> T;
-                                              OG.getDescNo -> I#)if)
-                                        #);*)
-                                       (* Why does OG.Qalloc work here and not 
-                                        * for vStub above?'*)
-                                       (1,none) -> OG.Qalloc
-                                   if);
-                                   cd.com
-                                   (#
-                                   do 'Ptn:Invoke:' -> T; OG.IS.newDescno -> I
-                                   #);
-                                   
-                                   (sig.id[],OG.IS.newDescno,staticOff,not OG.IS.doHasCode) 
-                                     -> cd.invoke;
-                               if)
-                       if)if);
-                       (if not useReturnValue then popReturn if)
-               if)if)
+                           (sig.id[],OG.IS.newDescno,staticOff,not OG.IS.doHasCode) 
+                             -> cd.invoke;
+                       if)
+               if)if);
+               (if not useReturnValue then popReturn if)
             #);
           popReturn:
             (* perhaps this should be the same virtual as in dataItem!?
