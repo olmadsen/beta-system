@@ -12,11 +12,13 @@ INCLUDE 'qvirtual'
  * but saved in argBuf.add and then used in argBuf.check
  * Checking is recursive whenever neeeded, see abstractsyntaxtree::check
  *)
+elimOrigin: (# exit true #);
 traceGeneric: (# exit false #);
 traceGeneric2: (# exit false #);
 traceGeneric3: (# exit false #);
 handleGeneric: (# exit true #);
 onlyR_test: (# exit false #);
+traceNoGlobals: (# exit false #);
 checker: Parser
   (# traceCheck,traceSearch: @ boolean;
      Module::<
@@ -76,6 +78,62 @@ checker: Parser
                    this(Items)[] -> props.setUpOrigin
                if);
             #);
+          checkGlobals:
+            (# noGlobalsInSuper,noGlobals,noGlobalsInSub: @boolean
+            do (if superDesc[] <> none then
+                   &superDesc.checkGlobals -> 
+                   (noGlobalsInSuper,noGlobals,noGlobalsInSub)
+               if);
+               (if true
+                // (noGlobals = false) and (noGlobalsInSub = false) then
+                   (* super may acces globals
+	            * main may access globals unles globals-property
+                    * so scan for globals below *)
+                // (noGlobals = false) and (noGlobalsInSub = true) then
+                   (* super may access globals
+	            * main may not access globals, so leave *)
+                   true -> noGlobalsInSuper -> noGlobals -> noGlobalsInSub;
+                   leave checkGlobals
+                // (noGlobals = true) and (noGlobalsInSub = false) then  
+                   (* super may not access globals
+	            * main may access globals unless globals-prop
+                    * scan for globals in main *)
+                // (noGlobals = true) and (noGlobalsInSub = true) then  
+                     (* super may not access globals
+	              * main may not access globals - leave *)
+                   true -> noGlobalsInSuper -> noGlobals -> noGlobalsInSub;
+                   leave checkGlobals
+               if);
+               noGlobals -> noGlobalsInSuper;
+               false -> noGlobals -> noGlobalsInSub;
+               (if props.globals[] <> none then 
+                   (if traceNoGlobals then 
+                       'Has globals prop: '->puttext; props.dopt -> putline
+                   if);
+                   true -> noGlobals -> noGlobalsInSub;
+                   L: props.globals.scanSons
+                     (# P: ^Property
+                     do current[] -> P[]; 
+                        (if ('inSub' -> P.P.T.equalNCS) then
+                            (*'***insub'-> putline; dopt -> putline;*)
+                            (* OBS [globals[P1,P2,inSub,...]] *)
+                            false -> noGlobalsInSub
+                         else 
+                            false -> noGlobals -> noGlobalsInSub; 
+                            leave L 
+                     if)#); 
+               if);
+               (if traceNoGlobals then
+                   '-----CheckGlobals:\n '->puttext;
+                   father.dopt -> putline;
+                   (if noGlobalsInSuper then 'noGlobalsInSuper:true, ' -> puttext if);
+                   (if noGlobals then 'noGlobals:true, ' -> puttext if);
+                   (if noGlobalsInSub  then 'noGlobalsInSub:true' -> puttext if);
+                   newline;
+               if);
+            exit(noGlobalsInSuper,noGlobals,noGlobalsInSub)
+            #);
+          
           check::
             (# checkDoubleDecls:
                  (#
@@ -104,6 +162,7 @@ checker: Parser
                        (*newline;*)
                     #)
                  #);
+ 
             do (if traceCheck then '*** Check Items: \n' -> puttext; doPT->putline if);
                this(items)[] -> basicScope[];
                (if props[] <> none then 
@@ -116,13 +175,55 @@ checker: Parser
                   (if I.hasCode then true -> doHasCode if)
                #);
                checkDoubleDecls;
+               (if false and (descNo = 102) then
+                   '\n*** descno:102:'->putline;
+               if);
+               (*scanGlobals
+               (# hasGlobals :: (# do true -> noGlobals #);
+                  hasInSub:: (# #)
+               do false -> noGlobals
+                #);*)
+               checkGlobals -> (noGlobalsInSuper,noGlobals,noGlobalsInSub);
+               (*'***** checkglobals:'->putline;
+                (theObjectGenerator).dopt -> putline;
+                (if noGlobalsInSuper then ' -> noGlobalsInSuper'->puttext if);
+                (if noGlobals then ' -> noGlobals' -> putline if);*)
+               
+               (if traceNoGlobals and  noGlobalsInSuper and not noGlobals then
+                   '\n****noGloblasInSuper but globals in main: ' -> putline;
+                   (theObjectGenerator).dopt -> putline
+               if);
+               (if traceNoGlobals then
+                   (if noGlobals then
+                       '*** no globals may be accessed: ' -> putline;
+                    else
+                       '*** globals may be accessed ' -> putline
+               if)if);
+             
+               (if false and (descNo = 102) then
+                   '\n*** >>>descno:102:'->putline;               
+               if)
             #);
+          noGlobalsInSuper,         (* true: no global access in super *)
+          noGlobals,                (* true: no global access in main *)
+          noGlobalsInSub: @boolean; (* true: no global access in main.sub *)
           alloc::
-            (#
-            do (*'Items:alloc: ' -> puttext; *)
+            (# allocOrigin:
+                 (# 
+                 do (if elimOrigin and noGlobals then
+                     else
+                        rsize + 1 -> rsize -> originOff
+                    if)
+                 #);
+            do (if traceNoGlobals then
+                   (if noGlobals then
+                       '*** thisOG does not acces global attributes:\n '
+                         -> puttext;
+                       father.father.dopt -> putline
+               if)if);
                (if super.ATd[] <> none then
                    (if superDesc[] = none then
-                       'Items:alloc: ' -> puttext; dopt ->putline
+                       'Items:alloc: ' -> puttext; dopt -> putline;
                    if);
                    superDesc.vsize -> vsize;
                    superDesc.rsize -> rsize;
@@ -130,17 +231,21 @@ checker: Parser
                    (if super.isThisBlockLevel and 
                        (not super.isImplSuper) and (not super.isSingularImplSuper)
                        then
-                       superDesc.originOff -> originOff; 
+                       (if elimOrigin and noGlobalsInSuper then
+                           rsize + 1 -> rsize -> originOff
+                        else
+                           superDesc.originOff -> originOff
+                       if)
                     else
-                       rsize + 1 -> rsize -> originOff
+                      allocOrigin 
                    if)
                 else
-                   rsize + 1 -> rsize -> originOff
+                   allocOrigin
                if);
                (if sig[] <> none then
                    this(items)[] -> sig.alloc
                if);
-               scanSons(# do this(items)[] -> current.alloc #)
+               scanSons(# do this(items)[] -> current.alloc #);
             #);
           topSuper:
             (# topDesc: ^Items
