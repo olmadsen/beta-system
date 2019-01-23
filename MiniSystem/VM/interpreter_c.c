@@ -577,7 +577,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
-  fprintf(ctx->trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
+  fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
@@ -608,7 +608,7 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
-  fprintf(ctx->trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
+  fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
@@ -643,7 +643,7 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #endif
   ctx->callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
-  fprintf(ctx->trace,"callee: %s %i ",nameOf(ctx->callee),(int)ctx->callee);
+  fprintf(ctx->trace,"callee: %s %i\n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
   //if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
   if (staticOff > 0) putR(ctx->thisObj,staticOff,ctx->callee);
