@@ -476,7 +476,8 @@ generator: restrictions
                (if not done then
                    true -> done;
                    OG.XaddB.copySuper;
-                   (N[],descNo,false, (topSuper).descNo,originOff) -> cd.class;
+                   (*(N[],descNo,false, (topSuper).descNo,originOff) -> cd.class;*)
+                   (N[],descNo,false, (topSuper).descNo,rSize) -> cd.class;
                    (* thisObj = the new instance of this class 
                     * thisStack = caller
                     * Possible arguments on callerStack
@@ -484,9 +485,25 @@ generator: restrictions
                    cd.bcPos -> beginBCP;
                    (* store parameters + origin *)
                    (if sig[] <> none then sig.storeParameters if);
-                   (* 'GenClass:items: ' -> puttext; N[] -> puttext;
-                    ' ' -> put; originOff -> putint; newline;*)
-                   ('origin',originOff) -> cd.rstore;
+                   
+                   (if false and (descNo = 207) then
+                       'GenClass:items: ' -> puttext; N[] -> puttext;
+                       ' ' -> put; originOff -> putint; 
+                       ' ' -> put; descNo -> putint; newline;
+                       'noGlobalsInSuper:'->puttext; noglobalsinsuper -> printboolean;
+                       'noGlobals:'->puttext; noglobals -> printboolean;
+                       'noGlobalsInSub:'->puttext; noglobalsinsub -> printboolean;
+                   if);
+                   (if noGlobals and elimOrigin  then
+                       (if traceNoGlobals then
+                           '*** No globals-do not store origin' -> putline;
+                           'do not store origin'->cd.comment;
+                           dopt -> putline;
+                       if)
+                       (*cd.rPop*)
+                    else
+                       ('origin',originOff) -> cd.rstore;
+                   if);                   
                    not doHasCode -> cd.allocEventQ;
                    
                    (if (superDesc[] <> none) and not superDesc.isBasic
@@ -500,32 +517,45 @@ generator: restrictions
                        (* push super arguments *)
                        
                        (if super.isImplSuper then
-                           (if super.isSingularImplSuper then
-                               cd.pushThis;
-                               ('iOrigin',originOff) -> cd.rpushg
+                           (if elimOrigin and noGlobalsInsuper then
                             else
-                               super.ATd[] -> ptn[];
-                               origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
-                               (for i: super.pn repeat
-                                    vSuperDesc.superDesc[] -> vSuperDesc[]
-                               for);
-                               cd.pushThis;
-                               ('origin',originOff) -> cd.rpushg;
-                               (* No arguments for super, so no
-                                * - originOff for loadArgs as below
-                                *)
-                               (ptn.OG.super.on,none) -> vSuperDesc.goOrigin
-                           if)                                   
+                               (if super.isSingularImplSuper then
+                                   cd.pushThis;
+                                   ('iOrigin',originOff) -> cd.rpushg
+                                else
+                                   super.ATd[] -> ptn[];
+                                   origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
+                                   (for i: super.pn repeat
+                                        vSuperDesc.superDesc[] -> vSuperDesc[]
+                                   for);
+                                   cd.pushThis;
+                                   ('origin',originOff) -> cd.rpushg;
+                                   (* No arguments for super, so no
+                                    * - originOff for loadArgs as below
+                                    *)
+                                   (ptn.OG.super.on,none) -> vSuperDesc.goOrigin
+                           if)if)
                         else
                            (# E,rec: ^Exp
                            do (*'GenItems:' -> puttext;
-                              super.doPT -> puttext;
-                              ' originOff:'->puttext;
-                              originOff -> putint; 
-                              ' super.on: ' -> puttext;
+                               super.doPT -> puttext;
+                               ' originOff:'->puttext;
+                               originOff -> putint; 
+                               ' super.on: ' -> puttext;
                                super.on -> putint; newline;*)
-                              (true,0,originOff,CC[]) -> Super.loadOrigin 
-                                -> (rec[],E[]);
+                              (if elimOrigin and noGlobalsInSuper then
+                                  super.scanSons
+                                  (#
+                                  do current[] -> E[];
+                                     (if not isLast then E[] -> rec[] 
+                                      else
+                                         (if isFirst then E[] -> rec[]
+                                     if)if)
+                                  #)
+                               else                          
+                                  (true,0,originOff,CC[]) -> Super.loadOrigin 
+                                    -> (rec[],E[]);
+                              if);
                               (if sig[] = none then
                                   'Super:sig none'->cd.comment;
                                   (originOff,CC[]) -> E.loadArgs; 
@@ -535,8 +565,7 @@ generator: restrictions
                                    * but use originOff first time
                                    *)
                                   (- originOff,CC[]) -> E.loadArgs; 
-                              if);
-                           #);
+                           if)#)
                        if);
                        superDesc.descNo -> cd.toSuper;
                        cd.markEnterE;  
@@ -1072,7 +1101,14 @@ generator: restrictions
                 // indexed_prim then
                    (*'\ninvoke:Indexed: ' -> putline;
                    dopt-> putline;
-                   E.dopt -> putline;*)
+                    E.dopt -> putline;*)
+                   (** OBS: allocIndexed in betaVM expect an origin on the stack
+                    * but with elimOrigin, there is no origin on the stack
+                    * since Indexed has property [noglobals[]]
+                    *)
+                   (if elimOrigin then
+                       cd.pushThis (* not used by allocIndexed - just popped *)
+                   if);
                    E.args.scanArgs
                    (# OG: ^ObjectGenerator; i: @integer
                    do (*current.dopt -> puttext; ' ' -> put;*)
@@ -1088,8 +1124,16 @@ generator: restrictions
                       if)if)
                    #); 
                    (*newline;*)
-
-                   OG.IS.rsize -> cd.pushConst; (* dinx *)
+                   (if elimOrigin then
+                       1 -> cd.pushConst; (* dinx *)
+                    else
+                       (* rsize may be from the first Beta compiler
+                        * where there may be non-indexed data-items
+                        * and indexed was the last declaration!?
+                        * With qbeta no other data-items than indexed
+                        *)
+                       OG.IS.rsize -> cd.pushConst; (* dinx *)
+                   if);
                    ('StaticRep',OG.IS.descNo,false (*not used*),true) 
                      -> cd.allocIndexed;
                    (if staticOff > 0 then
@@ -1167,9 +1211,42 @@ generator: restrictions
         *)
        (# gen:: 
             (# gdb:: (# do doPT -> lx.puttext #);
-               rec,E: ^Exp; T: ^Text
+               rec,E: ^Exp; T: ^Text;
+               needOrigin: booleanValue
+                 (# IT: ^Items
+                 do true -> value;
+                    scanSons
+                    (#
+                    do current[] -> E[];
+                       (if not isLast then E[] -> rec[] 
+                        else
+                           (if isFirst then E[] -> rec[]
+                       if)if)
+                    #);
+                    (if not E.ATd.isPattern then
+                       (* '>>>>>dataitem: '->puttext; E.dopt->putline;*)
+                        leave needOrigin
+                    if);
+                    (*
+                    (if E.ATd.primNo = stringGet_Prim then
+                        '>>>>>stringGet_Prim: ' -> puttext; E.dopt -> putline;
+                        leave needOrigin
+                    if);*)
+                    E.ATd.desc -> IT[];
+                    (if IT.noGlobals and elimOrigin then
+                        '***LoadOrign:no:loadOrigin: ' -> cd.comment;;
+                        (IT.theObjectGenerator).doPT -> cd.comment;
+                        false -> value
+                    if);
+                 #);
             do cd.bcPos -> beginBCP;
-               (useReturnValue,staticOff,superAdj,CC[]) -> loadOrigin -> (rec[],E[]);
+               (if needOrigin then
+                   (useReturnValue,staticOff,superAdj,CC[]) 
+                     -> loadOrigin 
+                     -> (rec[],E[])
+               if);
+               cd.com(#do 'invocation:gen:afterNeedOrigin:rec: '-> T;
+                        rec.dopt->T; ' E:'->T; E.dopt -> T #);
                (superAdj,CC[]) -> E.loadArgs;
                (rec[],E[],useReturnValue,staticOff,CC[]) -> E.invoke;
                cd.bcPos -> endBCP
@@ -1377,11 +1454,18 @@ generator: restrictions
              *)
             (# 
             do (*'StringObj:loadOrigin:' -> puttext; dopt->putline; *)
-               T[] -> cd.pushText ; 
+               (if not elimOrigin then
+                   T[] -> cd.pushText
+               if); 
                this(StringObj)[] -> E[] -> rec[];
-
             #);
-          invoke:: (# do (if not useReturnValue then cd.rPop if)#);
+          invoke:: 
+            (# 
+            do (if elimOrigin then
+                   T[] -> cd.pushText ; 
+               if);
+               (if not useReturnValue then cd.rPop if)
+            #);
        #);
      ObjTmpStack: @
        (# item: 

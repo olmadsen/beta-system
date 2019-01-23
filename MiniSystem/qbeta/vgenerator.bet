@@ -845,7 +845,16 @@ generator: variants
                    (if sig[] <> none then sig.storeParameters if);
                    (*'GenClass,items, ' -> puttext; N[] -> puttext;
                     ' ' -> put; newOriginOff -> putint; newline;*)
-                   ('origin',newOriginOff) -> cd.rstore;
+                   (if noGlobals and elimOrigin  then
+                       (if traceNoGlobals then
+                           '*** No globals-do not store origin' -> putline;
+                           'do not store origin'->cd.comment;
+                           dopt -> putline;
+                       if)
+                       (*cd.rPop*)
+                    else                   
+                       ('origin',newOriginOff) -> cd.rstore;
+                   if);
                    not doHasCode -> cd.allocEventQ;
                    
                    (if (superDesc[] <> none) and not superDesc.isBasic
@@ -867,22 +876,24 @@ generator: variants
                        (* push super arguments *)
                        
                        (if super.isImplSuper then
-                           (if super.isSingularImplSuper then
-                               cd.pushThis;
-                               ('iOrigin',newOriginOff) -> cd.rpushg
+                           (if elimOrigin and noGlobalsInsuper then
                             else
-                               super.ATd[] -> ptn[];
-                               origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
-                               (for i: super.pn repeat
-                                    vSuperDesc.superDesc[] -> vSuperDesc[]
-                               for);
-                               cd.pushThis;
-                               ('origin',newOriginOff) -> cd.rpushg;
-                               (* No arguments for super, so no
-                                * - newOriginOff for loadArgs as below
-                                *)
-                               (ptn.OG.super.on,none) -> vSuperDesc.goOrigin
-                           if)                               
+                               (if super.isSingularImplSuper then
+                                   cd.pushThis;
+                                   ('iOrigin',newOriginOff) -> cd.rpushg
+                                else
+                                   super.ATd[] -> ptn[];
+                                   origin[] -> vSuperDesc[]; (* find desc enclosing vDcl *)
+                                   (for i: super.pn repeat
+                                        vSuperDesc.superDesc[] -> vSuperDesc[]
+                                   for);
+                                   cd.pushThis;
+                                   ('origin',newOriginOff) -> cd.rpushg;
+                                   (* No arguments for super, so no
+                                    * - newOriginOff for loadArgs as below
+                                    *)
+                                   (ptn.OG.super.on,none) -> vSuperDesc.goOrigin
+                           if)if)
                         else
                            (# E,rec: ^Exp
                            do (*'GenItems:' -> puttext;
@@ -891,8 +902,19 @@ generator: variants
                               newOriginOff -> putint; 
                               ' super.on: ' -> puttext;
                                super.on -> putint; newline;*)
-                              (true,0,newOriginOff,CC[]) -> Super.loadOrigin 
-                                -> (rec[],E[]);
+                              (if elimOrigin and noGlobalsInSuper then
+                                  super.scanSons
+                                  (#
+                                  do current[] -> E[];
+                                     (if not isLast then E[] -> rec[] 
+                                      else
+                                         (if isFirst then E[] -> rec[]
+                                     if)if)
+                                  #)
+                               else 
+                                  (true,0,newOriginOff,CC[]) -> Super.loadOrigin 
+                                    -> (rec[],E[])
+                              if);
                               (if sig[] = none then
                                   'Super:sig none'->cd.comment;
                                   (newOriginOff,CC[]) -> E.loadArgs; 
@@ -1573,10 +1595,41 @@ generator: variants
                                 #)
                                          
                      #);
-               rec,E: ^Exp; T: ^Text
+               rec,E: ^Exp; T: ^Text;
+               needOrigin: booleanValue
+                 (# IT: ^Items
+                 do true -> value;
+                    scanSons
+                    (#
+                    do current[] -> E[];
+                       (if not isLast then E[] -> rec[] 
+                        else
+                           (if isFirst then E[] -> rec[]
+                       if)if)
+                    #);
+                    (if not E.ATd.isPattern then
+                        (* '>>>>>dataitem: '->puttext; E.dopt->putline;*)
+                        leave needOrigin
+                    if);
+                    (*
+                     (if E.ATd.primNo = stringGet_Prim then
+                        '>>>>>stringGet_Prim: ' -> puttext; E.dopt -> putline;
+                        leave needOrigin
+                    if);*)
+                    E.ATd.desc -> IT[];
+                    (if IT.noGlobals and elimOrigin then
+                        '***LoadOrign:no:loadOrigin: ' -> cd.comment;;
+                        (IT.theObjectGenerator).doPT -> cd.comment;
+                        false -> value
+                    if);
+                 #);
             do (*'Invocation:Qgen:' -> puttext; dopt -> putline;*)
                cd.bcPos -> beginBCP;
-               (useReturnValue,staticOff,superAdj,CC[]) -> loadOrigin -> (rec[],E[]);
+               (if needOrigin then
+                   (useReturnValue,staticOff,superAdj,CC[]) 
+                     -> loadOrigin 
+                     -> (rec[],E[])
+               if);               
                (superAdj,CC[]) -> E.loadArgs;
                (rec[],E[],useReturnValue,staticOff,CC[]) -> E.invoke;
                cd.bcPos -> endBCP
@@ -1802,11 +1855,18 @@ generator: variants
              *)
             (# 
             do (*'StringObj:loadOrigin:' -> puttext; dopt->putline; *)
-               T[] -> cd.pushText ; 
-               this(StringObj)[] -> E[] -> rec[];
-
+                (if not elimOrigin then
+                    T[] -> cd.pushText
+                if);                
+               this(StringObj)[] -> E[] -> rec[]
             #);
-          invoke:: (# do (if not useReturnValue then cd.rPop if)#);
+          invoke:: 
+            (# 
+            do (if elimOrigin then
+                   T[] -> cd.pushText ; 
+               if);
+               (if not useReturnValue then cd.rPop if)
+            #);
        #);
      ObjTmpStack: @
        (# item: 
