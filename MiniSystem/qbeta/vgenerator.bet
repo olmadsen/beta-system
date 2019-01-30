@@ -7,7 +7,11 @@ generator: variants
   (# traceModules: (# exit false #);
      
      Module::
-       (# Qgen:: 
+       (# markForCodeGen::
+            (#
+            do DI.OG.markForCodeGen
+            #);
+          Qgen:: 
             (# encModule:
                  (# org: ^Items; 
                  do (if origin[] <> none then
@@ -29,7 +33,8 @@ generator: variants
           findNextImp:: (# do bcp -> DI.OG.IS.findNextImp -> impx[] #);
        #);
      ModuleItem::
-       (# Qgen::
+       (# markForCodeGen:: (#do MD.markForCodeGen #);
+          Qgen::
             (#
             do (if MD.isIncluded then
                    (if traceModules then
@@ -65,14 +70,26 @@ generator: variants
         *    V4: ? Fool -- singular
         *       ...
         *)
-       (# 
+       (# markForCodeGen::
+            (# 
+            do cd.com(#do 'DataItem:markForCodeGen:'->T; sig.id[]->T;
+                        ':descNo:'->T; OG.IS.newDescNo -> I; 
+                        ':OG.primNo:'->T; OG.primno -> I; ' ' -> T;
+                        ':'->T; doPT->T;
+                     #);    
+               (if OG.primNo = 16 then
+                   '***DI:Mark:' -> putline; 
+                   dopt -> putline
+               if);
+               OG.markForCodeGen
+            #);
           Qgen:: 
             (# gdb:: (# do sig.id[] -> lx.puttext #);
                T: @text
             do (*'DataItem:Qgen:' -> putline; doPT -> putline;*)
                (if isVirtualObject then
-                   '\***DataItem:qGen:virtual object: ' -> puttext;
-                   dopt ->putline;
+                 (*  '\***DataItem:qGen:virtual object: ' -> puttext;
+                   dopt ->putline;*)
                if);
                (if true 
                 // OG.isSimpleValue then
@@ -106,10 +123,9 @@ generator: variants
                    (sig.id[],this(DataItem).NewOff) -> cd.rstoreg
                 else
                    (* C3,C4,V3,V4 *)
+                   (* All obbjects/patterns being embedded must be handled by
+                    * Alloc and gen aince we must know the size *)
                    (if isConst or not OG.IS.isEmpty or isValue then
-                       (if isValue then 
-                           (*'**** Embed value: ' -> puttext; dopt -> putline;*)
-                       if);
                        (* X: = Foo or 
                        (* Singular T: = P{...} *)
                        (* C3,C4,V4 *)
@@ -129,6 +145,7 @@ generator: variants
                             else
                                (false,0,this(DataItem).NewOff) -> OG.Qgen
                            if);
+                           
                            cd.bcPos -> endBCP;
                         else 
                            (* A module object - why special handling? 
@@ -140,7 +157,24 @@ generator: variants
                             else
                                cd.com(#do 'dataItem:gen:PG.IS.isEmpty:'-> T; sig.id[] -> T#)
                            if)   
-                       if) 
+                       if);
+                       (if isValue then 
+                           '**** Embed value: size: ' -> puttext; 
+                           (if not OG.IS.isEmpty then
+                               'S' -> put; ' '->put;
+                               OG.IS.qsize[1 (*OG.IS.thisVar.thisVarNo*)] -> putint; 
+                            else
+                               (# ptn: ^pattern
+                               do 'P'->put;  ' '->put;
+                                  OG.super.ATd[] -> ptn[];
+                                  ptn.OG.IS.qsize[1 (*OG.IS.thisVar.thisVarNo*)] -> putint;
+                                  newline;
+                                  (*ptn.dopt -> putline;*)
+                               #)
+                           if);
+                           ' ' -> put;
+                           dopt -> putline;
+                       if);
                        (* else V3 - just a qualifcation; 
                         * see also the discussion of #foo versus foo *)
                        (* Could be S: ?elm where elm:< Object -- no code gen *)
@@ -154,6 +188,10 @@ generator: variants
             do (if isVirtualObject then
                    '***DataItem:invoke:isVirtualObject: ' -> puttext;
                    dopt -> putline
+               if);
+               (if newoff = 0 then
+                   '***** newoff = 0 ' -> puttext; dopt ->putline;
+                   
                if);
                (if OG.isSimpleValue then 
                    (if (E[] <> none) then
@@ -184,11 +222,11 @@ generator: variants
           store::
             (* Called from Signature::StoreParameters *)
             (# OGx: ^ObjectGenerator; var: ^Variant
-            do 'dataitem:store:' -> cd.comment;
-               (if isVirtualObject then
-                   '***dataItem:store:isVirtualObject: ' -> puttext;
-                   dopt -> putline
-               if);
+            do cd.com(#do 'dataitem:store:' -> T;
+                        (if isVirtualObject then
+                            'isVirtualObject:' -> T;
+                            dopt -> T
+                     if)#);
                (if newAlloc and 
                    (father.father## = ObjectGenerator##) and
                    ((father.father[] -> OGx[]).IS.newDescNo = 0) then
@@ -299,7 +337,45 @@ generator: variants
             #);
        #);
      ObjectGenerator::
-       (# computeVariant:
+       (# marked: @boolean;
+          markForCodeGen::
+            (# OGs: ^ObjectGenerator; ptn: ^Pattern
+            do (if not marked then
+                   true -> marked;
+                   cd.com(#do 'OG:markForCodeGen:'-> T; dopt -> T; #);
+                   (If primNo = 16 then
+                       '**** pattern core is marked'->putline;
+                       dopt -> putline
+                   if);
+                   (if primNo = inner_prim then
+                       cd.com(#do
+                                'OG:NO mark for inner'->T; dopt -> T
+                             #);
+                       leave markForCodeGen
+                   if);
+                   (if (super[] <> none) and not super.isEmpty then
+                       (*
+                       (super.last).ATD[] -> ptn[];
+                       (if ptn.OG.primNo = inner_prim then
+                           'dont mark inner B:'->putline
+                        else
+                        (if ptn[] <> objectDecl[] then
+                        'marksuper:'->puttext; super.label -> putline;
+                        super.dopt -> putline;*)
+                       
+                       super.markForCodeGen; 
+                       
+                       (*
+                        ((super.last).ATD[] -> ptn[]).OG[] -> OGs[];
+                        (OGS.OGid,none,OGs[],OGs.super[],NONE,OGs.computeVariant)
+                        -> objTmpStack.add*)
+                   if);
+                   IS.markForCodeGen;
+                   (OGid,sig[],this(ObjectGenerator)[],super[],NONE,computeVariant)
+                     -> objTmpStack.add;
+               if)
+            #);
+          computeVariant:
             (* OG.Qgen is called for a singular object
              * We thus only have one variant
              * This variant will propagate to superpatterns
@@ -311,9 +387,24 @@ generator: variants
                    (if contextOG[] = none then this(ObjectGenerator)[] -> contextOG[] if);
                    contextOG[] -> Qvariants.computeVariant -> var[]*)
                 else
+                   (*'----computeVariant:'->putline; dopt -> putline; *)
+                   
                    (if contextOG[] = none then this(ObjectGenerator)[] -> contextOG[] if);
-                   cd.com(#do 'ComputeVariant' -> T; OGid -> T #);
+                   cd.com(#do 'ComputeVariant:A:' -> T; OGid -> T #);
                    Qvariants.new -> var[];
+                   
+                   (*IS.scanSons
+                   (# I: ^Item; DI: ^DataItem
+                   do current[] -> I[];
+                      (if I.isDecl then
+                          (if (not I.isPattern or I.isVirtual) and I.isDataItem then
+                              I[] -> DI[];
+                              DI.markForCodeGen
+                          if)
+                       else
+                          I.markForCodeGen
+                   if)#); *)                  
+                   
                    (* this(OG) is not sufficient 
                     * For 
                     *    Lrecord.insert(Record(...))
@@ -338,6 +429,7 @@ generator: variants
                        V[] -> var[]
                    if);
                    (*Qvariants.print;*)
+                   cd.com(#do 'ComputeVariant:B:' -> T; OGid -> T #);
                if)
             exit var[]
             #);          
@@ -348,9 +440,9 @@ generator: variants
             (# gdb:: 
                  (#
                  do OGid -> lx.puttext; ' '-> lx.put; dopt -> lx.puttext;
-                    '\n\t   super: ' -> lx.puttext; super.label -> lx.puttext;
+                    '\n\t   super: ' -> lx.puttext;(* super.label -> lx.puttext;
                     ': '->lx.puttext;
-                    super.doPT -> lx.puttext;
+                    super.doPT -> lx.puttext;*)
                     (if IS.isEmpty then 
                         '\n\t   IS-empty: ' -> lx.puttext 
                      else
@@ -376,21 +468,26 @@ generator: variants
                var: ^Variant;
                trace: (# exit false #);
             do (if not genIsDone then
+                   (if primNo = inner_prim then
+                       (*'TRYING code gen for inner'->putline*)
+                   if);
                    (* Check if code has been generated for this variant *)
                    true -> genIsDone;
                    cd.com(# ptn: ^Pattern; OI: ^ObjectInvocation; E: ^Exp
                          do 'ObjectGenerator:Qgen:OGid:' -> T; OGid -> T; 
-                            'doPT:'-> T; dopt -> T;
+                            ':doPT:'-> T; dopt -> T;
                             'IS.descNo:' -> T; IS.newDescNo -> I;
                             'OG.top:'->T; Qvariants.top->I;
+                            (*
                             super.last -> E[];
-                            (if E## = objectInvocation## then 
+                            
+                            (if (E[] <> none) and (E## = objectInvocation##) then 
                                 (if ((E[] ->  OI[]).ATD## = pattern##) then
                                     (E[] ->  OI[]).ATD[] -> ptn[];
                                     'super:'->T; ptn.sig.dopt -> T;
                                     'superDescNo:' -> T; ptn.OG.IS.newDescNo -> I;
                                     'super.OG.top:' -> T; ptn.OG.Qvariants.top -> I;
-                            if)if)
+                            if)if)*)
                          #);
                    (* we may have 
                     * non-singular: foo
@@ -412,7 +509,7 @@ generator: variants
                        (* Implies that super.OG is pushed on objTmpStack
                         * So should we pass the variant of this OG to Qgen?
                         *)
-                       cd.com(#do 'OG:Qgen:IS.isEmpty:' -> T #);
+                       cd.com(#do 'OG:Qgen:IS.isEmpty:' -> T;#);
                        (useReturnValue,superAdj,staticOff) -> super.Qgen
                     else
                        (* Perhaps move check for virtuals to here!? *)
@@ -420,6 +517,7 @@ generator: variants
                         * includes pattern invocations with 
                         * virtual arguments like %if .. %then% ... %else ...
                         *)
+                       cd.com(#do 'OG:Qgen:IS is not empty:'->T; #);
                        cd.pushThis; (* origin for a singular object *)
                        (* This is also the case for R.S.foo{ ... } *)
                        
@@ -548,7 +646,12 @@ generator: variants
             #)
        #);
      items::
-       (# genClass:
+       (# markForCodeGen::
+            (#
+            do cd.com(#do 'items:markForCodeGen:'->T; doPT -> T; #);
+               scanSons(#do  current.MarkForCodegen #);
+            #);
+          genClass:
             (# N: ^text; sig: ^Signature; descNo: @integer; super: ^Invocation;
                var: ^Variant;
                T: @text; ptn: ^Pattern;
@@ -568,7 +671,7 @@ generator: variants
                               OG.vDescNo -> T.putint;
                            exit T[]
                            #);
-                         D: ^Decl; OG: ^ObjectGenerator;
+                         D: ^Decl; OG: ^ObjectGenerator; ptn: ^Pattern;
                          id: ^text; dNo: @integer; var: ^Variant
                       enter(D[],OG[])
                       do (if D.isVirtual then
@@ -578,17 +681,20 @@ generator: variants
                                   else
                                      newDesc -> dNo
                                  if);
-                                 cd.com(#do 'genClass:BindVirtuals: descNo: ' -> T;
+                                 cd.com(#do 'genClass:BindVirtuals:descNo:'
+                                            -> T;
                                           dNo -> I
                                        #);
-                                 (mkStubName,dNo,false,1,newOriginOff) -> cd.class;
+                                 objectDecl[] -> ptn[];
+                                 (mkStubName,dNo,false,ptn.OG.IS.newDescNo,newOriginOff) 
+                                   -> cd.class;
                                  'Load origin' -> cd.comment;
                                  (if OG.isVirtualArg then
                                      (OG.super.on + 1,OG.super[]) -> goOrigin;
                                   else
                                      (OG.super.on,OG.super[]) -> goOrigin;
                                  if);
-                                 cd.com(#do OG.super.on->I; OG.getDescNo->I #);
+                                 cd.com(#do 'OG.super.on/descNo:' -> T; OG.super.on->I; OG.getDescNo->I #);
                                  (if OG.getDescNo = 0 then
                                      (* move to vvariants.bet *)
                                      (# ptn: ^Pattern
@@ -673,11 +779,12 @@ generator: variants
                if);
                dopt-> printHead;*)
                
-               (if (var[] <> none) and (var.thisVarNo > 1) then
-                   (*'genClass,varNo = '-> puttext; var.thisVarNo -> putint;
-                   newline;
-                   dopt -> printHead;*)
-               if);
+               cd.com(#
+                     do 'GenClass:'->T; N[] -> T;
+                        (if (var[] <> none) (*and (var.thisVarNo > 1)*) then
+                            ' :varNo = '-> T; var.thisVarNo -> I;
+                        if);
+                     #);
 
                (if not OG.Qvariants.isEmpty then
                   (* '\n***** GenClass,N: ' -> puttext; 
@@ -818,14 +925,20 @@ generator: variants
                    (if (var[] <> none) and done then
                        (* we must eliminate this case 
                         * there should always be var <> none *)
-                       (*'\n***OBS! trying to call genClass for: ' -> puttext;
-                       N[] -> puttext;
-                       ' with var<>none and done=true\n'->putline;*)
+                       cd.com(#
+                             do 'OBS! calling genClass for:' -> T; N[] -> T;
+                                ':var<>none:Done:'->T;  done->B;
+                                ':leave genClass' -> T
+                             #);
                        (* (dumpStack,'---') -> stop;*)
                        true -> var.genDone;
                        leave genclass
                    if);
                    (if var[] <> none then 
+                       cd.com(#
+                             do 'GenClass:'->T; N[] -> T;
+                                ':true -> var.genDone' -> T
+                             #);
                        true -> var.genDone
                     else 
                        true -> done 
@@ -835,7 +948,7 @@ generator: variants
                    (if newDescNo = 36 then
                        cd.com(#do 'descNo = 36 ' -> T; N[] -> T; ' ' -> T; descNo -> I #);
                    if);
-                   (N[],newDescNo,false,(topSuper).newDescNo,newOriginOff) -> cd.class;
+                   (N[],newDescNo,false,(topSuper).newDescNo,qsize[thisVar.thisVarNo]) -> cd.class;
                    (* thisObj = the new instance of this class 
                     * thisStack = caller
                     * Possible arguments on callerStack
@@ -969,8 +1082,8 @@ generator: variants
                    
                    (* Code for action part *)
                    (false,doHasCode) -> cd.actions;
-                   restartLab.new;
-                   leaveLab.new;
+                   (*restartLab.new;
+                   leaveLab.new;*)
                    restartLab -> cd.defLab;
                    scanSons
                    (# I: ^Item; 
@@ -993,6 +1106,11 @@ generator: variants
                        cd.rtnInner
                     else
                        0 -> cd.rtnEventQ;
+                       cd.com(#
+                             do 'OG:pushReturn:' -> T; 
+                                (if sig[] = none then '-none-'->T
+                                 else
+                                    sig.id[] -> T if)#);
                        (if sig[] <> none then 
                            sig.pushReturnValues 
                         else
@@ -1051,7 +1169,7 @@ generator: variants
             exit org[]
             #); 
           hasSuperAndInner: @Boolean;
-          restartLab,leaveLab: @LabelHandler.label;
+          (*restartLab,leaveLab: @LabelHandler.label;*)
 
           findNextImp::
             (#
@@ -1065,6 +1183,16 @@ generator: variants
        #);
      Pattern::
        (# genIsDone: @boolean;
+          markForCodegen::
+            (#
+            do cd.com(#do 'Pattern:markForCodeGen:' -> T; ; dopt -> T;#);
+               (if OG.primNo
+                // inner_prim then
+                   '***** NO mark for inner'->putline;
+                else
+                   OG.markForCodeGen
+               if);
+            #);
           Qgen::
             (# gdb:: (# do sig.dopt -> lx.puttext #);
                enclosingOG: ^ObjectGenerator;
@@ -1364,9 +1492,16 @@ generator: variants
                                 currentArg.doPT -> putline;
                                 newline;
                             if);
-                            (name[],none,actArgs[i][],actArgs[i].super[],CC[],var[])
-                              -> ObjTmpStack.add;
-                            
+                            (if var[] = none then
+                                E.father.father[] -> OG[];
+                                (* '!! OBS! OG:loadArgs:var is none'->putline;
+                                dopt -> putline;*)
+                                (name[],none,actArgs[i][],actArgs[i].super[],CC[],OG.computeVariant)
+                                  -> ObjTmpStack.add
+                             else
+                                (name[],none,actArgs[i][],actArgs[i].super[],CC[],var[])
+                                  -> ObjTmpStack.add;
+                            if);
                             E.father.father[] -> OG[]; (* need OG.descNo for VDT *)
                             (*'\n vdtTableAt: ' -> puttext; 
                              currentArg.Off -> putint; ' ' -> put;
@@ -1442,7 +1577,8 @@ generator: variants
                  #);   
                doPrimElse: BooleanValue(#<<SLOT doPrimElse:doPart>> #);
                exNo: @integer; N:^ Node; di: ^DataItem; var: ^Variant
-            do (*'\n***** Pattern:invoke:'->puttext; OG.OGid-> putline;*)
+            do cd.com(#
+                     do' Pattern:invoke:'->T; OG.OGid->T #);
                (*(if not OG.IS.isEmpty then
                    (OG.OGid,OG.sig[],OG[],OG.super[],CC[],none) -> ObjTmpStack.add;
                 if);*)
@@ -1495,8 +1631,8 @@ generator: variants
                                 #);
                            #) -> var[];
                            (if var[] <> none then
-                               var.print;
-                               OG.Qvariants.print
+                              (* var.print;
+                               OG.Qvariants.print*)
                            if)
                         else 
                            (* Receiver and rec.ATd is module 
@@ -1580,8 +1716,41 @@ generator: variants
         * perhaps same problem for keyWord
         * We must reconsider parsing/AST and/or gen below
         *)
-       (# Qgen:: 
-            (# gdb:: (# do doPT -> lx.puttext;
+       (# markForCodeGen::
+            (# ptn: ^Pattern; OGs: ^ObjectGenerator; E,rec: ^Exp
+            do cd.com(#do 'Invocation:markForCodeGen:'->T; dopt -> T;#);
+               (if (last).atd[] = none then
+                   'last.adt is none'->putline;
+                   dopt -> putline;
+                   leave markForCodeGen
+               if);
+              (* ((last).ATD[] -> ptn[]).OG[] -> OGs[];
+               (if OGs[] = none then 
+                   'none'->putline;
+                   leave markForCodeGen
+               if);*)
+               scanSons
+               (#
+               do current[] -> E[]; 
+                  current.MarkForCodeGen;
+                  (if not isLast then E[] -> rec[] 
+                   else
+                      (if isFirst then E[] -> rec[]
+                  if)if)
+               #);
+               (if (E[] <> none) and (E.args[] <> none) then
+                   (if E.ATd.primNo        
+                    // inner_prim // leave_prim // restart_prim then
+                    else
+                       (*'Invocation:E:'->puttext; E.dopt -> putline;*)
+                       E.args.scanArgs
+                       (#
+                       do (*'arg:' -> puttext; ' '-> put; current.dopt -> putline;*)
+                          (*current.markForCodeGen*)
+               #)if)if)
+            #);
+          Qgen:: 
+            (# gdb:: (# do doPT -> lx.puttext;(*
                         scanSons(# ptn: ^Pattern; OI: ^ObjectInvocation
                                 do (if (current## = ObjectInvocation##)
                                        and 
@@ -1592,7 +1761,7 @@ generator: variants
                                        ' top: ' -> lx.puttext;
                                        PTN.OG.Qvariants.top -> lx.putint
                                    if)
-                                #)
+                                #)*)
                                          
                      #);
                rec,E: ^Exp; T: ^Text;
@@ -1704,7 +1873,25 @@ generator: variants
         *  A pattern Foo declared as Foo: Bar{ ... }
         *  ATd = operator.Decl
         *)
-       (# pushThis:: (# do cd.bcPos -> beginBCP; ATd.pushThis #);
+       (# markForCodeGen::
+            (#
+            do cd.com(#do 'ObjectInvocation:markForCodeGen:'-> T; dopt -> T;#);
+               (if ATd.primNo 
+                // inner_prim then
+                   (*'Dont mark inner'->putline - is this correct?*)
+                // thisCore_prim then
+                   'Mark thisCore'->putline;
+                   ATd.dopt -> putline;
+                   ATd.markForCodeGen     
+                // 16 then
+                   '>>>>>>>>>Mark Core'->putline;
+                   ATd.dopt -> putline;
+                   ATd.markForCodeGen   
+                else
+                   ATd.markForCodeGen
+               if)               
+            #);
+          pushThis:: (# do cd.bcPos -> beginBCP; ATd.pushThis #);
           loadOrigin::
             (# gdb:: (# do doPT -> lx.puttext #);
                org: ^Items;
@@ -1876,23 +2063,32 @@ generator: variants
             exit this(item)[]
             #);
           add:
-            (# N: ^text; sig: ^Signature; OT: ^ObjectGenerator; super: ^Invocation; 
+            (# N: ^text; sig: ^Signature; 
+               OT: ^ObjectGenerator; super: ^Invocation; 
                CC: ^CallChain; var: ^Variant
             enter(N[],sig[],OT[],super[],CC[],var[])
-            do (if ('Object' -> N.equalNCS) then
-                   '\n***ObjTmpStack:add:'-> puttext; N[] -> putline;
-               if);
-               (if (top+1-> top) > OTL.range then 
+            do (if (top+1-> top) > OTL.range then 
                    OTL.range -> OTL.extend;;
                    done.range -> done.extend
                if);
-               cd.com(#do '!ObjTmpStack:add:'->T; N[] -> T #);
+               (if OT.primNo = inner_prim then
+                   'OBJT:add inner'->putline;
+                   (dumpStack,'inner') -> stop
+               if);
+               cd.com(#
+                     do 'ObjTmpStack:add:'->T; N[] -> T;
+                        (if var[] <> none then
+                            ':genDone:'->T; var.GenDone -> B;
+                        if);
+                     #);
+               (if var[] = none then
+                   '************** objTmpStack:var:is none'->putline;
+                   OT.doPT -> putline;
+                   (dumpStack,'---') -> stop
+               if);
                (N[],sig[],OT[],super[],CC[],var[]) -> item -> OTL[top][];
                (* Does IS.newDescNo correspond to var? Probably no!?*)
-               (if OT.IS.newDescNo = 36 then
-                   cd.com(#do 'add:descNo=36 ' -> T;
-                            N[] -> T;
-               #)if);
+;
                (if newAlloc and (OT.IS.newDescNo = 0) then
                    'ObjTmpStack: Qalloc'->cd.comment;
                    (if var[] <> none then
@@ -1905,11 +2101,11 @@ generator: variants
                        newline;
                        (1,none) -> OT.Qalloc
                    if);
-                   (if false and (OT.IS.newDescno = 0) then
-                       '\n\n*** OBS! no descNo allocated for:'->putline;
+                   (if (OT.IS.newDescno = 0) then
+                       (*'\n\n*** OBS! no descNo allocated for:'->putline;
                        OT.dopt -> putline;
                        OT.father.dopt->putline;
-                       newline;
+                       newline;*)
                    iF);
                if);
               (* newline;*)
@@ -1922,6 +2118,15 @@ generator: variants
                  (#
                  do inx + 1 -> inx;
                     (if inx <= top then
+                        cd.com(#
+                              do 'objTmpStack:next: ' -> T;
+                                 OTL[inx].N[] ->T; 
+                                 ' : done:'->T; done[inx] -> B;
+                                 ' :var.genDone: ' -> T;
+                                 (if OTL[inx].var[] <> none then
+                                     OTL[inx].var.genDone -> B
+                                 if)
+                              #);
                         (if OTL[inx].var[] = none then  
                             (if ('Object' -> OTL[inx].N.equalNCS) then
                                 '\n***OBS next: object\n' -> puttext;
@@ -1929,12 +2134,12 @@ generator: variants
                             '\n*** objTmpStack:next:A:var is none ' -> puttext;
                             OTL[inx].N[] -> putline;
                             (*OTL[inx].OT.doPT -> printhead;*)
+
                             (if not done[inx] then 
                                 true -> B;             
                                 (* just a tmp test since var may be none 
                                  * - must be fixed *)
-                                (*'\n*** objTmpStack:next:B: ' -> puttext;
-                                OTL[inx].N[] -> putline;*)
+
                                 true -> done[inx];
                                 (OTL[inx].N[],OTL[inx].sig[],OTL[inx].super[]
                                 ,OTL[inx].CC[],OTL[inx].var[]) 
@@ -1942,6 +2147,10 @@ generator: variants
                             if);
                          else
                             (if not OTL[inx].var.genDone then
+                                cd.com(#
+                                      do 'objTmpStack:next:C: ' -> T;
+                                         OTL[inx].N[] ->T
+                                      #);
                                 (*'\n*** objTmpStack:next:C: ' -> puttext;
                                 OTL[inx].N[] -> putline;
                                 OTL[inx].OT.dopt->putline;
@@ -1964,7 +2173,7 @@ generator: variants
           OTL: [10] ^Item; top: @integer;
           done: [10] @boolean
        #);
-     labelHandler: @
+    (* labelHandler: @
        (# labCount: @integer;
           label:
             (# labNo: @integer;
@@ -1973,7 +2182,7 @@ generator: variants
             exit labNo
             #);
           init: (# do 0 -> labCount #);
-       #);
+       #);*)
      markIncludes,EPpath: @ ModulePath;
      
      ModulePath:
@@ -2106,7 +2315,11 @@ generator: variants
      (if newAlloc then 
          (* rootModule = BETAworld must have descNo = 1 *)
          (#
-         do rootModule.DI.OG.computeVariant;
+         do (if false then
+                rootModule.markForCodeGen
+             else
+                rootModule.DI.OG.computeVariant;
+            if)
            (* rootModule.DI.OG.IS.newDescNo -> putint; ' '->put;
             rootModule.DI.OG.Qvariants.top -> putint; ' ' -> put;*)
          #);(*
