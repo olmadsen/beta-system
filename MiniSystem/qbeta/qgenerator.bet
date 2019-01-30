@@ -383,56 +383,39 @@ generator: variants
             (# contextOG: ^ObjectGenerator;
                var,V: ^Variant
             enter contextOG[]
-            do (if false then(*
-                   (if contextOG[] = none then this(ObjectGenerator)[] -> contextOG[] if);
-                   contextOG[] -> Qvariants.computeVariant -> var[]*)
+            do (*'----computeVariant:'->putline; dopt -> putline; *)
+               (if contextOG[] = none then 
+                   this(ObjectGenerator)[] -> contextOG[] if);
+               cd.com(#do 'ComputeVariant:A:' -> T; OGid -> T #);
+               Qvariants.new -> var[];                 
+                   
+               (* this(OG) is not sufficient 
+                * For 
+                *    Lrecord.insert(Record(...))
+                * we need Lrecord.OG
+                *)
+               (contextOG[],var[]) -> Qvariants.scanObjectRefs;
+               (* We have a Variant of OG; 
+                * if var.top = 0, there are no data-items depending on 
+                * virtual Object (Later to be replaced by Any)
+                *
+                * Check that var[] does not already existt
+                * var returned below may differ from var above *)
+               Qvariants.checkIfTopIsNew -> V[];
+               (if var[] = V[] then
+                   cd.com(#do 'var is new:'->T; 'top: '-> T; Qvariants.top -> I;
+                            'var.thisVarNo:'-> T; var.thisVarNo -> I #);
+                   (var.thisVarNo,none) -> Qalloc;
+                   cd.com(#do 'computeVariant:newDescNo:'->T; IS.newDescNo -> I;
+                            'IS:'->T; IS.doPT -> T #);
                 else
-                   (*'----computeVariant:'->putline; dopt -> putline; *)
-                   
-                   (if contextOG[] = none then this(ObjectGenerator)[] -> contextOG[] if);
-                   cd.com(#do 'ComputeVariant:A:' -> T; OGid -> T #);
-                   Qvariants.new -> var[];
-                   
-                   (*IS.scanSons
-                   (# I: ^Item; DI: ^DataItem
-                   do current[] -> I[];
-                      (if I.isDecl then
-                          (if (not I.isPattern or I.isVirtual) and I.isDataItem then
-                              I[] -> DI[];
-                              DI.markForCodeGen
-                          if)
-                       else
-                          I.markForCodeGen
-                   if)#); *)                  
-                   
-                   (* this(OG) is not sufficient 
-                    * For 
-                    *    Lrecord.insert(Record(...))
-                    * we need Lrecord.OG
-                    *)
-                   (contextOG[],var[]) -> Qvariants.scanObjectRefs;
-                   (* We have a Variant of OG; 
-                    * if var.top = 0, there are no data-items depending on 
-                    * virtual Object (Later to be replaced by Any)
-                    *
-                    * Check that var[] does not already existt
-                    * var returned below may differ from var above *)
-                   Qvariants.checkIfTopIsNew -> V[];
-                   (if var[] = V[] then
-                       cd.com(#do 'var is new:'->T; 'top: '-> T; Qvariants.top -> I;
-                             'var.thisVarNo:'-> T; var.thisVarNo -> I #);
-                       (var.thisVarNo,none) -> Qalloc;
-                       cd.com(#do 'computeVariant:newDescNo:'->T; IS.newDescNo -> I;
-                             'IS:'->T; IS.doPT -> T #);
-                    else
-                       cd.com(#do'var is not new:'->T #);
-                       V[] -> var[]
-                   if);
-                   (*Qvariants.print;*)
-                   cd.com(#do 'ComputeVariant:B:' -> T; OGid -> T #);
-               if)
+                   cd.com(#do'var is not new:'->T #);
+                   V[] -> var[]
+               if);
+               (*Qvariants.print;*)
+               cd.com(#do 'ComputeVariant:B:' -> T; OGid -> T #);
             exit var[]
-            #);          
+            #);        
           Qgen::
             (* Qgen is only called for singular Objects and pushed on stack
              * For patterns OG is pushed on stack and later genClass is called
@@ -766,23 +749,12 @@ generator: variants
                 * The actual variant should have info about: 
                 * actual descNo and actual storage layout 
                 *)
-               (*'\n*** OBS! genClass; '->puttext; N[] -> putline;
-               (if (var[] = none) and ('Object'->N.equalNCS) then
-                   '\n*** OBS! genClass, Object,'->puttext;
-                   newline
-               if);*)
-               (*'\n*** genclass, '->putline;
-               (if var[] = none then ' var is none' -> putline
-                else
-                   var.thisVarNo -> putint; 
-                   (if var.genDone then ' genDone '->putline if)
-               if);
-               dopt-> printHead;*)
-               
                cd.com(#
                      do 'GenClass:'->T; N[] -> T;
-                        (if (var[] <> none) (*and (var.thisVarNo > 1)*) then
+                        (if (var[] <> none) then
                             ' :varNo = '-> T; var.thisVarNo -> I;
+                         else
+                            ':var is none' -> T
                         if);
                      #);
 
@@ -915,13 +887,6 @@ generator: variants
                
                (if (var[] = none) and not done or 
                    (var[] <> none) and not var.genDone then
-                   
-                   (if var[] = none then
-                       (*'\n***OBS! trying to call genClass for: ' -> puttext;
-                       N[] -> puttext;
-                       ' var = none\n' -> puttext;*)
-                       (*(dumpStack,'---') -> stop;*)
-                   if);
                    (if (var[] <> none) and done then
                        (* we must eliminate this case 
                         * there should always be var <> none *)
@@ -945,9 +910,7 @@ generator: variants
                    if);
                    
                    OG.XaddB.copySuper;
-                   (if newDescNo = 36 then
-                       cd.com(#do 'descNo = 36 ' -> T; N[] -> T; ' ' -> T; descNo -> I #);
-                   if);
+
                    (N[],newDescNo,false,(topSuper).newDescNo,qsize[thisVar.thisVarNo]) -> cd.class;
                    (* thisObj = the new instance of this class 
                     * thisStack = caller
@@ -1213,22 +1176,8 @@ generator: variants
                         if);
                         (if ptnKind 
                          // plainPtn then
-                            (if ('Lock' -> sig.id.equalNCS ) then
-                               (* '\n*** PTN:Qgen:GOT Lock: descNo: '-> puttext;
-                                OG.IS.newDescNo -> putint; 
-                                ' top: ' -> puttext;
-                                OG.Qvariants.top -> putint;
-                                newline;*)
-                            if);
                             (sig.id[],sig[],OG[],OG.super[],CC[],OG.computeVariant)
-                              -> objTmpStack.add;
-                            (if ('Lock' -> sig.id.equalNCS ) then
-                               (* '\n*** PTN:Qgen:GOT Lock:B: descNo: '-> puttext;
-                                OG.IS.newDescNo -> putint; 
-                                 ' top: ' -> puttext;
-                                OG.Qvariants.top -> putint;*)
-                                newline;
-                            if);                            
+                              -> objTmpStack.add;                           
                          // virtualPtn then
                             (if not OG.hasItems (* OG.IS.isEmpty*) then
                                 cd.com(#do 'vdt:d'-> T #);
@@ -1322,9 +1271,9 @@ generator: variants
             (# gdb:: (# do sig.dopt -> lx.puttext #); T: @text
             do (if OG.primNo
                 // 0 
-                // value_prim  (* OBS - needed for a Value ptn being sub of Value
+                // value_prim  (* OBS - needed for a ptn being sub of Value
                                 * otherwise execution fails since origin is not loaded
-                                * An explicit sub of also Object fails
+                                * An explicit sub of Object also fails
                                 *)
                 // this_prim 
                 // indexedGet_prim (* not tested*)
@@ -1604,7 +1553,7 @@ generator: variants
                    cd.com(#do'Pattern:invoke:descNo:'->T; OG.is.newDescNo -> I;
                             ' top:' -> T; OG.Qvariants.top -> I
                          #);
-                   (* We msut understand the differemces between
+                   (* We must understand the differences between
                     * computeVariant and computeVariantX and the different 
                     * situations below where computeVarints(X) is called
                     *)
@@ -2320,26 +2269,18 @@ generator: variants
              else
                 rootModule.DI.OG.computeVariant;
             if)
-           (* rootModule.DI.OG.IS.newDescNo -> putint; ' '->put;
-            rootModule.DI.OG.Qvariants.top -> putint; ' ' -> put;*)
-         #);(*
-         (1,none) -> rootModule.DI.OG.Qalloc;*)
+         #);
          
          (* Pattern Object is special and not reached during a by-need scan
           * but must be allocated
           *)
-        (* objectDecl.label -> putline;
-         objectDecl.dopt -> putline;*)
          (# ptn: ^Pattern
          do objectDecl[] -> ptn[];
-           (* '***ObjectDecl:computeVariant'->putline;*)
             PTN.OG.computeVariant;
             (*
             ptn.OG.Qvariants.print;
             '---end objectDecl'->putline*)
          #);
-         (*(1,none) -> objectDecl.Qalloc;*)
-
       else
          (1,none) -> rootModule.Qalloc;
      if);
