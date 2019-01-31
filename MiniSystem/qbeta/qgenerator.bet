@@ -5,7 +5,8 @@ BODY 'qgeneratorBody'
 ---lib:attributes---
 generator: variants
   (# traceModules: (# exit false #);
-     
+     useMarkForCodeGen: (# exit false #);
+
      Module::
        (# markForCodeGen::
             (# encModule:
@@ -44,7 +45,7 @@ generator: variants
           findNextImp:: (# do bcp -> DI.OG.IS.findNextImp -> impx[] #);
        #);
      ModuleItem::
-       (# markForCodeGen:: (#do MD.markForCodeGen #);
+       (# markForCodeGen:: (#do (if MD.isIncluded then MD.markForCodeGen if)#);
           Qgen::
             (#
             do (if MD.isIncluded then
@@ -369,6 +370,9 @@ generator: variants
                    if);
                    (if (super[] <> none) and not super.isEmpty 
                        and ((super.last).ATd[] <> none) then
+                       (if not (super.last).ATd.isPattern then
+                           leave markForCodeGen
+                       if);
                        (super.last).ATd[] -> ptn[];
                        (if ptn.OG.primNo = inner_prim then
                            'dont mark inner B:'->putline
@@ -458,7 +462,7 @@ generator: variants
                            if)#)if)
                  #);
                name: ^text; head: @boolean; Px: ^OGpath;
-               ATd: ^Decl; on,pn: @integer;
+               on,pn: @integer;
                var: ^Variant;
                trace: (# exit false #);
             do (if not genIsDone then
@@ -645,7 +649,25 @@ generator: variants
             do cd.com(#do 'items:markForCodeGen:'->T; doPT -> T; #);
                (* see Qgen: 
                 * should we differenciate for virtuals, bindings, etc?*)
-               scanSons(#do  current.MarkForCodegen #);
+               scanSons
+               (# I: ^Item
+               do current[] -> I[];
+                  (if current.isDataItem then
+                      current.MarkForCodegen 
+                   else
+                      (if I.isDecl then
+                          (if not I.isPattern or (I[] = StringDecl[]) then
+                              (if I[] = StringDecl[] then
+                                  cd.com(#do 'Items:markString'->T; dopt->T #)if);
+                              current.MarkForCodeGen 
+                          if)
+                       else
+                          cd.com(#do 'markItem:"'->T; current.doPT -> T; '":'->T;
+                                current.label -> T #);
+                          current.MarkForCodeGen 
+                      if)
+                   if)
+               #);
             #);
           genClass:
             (# N: ^text; sig: ^Signature; descNo: @integer; super: ^Invocation;
@@ -1461,8 +1483,6 @@ generator: variants
                             (if not useMarkForCodeGen then
                                 (if var[] = none then
                                     E.father.father[] -> OG[];
-                                    (* '!! OBS! OG:loadArgs:var is none'->putline;
-                                     dopt -> putline;*)
                                     (name[],none,actArgs[i][],actArgs[i].super[],CC[],OG.computeVariant)
                                       -> ObjTmpStack.add
                                  else
@@ -1690,16 +1710,12 @@ generator: variants
        (# markForCodeGen::
             (# ptn: ^Pattern; OGs: ^ObjectGenerator; E,rec: ^Exp
             do cd.com(#do 'Invocation:markForCodeGen:'->T; dopt -> T;#);
-               (if (last).atd[] = none then
-                   'last.adt is none'->putline;
+               (if (last).ATd[] = none then
+                   'last.ATd is none'->putline;
                    dopt -> putline;
                    leave markForCodeGen
                if);
-              (* ((last).ATD[] -> ptn[]).OG[] -> OGs[];
-               (if OGs[] = none then 
-                   'none'->putline;
-                   leave markForCodeGen
-               if);*)
+
                scanSons
                (#
                do current[] -> E[]; 
@@ -1710,15 +1726,11 @@ generator: variants
                   if)if)
                #);
                (if (E[] <> none) and (E.args[] <> none) then
-                   (if E.ATd.primNo        
-                    // inner_prim // leave_prim // restart_prim then
-                    else
-                       (*'Invocation:E:'->puttext; E.dopt -> putline;*)
-                       E.args.scanArgs
-                       (#
-                       do (*'arg:' -> puttext; ' '-> put; current.dopt -> putline;*)
-                          (*current.markForCodeGen*)
-               #)if)if)
+                   E.args.scanArgs
+                   (#
+                   do cd.com(#do 'arg:' -> T; ' '-> T; current.dopt -> T#);
+                      current.markForCodeGen
+               #)if)
             #);
           Qgen:: 
             (# gdb:: (# do doPT -> lx.puttext;(*
@@ -1803,13 +1815,17 @@ generator: variants
                       E.pushThis;
                       (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
                   if); 
-                  (*superAdj -> E.loadArgs;*)
+                  cd.com(#do 'Invocation:loadOrigin:rec:'->T;
+                           rec.dopt->T; ':E:'->T; E.dopt -> T #);
                   (if not isLast then
                       E[] -> rec[];
+                      cd.com(#do 'next:'->T; (next).dopt -> T;
+                               (next -> nE[]).ATd[] = none -> B;
+                            #);
                       (if (next -> nE[]).ATd.primNo <> assign_prim then
-                          'next not assign: ' -> T[]; (next).doP -> T.puttext;
-                          ' :E: ' -> T.puttext; E.doPT -> T.puttext; 
-                          T[] -> cd.comment;
+                          cd.com
+                          (#do 'next not assign:' -> T; (next).doP -> T;
+                             ':E: ' -> T; E.doPT -> T #);
                           (superAdj,CC[]) -> E.loadArgs;
                           (rec[],nE[],true,staticOff,CC[]) -> E.invoke
                       if)
@@ -1848,23 +1864,13 @@ generator: variants
         *)
        (# markForCodeGen::
             (#
-            do cd.com(#do 'ObjectInvocation:markForCodeGen:'-> T; dopt -> T;#);
-               (if ATd.primNo 
-                // inner_prim then
-                   (*'Dont mark inner'->putline - is this correct?*)
-                // thisCore_prim then
-                   'Mark thisCore'->putline;
-                   ATd.dopt -> putline;
-                   ATd.markForCodeGen     
-                // 16 then
-                   '>>>>>>>>>Mark Core'->putline;
-                   ATd.dopt -> putline;
-                   ATd.markForCodeGen   
-                else
-                   ATd.markForCodeGen
-               if)               
+            do cd.com(#do 'ObjectInvocation:markForCodeGen:'-> T; dopt -> T;
+                        ' :ATd=none:'-> T; ATd[] = none -> B; ATd.dopt -> T #); 
+               ATd.markForCodeGen
             #);
-          pushThis:: (# do cd.bcPos -> beginBCP; ATd.pushThis #);
+          pushThis:: (# do cd.com(#do 'OI:pushThis:'->T; dopt ->T;
+                                    ' :ATd=none:'-> T; ATd[] = none -> B;#);
+                        cd.bcPos -> beginBCP; ATd.pushThis #);
           loadOrigin::
             (# gdb:: (# do doPT -> lx.puttext #);
                org: ^Items;
@@ -2014,17 +2020,13 @@ generator: variants
              * and 'just store the string!
              *)
             (# 
-            do (*'StringObj:loadOrigin:' -> puttext; dopt->putline; *)
-                (if not elimOrigin then
-                    T[] -> cd.pushText
-                if);                
+            do cd.com(#do 'StringObj:loadOrigin:' -> T; dopt->T; #);
+               (if not elimOrigin then T[] -> cd.pushText if);                
                this(StringObj)[] -> E[] -> rec[]
             #);
           invoke:: 
             (# 
-            do (if elimOrigin then
-                   T[] -> cd.pushText ; 
-               if);
+            do (if elimOrigin then T[] -> cd.pushText if);
                (if not useReturnValue then cd.rPop if)
             #);
        #);
@@ -2061,7 +2063,6 @@ generator: variants
                if);
                (N[],sig[],OT[],super[],CC[],var[]) -> item -> OTL[top][];
                (* Does IS.newDescNo correspond to var? Probably no!?*)
-;
                (if newAlloc and (OT.IS.newDescNo = 0) then
                    'ObjTmpStack: Qalloc'->cd.comment;
                    (if var[] <> none then
@@ -2101,9 +2102,6 @@ generator: variants
                                  if)
                               #);
                         (if OTL[inx].var[] = none then  
-                            (if ('Object' -> OTL[inx].N.equalNCS) then
-                                '\n***OBS next: object\n' -> puttext;
-                            if);
                             '\n*** objTmpStack:next:A:var is none ' -> puttext;
                             OTL[inx].N[] -> putline;
                             (*OTL[inx].OT.doPT -> printhead;*)
@@ -2122,15 +2120,11 @@ generator: variants
                             (if not OTL[inx].var.genDone then
                                 cd.com(#
                                       do 'objTmpStack:next:C: ' -> T;
-                                         OTL[inx].N[] ->T
+                                         OTL[inx].N[] -> T;':descNo:' -> T; 
+                                         OTL[inx].OT.IS.newdescno -> I; 
+                                         ':top:' ->T ;
+                                         OTL[inx].OT.Qvariants.top -> I;
                                       #);
-                                (*'\n*** objTmpStack:next:C: ' -> puttext;
-                                OTL[inx].N[] -> putline;
-                                OTL[inx].OT.dopt->putline;
-                                OTL[inx].OT.IS.newdescno -> putint; ' ' ->put;
-                                OTL[inx].OT.Qvariants.top -> putint; newline;*)
-                                
-                                (*true -> OTL[inx].var.genDone;*)
                                 (if OTL[inx].OT.IS.newdescno = 0 then
                                  else
                                     (OTL[inx].N[],OTL[inx].sig[],OTL[inx].super[]
