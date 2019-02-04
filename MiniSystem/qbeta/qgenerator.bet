@@ -188,7 +188,7 @@ generator: variants
             do (if OG.isSimpleValue or isValue then
                    cd.com(#do 'DI:loadAdr:simpleOrValueoff:'->T; off -> I;
                             ' ' -> T; dopt -> T #);
-                   off + newOff - 1 -> off
+                   off + newOff -> off
                 else
                    cd.com(#do 'DI:loadAdr:off:'->T; off -> I #);
                    (if off > 0 then
@@ -214,7 +214,11 @@ generator: variants
                             * For R ++ 117 offset for R should be pushed 
                             * since it is origin
                             *) 
-                           (sig.id[],NewOff) -> cd.pushg
+                           (if valueImpl then
+                               (sig.id[],hOff + NewOff - 1) -> cd.pushg
+                            else
+                               (sig.id[],NewOff) -> cd.pushg
+                           if)
                         else
                            off -> cd.pushConst
                        if)
@@ -236,7 +240,7 @@ generator: variants
           store::
             (* Called from Signature::StoreParameters *)
             (# OGx: ^ObjectGenerator; var: ^Variant
-            do cd.com(#do 'dataitem:store:' -> T;
+            do cd.com(#do 'dataitem:store:hOff:' -> T; hOff -> I; ':off:'-> T; newOff -> I;
                         (if isVirtualObject then
                             'isVirtualObject:' -> T;
                             dopt -> T
@@ -252,7 +256,11 @@ generator: variants
                    if)
                if);
                (if OG.isSimpleValue then 
-                   (sig.id[],NewOff) -> cd.storeg
+                   (if valueImpl then
+                       (sig.id[],hOff + NewOff - 1) -> cd.storeg
+                    else
+                       (sig.id[],NewOff) -> cd.storeg
+                   if)
                 else
                    (if not noSwap then cd.rswap if); 
                    (* Could be S: ?elm where elm:< Object *)                   
@@ -283,8 +291,12 @@ generator: variants
             do scanArgsReverse
                (# D: ^Decl
                do (if not (currentPar[] -> D[]).isVirtual then
-                      cd.pushThis;
-                      true -> currentPar.store
+                      cd.pushThis;                      
+                      (if valueImpl then
+                          (true,1) -> currentPar.store
+                       else
+                          (true,0) -> currentPar.store
+                      if)
                   if)
                #)
             #);
@@ -1520,7 +1532,7 @@ generator: variants
                doPrimElse: BooleanValue(#<<SLOT doPrimElse:doPart>> #);
                exNo: @integer; N:^ Node; di: ^DataItem; var: ^Variant
             do cd.com(#
-                     do' Pattern:invoke:'->T; OG.OGid->T #);
+                     do 'Pattern:invoke:'->T; OG.OGid->T #);
                (*(if not OG.IS.isEmpty then
                    (OG.OGid,OG.sig[],OG[],OG.super[],CC[],none) -> ObjTmpStack.add;
                 if);*)
@@ -1721,22 +1733,22 @@ generator: variants
                         false -> value
                     if)
                  #);
-               off: @integer
+               hOff: @integer
             do (*'Invocation:Qgen:' -> puttext; dopt -> putline;*)
                cd.bcPos -> beginBCP;
                (if needOrigin then
                    (useReturnValue,staticOff,superAdj,CC[]) 
                      -> loadOrigin 
-                     -> (rec[],E[],off)
+                     -> (rec[],E[],hOff)
                if);               
                (superAdj,CC[]) -> E.loadArgs;
-               (rec[],E[],useReturnValue,staticOff,CC[]) -> E.invoke;
+               (rec[],E[],useReturnValue,staticOff,hOff,CC[]) -> E.invoke;
                cd.bcPos -> endBCP
             #);
           loadOrigin:
             (# usereturnValue: @boolean;
                staticOff,superAdj: @integer;
-               rec,E,nE: ^Exp; CC: ^CallChain; off: @integer
+               rec,E,nE: ^Exp; CC: ^CallChain; hOff: @integer
             enter(useReturnValue,staticOff,superAdj,CC[])
             do ('Invocation:loadOrigin:',doPT) -> cd.com2;
                (* could rec be thisObject for first E1 in E1.E2.E3 ?*)
@@ -1753,13 +1765,13 @@ generator: variants
                        current.doPT -> T.puttext;
                        T[] -> cd.comment;
                     #);
-                  T: ^ Text; off: @integer
+                  T: ^ Text; 
                do current[] -> E[]; 
                   gdb;
                   (if isFirst then 
                       E.pushThis;
                       (if false then
-                          (rec[],E[],off) -> E.loadAdr -> (rec[],E[],off)
+                          (rec[],E[],hOff) -> E.loadAdr -> (rec[],E[],hOff)
                        else
                           (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
                       if)
@@ -1769,10 +1781,10 @@ generator: variants
                       (if (next -> nE[]).ATd.primNo <> assign_prim then
                           (superAdj,CC[]) -> E.loadArgs;
                           (if valueImpl then
-                              (rec[],nE[],off) -> E.loadAdr -> (rec[],E[],off);
-                              cd.com(#do 'loadOrigin:off:'->T; off -> I #);
+                              (rec[],nE[],hOff) -> E.loadAdr -> (rec[],E[],hOff);
+                              cd.com(#do 'loadOrigin:off:'->T; hOff -> I #);
                            else
-                              (rec[],nE[],true,staticOff,CC[]) -> E.invoke
+                              (rec[],nE[],true,staticOff,0,CC[]) -> E.invoke
                           if);
                       if)
                   if)
@@ -1790,7 +1802,7 @@ generator: variants
                 *     pushOff for simple_bar = rec
                 *     loadAsReceiver for simple_bar, but empty action
                 *)
-            exit(rec[],E[],off)
+            exit(rec[],E[],hOff)
             #);
        #);
      adjustOrigin:
@@ -1879,7 +1891,7 @@ generator: variants
                 // moduleItem## then
                    'OI:invoke:moduleItem' -> cd.comment
                if);
-               (rec[],E[],useReturnValue,staticOff,CC[]) -> ATd.invoke
+               (rec[],E[],useReturnValue,staticOff,hOff,CC[]) -> ATd.invoke
             #);
           loadArgs:: 
             (#
