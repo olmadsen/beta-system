@@ -54,7 +54,7 @@ typedef struct Btemplate {
   int lscStack[16];
   int lscTop;
   int lsc;
-  struct Btemplate *rfields[64];
+  //struct Btemplate *rfields[64];
   int vfields[]; // lexible array
 } Btemplate;
 
@@ -345,7 +345,7 @@ int rSize(ObjDesc desc){
 }
 
 
-char * nameOf(Btemplate *obj){
+char * nameOf(Btemplate *obj){ 
   if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
   int inx = desc_getInt2(desc,0);
@@ -362,7 +362,7 @@ Btemplate *myCorigin(Btemplate *obj){
   if (newAlloc){
     if (inx > 0) origin =(Btemplate *) obj->vfields[inx];
   }else{
-    if (inx > 0) origin = obj->rfields[inx];
+    //if (inx > 0) origin = obj->rfields[inx];
   };
   return origin;
 }

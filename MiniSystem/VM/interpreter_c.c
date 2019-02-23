@@ -49,7 +49,7 @@ typedef void *FILE;
 
 
 #include "interpreter_image.c"
-
+ 
 #define MAX_THREADS 5
 
 void runTimeError(char *msg){
@@ -147,7 +147,7 @@ Btemplate *getR(Btemplate *obj,int inx){
       printf("getR: index error %i\n",inx);
     }
   }else{
-    return obj->rfields[inx];
+    //    return obj->rfields[inx];
   }
 };
 void putR(Btemplate *obj,int inx, Btemplate *X){  
@@ -158,7 +158,7 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
       printf("putR: index error %i\n",inx);
     }
   }else{
-    obj->rfields[inx] = X;
+    // obj->rfields[inx] = X;
   }
 };
 
@@ -233,7 +233,7 @@ void dumpRstack(FILE *trace,Btemplate *stack){
 #endif
 }
 int cMyLscTop(Btemplate *obj) { return obj->lscTop; };
-
+  
 int topOfLsc(Btemplate *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
 void dumpStackX(Btemplate *obj){
