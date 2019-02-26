@@ -185,25 +185,26 @@ generator: variants
           pushThis:: (# gdb:: (#do sig.id[] -> lx.puttext #)do cd.pushThis #);
           loadAdr::
             (#
-            do (if OG.isSimpleValue or isValue then
-                   cd.com(#do 'DI:loadAdr:simpleOrValueoff:'->T; off -> I;
-                            ' ' -> T; dopt -> T #);
-                   off + newOff -> off
+            do cd.com(#do 'DI:loadAdr:hOff:'->T; hOff -> I;
+                        ':simpleValue:'->T; OG.isSimpleValue or isValue -> B;
+                        ' ' -> T; dopt -> T #);
+               
+               (if OG.isSimpleValue or isValue then
+                   hOff + newOff -> hOff
                 else
-                   cd.com(#do 'DI:loadAdr:off:'->T; off -> I #);
-                   (if off > 0 then
-                       '\n**** DataItem:loadAdr:not simple: off> 0: ' -> puttext;
-                       dopt -> putline;
-                       'E:'->puttext; (if E[] <> none then E.dopt -> putline if);
+                   (if valueImpl then
+                       (sig.id[],hOff + NewOff - 1) -> cd.rpushg;
+                    else
+                       (sig.id[],NewOff) -> cd.rpushg
                    if);
-                   (sig.id[],NewOff) -> cd.rpushg
+                   (*1 -> hOff*)
                if)
             #);
           invoke::
             (* called when not receiver - i.e. value to be pushed *)
             (# gdb:: (#do sig.id[] -> lx.puttext #)
             do 
-               (if OG.isSimpleValue then 
+               (if OG.isSimpleValue or OG.isValue then 
                    cd.com(#do 'DI:invoke:simpleValue;off:' -> T; newoff -> I #);
                    (if (E[] <> none) then
                        cd.com(#do 'DI:invoke:E_not_none'->T #);
@@ -249,10 +250,9 @@ generator: variants
             (* Called from Signature::StoreParameters *)
             (# OGx: ^ObjectGenerator; var: ^Variant
             do cd.com(#do 'dataitem:store:hOff:' -> T; hOff -> I; ':off:'-> T; newOff -> I;
-                        (if isVirtualObject then
-                            'isVirtualObject:' -> T;
-                            dopt -> T
-                     if)#);
+                        (if isVirtualObject then ':isVirtualObject:' -> T if);
+                        ' "'->T; dopt -> T; '"' -> T
+                     #);
                (if newAlloc and 
                    (father.father## = ObjectGenerator##) and
                    ((father.father[] -> OGx[]).IS.newDescNo = 0) then
@@ -526,6 +526,10 @@ generator: variants
                         *)
                        (* Invoke the singular object *)
                        (if not newAlloc then
+                           (if isValue then
+                               '\n*** invoke value:'->puttext;
+                               dopt -> putline
+                           if);
                            (OGid,IS.newDescNo,staticOff,true) -> cd.invoke;
                            (if not useReturnValue then cd.rpop if);
                        if);
@@ -1113,7 +1117,11 @@ generator: variants
                            cd.setThisStack;
                            cd.pushThis
                        if);
-                       'D' -> cd.rtn;
+                       (if (theObjectGenerator).isValue then 
+                           cd.rtnV
+                        else
+                           'D' -> cd.rtn
+                       if)
                    if);
                    (vsize,rsize,1) -> CD.endClass;
                    cd.bcPos -> endBCP
@@ -1624,9 +1632,14 @@ generator: variants
                                if);
                                cd.com(#do 'invoke:var not none'->T;
                                         OG.IS.newDescno -> I #);
-                               (sig.id[],OG.IS.newDescno,staticOff
-                               ,not OG.IS.doHasCode) 
-                                 -> cd.invoke;                               
+                               (if OG.isValue then
+                                   '\n**** pattern is value: ' -> puttext; dopt -> putline;
+                                   (sig.id[],OG.IS.newDescno,staticOff - 1) -> cd.invokeVal
+                                else
+                                   (sig.id[],OG.IS.newDescno,staticOff
+                                   ,not OG.IS.doHasCode) 
+                                     -> cd.invoke
+                               if)                               
                             else 
                                (*'---var is none: descNo:'->puttext;
                                 * OG.IS.newDescNo -> putint; newline;
@@ -1646,8 +1659,15 @@ generator: variants
                                (#
                                do 'Ptn:Invoke:' -> T; OG.IS.newDescno -> I
                                #);
-                               (sig.id[],OG.IS.newDescno,staticOff,not OG.IS.doHasCode) 
-                                 -> cd.invoke
+                               (if OG.isValue then
+                                   '\n**** pattern is value: ' -> puttext; dopt -> putline;
+                                   '\n**** push this + staticOff'->putline;
+                                   
+                                   (sig.id[],OG.IS.newDescno,staticOff - 1) -> cd.invokeVal
+                                else
+                                   (sig.id[],OG.IS.newDescno,staticOff,not OG.IS.doHasCode) 
+                                     -> cd.invoke
+                               if)
                        if)if)
                    if);
                    (if not useReturnValue then popReturn if);
@@ -1750,6 +1770,9 @@ generator: variants
                      -> (rec[],E[],hOff)
                if);               
                (superAdj,CC[]) -> E.loadArgs;
+               
+               cd.com(#do 'after:loadOrigin: "' -> T; doPT -> T;
+                        '" :hOff:'-> T; hOff -> I; ' ' -> T; E.dopt -> T #);
                (rec[],E[],useReturnValue,staticOff,hOff,CC[]) -> E.invoke;
                cd.bcPos -> endBCP
             #);
@@ -1773,7 +1796,7 @@ generator: variants
                        current.doPT -> T.puttext;
                        T[] -> cd.comment;
                     #);
-                  T: ^ Text; 
+                  T: ^ Text; hadAssign: @boolean
                do current[] -> E[]; 
                   gdb;
                   (if isFirst then 
@@ -1784,18 +1807,44 @@ generator: variants
                           (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
                       if)
                   if); 
+                  (* For X: = { R:  = { ... q: ...} ... R.X }
+                   * stack[top] = origin = X 
+                   * add offset to R or push(ref(R))
+                   *)
+                  cd.com(#do 'loadOrigin:afterIsFirst:'-> T; ' ' -> T;
+                        ' ' -> T; current.doPT -> T #);
+                  1 -> hOff;
                   (if not isLast then
                       E[] -> rec[];
                       (if (next -> nE[]).ATd.primNo <> assign_prim then
                           (superAdj,CC[]) -> E.loadArgs;
                           (if valueImpl then
                               (rec[],nE[],hOff) -> E.loadAdr -> (rec[],E[],hOff);
-                              cd.com(#do 'loadOrigin:off:'->T; hOff -> I #);
+                              cd.com(#do 'loadOrigin:NotAssign:off:'->T; hOff -> I;
+                                       ':rec:E: ' -> T; current.doPT -> T;
+                                       ':next:'-> T; nE.doPT -> T
+                                    #);
                            else
                               (rec[],nE[],true,staticOff,0,CC[]) -> E.invoke
                           if);
+                       else
+                          cd.com(#do 'loadOrigin:assign:'-> T; #);
+                          true -> hadAssign
                       if)
-                  if)
+                   else
+                      cd.com(#do 'loadOrigin:last:hOff:' -> T; hOff -> I;
+                               ' ' -> T; current.doPt -> T #);
+                      (if hadAssign (*E.ATd.primNo = assign_prim *) then
+                          cd.com(#do 'loadOrigin:last:assign:rec:'->T; rec.dopt -> T;
+                                   ':E:' -> T; E.doPT -> T #);
+                       else
+                          cd.com(#do 'loadOrigin:last:NOTassign:rec:'->T; rec.doPT -> T;
+                                   ':E:'->T; E.doPT -> T #);
+                          (if not isFirst and valueImpl and (hOff > 0) then
+                              (rec[],rec[],true,staticOff,hOff,CC[]) -> rec.invoke
+                          if)
+                      if)
+                  if);
                #);
                (* S.simple_bar.c1 := 'x'
                 *     rec = c1, E = ':='
@@ -1837,7 +1886,7 @@ generator: variants
           pushThis:: (#do cd.bcPos -> beginBCP; ATd.pushThis #);
           loadAdr::
             (#
-            do (rec[],E[],off) -> ATd.loadAdr -> (rec[],E[],off)
+            do (rec[],E[],hOff) -> ATd.loadAdr -> (rec[],E[],hOff)
             #);
           loadOrigin::
             (# gdb:: (# do doPT -> lx.puttext #);
