@@ -190,6 +190,7 @@ generator: variants
                         ' ' -> T; dopt -> T #);
                
                (if OG.isSimpleValue or isValue then
+                   cd.com(#do 'DI:loadAdr:simpleOrValue:'->T #);
                    hOff + newOff -> hOff
                 else
                    (if valueImpl then
@@ -200,10 +201,31 @@ generator: variants
                    (*1 -> hOff*)
                if)
             #);
+          getAdr::
+            (#
+            do cd.com(#do 'DI:getAdr:newOff:'->T; newOff -> I; 
+                        A.print -> T; ' '  -> T; dopt -> T #);
+               (if OG.isSimpleValue or isValue then
+                   (if A.off > 0 then
+                       newOff - 1 + A.off -> A.off;
+                    else
+                       newOff -> A.off
+                   if);
+                   OG.isSimpleValue or OG.isValue -> A.isValue
+                else
+                   (if valueImpl then
+                       A.load;
+                       (0,none) -> Address -> A[];
+                       newOff -> A.off
+               if)if)
+            #);
           invoke::
             (* called when not receiver - i.e. value to be pushed *)
             (# gdb:: (#do sig.id[] -> lx.puttext #)
-            do 
+            do (*(if valueImpl and (adr[] <> none) then 
+                   'DI:adr.load:' -> cd.comment;
+                   newOff + adr.off -> adr.off
+               if);*)
                (if OG.isSimpleValue or OG.isValue then 
                    cd.com(#do 'DI:invoke:simpleValue;off:' -> T; newoff -> I #);
                    (if (E[] <> none) then
@@ -216,7 +238,12 @@ generator: variants
                             * since it is origin
                             *) 
                            (if valueImpl then
-                               (sig.id[],hOff + NewOff - 1) -> cd.pushg
+                               (if adr[] <> none then 
+                                   'DI:use:adr:'->cd.comment;
+                                   adr.load
+                                else
+                                   (sig.id[],hOff + NewOff) -> cd.pushg
+                               if);
                             else
                                (sig.id[],NewOff) -> cd.pushg
                            if)
@@ -224,9 +251,14 @@ generator: variants
                            off -> cd.pushConst
                        if)
                     else
-                       cd.com(#do 'DI:invoke:E_not_none' -> T#);
+                       cd.com(#do 'DI:invoke:E=none' -> T#);
                        (if valueImpl then
-                           (sig.id[],hOff + NewOff - 1) -> cd.pushg
+                             (if adr[] <> none then 
+                                   'DI:use:adr:'->cd.comment;
+                                 adr.load
+                              else
+                                 (sig.id[],hOff + NewOff) -> cd.pushg
+                             if)
                         else
                            (sig.id[],NewOff) -> cd.pushg
                        if)
@@ -239,8 +271,13 @@ generator: variants
                        OG.super.ATd[] -> CC.ValueOrObject
                    if);
                    cd.com(#do 'DI:invoke:off:' -> T; newoff -> I #);
-                   (if valueImpl then                   
-                       (sig.id[],hOff + NewOff - 1) -> cd.rpushg
+                   (if valueImpl then  
+                       (if adr[] <> none then 
+                           'DI:use:adr:'->cd.comment;
+                           adr.load
+                        else
+                           (sig.id[],hOff + NewOff) -> cd.rpushg
+                       if)
                     else
                        (sig.id[],NewOff) -> cd.rpushg
                    if)
@@ -265,7 +302,7 @@ generator: variants
                if);
                (if OG.isSimpleValue then 
                    (if valueImpl then
-                       (sig.id[],hOff + NewOff) -> cd.storeg
+                       (sig.id[],(**hOff + *) NewOff) -> cd.storeg
                     else
                        (sig.id[],NewOff) -> cd.storeg
                    if)
@@ -1499,7 +1536,9 @@ generator: variants
                                 (* Either to few arguments or Super as in
                                  *    foo{ ... }
                                  * where foo has arguments - to be fixed! *)
-                             else
+                             else(# j: @integer do i -> j;
+                                cd.com(#do 'loadArgs:X:'->T; 
+                                         actArgs[j].dopt->T #)#);
                                 (true,superAdj,0) -> actArgs[i].Qgen
                             if)
                    if)#);
@@ -1511,6 +1550,19 @@ generator: variants
                          restart handleSuperargs
                    if)
                if)
+            #);
+          load::
+            (#
+            do cd.com(#do 'Pattern:load:'->T;OG.primNo -> I; ' '->T; dopt -> T;   #);
+               (if OG.primNo
+                // assign_prim then
+                   A.store
+               if);
+            #);
+          getAdr::
+            (#
+            do cd.com(#do 'ptn:getAdr:'->T; sig.doPT -> T; A.print -> T #);
+               A.load
             #);
           invoke::
             (# gdb:: (# do sig.doPT -> lx.puttext; 
@@ -1687,6 +1739,58 @@ generator: variants
             do 'Pattern:store: '->puttext; doPT -> putline;
             #);   
        #);
+     Address: superAdr
+       (# done: @boolean;
+          load::
+            (#
+            do (if not done then
+                   true -> done;
+                   (if on > 0 then
+                   (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
+                   if);
+                   (* on > 0 ==> off = 0 ?*)
+                   (if not onlyOrigin and (off > 0) then
+                       (if isValue then
+                           ('',off) -> cd.pushg
+                        else
+                           ('',off) -> cd.rpushg
+                       if)
+               if)if)
+            #);
+          store::
+            (#
+            do (if not done then
+                   true -> done;
+                   cd.com(#do 'Address:store:'->T; off -> I #);
+                   (if on > 0 then
+                       (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
+                   if);
+                   (* on > 0 ==> off = 0 ?*)
+                   (if off > 0 then
+                       (if isValue then
+                           ('',off) -> cd.storeg
+                        else
+                           ('',off) -> cd.rstoreg
+                       if)
+               if)if)
+            #);
+          print::
+            (# 
+            do ' Address:E:"'-> T.append; 
+               (if E[] = none then 'E is none'->T.puttext
+                else
+                   E.dopt -> T.puttext 
+               if);
+               '" on:'-> T.puttext; on -> T.putint; 
+               ' off:'-> T.puttext; off -> T.putint;
+               ' isValue:' -> T.puttext; 
+               (if isValue then 'True'-> T.puttext 
+                else 'False'->T.puttext
+               if)
+            #);
+       enter(superAdj,CC[])
+       exit this(Address)[]
+       #);
      Invocation::
        (* E1.E2.E3
         *    E1.pushThis
@@ -1720,6 +1824,7 @@ generator: variants
                       current.markForCodeGen
                #)if)
             #);
+   
           Qgen:: 
             (# gdb:: (# 
                      do doPT -> lx.puttext;
@@ -1771,18 +1876,68 @@ generator: variants
                 * How about: R.S.T.Q ? Q noGlobals, or globals?
                 *)
                cd.bcPos -> beginBCP;
-               (if needOrigin then
-                   (useReturnValue,staticOff,superAdj,CC[]) 
-                     -> loadOrigin 
-                     -> (rec[],E[],hOff)
-               if);               
-               (superAdj,CC[]) -> E.loadArgs;
-               
-               cd.com(#do 'after:loadOrigin: "' -> T; doPT -> T;
-                        '" :hOff:'-> T; hOff -> I; ' ' -> T; E.dopt -> T #);
-               (rec[],E[],useReturnValue,staticOff,hOff,CC[]) -> E.invoke;
+               (if valueImpl then
+                   (# A: ^Address
+                   do
+                      (superAdj,&callChain[]) 
+                        -> Address 
+                        -> computeAdr -> (rec[],E[],A[]);
+                      cd.com(#do 'Invoke:after:computeAdr:'->T; A.print -> T;  #);
+                      (superAdj,CC[]) -> E.loadArgs;
+                      cd.com(#do 'Invoke:after:loadArgs:'->T #);
+                      (rec[],E[],useReturnValue,staticOff,hOff,CC[],A[]) 
+                        -> E.invoke;
+                      (*
+                      (rec[],A[]) -> E.load; 
+                      (if A[] <> none then
+                          A.load
+                      if)*)
+                   #)
+                else
+                   (if needOrigin then
+                       (useReturnValue,staticOff,superAdj,CC[]) 
+                         -> loadOrigin 
+                         -> (rec[],E[],hOff)
+                   if);               
+                   (superAdj,CC[]) -> E.loadArgs;
+                   
+                   cd.com(#do 'after:loadOrigin: "' -> T; doPT -> T;
+                            '" :hOff:'-> T; hOff -> I; ' ' -> T; E.dopt -> T #);
+                   (rec[],E[],useReturnValue,staticOff,hOff,CC[],none) -> E.invoke;
+               if);
                cd.bcPos -> endBCP
             #);
+          computeAdr:
+            (# A: ^Address; E,rec,nE: ^Exp
+            enter A[]
+            do scanSons
+               (# ix: @integer
+               do current[] -> E[]; ix + 1 -> ix;
+                  cd.com(#do 'computeAdr:I:'-> T; ix->I; ' E:'->T; E.dopt -> T; 
+                           ' ' -> T; A.PRINT-> T;  #);
+                  (if isFirst then
+                      E.pushThis;
+                      A[] -> E.getAdr -> A[];
+                      E[] -> rec[]
+                  if);
+                  (if not isLast then
+                      E[] -> rec[];
+                      (if (next -> nE[]).ATd.primNo <> assign_prim then
+                          (0(*superAdj,CC[]*),&callChain[]) -> E.loadArgs;
+                          (if not isFirst then A[] -> E.getAdr -> A[] if)
+                       else
+                          (if not isFirst then A[] -> E.getADr -> A[] if)
+                      if)
+                   else
+                      cd.com(#do 'computeAdr:notAssignA:'->T; E.dopt -> T; a.print->T; #);
+                      (if not isFirst and (E.ATd.primNo <> assign_prim) then 
+                          A[] -> E.getAdr -> A[] if);
+                      cd.com(#do 'computeAdr:notAssignB:'->T; E.dopt -> T; a.print->T; #);
+                  if)
+               #);
+               cd.com(#do 'computeAdr:exit:' -> T; A.print->T; #);
+            exit(rec[],E[],A[])
+            #);          
           loadOrigin:
             (# usereturnValue: @boolean;
                staticOff,superAdj: @integer;
@@ -1832,7 +1987,7 @@ generator: variants
                                        ':next:'-> T; nE.doPT -> T
                                     #);
                            else
-                              (rec[],nE[],true,staticOff,0,CC[]) -> E.invoke
+                              (rec[],nE[],true,staticOff,0,CC[],none) -> E.invoke
                           if);
                        else
                           cd.com(#do 'loadOrigin:assign:'-> T; #);
@@ -1848,7 +2003,7 @@ generator: variants
                           cd.com(#do 'loadOrigin:last:NOTassign:rec:'->T; rec.doPT -> T;
                                    ':E:'->T; E.doPT -> T #);
                           (if not isFirst and valueImpl and (hOff > 0) then
-                              (rec[],rec[],true,staticOff,hOff,CC[]) -> rec.invoke
+                              (rec[],rec[],true,staticOff,hOff,CC[],none) -> rec.invoke
                           if)
                       if)
                   if);
@@ -1895,6 +2050,20 @@ generator: variants
             (#
             do (rec[],E[],hOff) -> ATd.loadAdr -> (rec[],E[],hOff)
             #);
+          getAdr::
+            (# Ax: ^Address
+            do (*superAdj -> A.superAdj;*)
+               adr[] -> Ax[];
+
+               (if on > 0 then
+                   this(ObjectInvocation)[] -> Ax.E[];
+                   (* tricky - in R.S.Q, R.on may be > 0, but S.on = Q.on = 0
+                    * and the latter may mnot override on from R
+                    *)
+                   on -> Ax.on;
+               if);
+               Ax[] -> ATd.getAdr -> adr[]
+            #);
           loadOrigin::
             (# gdb:: (# do doPT -> lx.puttext #);
                org: ^Items;
@@ -1906,7 +2075,8 @@ generator: variants
                 // stringGet_prim // indexedGet_prim
                 // immutable_prim then 
                    'on : ' -> T.puttext; on -> T.putint; T[] -> cd.comment;
-                   (if superAdj < 0 then 'superAdj < 0'->cd.comment;
+                   (if superAdj < 0 then 
+                       'superAdj < 0'->cd.comment;
                        (if on > 0 then 
                            - superAdj -> AdjustOrigin;
                            (on - 1,this(ObjectInvocation)[]) 
@@ -1936,6 +2106,11 @@ generator: variants
                (* Actually rec = origin*n, E = this(OG) *)
                this(ObjectInvocation)[] -> E[] -> rec[]
             #);
+          load::
+            (#
+            do cd.com(#do 'OI:load:'-> T; dopt -> T #);
+               (rec[],A[]) -> ATd.load
+            #);
           invoke::
             (#ptn: ^pattern
             do cd.com
@@ -1955,7 +2130,9 @@ generator: variants
                 // moduleItem## then
                    'OI:invoke:moduleItem' -> cd.comment
                if);
-               (rec[],E[],useReturnValue,staticOff,hOff,CC[]) -> ATd.invoke
+               cd.com(#do 'OI:invoke:adr:'-> T; (if adr[] <> none then adr.print -> T if)#);
+                        
+               (rec[],E[],useReturnValue,staticOff,hOff,CC[],adr[]) -> ATd.invoke
             #);
           loadArgs:: 
             (#
@@ -2015,6 +2192,7 @@ generator: variants
      Const::
        (# Qgen:: (# do invoke #);
           invoke:: (# do T.setpos; T.getInt -> cd.pushConst #);
+          load:: (# do T.setpos; T.getInt -> cd.pushConst #);
        #);
      CharObj::
        (# Qgen:: (* Never called? *) (# do invoke #);
