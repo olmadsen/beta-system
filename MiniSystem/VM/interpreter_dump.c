@@ -158,6 +158,11 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg3 = op1(bc,&glsc);
 	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
 	break;
+      case invokeVal:
+	arg1 = op2(bc,&glsc);
+	arg2 = op2(bc,&glsc);
+	fprintf(trace,"invokeVal %i %i",arg1,arg2);
+	break;
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
 	fprintf(trace,"invokeExternal %i",arg1);
@@ -238,6 +243,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case rtnc:
 	fprintf(trace,"rtnC");
+	break;
+      case rtnV:
+	fprintf(trace,"rtnV");
 	break;
       case rpop:
 	fprintf(trace,"rpop");

@@ -47,6 +47,7 @@ typedef unsigned char * ObjDesc;
 typedef struct Btemplate {
   ObjDesc desc;
   int id;
+  int valOff;
   bool isObj;
   int vstack[16];  
   struct Btemplate *rstack[16];
@@ -55,7 +56,7 @@ typedef struct Btemplate {
   int lscTop;
   int lsc;
   //struct Btemplate *rfields[64];
-  int vfields[]; // lexible array
+  int vfields[]; // flexible array
 } Btemplate;
 
 typedef struct Block {
@@ -221,7 +222,9 @@ enum {
   rtnEventQ = 94,
   doEventQ = 95,
   allocEventQ = 96,
-  invokeExternal = 97
+  invokeExternal = 97,
+  invokeVal = 98,
+  rtnV = 99
 };
 
 

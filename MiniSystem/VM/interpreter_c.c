@@ -46,7 +46,7 @@ typedef void *FILE;
 //#define DUMP
 //#define TRACE
 //#define EVENT
-
+ 
 
 #include "interpreter_image.c"
  
@@ -170,6 +170,7 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   obj->id = ID;
+  obj->valOff = 0;
   obj->isObj = isObj;
   obj->vtop = 0;
   obj->rtop = 0;
@@ -296,6 +297,16 @@ Btemplate *rTopElm(Btemplate*stack,int inx){
   return stack->rstack[stack->rtop - inx];
 }
 
+void lscPush(Btemplate *stack,int V){
+  //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
+  if ((stack->lscTop = stack->lscTop + 1) > 16 ) runTimeErrorX("lscStack overflow",stack,-1);
+  stack->lscStack[stack->lscTop] = V;
+}
+
+int lscPop(Btemplate *stack){
+  if ((stack->lscTop = stack->lscTop - 1) < -1) runTimeErrorX("lscStack underflow",stack,-1);
+  return stack->lscStack[stack->lscTop + 1];
+}
 void cSaveReturn(Btemplate *obj,int descNo, int lsc){
   //fprintf(trace,"\n***cSaveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
   //int i;
@@ -667,7 +678,23 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #endif
 };
 
+void invokeValObj(Block *ctx,int descNo,int staticOff){
+#ifdef TRACE
+  fprintf(ctx->trace,"invokeVal %i %i\n",descNo,staticOff);
+#endif
+  cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
 
+  lscPush(ctx->thisObj,staticOff);
+
+  ctx->thisObj->valOff = ctx->thisObj->valOff + staticOff;
+
+  ctx->currentDescNo = descNo;
+
+  ctx->bc = (ObjDesc) codeFromDescNo(descNo);
+  ctx->glsc = getAllocE(getDesc(descNo));
+  //ctx->bc = (ObjDesc) myCode(ctx->thisObj);
+  //ctx->glsc = getAllocE(ctx->thisObj->desc);
+}
 void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
   fprintf(ctx->trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
@@ -1110,7 +1137,7 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"push ");
 #endif
-	arg2 = thisObj->vfields[arg1];
+	arg2 = thisObj->vfields[arg1 + thisObj->valOff];
 	vPush(thisStack,arg2);
 #ifdef TRACE
 	fprintf(trace,"%s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
@@ -1129,9 +1156,9 @@ void  *interpreter(void *B){;
 	arg1 = op1(bc,&glsc);
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
-	arg2 = X->vfields[arg1];
+	arg2 = X->vfields[arg1 + X->valOff];
 #ifdef TRACE
-	fprintf(trace,"pushg %s[%i] = %i\n",nameOf(X),arg1,arg2);
+	fprintf(trace,"pushg %s[%i + %i] = %i\n",nameOf(X),arg1,X->valOff,arg2);
 #endif
 	vPush(thisStack,arg2);
 	break;
@@ -1195,7 +1222,7 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"store %s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
 #endif
-	thisObj->vfields[arg1] = arg2; 
+	thisObj->vfields[arg1 + thisObj->valOff] = arg2; 
      	break;
       case rstore:
 	arg1 = op1(bc,&glsc);
@@ -1216,9 +1243,9 @@ void  *interpreter(void *B){;
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	arg2 = vPop(thisStack); // value
 #ifdef TRACE
-	fprintf(trace,"storeg %s[%i] = %i \n",nameOf(X),arg1,arg2);
+	fprintf(trace,"storeg %s[%i+%i] = %i \n",nameOf(X),arg1,X->valOff,arg2);
 #endif
-	X->vfields[arg1] = arg2;
+	X->vfields[arg1 + X->valOff] = arg2;
 	break;
       case rstoreg:   
 	arg1 = op1(bc,&glsc);
@@ -1339,6 +1366,18 @@ void  *interpreter(void *B){;
 	}
 #endif
 	break;
+      case rtnV:
+	arg1 = lscPop(thisObj); // staticOff
+#ifdef TRACE
+	fprintf(trace,"rtnV: %i\n",arg1);
+#endif
+	glsc = cRestoreReturn(thisObj);
+	currentDescNo = cRestoreReturn(thisObj);        
+	bc = codeFromDescNo(currentDescNo);
+	thisObj->valOff = thisObj->valOff - arg1;
+	rPush(thisObj,thisObj);
+
+	break;
       case mvStack:
 #ifdef TRACE
 	//fprintf(trace,"mvStack %s -> %s [",nameOf(thisObj),nameOf(thisStack));
@@ -1419,6 +1458,13 @@ void  *interpreter(void *B){;
 #endif
 	saveContext();
         invokeObj(thisBlock,arg1,arg2,0,0);
+	restoreContext();
+	break;
+      case invokeVal:
+	arg1 = op2(bc,&glsc);
+	arg2 = op2(bc,&glsc);
+	saveContext();
+        invokeValObj(thisBlock,arg1,arg2);
 	restoreContext();
 	break;
       case invokeExternal:
