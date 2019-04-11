@@ -224,7 +224,8 @@ enum {
   allocEventQ = 96,
   invokeExternal = 97,
   invokeVal = 98,
-  rtnV = 99
+  rtnV = 99,
+  addOff= 100
 };
 
 
@@ -349,6 +350,7 @@ int rSize(ObjDesc desc){
 
 
 char * nameOf(Btemplate *obj){ 
+  return "???";
   if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
   int inx = desc_getInt2(desc,0);

@@ -36,15 +36,15 @@ typedef void *FILE;
 #include <sched.h>
 #endif
 
-#ifdef __ARDIUNO__
+#ifdef __ARDIUNO__ 
 #include "mraa.h"
 #include "mraa/gpio.h"
 #define LOW 0
 #define HIGH 5
 #endif
 
-//#define DUMP
-//#define TRACE
+#define DUMP
+#define TRACE
 //#define EVENT
  
 
@@ -1132,6 +1132,16 @@ void  *interpreter(void *B){;
 	fprintf(trace,"pushc %i\n", arg1);
 #endif
 	break;
+      case addOff:
+	arg1 = op2(bc,&glsc);
+	X = rPop(thisStack);
+#ifdef TRACE
+	fprintf(trace,"addOff %s (%i) + %i\n",nameOf(thisObj),(int)thisObj,arg1 * 4);
+#endif
+	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	//arg2 = X->vfields[arg1 + X->valOff];
+	rPush(thisStack,X + arg1 * 4 );
+	break;
       case push:
 	arg1 = op1(bc,&glsc);
 #ifdef TRACE
@@ -1233,7 +1243,8 @@ void  *interpreter(void *B){;
 	putR(thisObj,arg1,X);
 	//thisObj->rfields[arg1] = X;
 #ifdef TRACE
-	//printf("rstore: %s %i %s\n",nameOf(X),arg1,nameOf(thisObj));
+	fprintf(trace,"done\n");
+	fprintf(trace,"%c",nameOf(X));
 	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
 #endif
 	break;

@@ -345,6 +345,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case allocEventQ:
 	fprintf(trace,"allocEventQ %i",op1(bc,&glsc));
         break;
+      case addOff:
+	fprintf(trace,"addOff %i",op2(bc,&glsc));
+    break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc - 1]);
 	break;
