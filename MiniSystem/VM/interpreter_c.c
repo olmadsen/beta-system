@@ -169,7 +169,7 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   Btemplate *obj = (Btemplate*)heapAlloc(i);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
-  obj->id = ID;
+  obj->id = ID; 
   obj->valOff = 0;
   obj->isObj = isObj;
   obj->vtop = 0;
@@ -189,7 +189,7 @@ void dumpVstack(FILE *trace,Btemplate *stack);
 void StacksToOut(FILE *trace,Btemplate *thisObj, Btemplate *thisStack)//, Block *ctx)
 { fprintf(trace,"\n\tthisObj = %s ",nameOf(thisObj));
   dumpRstack(trace,thisObj);
-  dumpVstack(trace,thisObj);
+  dumpVstack(trace,thisObj); 
   fprintf(trace,"\n\tthisStack = %s ",nameOf(thisStack));
   dumpRstack(trace,thisStack);
   dumpVstack(trace,thisStack);
@@ -590,7 +590,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
-  rPush(ctx->callee,ctx->thisObj);
+  rPush(ctx->callee,ctx->thisObj); 
   rPush(ctx->callee,ctx->thisStack);
   rPush(ctx->callee,origin); // OBS - cf invokeObj
 
@@ -1136,11 +1136,13 @@ void  *interpreter(void *B){;
 	arg1 = op2(bc,&glsc);
 	X = rPop(thisStack);
 #ifdef TRACE
-	fprintf(trace,"addOff %s (%i) + %i\n",nameOf(thisObj),(int)thisObj,arg1 * 4);
+	fprintf(trace,"thisObj: %i \n",(int)thisObj);
+	fprintf(trace,"addOff %s (%i) + %i, %i\n",nameOf(thisObj),(int)X,arg1 * 4
+, (int)X + arg1 *4);
 #endif
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	//arg2 = X->vfields[arg1 + X->valOff];
-	rPush(thisStack,X + arg1 * 4 );
+	rPush(thisStack,(int)X + arg1 * 4 );
 	break;
       case push:
 	arg1 = op1(bc,&glsc);
@@ -1216,7 +1218,7 @@ void  *interpreter(void *B){;
 	break;
       case xrpushg:
 	arg1 = op1(bc,&glsc);
-	X = rPop(thisStack);
+	X = rPop(thisStack); 
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
 	Y = getR(X,arg1 + arg2 + newAllocOff); // need range check - do we adjust for range?
@@ -1237,14 +1239,14 @@ void  *interpreter(void *B){;
       case rstore:
 	arg1 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"rstore ");
+	fprintf(trace,"rstore %i",arg1);
 #endif
 	X = rPop(thisStack);
+	fprintf(trace,"X: %i\n",(int)X);
 	putR(thisObj,arg1,X);
 	//thisObj->rfields[arg1] = X;
 #ifdef TRACE
-	fprintf(trace,"done\n");
-	fprintf(trace,"%c",nameOf(X));
+	fprintf(trace,"%c thisObj: %i %i ",nameOf(X),(int)thisObj,(int)X);
 	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
 #endif
 	break;

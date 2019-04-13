@@ -202,14 +202,16 @@ generator: variants
                if)
             #);
           getAdr::
-            (#
+            (# E: ^Exp; originIsValue: @boolean
             do cd.com(#do 'DI:getAdr:newOff:'->T; newOff -> I; ':isValue:'->T; isValue-> B #);
                cd.com(#do 'A.isValue:' -> T; A.isValue -> B #);
                cd.com(#do A.print -> T; ' '  -> T; dopt -> T #);
                (if OG.isSimpleValue or isValue then
                    (if not A.isValue then
                        A.load;   
-                       (0,none) -> Address -> A[];
+                       A.E[] -> E[]; A.originIsValue -> originIsValue;
+                       (0,none) -> Address -> A[]; 
+                       E[] -> A.E[]; originIsValue -> A.originIsValue;
                        newOff -> A.off;
                        OG.isSimpleValue or OG.isValue -> A.isValue
                     else
@@ -1011,6 +1013,11 @@ generator: variants
                        (*cd.rPop*)
                     else                   
                        ('origin',newOriginOff) -> cd.rstore;
+                       (if (origin[] -> originIsValue) then
+                           cd.com(#do 'origin.valueOff:store:' -> T;
+                                    NewOriginOff + 1 -> I; #);
+                           ('originOff',NewOriginOff + 1) -> cd.store
+                       if)
                    if);
                    not doHasCode -> cd.allocEventQ;
                    
@@ -1204,6 +1211,12 @@ generator: variants
                        cd.com(#do 'goOrigin:'-> T; OT.OGid-> T; 
                                 OT.IS.newOriginOff -> I; newOriginOff -> I #);
                        (T[],newOriginOff) -> cd.rpushg;
+                       (if (origin[] -> originIsValue) then
+                           cd.com(#do 'origin.valueOff:load ' -> T;
+                                    newOriginOff + 1 -> I #);
+                           cd.pushThis;
+                           (T[],newOriginOff + 1) -> cd.pushg;
+                       if);
                        (if origin[] <> none then
                            (on - 1,NA[]) -> (origin[]->org[]).goOrigin -> org[]
                         else
@@ -1754,12 +1767,21 @@ generator: variants
        (* E = first exp in "R.S.Q", ie. E = "R" *)
        (# done: @boolean;
           loadAdr::
-            (#
+            (# orgIsValue: @boolean
             do (if not done then
                    cd.com(#do 'loadAdr:'->T; this(address).print -> T  #);
                    true -> done;
                    (if on > 0 then
-                       (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
+                       (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[]);
+                       (if (E[] <> none) then
+                           cd.com(#do 'Ea:'->T; E.dopt -> T;' ' -> T;
+                                    (E.enclosingObjectGenerator).dopt -> T
+                                    #);
+                           (if (E.ATd.enclosingObjectGenerator).isValue then
+                               cd.com(#do 'origin.value:loadOrigin: ' -> T; #);
+                               true -> originIsValue
+                           if)
+                       if)
                    if);
                    (if off > 0 then
                        (if isValue then
@@ -1777,17 +1799,36 @@ generator: variants
                if)if)
             #);
           load::  
-            (#
+            (# orgIsValue: @boolean
             do (if not done then
                    cd.com(#do 'load:'->T; this(address).print -> T  #);
                    true -> done;
                    (if on > 0 then
-                       (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
+                       (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[]);
+                       (if (E[] <> none) then
+                           cd.com(#do 'Eb:'->T; E.dopt -> T;' ' -> T;
+                                    (E.ATD.enclosingObjectGenerator).isValue -> B;
+                                    ' ' -> T;
+                                    (E.ATd.enclosingObjectGenerator).dopt -> T
+                                 #);
+                           (if (E.ATd.enclosingObjectGenerator).isValue then
+                               cd.com(#do 'origin.value:loadOrigin: ' -> T; #);
+                               true -> orgIsValue;
+                               true -> originIsValue
+                           if)
+                       if)                       
                    if);
                    (* on > 0 ==> off = 0 ?*)
                    (if not onlyOrigin and (off > 0) then
+                       (if originIsValue then
+                           cd.com(#do 'origin.value:adjustOff'-> T; #);
+                       if);
                        (if isValue then
-                           ('',off) -> cd.pushg
+                           (if originIsValue then
+                               ('',off) -> cd.ovpushg
+                            else
+                               ('',off) -> cd.pushg
+                           if)
                         else
                            ('',off) -> cd.rpushg
                        if)
@@ -1825,9 +1866,9 @@ generator: variants
                '" on:'-> T.puttext; on -> T.putint; 
                ' off:'-> T.puttext; off -> T.putint;
                ' isValue:' -> T.puttext; 
-               (if isValue then 'True'-> T.puttext 
-                else 'False'->T.puttext
-               if)
+               (if isValue then 'True'-> T.puttext else 'False'->T.puttext if);
+               ' originIsValue:' -> T.puttext; 
+               (if originIsValue then 'True'-> T.puttext else 'False'->T.puttext if);
             #);
        enter(superAdj,CC[])
        exit this(Address)[]
@@ -1953,11 +1994,11 @@ generator: variants
                   cd.com(#do 'computeAdr:I:'-> T; ix->I; ' E:"'->T; E.dopt -> T; 
                            '" ' -> T; A.PRINT-> T;  #);
                   (if isFirst then
-                      cd.com(#do 'computeAdr:Q:'-> T #);
+                      cd.com(#do 'computeAdr:Q:'-> T; A.print -> T #);
                       E.pushThis;
-                      cd.com(#do 'computeAdr:W:'-> T #);
+                      cd.com(#do 'computeAdr:W:'-> T; A.print -> T #);
                       A[] -> E.getAdr -> A[];
-                      cd.com(#do 'computeAdr:E:'-> T #);
+                      cd.com(#do 'computeAdr:E:'-> T; A.print -> T #);
                       E[] -> rec[]
                   if);
                   (if not isLast then

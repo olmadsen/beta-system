@@ -48,7 +48,7 @@ typedef struct Btemplate {
   ObjDesc desc;
   int id;
   int valOff;
-  bool isObj;
+  bool isObj; 
   int vstack[16];  
   struct Btemplate *rstack[16];
   int vtop; int rtop;
@@ -350,7 +350,6 @@ int rSize(ObjDesc desc){
 
 
 char * nameOf(Btemplate *obj){ 
-  return "???";
   if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
   int inx = desc_getInt2(desc,0);
