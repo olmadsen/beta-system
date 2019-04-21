@@ -6,7 +6,7 @@ BODY 'qgeneratorBody'
 generator: variants
   (# traceModules: (# exit false #);
      useMarkForCodeGen: (# exit true #);
-
+     newCA: (# exit true #);
      Module::
        (# markForCodeGen::
             (# encModule:
@@ -208,7 +208,11 @@ generator: variants
                cd.com(#do A.print -> T; ' '  -> T; dopt -> T #);
                (if OG.isSimpleValue or isValue then
                    (if not A.isValue then
-                       A.load;   
+                       (if newCA then
+                           true ->  loadRec
+                        else
+                           A.load;
+                       if);
                        A.E[] -> E[]; A.originIsValue -> originIsValue;
                        (0,none) -> Address -> A[]; 
                        E[] -> A.E[]; originIsValue -> A.originIsValue;
@@ -224,7 +228,11 @@ generator: variants
                    if)
                 else                   
                    (if valueImpl then
-                       A.load;
+                       (if newCA then
+                           true -> loadRec 
+                        else
+                           A.load;
+                       if);
                        (0,none) -> Address -> A[];
                        newOff -> A.off
                if)if)
@@ -249,8 +257,13 @@ generator: variants
                             *) 
                            (if valueImpl then
                                (if adr[] <> none then 
-                                   'DI:use:adr:'->cd.comment;
-                                   adr.load
+                                   (if newCA then 
+                                       adr.load_x
+                                       (*(sig.id[],adr.off) -> cd.pushg*)
+                                    else
+                                       'DI:use:adr:'->cd.comment;
+                                       adr.load
+                                   if)
                                 else
                                    (sig.id[],hOff + NewOff) -> cd.pushg
                                if);
@@ -263,9 +276,14 @@ generator: variants
                     else
                        cd.com(#do 'DI:invoke:E=none' -> T#);
                        (if valueImpl then
-                             (if adr[] <> none then 
+                           (if adr[] <> none then 
+                               (if newCA then
+                                   adr.load_x
+                                   (*(sig.id[],adr.off) -> cd.pushg*)
+                                else
                                    'DI:use:adr:'->cd.comment;
-                                 adr.load
+                                   adr.load
+                               if)
                               else
                                  (sig.id[],hOff + NewOff) -> cd.pushg
                              if)
@@ -283,8 +301,13 @@ generator: variants
                    cd.com(#do 'DI:invoke:off:' -> T; newoff -> I #);
                    (if valueImpl then  
                        (if adr[] <> none then 
-                           'DI:use:adr:'->cd.comment;
-                           adr.load
+                           (if newCA then
+                               adr.load_x
+                               (*(sig.id[],adr.off) -> cd.rpushg*)
+                            else
+                               'DI:use:adr:'->cd.comment;
+                               adr.load
+                           if)
                         else
                            (sig.id[],hOff + NewOff) -> cd.rpushg
                        if)
@@ -1591,22 +1614,30 @@ generator: variants
             do cd.com(#do 'Pattern:load:'->T;OG.primNo -> I; ' '->T; dopt -> T;   #);
                (if OG.primNo
                 // assign_prim then
+                   '\n\n***** pattern:load:assign_prim: called A.store'->putline;
                    A.store
                if);
             #);
           getAdr::
             (#
-            do cd.com(#do 'ptn:getAdr:'->T; sig.doPT -> T; A.print -> T #);
-               (if isBasic  then
-                   A.load
+            do cd.com(#do A.print -> T #);
+               (if newCA then
+
+                   (if isBasic then
+                       true -> loadRec;
+                    else
+                       A.loadAdr_x
+                   if)
                 else
-                   A.loadAdr
-               if)
+                   (if isBasic  then
+                       A.load
+                    else
+                       A.loadAdr
+               if)if)
             #);
           invoke::
-            (# gdb:: (# do sig.doPT -> lx.puttext; 
-                        ' descNo: ' -> lx.puttext; OG.IS.newDescNo -> lx.putint;
-                        ' top: ' -> lx.puttext; OG.Qvariants.top -> lx.putint 
+            (# gdb:: (#do ':top:' ->TT; OG.Qvariants.top ->TI; 
+                        (if adr[] <> none then adr.print -> TT if)
                      #);
                org: ^Items; exitLab: @labelHandler.label;               
                doBreak:
@@ -1638,9 +1669,7 @@ generator: variants
                  #);   
                doPrimElse: BooleanValue(#<<SLOT doPrimElse:doPart>> #);
                exNo: @integer; N:^ Node; di: ^DataItem; var: ^Variant
-            do cd.com(#
-                     do 'Pattern:invoke:'->T; OG.OGid->T #);
-               (*(if not OG.IS.isEmpty then
+            do (*(if not OG.IS.isEmpty then
                    (OG.OGid,OG.sig[],OG[],OG.super[],CC[],none) -> ObjTmpStack.add;
                 if);*)
                (if doPrimElse then
@@ -1781,6 +1810,29 @@ generator: variants
      Address: superAdr
        (* E = first exp in "R.S.Q", ie. E = "R" *)
        (# done: @boolean;
+          load_x::
+            (#
+            do (if isValue then
+                   (if originIsValue then
+                       ('',off) -> cd.ovpushg
+                    else
+                       ('',off) -> cd.pushg
+                   if)
+                else
+                   ('',off) -> cd.rpushg
+               if)
+            #);
+          loadAdr_x::
+            (#
+            do (if off > 0 then
+                   (if isValue then
+                       cd.com(#do 'loadAdr:isValue:'-> T#);
+                       off -> cd.addOff;
+                       (*('',off) -> cd.pushg*)
+                    else
+                       ('',off) -> cd.rpushg
+               if)if);
+            #);
           loadAdr::
             (# orgIsValue: @boolean
             do (if not done then
@@ -1829,7 +1881,7 @@ generator: variants
                                     (E.ATd.enclosingObjectGenerator).dopt -> T
                                  #);
                            (if (E.ATd.enclosingObjectGenerator).isValue then
-                               cd.com(#do 'origin.value:loadOrigin: ' -> T; #);
+                               cd.com(#do 'origin.value:loadOrigin: ' -> T #);
                                true -> orgIsValue;
                                true -> originIsValue
                            if)
@@ -1853,6 +1905,10 @@ generator: variants
                        (if E## 
                         // charObj## // const##  then
                            E.invoke
+                       (* else
+                           (rec[],E[],true,0,0,none,this(address)[])
+                           -> 
+                           E.invoke*)
                    if)if)
                 else
                    cd.com(#do 'Address:load:done:'->T; this(address).print -> T #)
@@ -1987,11 +2043,15 @@ generator: variants
                    do (if needOrigin then
                           (superAdj,&callChain[]) 
                             -> Address
-                            -> computeAdr -> (rec[],E[],A[]);
+                            -> computeAdr_X -> (rec[],E[],A[]);
                       if);
                       cd.com(#do 'Invoke:after:computeAdr:superAdj:'->T; 
                                superAdj-> I;
                                (if A[] <>  none then A.print -> T if)#);
+                      cd.com(#do 'rec:label:"'-> T;
+                               (if rec[]<> none then 
+                                   rec.label -> T; '" "'->T;
+                               rec.doPT -> T; '"' -> T if)#);
                       (superAdj,CC[]) -> E.loadArgs;
                       cd.com(#do 'Invoke:after:loadArgs:'->T #);
                       (rec[],E[],useReturnValue,staticOff,hOff,CC[],A[]) 
@@ -2011,8 +2071,66 @@ generator: variants
                if);
                cd.bcPos -> endBCP
             #);
+          computeAdr_X:
+            (* R.S.foo(exp).Q
+             * X := Y + (Z +117)
+             * aLine.aPoint.X
+             *)
+            (# A: ^Address; E,rec,pRec: ^Exp; j: @integer; loadRec: @boolean
+            enter A[]
+            do 
+               scanSons
+               (#
+               do rec[] -> pRec[];
+                  E[] -> rec[];
+                  current[] -> E[];                  
+                  cd.com
+                  (#do 'computeAdr_x:'->T; j+1->j->I; ':rec:"'->T; 
+                     (if rec[]<> none then rec.dopt-> T else 'none'->T if);
+                     '" E:"'->T; E.dopt -> T; '"'->T; A.print -> T
+                  #);
+                  (if isFirst then
+                      E[] -> rec[];
+                      E.pushThis;
+                      (* E.loadOrigin - we must do this also for values *)
+                      (A.superAdj,none) -> E.loadOrigin -> (rec[],E[]);
+                      (* we should ignore rec and E - defined above 
+                       * And A.superAdj should be eliminated *)
+                      A[] -> E.getAdr -> (loadRec,A[]);
+                      (* really getOffSet of E.ATd *)
+                      (if (E.on > 0) or (A.superadj > 0) then
+                          (E.ATd.enclosingObjectGenerator).isValue -> A.originIsValue
+                          (* should probably be for each receiver in
+                           * R.S.foo(exp).Q, i.e. R, S and foo
+                           *)
+                      if)
+                   else
+                      (* rec - load
+                       * loadArgs
+                       * Invoke
+                       *)
+                      (if E.ATd.primNo <> assign_prim then
+                          cd.com(#do 'E:notAssign:"'->T; E.dopt->T; '"'->T#);
+                          A[] -> E.getAdr -> (loadRec,A[]);
+                          (if loadRec then
+                              (A.superAdj,none) -> rec.loadArgs;
+                              (* invoke and getAdr may imply two loads/push
+                               * Perhaps we need a combined invoke & getAdr
+                               * Perhaps inner in getAdr - 
+                               * and inner is called when invoke is needed!?
+                               *)
+                              (pRec[],rec[],true,0,0,none,none) -> rec.invoke;
+                          if);
+                          (* really getOffSet of E.ATd *)
+                       else
+                          cd.com(#do 'E:isAssign:'-> T; E.dopt -> T#); 
+                      if);                      
+                  if);
+               #);
+            exit(rec[],E[],A[])
+            #);
           computeAdr:
-            (# A: ^Address; E,rec,nE: ^Exp
+            (# A: ^Address; E,rec,nE: ^Exp; loadRec: @boolean
             enter A[]
             do scanSons
                (# ix: @integer
@@ -2024,7 +2142,7 @@ generator: variants
                       cd.com(#do 'computeAdr:Q:'-> T; A.print -> T #);
                       E.pushThis;
                       cd.com(#do 'computeAdr:W:'-> T; A.print -> T #);
-                      A[] -> E.getAdr -> A[];
+                      A[] -> E.getAdr -> (loadRec,A[]);
                       cd.com(#do 'computeAdr:E:'-> T; A.print -> T #);
                       E[] -> rec[]
                   if);
@@ -2032,14 +2150,14 @@ generator: variants
                       E[] -> rec[];
                       (if (next -> nE[]).ATd.primNo <> assign_prim then
                           (0(*superAdj,CC[]*),&callChain[]) -> E.loadArgs;
-                          (if not isFirst then A[] -> E.getAdr -> A[] if)
+                          (if not isFirst then A[] -> E.getAdr -> (loadRec,A[]) if)
                        else
-                          (if not isFirst then A[] -> E.getADr -> A[] if)
+                          (if not isFirst then A[] -> E.getADr -> (loadRec,A[]) if)
                       if)
                    else
                       cd.com(#do 'computeAdr:notAssignA:'->T; E.dopt -> T; a.print->T; #);
                       (if not isFirst and (E.ATd.primNo <> assign_prim) then 
-                          A[] -> E.getAdr -> A[] if);
+                          A[] -> E.getAdr -> (loadRec,A[]) if);
                       cd.com(#do 'computeAdr:notAssignB:'->T; E.dopt -> T; a.print->T; #);
                   if)
                #);
@@ -2153,14 +2271,15 @@ generator: variants
                         ATd.dopt -> T #); 
                ATd.markForCodeGen
             #);
-          pushThis:: (# gdb::(#do 'on:'->lx.puttext; on -> lx.putint#) 
+          pushThis:: (# gdb::(#do 'on:'->TT; on -> TI #) 
                      do cd.bcPos -> beginBCP; ATd.pushThis #);
           loadAdr::
             (# 
             do (rec[],E[],hOff) -> ATd.loadAdr -> (rec[],E[],hOff)
             #);
           getAdr::
-            (# gdb:: (#do ':superAdj:'->lx.append; adr.superAdj -> lx.putint; ':on:'->lx.append; on->lx.putint;  #);
+            (# gdb:: 
+                 (#do ':superAdj:'->TT; adr.superAdj->TI; ':on:'->TT; on->TI#);
                Ax: ^Address
             do (*superAdj -> A.superAdj;*)
                adr[] -> Ax[];
@@ -2172,7 +2291,7 @@ generator: variants
                    on -> Ax.on;
                if);
                cd.com(#do 'OI:getAdr:after:On:'->T; on -> I; Ax.print -> T #);
-               Ax[] -> ATd.getAdr -> adr[];
+               Ax[] -> ATd.getAdr -> (loadRec,adr[]);
                cd.com(#do 'OI:getAdr:after:ATd.getAdr:'->T; Ax.print -> T #);
             #);
           loadOrigin::
@@ -2293,7 +2412,7 @@ generator: variants
                adr[] -> IV.computeAdr -> (rec[],E[],adr[]);
                cd.com(#do 'BracketedExp:getAdr:after:computeAdr:'->T; adr.print->T#);
                (adr.superAdj,none) -> E.loadArgs;
-              (* (rec[],E[],true,0,0,none,adr[]) -> E.invoke;*)
+               (* (rec[],E[],true,0,0,none,adr[]) -> E.invoke;*)
             #);
           pushThis:: 
             (* Skip, since loadOrigin below includes pushThis *)  
@@ -2308,6 +2427,7 @@ generator: variants
           loadArgs:: 
             (* Skip, since loadOrigin includes loadArgs *)              
             (# #);
+          invoke::(# #)
        #);
      Const::
        (# Qgen:: (# do invoke #);
