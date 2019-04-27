@@ -688,7 +688,7 @@ void invokeValObj(Block *ctx,int descNo,int staticOff){
 
   ctx->thisObj->valOff = ctx->thisObj->valOff + staticOff;
 
-  ctx->currentDescNo = descNo;
+  //ctx->currentDescNo = descNo;
 
   ctx->bc = (ObjDesc) codeFromDescNo(descNo);
   ctx->glsc = getAllocE(getDesc(descNo));
@@ -1134,15 +1134,17 @@ void  *interpreter(void *B){;
 	break;
       case addOff:
 	arg1 = op2(bc,&glsc);
-	X = rPop(thisStack);
+	//X = rPop(thisStack);
 #ifdef TRACE
-	fprintf(trace,"thisObj: %i \n",(int)thisObj);
-	fprintf(trace,"addOff %s (%i) + %i, %i\n",nameOf(thisObj),(int)X,arg1 * 4
-, (int)X + arg1 *4);
+	fprintf(trace, "addOff %i\n",arg1);
+	//fprintf(trace,"thisObj: %i \n",(int)thisObj);
+	//fprintf(trace,"addOff %s (%i) + %i, %i\n",nameOf(thisObj),(int)X,arg1 * 4
+	//, (int)X + arg1 *4);
 #endif
-	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	// if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	//arg2 = X->vfields[arg1 + X->valOff];
-	rPush(thisStack,(int)X + arg1 * 4 );
+	// rPush(thisStack,(int)X + arg1 * 4 );
+	vPush(thisStack,arg1);
 	break;
       case push:
 	arg1 = op1(bc,&glsc);
@@ -1171,8 +1173,20 @@ void  *interpreter(void *B){;
 	arg2 = X->vfields[arg1 + X->valOff];
 #ifdef TRACE
 	fprintf(trace,"pushg %s[%i + %i] = %i\n",nameOf(X),arg1,X->valOff,arg2);
-#endif
+#endif 
 	vPush(thisStack,arg2);
+	break;
+
+      case ovpushg:
+	arg1 = op1(bc,&glsc);
+	arg2 = vPop(thisStack);
+	X = rPop(thisStack);
+	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	arg3 = getV(X,arg1 + arg2 - 1);
+        vPush(thisStack,arg3);
+#ifdef TRACE
+	fprintf(trace,"ovpushg %s[%i] = %s\n",nameOf(X),arg3);
+#endif
 	break;
       case rpushg:
 	arg1 = op1(bc,&glsc);
@@ -1388,7 +1402,7 @@ void  *interpreter(void *B){;
 	currentDescNo = cRestoreReturn(thisObj);        
 	bc = codeFromDescNo(currentDescNo);
 	thisObj->valOff = thisObj->valOff - arg1;
-	rPush(thisObj,thisObj);
+	//rPush(thisObj,thisObj);
 
 	break;
       case mvStack:

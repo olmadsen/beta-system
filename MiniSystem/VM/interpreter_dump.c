@@ -74,6 +74,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case pushg:
 	fprintf(trace,"pushg %i",op1(bc,&glsc));
 	break;
+      case ovpushg:
+	fprintf(trace,"ovpushg %i",op1(bc,&glsc));
+	break;
       case rpushg:
 	fprintf(trace,"rpushg %i ", op1(bc,&glsc));
 	break;
