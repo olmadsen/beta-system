@@ -43,8 +43,8 @@ typedef void *FILE;
 #define HIGH 5
 #endif
 
-#define DUMP
-#define TRACE
+//#define DUMP
+//#define TRACE
 //#define EVENT
  
 
