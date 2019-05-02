@@ -226,7 +226,8 @@ enum {
   invokeVal = 98,
   rtnV = 99,
   addOff = 100,
-  ovpushg = 101
+  ovpushg = 101, 
+  ovstoreg = 102
 };
 
 

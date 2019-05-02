@@ -20,7 +20,7 @@
 #ifdef __arm__
 typedef void *FILE;
 #else
-#include <stdio.h>
+#include <stdio.h> 
 #endif 
 
 #include <stdlib.h>
@@ -683,8 +683,10 @@ void invokeValObj(Block *ctx,int descNo,int staticOff){
   fprintf(ctx->trace,"invokeVal %i %i\n",descNo,staticOff);
 #endif
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
-
+ 
   lscPush(ctx->thisObj,staticOff);
+
+  ctx->currentDescNo = descNo;
 
   ctx->thisObj->valOff = ctx->thisObj->valOff + staticOff;
 
@@ -1176,7 +1178,6 @@ void  *interpreter(void *B){;
 #endif 
 	vPush(thisStack,arg2);
 	break;
-
       case ovpushg:
 	arg1 = op1(bc,&glsc);
 	arg2 = vPop(thisStack);
@@ -1273,6 +1274,14 @@ void  *interpreter(void *B){;
 	fprintf(trace,"storeg %s[%i+%i] = %i \n",nameOf(X),arg1,X->valOff,arg2);
 #endif
 	X->vfields[arg1 + X->valOff] = arg2;
+	break;
+      case ovstoreg:
+	arg1 = op1(bc,&glsc);
+	arg2 = vPop(thisStack);
+	X = rPop(thisStack);
+	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	arg3 = vPop(thisStack);
+	X->vfields[arg1 + arg3 - 1] = arg2;
 	break;
       case rstoreg:   
 	arg1 = op1(bc,&glsc);
@@ -1402,8 +1411,7 @@ void  *interpreter(void *B){;
 	currentDescNo = cRestoreReturn(thisObj);        
 	bc = codeFromDescNo(currentDescNo);
 	thisObj->valOff = thisObj->valOff - arg1;
-	//rPush(thisObj,thisObj);
-
+	//fprintf(trace,"rtnV2: glsc:%i descNo: %i op: %i\n",glsc,currentDescNo,bc[glsc]);
 	break;
       case mvStack:
 #ifdef TRACE
@@ -2464,8 +2472,8 @@ void  *interpreter(void *B){;
 	break;
       case _break:
 	arg1 = op1(bc,&glsc);
-	arg2 = op2(bc,&glsc);
-	arg3 = op2(bc,&glsc);
+	arg2 = op2(bc,&glsc); 
+	arg3 = op2(bc,&glsc); 
 #ifdef TRACE
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 #endif

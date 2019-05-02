@@ -77,6 +77,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case ovpushg:
 	fprintf(trace,"ovpushg %i",op1(bc,&glsc));
 	break;
+      case ovstoreg:
+	fprintf(trace,"ovstoreg %i",op1(bc,&glsc));
+	break; 
       case rpushg:
 	fprintf(trace,"rpushg %i ", op1(bc,&glsc));
 	break;
@@ -340,7 +343,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	fprintf(trace,"break %i %i",op1(bc,&glsc),op2(bc,&glsc));
+	fprintf(trace,"break %i %i %i",op1(bc,&glsc),op2(bc,&glsc),op2(bc,&glsc));
 	break;
       case stop: 
 	fprintf(trace,"stop ");
