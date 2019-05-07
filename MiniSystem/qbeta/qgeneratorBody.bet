@@ -62,6 +62,155 @@ do
         else
            true -> value       
    if)if)
+---GeneralPattern_invoke:doPart---
+do (# 
+      exNo: @integer; N:^ Node; di: ^DataItem; var: ^Variant
+   do (*(if not OG.IS.isEmpty then
+       (OG.OGid,OG.sig[],OG[],OG.super[],CC[],none) -> ObjTmpStack.add;
+       if);*)
+      (if doPrimElse then
+          (* Cases: E is an invocation of a pattern as in E, rec.E, R.rec.E, .
+           * (a)The receiver, rec, may be a constant or variable dataItem
+           * (For a variable DI, we forbid assigment etc if virtual Object)
+           * We have rec.E, like Lrecord.insert(...)
+           * rec may have virtual bindings that qualify data-items in E
+           * E is an invocation of this(Pattern)
+           * Find out if a new variant of this(Pattern) is needed
+           * In List example insert is local to List
+           * (b)The receiver may be a pattern as in Foo(...).bar(...)
+           * (a) We may mark OG as having virtual Object: 
+           * OG (insert) has probably no variants since local to List
+           * We have to create a new variant based on the bindings 
+           * in rec (Lrecord)
+           * For each virtual Object ref, or DI there is a variant
+           * with the corresponding bindings in the reciver
+           * Note we may need to consider the whole invocation list
+           * R.S.foo(...) R and S may have bindings
+           *)
+          cd.com(#do'Pattern:invoke:descNo:'->T; OG.is.newDescNo -> I;
+                   ' top:' -> T; OG.Qvariants.top -> I;
+                   ' rec:' -> T; rec[] = none -> B
+                #);
+          (* We must understand the differences between
+           * computeVariant and computeVariantX and the different 
+           * situations below where computeVarints(X) is called
+           *)
+          (if rec[] = E[] then
+              (if not useMarkForCodeGen then
+                  (OG.OGid,OG.sig[],OG[],OG.super[],CC[]
+                  ,OG.Qvariants.computeVariantX)
+                    -> ObjTmpStack.add
+              if)
+           else                
+              (if not useMarkForCodeGen then
+                  (OG.OGid,OG.sig[],OG[],OG.super[],CC[],OG.computeVariant)
+                    -> ObjTmpStack.add;
+              if);
+              (if rec.ATd## = dataItem## then 
+                  (* if receiver is constant, then only one variant *)
+                  rec.ATd[] -> OG.Qvariants.computeVariantX
+                  (# H:: (# do head #);
+                     head: @
+                       (# done: @boolean
+                       do (if not done then
+                              true -> done;
+                              ('\n***pattern:invoke:rec: '
+                              ,rec.dopt,' . ',E.dopt,'\n'
+                              ,OG.dopt,'\n')
+                                -> putTextL;
+                          if);
+                       #);
+                  #) -> var[];
+                  (if var[] <> none then
+                      (* var.print;  
+                       OG.Qvariants.print*)
+                  if)
+               else 
+                  (* Receiver and rec.ATd is module 
+                   * or pattern (as in foo(e).bar) 
+                   * but receiver is actually the return 
+                   * value of foo *)
+                  OG.Qvariants.computeVariantX -> var[];
+                  cd.com(#do 'Rec:module or pattern:'-> T; sig.id[] -> T;
+                           ' descNo: ' -> T; OG.IS.newDescNo -> I;
+                           ' top: ' -> T; OG.Qvariants.top -> I; OG.dopt->T
+                        #);
+          if)if);
+          (if ptnKind // virtualPtn // furtherPtn // finalPtn then
+              (# DI: ^DataItem; isStatic: @boolean
+              do (if rec.ATd## = DataItem## then
+                     rec.ATd[] -> DI[];
+                     (if true
+                      // DI.OG.isValue then
+                         true -> isStatic;
+                         (* '\nRec is value:call: '-> puttext; 
+                          * OG.IS.newDescNo -> putint;
+                          * ' ' -> put; DI.dopt -> putline;
+                          * dopt -> putline;
+                          *)
+                      // DI.isConst then
+                         true -> isStatic;
+                         (* '\nRec is const: '-> puttext; 
+                          * OG.IS.newDescNo -> putint;
+                          * ' ' -> put;DI.dopt -> putline;;
+                          * dopt -> putline;
+                          *)
+                 if)if);
+                 (if isStatic then
+                     (sig.id[],OG.IS.newDescno,staticOff,not OG.IS.doHasCode) 
+                       -> cd.invoke
+                  else
+                     (sig.id[],off) -> cd.sendVirtual
+                 if)                          
+              #)
+           else 
+              (if not isBasicPtn then 
+                  (if var[] <> none then 
+                      (if OG.IS.newDescNo = 0 then
+                          'OBS! Qalloc-X' -> cd.comment;
+                          (var.thisVarNo,none) -> OG.Qalloc;
+                      if);
+                      cd.com(#do 'invoke:var not none'->T;
+                               OG.IS.newDescno -> I #);
+                      (if OG.isValue then
+                          (*'\n**** pattern is value: '->puttext; dopt->putline;*)
+                          (sig.id[],OG.IS.newDescno,staticOff - 1) -> cd.invokeVal
+                       else
+                          (sig.id[],OG.IS.newDescno,staticOff
+                          ,not OG.IS.doHasCode) 
+                            -> cd.invoke
+                      if)                               
+                   else 
+                      (*'---var is none: descNo:'->puttext;
+                       * OG.IS.newDescNo -> putint; newline;
+                       * OG.IS.newDescNo does not corresp. to var *)
+                      (if OG.IS.newDescNo = 0 then
+                          '\n*** newDescNo=0:Y' -> putline;
+                          (* Why does OG.Qalloc work here and not 
+                           * for vStub above?*)
+                          'OBS! Qalloc-Y'->cd.comment;
+                          (if var[] <> none then 'Bingo'->putline;
+                              (var.thisVarNo,none) -> OG.Qalloc
+                           else
+                              (1,none) -> OG.Qalloc
+                          if);
+                      if);
+                      cd.com
+                      (#
+                      do 'Ptn:Invoke:' -> T; OG.IS.newDescno -> I
+                      #);
+                      (if OG.isValue then
+                          (*'\n**** pattern is value: '->puttext; dopt->putline;*)
+                          (sig.id[],OG.IS.newDescno,staticOff - 1) -> cd.invokeVal
+                       else
+                          (sig.id[],OG.IS.newDescno,staticOff,not OG.IS.doHasCode) 
+                            -> cd.invoke
+                      if)
+              if)if)
+          if);
+          (if not useReturnValue then popReturn if);
+      if)
+   #);   
 ---AssignMentPattern_invoke:doPart--
 do (#
    do (if ((rec.ATd.desc).newDescNo = 0) then
