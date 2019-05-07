@@ -62,6 +62,18 @@ do
         else
            true -> value       
    if)if)
+---AssignMentPattern_invoke:doPart--
+do (#
+   do (if ((rec.ATd.desc).newDescNo = 0) then
+          'descNo = 0'-> cd.comment;
+          rec.ATD.dopt -> cd.comment
+      if);
+      cd.com(#do 'AssignmentPattern:invoke:'-> T; dopt -> T#);
+      (if (adr[] <> none) then
+          cd.com(#do 'doPrimElse:adr:'-> T; adr.print -> T #);
+          adr.store;
+      if)
+   #)
    
 --BreakPatternInvoke:doPart---
 do
@@ -99,7 +111,100 @@ do
           leave_Prim -> doBreak   
       if)
    #)
----OtherPrimInvoke:doPart---
+---IndexPattern_invoke:doPart---
+do (#
+   do (if OG.primNo 
+       // indexedPut_prim then 
+          (* Can indexedPut and other primtives
+           * just be opcodes? May simplify things*)
+          (# D: ^DataItem; isRef: @boolean
+          do rec.ATd[] -> D[];
+             D.OG.scanActualArgs
+             (# i: @integer
+             do (if (i + 1 -> i) = 2 then
+                    current.dopt -> cd.comment;
+                    (if current.isBasic then
+                        'basic' -> cd.comment;
+                     else 
+                        'ref' -> cd.comment;
+                        true -> isRef;
+                if)if);
+             #);
+             (if isRef then
+                 cd.rswap;
+                 ('inx',1) -> cd.xrstoreg
+              else
+                 ('inx',1) -> cd.xstoreg  
+             if)
+          #)       
+       // indexedGet_prim then
+          (* check if rec is value or ref indexed *)
+          (# D: ^DataItem; isRef: @boolean
+          do (if rec.ATd.primNo = indexedGet_prim then
+                 (* The case for indexed::length *)
+                 ('inx',1) -> cd.xpushg
+              else
+                 rec.ATd[] -> D[];
+                 D.OG.scanActualArgs
+                 (# i: @integer
+                 do (if (i + 1 -> i) = 2 then
+                        current.dopt -> cd.comment;
+                        (if current.isBasic then 
+                            'value' -> cd.comment;
+                         else 
+                            'ref' -> cd.comment;
+                            true -> isRef
+                    if)if)
+                 #);
+                 (if isRef then
+                     ('inx',1) -> cd.xrpushg
+                  else
+                     ('inx',1) -> cd.xpushg
+                 if);
+             if)
+          #)
+       // stringGet_prim then
+          ('inx',1) -> cd.xpushg  
+       // indexed_prim then
+          (if elimOrigin then
+              cd.pushThis (* not used by allocIndexed - just popped *)
+          if);
+          E.args.scanArgs
+          (# OG: ^ObjectGenerator; i: @integer
+          do (*current.dopt -> puttext; ' ' -> put;*)
+             i + 1 -> i;
+             (if i = 2 then
+                 current[] -> OG[];
+                 (if Og.primNo = integer_prim then
+                     (*'Got value' -> puttext;*)
+                     0 -> cd.pushConst;   (* not isRindexed *)
+                  else
+                     (*'Got ref' -> puttext;*)
+                     1 -> cd.pushConst;   (* isRindexed *)
+          if)if)#); 
+          (sig.id[],sig[],OG[],OG.super[],CC[],OG.computeVariant) 
+            -> objTmpStack.add;           
+          (if elimOrigin then
+              1 -> cd.pushConst; (* dinx *)
+           else
+              (* rsize may be from the first Beta compiler
+               * where there may be non-indexed data-items
+               * and indexed was the last declaration!?
+               * With qbeta no other data-items than indexed
+               *)
+              OG.IS.rsize -> cd.pushConst; (* dinx *)
+          if);
+          ('StaticRep',OG.IS.newDescNo,false (*not used*),true) 
+            -> cd.allocIndexed;
+          (if staticOff > 0 then
+              cd.pushThis;
+              ('indexed',staticOff) -> cd.rstoreg
+          if)
+       // asString_prim then
+          ('asString',primNo) -> cd.callPrim
+      if)
+   #)   
+---OtherPrim_invoke:doPart---
 do (if OG.primNo    
     // ifthen_prim then
        exitLab.new;                   
