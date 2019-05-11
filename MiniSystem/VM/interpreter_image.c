@@ -227,7 +227,8 @@ enum {
   rtnV = 99,
   addOff = 100,
   ovpushg = 101, 
-  ovstoreg = 102
+  ovstoreg = 102,
+  vassign = 103
 };
 
 

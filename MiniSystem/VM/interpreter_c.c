@@ -138,6 +138,7 @@ int hSize = 0;
 
 
 int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
+void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 Btemplate *getR(Btemplate *obj,int inx){ 
   if (newAlloc){
@@ -1282,6 +1283,22 @@ void  *interpreter(void *B){;
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	arg3 = vPop(thisStack);
 	X->vfields[arg1 + arg3 - 1] = arg2;
+#ifdef TRACE
+	fprintf(trace,"ovstoreg %i\n",arg1);
+#endif
+	break;
+      case vassign:
+	arg1 = op1(bc,&glsc);   // size
+	arg2 = vPop(thisStack); // destOff
+	arg3 = vPop(thisStack); // srcOff
+        Y = rPop(thisStack);    // destObj
+        X = rPop(thisStack);    // srcObj
+#ifdef TRACE
+	fprintf(trace,"vassign %i\n",arg1);
+#endif
+        for (i = 1; i <= arg1; i++) {
+	  putV(Y,arg2 + i - 1,getV(X,arg3 + i - 1));
+	}
 	break;
       case rstoreg:   
 	arg1 = op1(bc,&glsc);
