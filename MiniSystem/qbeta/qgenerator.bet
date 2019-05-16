@@ -966,13 +966,15 @@ generator: variants
                               if);
                               (if sig[] = none then
                                   'Super:sig none'->cd.comment;
-                                  (newOriginOff,CC[]) -> E.loadArgs; 
+                                  (* do we need staticOff beloe? *)
+                                  (newOriginOff,0,CC[]) -> E.loadArgs; 
                                else
                                   'Super:sig not none'->cd.comment;
                                   (* go ON - 1 
                                    * but use newOriginOff first time
                                    *)
-                                  (- newOriginOff,CC[]) -> E.loadArgs; 
+                                  (* do we need staticOff beloe? *)
+                                  (- newOriginOff,0,CC[]) -> E.loadArgs; 
                               if);
                            #);
                        if);
@@ -1050,7 +1052,7 @@ generator: variants
                              do 'OG:pushReturn:' -> T; 
                                 (if sig[] = none then '-none-'->T
                                  else
-                                sig.id[] -> T if)#);                      
+                                sig.id[] -> T if)#);
                        (if (theObjectGenerator).isValue then 
                            cd.rtnV
                         else
@@ -1254,11 +1256,15 @@ generator: variants
                         ' descNo: ' -> lx.puttext; OG.IS.newDescNo -> lx.putint;
                         ' top: ' -> lx.puttext; OG.Qvariants.top -> lx.putint
                      #);
-               actArgs: [6]^ObjectGenerator; (* actaul arguments *)
+               actArgs: [6]^ObjectGenerator; (* actual arguments *)
                top,i: @integer;
                enclosingOG: ^ObjectGenerator;
                var: ^Variant
-            do (if OG.primNo 
+            do cd.com(#do 'isValue: ' -> T; 
+                        E.ATd.primNo = vAssign_prim -> B
+                     #);
+               
+               (if OG.primNo 
                    (* Some of these are handled in invoke below
                     * May be moved to here*)
                 // inner_prim // this_prim // ifThen_prim
@@ -1402,21 +1408,31 @@ generator: variants
                             (currentArg.off, OG[]) 
                               -> (father.father[]-> enclosingOG[]).XaddB
                          else
+                            (* non-virtual argument *)
                             (if i > top then
                                 (* Either to few arguments or Super as in
                                  *    foo{ ... }
                                  * where foo has arguments - to be fixed! *)
-                             else(# j: @integer do i -> j;
+                             else
+                                (# j: @integer do i -> j;
                                     cd.com(#do 'loadArgs:X:'->T; 
-                                    actArgs[j].dopt->T #)#);
-                                (true,superAdj,0) -> actArgs[i].Qgen
+                                   actArgs[j].dopt->T #)#);
+                                (if (primNo = vAssign_prim) and actArgs[i].isValue then
+                                    '\n***Pattern:loadArgs:Value: ' -> puttext;
+                                    dopt -> putline;
+                                    actArgs[i].dopt ->putline
+                                 else
+                                    0 -> staticOff
+                                if);
+                                    
+                                (true,superAdj,staticOff) -> actArgs[i].Qgen
                             if)
                    if)#);
                    handleSuperArgs:
                      (if i < top then 
                          (* a hack - need to scan arguments of super *)
                          i + 1 -> i;
-                         (true,superAdj,0) -> actArgs[i].Qgen;
+                         (true,superAdj,staticOff) -> actArgs[i].Qgen;
                          restart handleSuperargs
                      if)
                if)
@@ -1628,21 +1644,25 @@ generator: variants
                 * How about: R.S.T.Q ? Q noGlobals, or globals?
                 *)
                cd.bcPos -> beginBCP;
-               (# A: ^Address
+               (# A: ^Address; off: @integer
                do (if needOrigin then
                       superAdj
                         -> Address
                         -> computeAdr -> (rec[],E[],A[]);
                   if);
-                  cd.com(#do 'Invoke:after:computeAdr:superAdj:'->T; 
-                           superAdj-> I;
-                           (if A[] <>  none then A.print -> T if)#);
-                  cd.com(#do 'rec:label:"'-> T;
-                           (if rec[]<> none then 
-                               rec.label -> T; '" "'->T;
-                           rec.doPT -> T; '"' -> T if)#);
-                  (superAdj,CC[]) -> E.loadArgs;
-                  cd.com(#do 'Invoke:after:loadArgs:'->T; ':E:'->T; E.dopt -> T;#);
+                  (if (E.ATd.primNo = vAssign_prim) and (A[] <> none) then A.off -> off if);
+                  cd.com(#do 'OI:after:computeAdr:superAdj:'->T; 
+                           superAdj-> I; (if A[] <>  none then A.print -> T if)#);
+                  cd.com(#do 'rec:label:'-> T;
+                           (if rec[]<> none then rec.label -> T; rec.doPT -> TQ if)#);
+                  cd.com(#do 'rec: ' -> T; rec.dopt -> TQ;
+                           'E: ' -> T; E.dopt -> TQ;
+                           'isValueAssign: ' -> T;
+                           E.ATd.primNo = vAssign_prim -> B;
+                        #);
+
+                  (superAdj,off,CC[]) -> E.loadArgs;
+                  cd.com(#do 'OI:after:loadArgs:'->T; ':E:'->T; E.dopt -> T;#);
                   (rec[],E[],useReturnValue,staticOff,CC[],A[]) 
                     -> E.invoke;
                #);
@@ -1697,7 +1717,7 @@ generator: variants
                                *    R.S,      rec = R, E = S
                                * E is a pattern or dataItem 
                                *)
-                              (A.superAdj,none) -> rec.loadArgs;
+                              (A.superAdj,0,none) -> rec.loadArgs;
                               (* Perhaps a combined invoke & getAdr *)
                               
                               (* A is the address of E - not of rec!!!!!!! *)
@@ -1748,7 +1768,7 @@ generator: variants
                   (if not isLast then
                       E[] -> rec[];
                       (if (next -> nE[]).ATd.primNo <> rAssign_prim then
-                          (superAdj,CC[]) -> E.loadArgs;
+                          (superAdj,staticOff,CC[]) -> E.loadArgs;
                           (rec[],nE[],true,staticOff,CC[],none) -> E.invoke
                        else
                           cd.com(#do 'loadOrigin:assign:'-> T; #);
@@ -1892,8 +1912,8 @@ generator: variants
                (rec[],E[],useReturnValue,staticOff,CC[],adr[]) -> ATd.invoke
             #);
           loadArgs:: 
-            (#
-            do (this(Exp)[],superAdj,CC[]) -> ATd.loadArgs
+            (# gdb:: (# do 'staticOff:' -> lx.puttext; staticOff -> lx.putint #);
+            do (this(Exp)[],superAdj,staticOff,CC[]) -> ATd.loadArgs
             #);
        #);       
      BracketedExp::
@@ -1938,7 +1958,7 @@ generator: variants
                      #);
                adr[] -> IV.computeAdr -> (rec[],E[],adr[]);
                cd.com(#do 'BracketedExp:getAdr:after:computeAdr:'->T; adr.print->T#);
-               (adr.superAdj,none) -> E.loadArgs;
+               (adr.superAdj,0,none) -> E.loadArgs; (* do we need staticOff here? *)
                (* (rec[],E[],true,0,0,none,adr[]) -> E.invoke;*)
             #);
           pushThis:: 
