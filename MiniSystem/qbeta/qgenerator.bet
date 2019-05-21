@@ -183,14 +183,14 @@ generator: variants
                        0 -> Address -> A[]; 
                        E[] -> A.E[]; originIsValue -> A.originIsValue;
                        newOff -> A.off;
-                       OG.isSimpleValue or OG.isValue -> A.isValue
+                       OG.isSimpleValue or OG.isValueObj -> A.isValue
                     else
                        (if A.off > 0 then
                            newOff - 1 + A.off -> A.off;
                         else
                            newOff -> A.off
                        if);
-                       OG.isSimpleValue or OG.isValue -> A.isValue
+                       OG.isSimpleValue or OG.isValueObj -> A.isValue
                    if)
                 else                   
                    true -> loadRec;
@@ -201,7 +201,7 @@ generator: variants
           invoke::
             (* called when not receiver - i.e. value to be pushed *)
             (# 
-            do (if OG.isSimpleValue or OG.isValue then 
+            do (if OG.isSimpleValue or OG.isValueObj then 
                    cd.com(#do 'DI:invoke:simpleValue;off:' -> TT; newoff -> II #);
                    (if (E[] <> none) then
                        cd.com(#do 'DI:invoke:E_not_none'->TT #);
@@ -217,14 +217,14 @@ generator: variants
                            (if true
                             // OG.isSimpleValue then 
                                cd.com(#do'Load simple value: ' -> TT #)
-                            // OG.isValue then 
+                            // OG.isValueObj then 
                                cd.com(#do '##Load compound value:isAdr:' -> TT;
                                         adr.isAdr -> BB; ' Size:'->TT;
                                         objSize -> II;
                                         rec.dopt -> TT; '.' -> TT;
                                         E.dopt -> TT; ',' -> TT; OG.dopt -> TT;
                                      #);
-                               true -> adr.isAdr
+                               true -> adr.isAdr;
                            if);                     
                            adr.load
                         else
@@ -263,7 +263,7 @@ generator: variants
                      #);
                (if true
                 // OG.isSimpleValue then (*'Store simple value: ' -> puttext;*)
-                // OG.isValue then 
+                // OG.isValueObj then 
                    cd.com(# do '##Store compound value: ' -> TT;OG.dopt -> TQ#);
                if);
 
@@ -271,10 +271,21 @@ generator: variants
                 // OG.isSimpleValue then 
                    cd.pushThis;
                    (sig.id[],NewOff) -> cd.storeg
-                // OG.isValue then
+                // OG.isValueObj then
                    (* is the order of src and dest objs on the stack correct? *)
-                   (if false then
-                       (sig.id[],(OG.superPtn).OG.IS.newDescNo,newOff - 1) -> cd.invokeVal
+                   (if true then
+                       (# L1, L2: @labelHandler.label
+                       do L1.new; L2. new;
+                          L1 -> cd.jmpFalse;
+                          cd.pushThis;
+                          newOff -> cd.addOff;
+                          OG.objSize -> cd.vassign;
+                          L2 -> cd.jmp;
+                          L1 -> cd.defLab;                          
+                          (sig.id[],(OG.superPtn).OG.IS.newDescNo,newOff - 1) 
+                            -> cd.invokeVal;
+                          L2 -> cd.defLab
+                       #)
                     else
                        cd.pushThis;
                        (false,0,0) -> Qgen; 
@@ -319,7 +330,7 @@ generator: variants
             #);
           pushReturnValues:
             (#
-            do (if not (theObjectGenerator).isValue then
+            do (if not (theObjectGenerator).isValueObj then
                    cd.setThisStack
                if);
                (if val[] <> none then
@@ -991,7 +1002,7 @@ generator: variants
                    if);
                    (if (superDesc[] <> none) and not superDesc.isBasic  then
                     else 
-                       (if not OG.isValue then
+                       (if not OG.isValueObj then
                            cd.mvStack
                        if)
                    if);
@@ -1027,7 +1038,7 @@ generator: variants
                    
                    (* Code for action part *)
                    (false,doHasCode) -> cd.actions;
-                   (if not OG.isValue then 
+                   (if not OG.isValueObj then 
                        cd.mvStack
                    if);
 
@@ -1057,7 +1068,7 @@ generator: variants
                                 (if sig[] = none then '-none-'->TT
                                  else
                                 sig.id[] -> TT if)#);
-                       (if (theObjectGenerator).isValue then 
+                       (if (theObjectGenerator).isValueObj then 
                            cd.rtnV
                         else
                            (if sig[] <> none then 
@@ -1417,17 +1428,38 @@ generator: variants
                                  *    foo{ ... }
                                  * where foo has arguments - to be fixed! *)
                              else
-                                cd.com(#do 'loadArgs:X:'->TT; actArgs[i].dopt->TT #);
-                                (if actArgs[i].isValue then
-                                    '\n***Pattern:Val:loadArgNo: ' -> puttext;
-                                    i -> putint; ' ' -> put;
-                                    actArgs[i].dopt ->putline;
-                                    dopt -> putline;
-                                    0 -> staticOff
+                                cd.com(#do 'loadArgs:X:'->TT; actArgs[i].dopt->TQ;
+                                         ' label:'->TT; actArgs[i].label -> TQ #);
+                                (if actArgs[i].isValueObj then
+                                    cd.com
+                                    (#do 'Pattern:Val:loadArgNo: ' ->TT;
+                                       i -> II;  ' actArg:'->TT;
+                                       actArgs[i].dopt ->TQ; #);
+                                    cd.com(# do dopt -> TQ; 
+                                             ' vAssign:'-> TT;
+                                             this(pattern).OG.primno = vAssign_prim -> BB
+                                         #);
+                                    0 -> staticOff;
                                  else
-                                    0 -> staticOff
+                                    0 -> staticOff;
                                 if);
-                                (true,superAdj,staticOff) -> actArgs[i].Qgen
+                                (true,superAdj,staticOff) -> actArgs[i].Qgen;
+                                cd.com(#do 'loadArgs:after:Qgen:'->TT;  #);
+                                (if actArgs[i].isValueObj 
+                                    and actArgs[i].super.ATd.isDataItem 
+                                    and (this(Pattern).primNo <> vAssign_prim)
+                                    then
+                                    cd.com(#do 'pattern:loadArg:Value:dataItem:'-> TT #);
+                                    1 -> cd.pushConst
+                                 else
+                                    (if (this(Pattern).primNo = vAssign_prim) then
+                                        (if actArgs[i].isValueObj 
+                                            and actArgs[i].super.ATd.isPattern
+                                            then
+                                            cd.com(#do 'pattern:loadArgs:vassign:Value:pattern:'->TT;;
+                                                     actArgs[i].dopt -> TQ #);
+                                    if)if)
+                                if)
                             if)
                    if)#);
                    handleSuperArgs:
@@ -1513,7 +1545,8 @@ generator: variants
                            61 (*plus*) -> cd.op
                         else
                            off -> cd.addOff;
-                       if)
+                       if);
+                       (*1 -> cd.pushConst*)
                        (*('',off) -> cd.pushg*)
                     else
                        ('',off) -> cd.rpushg
@@ -1527,8 +1560,13 @@ generator: variants
                    (if off > 0 then
                        (if isValue then
                            (if isAdr then
-                               off -> cd.addOff;
-                               size -> cd.vassign
+                               (if descNo > 0 then
+                                   cd.vpop;
+                                   ('IV',descNo,off - 1) -> cd.invokeVal
+                                else
+                                   off -> cd.addOff;
+                                   size -> cd.vassign
+                               if)
                             else
                                (if originIsValue then
                                    cd.com(#do 'Address:store:originIsValue:'->TT #);
@@ -1697,7 +1735,7 @@ generator: variants
                       A[] -> E.getAdr -> (loadRec,A[]);
                       (* really getOffSet of E.ATd *)
                       (if (E.on > 0) or (A.superadj > 0) then
-                          (E.ATd.enclosingObjectGenerator).isValue 
+                          (E.ATd.enclosingObjectGenerator).isValueObj 
                             -> A.originIsValue
                           (* should probably be for each receiver in
                            * R.S.foo(exp).Q, i.e. R, S and foo
