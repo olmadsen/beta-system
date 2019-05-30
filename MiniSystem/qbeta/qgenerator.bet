@@ -221,8 +221,8 @@ generator: variants
                                cd.com(#do '##Load compound value:isAdr:' -> TT;
                                         adr.isAdr -> BB; ' Size:'->TT;
                                         objSize -> II;
-                                        rec.dopt -> TT; '.' -> TT;
-                                        E.dopt -> TT; ',' -> TT; OG.dopt -> TT;
+                                        rec.dopt -> TQ; '.' -> TT;
+                                        E.dopt -> TQ; ',' -> TT; OG.dopt -> TQ;
                                      #);
                                true -> adr.isAdr;
                            if);                     
@@ -279,7 +279,7 @@ generator: variants
                           L1 -> cd.jmpFalse;
                           cd.pushThis;
                           newOff -> cd.addOff;
-                          OG.objSize -> cd.vassign;
+                          (OG.objSize,0) -> cd.vassign;
                           L2 -> cd.jmp;
                           L1 -> cd.defLab;                          
                           (sig.id[],(OG.superPtn).OG.IS.newDescNo,newOff - 1) 
@@ -290,7 +290,7 @@ generator: variants
                        cd.pushThis;
                        (false,0,0) -> Qgen; 
                        newOff -> cd.addOff;
-                       OG.objSize -> cd.vassign;
+                       (OG.objSize,0) -> cd.vassign;
                    if)
                 else
                    cd.pushThis;
@@ -1082,7 +1082,8 @@ generator: variants
                BindVirtuals
             #);
           goOrigin:
-            (# on: @integer; NA: ^Apl; org: ^Items; T: ^text; var: ^Variant
+            (# on: @integer; NA: ^Apl; org: ^Items; T: ^text; var: ^Variant;
+               orgIsVal: @boolean
             enter(on,NA[])
             do (if on > 0 then
                    OT.OGid -> T[]; ':origin' -> T.append;
@@ -1095,7 +1096,7 @@ generator: variants
                     * OGs in the origin chain?
                     *)
                    (if basicNo = ifthen_prim then
-                       (on,NA[]) -> (origin[]->org[]).goOrigin -> org[]
+                       (on,NA[]) -> (origin[]->org[]).goOrigin -> (org[],orgIsVal)
                     else
                        (if OT.IS.newOriginOff = 0 then 
                            (*father.dopt -> putline;*)
@@ -1108,25 +1109,24 @@ generator: variants
 
                        (if (origin[] -> originIsValue) then
                            cd.com(#do 'origin.valueOff:load ' -> TT; newOriginOff + 1 -> II #);
-                           '\n*** originIsValue: ' -> puttext; NA.dopt->puttext; newline;  dopt -> putline;
-                           776 -> cd.pushconst;
+                           (*'\n*** originIsValue: ' -> puttext; NA.dopt->puttext; newline;  dopt -> putline;
+                           776 -> cd.pushconst;*)
                            cd.rdouble;
                            (T[],newOriginOff) -> cd.rpushg;
                            cd.rswap;
                            (T[],newOriginOff + 1) -> cd.pushg;
+                           true -> orgIsVal
                         else
                            (T[],newOriginOff) -> cd.rpushg;
                        if);
-                       (if origin[] <> none then
-                           (on - 1,NA[]) -> (origin[]->org[]).goOrigin -> org[]
-                        else
-                           'Origin is none: ' -> puttext; on -> putint; newline
+                       (if (origin[] <> none) (*and (on > 1)*) then
+                           (on - 1,NA[]) -> (origin[]->org[]).goOrigin -> (org[],orgIsVal)
                        if)
                    if)
                 else
                    this(Items)[] -> org[]
                if)
-            exit org[]
+            exit(org[],orgIsVal)
             #); 
           hasSuperAndInner: @Boolean;
 
@@ -1258,9 +1258,7 @@ generator: variants
                if)
             #);
           loadArgs::
-            (# gdb:: (# do
-                        ' E: ' -> lx.puttext;
-                        E.doPT -> TQ;
+            (# gdb:: (# do ' E: ' -> lx.puttext; E.doPT -> TQ;
                         ' descNo: ' -> lx.puttext; OG.IS.newDescNo -> lx.putint;
                         ' top: ' -> lx.puttext; OG.Qvariants.top -> lx.putint
                      #);
@@ -1547,7 +1545,7 @@ generator: variants
                if)if);
             #);
           store::
-            (#
+            (# mode: @integer
             do (if not done then
                    true -> done;
                    cd.com(#do 'store:'->TT; this(address).print->TT #);
@@ -1559,13 +1557,15 @@ generator: variants
                                    cd.saveAndSetThis;
                                    ('IV',descNo,off - 1) -> cd.invokeVal;
                                    cd.restoreThis
-                                else
-                                   (if originIsvalue then
-                                       cd.com(#do 'originIsValue:'->TT #);
-                                       777 -> cd.pushConst; 
-                                   if);
+                                else                                   
+                                   (if srcIsVal then 1 -> mode if);
+                                   (if destIsVal then mode + 2 -> mode if);
+                                   cd.com(#do 'Address:store::srcIsVal:'->TT; 
+                                            srcIsVal -> BB;
+                                            ' destIsVal:' -> TT; originIsValue -> BB;
+                                         ' mode:' -> TT; mode -> II #);
                                    off -> cd.addOff;
-                                   size -> cd.vassign
+                                   (size,mode) -> cd.vassign
                                if)
                             else
                                (if originIsValue then
@@ -1712,7 +1712,8 @@ generator: variants
              * X := Y + (Z +117)
              * aLine.aPoint.X
              *)
-            (# A,recA: ^Address; E,rec,pRec: ^Exp; j: @integer; loadRec: @boolean
+            (# A,recA: ^Address; E,rec,pRec: ^Exp; j: @integer; 
+               loadRec,orgIsVal: @boolean
             enter A[]
             do 
                scanSons
@@ -1730,7 +1731,7 @@ generator: variants
                       E.pushThis;
                       (* E.loadOrigin - we must do this also for values *)
 
-                      (A.superAdj,none) -> E.loadOrigin -> (rec[],E[]);
+                      (A.superAdj,none) -> E.loadOrigin -> (rec[],E[],orgIsVal);
                       (* we should ignore rec and E - defined above 
                        * And A.superAdj should be eliminated *)
                       A[] -> E.getAdr -> (loadRec,A[]);
@@ -1790,19 +1791,18 @@ generator: variants
                     do 'Invocation:loadOrigin:scan: ' -> TT;
                        current.doPT -> TQ;
                     #);
-                  T: ^ Text; hadAssign: @boolean
+                  T: ^ Text; hadAssign,orgIsVal: @boolean
                do current[] -> E[]; 
                   gdb;
                   (if isFirst then 
                       E.pushThis;
-                      (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[])
+                      (superAdj,CC[]) -> E.loadOrigin -> (rec[],E[],orgIsVal)
                   if); 
                       (* For X: = { R:  = { ... q: ...} ... R.X }
                        * stack[top] = origin = X 
                        * add offset to R or push(ref(R))
                        *)
-                  cd.com(#do 'loadOrigin:afterIsFirst:'-> TT; ' ' -> TT;
-                           ' ' -> TT; current.doPT -> TT #);
+                  cd.com(#do 'loadOrigin:afterIsFirst:'-> TT; current.doPT -> TQ #);
                   (if not isLast then
                       E[] -> rec[];
                       (if (next -> nE[]).ATd.primNo <> rAssign_prim then
@@ -1881,9 +1881,7 @@ generator: variants
                cd.com(#do 'OI:getAdr:after:ATd.getAdr:'->TT; Ax.print -> TT #);
             #);
           loadOrigin::
-            (# gdb:: (# #);
-               org: ^Items;
-               T: @text
+            (# org: ^Items; T: @text
             do (if ATD.primNo
                 // 0 
                 // indexed_prim 
@@ -1895,10 +1893,13 @@ generator: variants
                            - superAdj -> AdjustOrigin;
                            (on - 1,this(ObjectInvocation)[]) 
                              -> (origin[]->org[]).goOrigin
+                             -> (org[],orgIsVal)
                        if)
                     else
                        superAdj -> AdjustOrigin;
-                       (on,this(ObjectInvocation)[]) -> (origin[]->org[]).goOrigin
+                       (on,this(ObjectInvocation)[]) 
+                         -> (origin[]->org[]).goOrigin
+                         -> (org[],orgIsVal)
                    if)
                 // this_prim then
                    (* Must check that argument is the name of an enclosing 
@@ -1911,7 +1912,8 @@ generator: variants
                    (# A: ^ObjectGenerator
                    do current[] -> A[];
                       (A.super.on - 1,this(ObjectInvocation)[])
-                        -> (origin[]->org[]).goOrigin; 
+                        -> (origin[]->org[]).goOrigin
+                        -> (org[],orgIsVal)
                    #)
                 // thisCore_prim then 
                    (* perhaps not in loadOrigin, but in execute/ATd.invoke *)
