@@ -1080,7 +1080,7 @@ void  *interpreter(void *B){;
     threadId = thisBlock->threadId;
   }
 
-  int opCode,arg1,arg2,arg3,dscNo,V;
+  int opCode,arg1,arg2,arg3,dscNo,V,isValueObj,size;
   int dinx,isRindexed,rangee,i;
   bool running = true;
   Btemplate *X, *Y;
@@ -1334,6 +1334,8 @@ void  *interpreter(void *B){;
 	break;
       case xstoreg:
 	arg1 = op1(bc,&glsc);
+	isValueObj = op1(bc,&glsc);
+	size = op1(bc,&glsc);
 	X = rPop(thisStack);
 	arg2 = vPop(thisStack);
 	arg3 = vPop(thisStack);
