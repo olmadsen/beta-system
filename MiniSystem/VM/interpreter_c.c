@@ -2414,16 +2414,17 @@ void  *interpreter(void *B){;
       case allocIndexed:	
 	arg1 = op2(bc,&glsc);
 	arg2 = op1(bc,&glsc);
+	arg3 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"allocIndexed %i %i\n",arg1,arg2);
+      fprintf(trace,"allocIndexed %i %i %i\n",arg1,arg2,arg3);
 #endif
 	X = rPop(thisStack);
 	dinx = vPop(thisStack);
-	isRindexed = vPop(thisStack);
+	//isRindexed = vPop(thisStack);
 	rangee = vPop(thisStack);
 	if (isXbeta) {
 	  saveContext();
-	  QallocIndexed(thisBlock,X,arg1,arg2,dinx,rangee,isRindexed);
+	  QallocIndexed(thisBlock,X,arg1,arg3,dinx,rangee,isRindexed);
 	  restoreContext();
 	}
 	  else {
