@@ -18,7 +18,7 @@
 #endif
 
 #ifdef __arm__
-typedef void *FILE;
+typedef void *FILE; 
 #else
 #include <stdio.h> 
 #endif 
@@ -1222,6 +1222,8 @@ void  *interpreter(void *B){;
 	break;
       case xpushg:
 	arg1 = op1(bc,&glsc);
+	isValueObj = op1(bc,&glsc);
+	size = op1(bc,&glsc);
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);

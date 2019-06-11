@@ -90,7 +90,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"xrpush %i",op1(bc,&glsc));
 	break;
       case xpushg:
-	fprintf(trace,"xpushg %i",op1(bc,&glsc));
+	fprintf(trace,"xpushg %i %i %i",op1(bc,&glsc),op1(bc,&glsc),op1(bc,&glsc));
 	break;
       case xrpushg:
 	fprintf(trace,"xrpushg %i",op1(bc,&glsc));
@@ -117,7 +117,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"xrstore %i ",op1(bc,&glsc));
 	break;
       case xstoreg:
-	fprintf(trace,"xstoreg %i ",op1(bc,&glsc));
+	fprintf(trace,"xstoreg %i %i %i",op1(bc,&glsc),op1(bc,&glsc),op1(bc,&glsc));
 	break;
       case xrstoreg:
 	fprintf(trace,"xrstoreg %i ",op1(bc,&glsc));
