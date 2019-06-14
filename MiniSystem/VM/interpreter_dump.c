@@ -96,7 +96,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"xrpushg %i",op1(bc,&glsc));
 	break;
       case vassign:
-	fprintf(trace,"vassign %i",op1(bc,&glsc));
+	fprintf(trace,"vassign %i %i",op1(bc,&glsc),op1(bc,&glsc));
 	break;
       case store:
 	fprintf(trace,"store %i",op1(bc,&glsc));
@@ -356,6 +356,16 @@ void dumpCode(FILE *trace, ObjDesc desc){
         break;
       case addOff:
 	fprintf(trace,"addOff %i",op2(bc,&glsc));
+	break;
+      case saveAndSetThis:
+	fprintf(trace,"saveAndSetThis");
+	break;
+      case restoreThis:
+	fprintf(trace,"restoreThis");
+	break;
+      case pushValue:
+	fprintf(trace,"pushValue %i",op1(bc,&glsc));
+	break;
     break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc - 1]);

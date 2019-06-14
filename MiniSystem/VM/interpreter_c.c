@@ -196,6 +196,22 @@ void StacksToOut(FILE *trace,Btemplate *thisObj, Btemplate *thisStack)//, Block 
   dumpVstack(trace,thisStack);
   fprintf(trace,"\n");
 }
+
+void dumpObj(FILE *trace,char *name,Btemplate *X){
+  int i;
+  fprintf(trace,"Object: %s %s\n",name,nameOf(X));
+
+  fprintf(trace,"Fields: ");
+  for (i = 0; i < 20; i++){
+    fprintf(trace,"%i:%i,",i,getV(X,i));
+  }
+  fprintf(trace,"\nVstack: ");
+  dumpVstack(trace,X);
+  fprintf(trace,"\nRstack: ");
+  dumpRstack(trace,X);
+  fprintf(trace,"\n");
+}
+
 #endif
 
 int threadStubDescNo; // perhaps a hack?
@@ -1080,7 +1096,7 @@ void  *interpreter(void *B){;
     threadId = thisBlock->threadId;
   }
 
-  int opCode,arg1,arg2,arg3,dscNo,V,isValueObj,size;
+  int opCode,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
   int dinx,isRindexed,rangee,i;
   bool running = true;
   Btemplate *X, *Y;
@@ -1133,6 +1149,20 @@ void  *interpreter(void *B){;
 	vPush(thisStack,arg1);
 #ifdef TRACE
 	fprintf(trace,"pushc %i\n", arg1);
+#endif
+	break;
+      case saveAndSetThis:
+	X = rPop(thisStack);
+	rPush(thisStack,thisObj);
+	thisObj = X;
+#ifdef TRACE
+	fprintf(trace,"saveAndSetThis %i\n", arg1);
+#endif
+	break;
+      case restoreThis:
+	thisObj = rPop(thisStack);
+#ifdef TRACE
+	fprintf(trace,"restoreThis %i\n", arg1);
 #endif
 	break;
       case addOff:
@@ -1227,12 +1257,21 @@ void  *interpreter(void *B){;
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
-	arg3 = X->vfields[arg1 + arg2 + newAllocOff]; // need range check - and do we adjust for range?
-	//printf("xpushg %s[%i+%i] %i = %i\n",nameOf(X),arg1,arg2,arg3,X->vfields[3]);
 #ifdef TRACE
-	fprintf(trace,"xpushg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
+	fprintf(trace,"xpushg %i %i %i %i\n",arg1,isValueObj,size,arg2);
+	dumpObj(trace,"xpushg",X);
 #endif
-	vPush(thisStack,arg3); 
+	for (i=0; i < size; i++){
+	  int ix = 0;
+	  if (size == 1) ix = arg1 + arg2 + newAllocOff - i;
+	  else ix = arg1 + arg2 + newAllocOff + i - 1;
+	  arg3 = X->vfields[ix]; // need range check - and do we adjust for range?
+
+#ifdef TRACE
+	  fprintf(trace,"xpushg %s[%i] = %i\n",nameOf(X),ix,arg3);
+#endif
+	  vPush(thisStack,arg3); 
+	}
 	break;
       case xrpushg:
 	arg1 = op1(bc,&glsc);
@@ -1257,15 +1296,12 @@ void  *interpreter(void *B){;
       case rstore:
 	arg1 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"rstore %i",arg1);
+	fprintf(trace,"rstore %i ",arg1);
 #endif
 	X = rPop(thisStack);
-	fprintf(trace,"X: %i\n",(int)X);
 	putR(thisObj,arg1,X);
-	//thisObj->rfields[arg1] = X;
 #ifdef TRACE
-	fprintf(trace,"%c thisObj: %i %i ",nameOf(X),(int)thisObj,(int)X);
-	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
+	fprintf(trace,"thisObj:%s[%i] = X:%s\n",nameOf(thisObj),arg1,nameOf(X));
 #endif
 	break;
       case storeg:
@@ -1290,17 +1326,29 @@ void  *interpreter(void *B){;
 #endif
 	break;
       case vassign:
+
 	arg1 = op1(bc,&glsc);   // size
+	mode = op1(bc,&glsc); 
 	arg2 = vPop(thisStack); // destOff
-	arg3 = vPop(thisStack); // srcOff
+	//arg3 = vPop(thisStack); // srcOff
         Y = rPop(thisStack);    // destObj
-        X = rPop(thisStack);    // srcObj
+        //X = rPop(thisStack);    // srcObj
 #ifdef TRACE
 	fprintf(trace,"vassign %i\n",arg1);
 #endif
-        for (i = 1; i <= arg1; i++) {
-	  putV(Y,arg2 + i - 1,getV(X,arg3 + i - 1));
+	int D[10];
+	for (i = 1; i <= arg1; i++){
+	  D[i] = vPop(thisStack);
 	}
+	if (mode == 1) {
+	  arg2 = arg2 + vPop(thisStack) - 1;
+	}
+        for (i = 1; i <= arg1; i++) {
+	  putV(Y,arg2 + i - 1,D[i]);
+	}
+#ifdef TRACE
+	dumpObj(trace,"dest",Y);
+#endif
 	break;
       case rstoreg:   
 	arg1 = op1(bc,&glsc);
@@ -1335,17 +1383,26 @@ void  *interpreter(void *B){;
 	putR(thisObj,arg1 + arg2 + newAllocOff,X);
 	break;
       case xstoreg:
-	arg1 = op1(bc,&glsc);
+	arg1 = op1(bc,&glsc);       // off
 	isValueObj = op1(bc,&glsc);
 	size = op1(bc,&glsc);
 	X = rPop(thisStack);
-	arg2 = vPop(thisStack);
-	arg3 = vPop(thisStack);
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	arg2 = vPop(thisStack);  // inx
+
+	if (isValueObj == 1) vPop(thisStack);
+
+	for (i = 0; i < size; i++) {
+	  arg3 = vPop(thisStack);
+	  int ix = arg1 + arg2 + newAllocOff - i;
 #ifdef TRACE
-	fprintf(trace,"xstoreg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
+	  fprintf(trace,"xstoreg %i %i %i %s[%i] = %i\n",arg1,isValueObj,size,nameOf(X),ix,arg3);
 #endif
-	X->vfields[arg1 + arg2 + newAllocOff] = arg3;
+	  X->vfields[ix] = arg3;
+	}
+#ifdef TRACE
+	dumpObj(trace,"xstoreg",X);
+#endif
 	break;
       case xrstoreg:
 	arg1 = op1(bc,&glsc);
@@ -1359,6 +1416,25 @@ void  *interpreter(void *B){;
 	//X->rfields[arg1 + arg2] = Y;
 	putR(X,arg1 + arg2 + newAllocOff,Y);
 	break;
+      case pushValue:
+	arg1 = op1(bc,&glsc);   // size
+	arg2 = vPop(thisStack); // srcOff
+	X = rPop(thisStack);    // srcObj
+#ifdef TRACE
+	fprintf(trace,"pushValue %s %i %i ",nameOf(X), arg1,arg2);
+#endif
+	for (i = 0; i < arg1; i++) {
+	  arg3 = getV(X,arg2 + i);
+#ifdef TRACE
+	  fprintf(trace,"val: %i ",arg3);
+	  if (i == (arg1 - 1)) fprintf(trace,"\n");
+#endif
+          vPush(thisStack,arg3);
+	}
+#ifdef TRACE
+	StacksToOut(trace,thisObj,thisStack);
+#endif
+	break;
       case _double:
 	arg1 = vPop(thisStack);
 #ifdef TRACE
@@ -1367,7 +1443,6 @@ void  *interpreter(void *B){;
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg1);
 	break;
-
       case rdouble:
 	X = rPop(thisStack);
 #ifdef TRACE
@@ -2436,6 +2511,9 @@ void  *interpreter(void *B){;
 	    allocIndexedObj(thisBlock,X,arg1,arg2,dinx,rangee,isRindexed);
 	    restoreContext();
 	  }
+#ifdef TRACE
+	dumpObj(trace,"QallocIndexed",thisBlock->callee);
+#endif
 	break;
       case mkStrucRef: 
 	arg1 = vPop(thisStack);

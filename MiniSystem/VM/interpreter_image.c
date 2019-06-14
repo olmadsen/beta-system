@@ -228,7 +228,10 @@ enum {
   addOff = 100,
   ovpushg = 101, 
   ovstoreg = 102,
-  vassign = 103
+  vassign = 103,
+  saveAndSetThis = 104,
+  restoreThis = 105,
+  pushValue = 106
 };
 
 
