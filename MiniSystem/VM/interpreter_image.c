@@ -55,7 +55,6 @@ typedef struct Btemplate {
   int lscStack[16];
   int lscTop;
   int lsc;
-  //struct Btemplate *rfields[64];
   int vfields[]; // flexible array
 } Btemplate;
 

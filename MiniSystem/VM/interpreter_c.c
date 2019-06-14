@@ -2090,7 +2090,7 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"saveBETAworld\n");
 #endif
-	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
+	X = rPop(thisStack); // should be assigned to eventprocessor.fields[1][]
 	thisBlock->world = X;
 	break;
       case doSuper:
