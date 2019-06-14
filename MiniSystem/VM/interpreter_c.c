@@ -148,7 +148,6 @@ Btemplate *getR(Btemplate *obj,int inx){
       printf("getR: index error %i\n",inx);
     }
   }else{
-    //    return obj->rfields[inx];
   }
 };
 void putR(Btemplate *obj,int inx, Btemplate *X){  
@@ -158,8 +157,6 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
     }else{
       printf("putR: index error %i\n",inx);
     }
-  }else{
-    // obj->rfields[inx] = X;
   }
 };
 
@@ -673,7 +670,6 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i\n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
-  //if (staticOff > 0) ctx->thisObj->rfields[staticOff] = ctx->callee;
   if (staticOff > 0) putR(ctx->thisObj,staticOff,ctx->callee);
   
   rPush(ctx->callee,ctx->thisObj);
@@ -762,7 +758,6 @@ void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
   Btemplate * X = allocTemplate(newId(ctx),getStrucRefDescNo(),0,0,0);
   if (isVirtual) inx = vdtTable(ctx->trace,origin,inx);
   X->vfields[1] = inx;
-  //X->rfields[2] = origin;
   putR(X,2,origin);
   rPush(ctx->thisStack,X);
 };
@@ -771,7 +766,6 @@ void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
 #ifdef TRACE
   fprintf(ctx->trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
 #endif
-  //allocObj(ctx,obj->rfields[2],obj->vfields[1],0,0,0);
   allocObj(ctx,getR(obj,2),obj->vfields[1],0,0,0);
 };
  void allocTextObj(Block *ctx,int litInx){
@@ -853,7 +847,6 @@ void C2QBstring(Block *ctx,char *S){
   QallocIndexed(ctx,0,getTextDescNo(),1,1,length,0);
   for (i = 0; i <= length; i++) ctx->callee->vfields[2 + i] = S[i];
   putR(ctx->callee,1,getR(ctx->world,3)); // a bloody hack
-  //ctx->callee->rfields[1] = ctx->world->rfields[3]; // a bloody hack
 #ifdef __arm__
 #else
   free(S);
@@ -870,12 +863,10 @@ void  ConvertIndexedAsString(Block *ctx) {
   QallocIndexed(ctx,0,getTextDescNo(),1,1,length + 1,0);
   while (X->vfields[length + 1] == 0 ) length = length - 1;
   putR(ctx->callee,1,getR(ctx->world,3)); // origin - a bloody hack
-  //ctx->callee->rfields[1] = ctx->world->rfields[3]; // origin - a bloody hack
   ctx->callee->vfields[1 + newAllocOff] = length; // done in QallocIndexed?
 
   for (i = 2; i <= length + 1; i++) 
     ctx->callee->vfields[i + newAllocOff] = X->vfields[i + newAllocOff];
-  //X->rfields[1] = ctx->world->rfields[3]; // origin - hack 
 }
 
 void doCall(Block *ctx,bool withEnablingSuspend){
@@ -1193,7 +1184,6 @@ void  *interpreter(void *B){;
       case rpush:
 	arg1 = op1(bc,&glsc);
 	X = getR(thisObj,arg1);
-	//X = thisObj->rfields[arg1];
 #ifdef TRACE
 	fprintf(trace,"rpush %s[%i] = %s \n",nameOf(thisObj),arg1,nameOf(X));
 #endif
@@ -1225,7 +1215,6 @@ void  *interpreter(void *B){;
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	Y = getR(X,arg1);
-	//Y = X->rfields[arg1];
 	rPush(thisStack,Y);
 #ifdef TRACE
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
@@ -1244,7 +1233,6 @@ void  *interpreter(void *B){;
 	arg1 = op1(bc,&glsc); // off
 	arg2 = vPop(thisStack); // inx
 	X = getR(thisObj,arg1 + arg2 + newAllocOff);
-	//X = thisObj->rfields[arg1 + arg2];
 	rPush(thisStack,X);
 #ifdef TRACE
 	fprintf(trace,"xrpush %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
@@ -1279,7 +1267,6 @@ void  *interpreter(void *B){;
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
 	Y = getR(X,arg1 + arg2 + newAllocOff); // need range check - do we adjust for range?
-	//Y = X->rfields[arg1 + arg2]; // need range check - and do we adjust for range?
 #ifdef TRACE
 	fprintf(trace,"xrpushg %s[%i+%i] = %s/%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
@@ -1330,9 +1317,7 @@ void  *interpreter(void *B){;
 	arg1 = op1(bc,&glsc);   // size
 	mode = op1(bc,&glsc); 
 	arg2 = vPop(thisStack); // destOff
-	//arg3 = vPop(thisStack); // srcOff
         Y = rPop(thisStack);    // destObj
-        //X = rPop(thisStack);    // srcObj
 #ifdef TRACE
 	fprintf(trace,"vassign %i\n",arg1);
 #endif
@@ -1357,7 +1342,6 @@ void  *interpreter(void *B){;
 	  runTimeErrorX("Reference is none",thisObj,glsc);
 	};
 	Y = rPop(thisStack);
-	//X->rfields[arg1] = Y;
 	putR(X,arg1,Y);
 #ifdef TRACE
 	fprintf(trace,"rstoreg %s[%i] = %s \n",nameOf(X),arg1,nameOf(Y));
@@ -1379,7 +1363,6 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"xrstore %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
 #endif
-	//thisObj->rfields[arg1 + arg2] = X;
 	putR(thisObj,arg1 + arg2 + newAllocOff,X);
 	break;
       case xstoreg:
@@ -1413,7 +1396,6 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"xrstoreg %s[%i+%i] = %s(%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
-	//X->rfields[arg1 + arg2] = Y;
 	putR(X,arg1 + arg2 + newAllocOff,Y);
 	break;
       case pushValue:
@@ -1461,7 +1443,6 @@ void  *interpreter(void *B){;
 	vPush(thisStack,arg2);
 	break;
       case _rswap:
-	//for (i=0; i <= thisStack->rtop; i++) { printf("%i ",thisStack->rstack[i]);};
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
 #ifdef TRACE
@@ -1469,7 +1450,6 @@ void  *interpreter(void *B){;
 #endif
 	rPush(thisStack,X);
 	rPush(thisStack,Y);
-	//for (i=0; i <= thisStack->rtop; i++) { printf("%i ",thisStack->rstack[i]);};
 	break;
       case rtn:
 	arg1 = op1(bc,&glsc);
@@ -2376,15 +2356,11 @@ void  *interpreter(void *B){;
 	//printf("\nseq:struc: %s %s\n",nameOf(X),nameOf(Y));
 	arg1 = X->vfields[1];
 	arg2 = Y->vfields[1];
-
-	//X = X->rfields[2];
-	//Y = Y->rfields[2];
 	X = getR(X,2);
 	Y = getR(Y,2);
 #ifdef TRACE
 	fprintf(trace,"seq %s %i %s %i\n",nameOf(X),arg1,nameOf(Y),arg2);
 #endif
-	//vPush(thisStack,(arg1 == arg2) && (X->rfields[2] == Y->rfields[2]));
 	vPush(thisStack,(arg1 == arg2) && getR(X,2) == getR(Y,2));
 	//printf("vTop: %i\n",thisStack->vstack[thisStack->vtop]);
 	break;
@@ -2394,7 +2370,6 @@ void  *interpreter(void *B){;
 #ifdef TRACE
 	fprintf(trace,"sne %i != %i\n",(int)X,(int)Y);
 #endif
-	//vPush(thisStack,(X->vfields[1] != Y->vfields[1]) || (X->rfields[2] != Y->rfields[2]));
 	vPush(thisStack,(X->vfields[1] != Y->vfields[1]) || getR(X,2) != getR(Y,2));
 	break;
       case plus:
