@@ -1044,9 +1044,12 @@ void  *interpreter(void *B){;
   //CPU_SET(threadId,&mask);
 #endif
 
+bool traceThreads = false;
+
 #ifdef __arm__
 #else
-  printf("*** C interpreter - threadId:%i\n",threadId);
+  if (traceThreads)
+    printf("*** C interpreter - threadId:%i\n",threadId);
 #endif
   FILE * trace;
 #ifdef __arm__
@@ -1089,7 +1092,7 @@ void  *interpreter(void *B){;
 
   int opCode,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
   int dinx,isRindexed,rangee,i;
-  bool running = true;
+  bool running = true; 
   Btemplate *X, *Y;
 
   int cnt = 0;
@@ -2606,7 +2609,10 @@ void  *interpreter(void *B){;
 #endif
 #ifdef __arm__
 #else
-  printf("\nStop: threadId: %i \n",threadId); if (hasThreads) printf("TRUE\n");
+  if (traceThreads){
+    printf("\nStop: threadId: %i \n",threadId); 
+    if (hasThreads) printf("TRUE\n");
+  }
 #endif
 
   if (threadNo > 0) {
@@ -2620,13 +2626,13 @@ void  *interpreter(void *B){;
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
 
     for( j=0; j < threadNo; j++)
-      { printf("Close\n");
+      { if (traceThreads) printf("Close\n");
 	CloseHandle(hThreadArray[j]);
       };
 #endif
 #ifdef __arm__
 #else
-    printf("After Wait\n");
+    if (traceThreads) printf("After Wait\n");
 #endif
   };
   if (threadId == 0) mkEvent(stop_event,0,0,0,0,0,0); 
