@@ -1245,23 +1245,26 @@ bool traceThreads = false;
 	arg1 = op1(bc,&glsc);
 	isValueObj = op1(bc,&glsc);
 	size = op1(bc,&glsc);
-	X = rPop(thisStack);
-	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
-	arg2 = vPop(thisStack);
+	if (isValueObj == 0 ){
+	  // imply size == 1 
+	  X = rPop(thisStack);
+	  if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	  arg2 = vPop(thisStack);
 #ifdef TRACE
-	fprintf(trace,"xpushg %i %i %i %i\n",arg1,isValueObj,size,arg2);
-	dumpObj(trace,"xpushg",X);
+	  fprintf(trace,"xpushg %i %i %i %i\n",arg1,isValueObj,size,arg2);
+	  dumpObj(trace,"xpushg",X);
 #endif
-	for (i=0; i < size; i++){
-	  int ix = 0;
-	  if (size == 1) ix = arg1 + arg2 + newAllocOff - i;
-	  else ix = arg1 + arg2 + newAllocOff + i - 1;
-	  arg3 = X->vfields[ix]; // need range check - and do we adjust for range?
-
+	  for (i=0; i < size; i++){
+	    int ix = 0;
+	    if (size == 1) ix = arg1 + arg2 + newAllocOff - i;
+	    else ix = arg1 + arg2 + newAllocOff + i - 1;
+	    arg3 = X->vfields[ix]; // need range check - and do we adjust for range?
+	    
 #ifdef TRACE
-	  fprintf(trace,"xpushg %s[%i] = %i\n",nameOf(X),ix,arg3);
+	    fprintf(trace,"xpushg %s[%i] = %i\n",nameOf(X),ix,arg3);
 #endif
-	  vPush(thisStack,arg3); 
+	    vPush(thisStack,arg3); 
+	  }
 	}
 	break;
       case xrpushg:
