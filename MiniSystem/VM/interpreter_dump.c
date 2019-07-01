@@ -96,7 +96,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"xrpushg %i",op1(bc,&glsc));
 	break;
       case vassign:
-	fprintf(trace,"vassign %i %i",op1(bc,&glsc),op1(bc,&glsc));
+	arg1 = op1(bc,&glsc);
+	arg2 = op1(bc,&glsc);
+	fprintf(trace,"vassign %i %i",arg1,arg2);
 	break;
       case store:
 	fprintf(trace,"store %i",op1(bc,&glsc));

@@ -27,7 +27,7 @@ typedef void *FILE;
 #include <stdbool.h>
 
 #ifdef linux
-#include <string.h>
+#include <string.h> 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -1266,6 +1266,10 @@ bool traceThreads = false;
 	    vPush(thisStack,arg3); 
 	  }
 	}
+	else{
+	  int inx = vPop(thisStack);
+	  vPush(thisStack,arg1 + inx + newAllocOff - 1 );
+	} 
 	break;
       case xrpushg:
 	arg1 = op1(bc,&glsc);
@@ -1335,7 +1339,7 @@ bool traceThreads = false;
 	  arg2 = arg2 + vPop(thisStack) - 1;
 	}
         for (i = 1; i <= arg1; i++) {
-	  putV(Y,arg2 + i - 1,D[i]);
+	  putV(Y,arg2 + arg1 - i,D[i]);
 	}
 #ifdef TRACE
 	dumpObj(trace,"dest",Y);
