@@ -2026,6 +2026,9 @@ bool traceThreads = false;
 	    ConvertIndexedAsString(thisBlock);
 	    restoreContext();
             break;
+          case 140: // dumpObj
+
+	    break;
 	  default:
 	    RTE2("\n\n*** prim: missing case %i\n",arg1);
 	    runTimeError("prim: missing case");
