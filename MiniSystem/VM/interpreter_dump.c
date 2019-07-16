@@ -211,7 +211,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"rtnEventQ %i ",op1(bc,&glsc));
 	break;
       case doEventQ:
-	fprintf(trace,"doEventQ %i ",op1(bc,&glsc));
+	fprintf(trace,"doEventQ ");
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld ");

@@ -43,7 +43,7 @@ typedef void *FILE;
 #define HIGH 5
 #endif
 
-//#define DUMP
+#define DUMP
 //#define TRACE
 //#define EVENT
  
@@ -98,7 +98,10 @@ void *heapAlloc(int size) {
     //#else
     obj = malloc(size);
     //#endif
-    if (obj == NULL) runTimeError("Malloc failure\n");
+    if (obj == NULL) {
+        printf("Malloc failuere: %i\n",size);
+        runTimeError("Malloc failure\n");
+    }
     ZZ = ZZ - 1;
 #ifdef linux 
     ret = pthread_mutex_unlock( &mutex1 );
@@ -161,7 +164,9 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
 };
 
 Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
-  int i = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;// + 1000;
+  // vInxSize = rInxSize = 0 - use objSize
+  int i = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
+  // make precise calc
   hSize = hSize + i;
   //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   Btemplate *obj = (Btemplate*)heapAlloc(i);
@@ -170,12 +175,12 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   obj->id = ID; 
   obj->valOff = 0;
   obj->isObj = isObj;
-  obj->vtop = 0;
+  obj->vtop = 0; 
   obj->rtop = 0;
   obj->lscTop = -1;
   obj->lsc = 0;
-  for (i = 1; i < 16; i++) obj->vfields[i] = 0; 
-  for (i = 1; i < 24; i++) putR(obj,i,NULL);
+  for (i = 1; i < 16; i++) obj->vfields[i] = 0;  // 16 is not ok - use exact size
+  for (i = 1; i < 24; i++) putR(obj,i,NULL);  // stores in vfields so superflouos
   // bc 
   return obj;
 }
@@ -364,14 +369,16 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 #ifdef linux
   int res = 0;
 #elif defined  __CYGWIN__
-    int res = WaitForSingleObject(eventTaken,INFINITE);
-    switch (res) {
-    case WAIT_OBJECT_0: 
-      theEvent = E; 
-      break;      
-    default: 
-      runTimeError("Wait failiure for eventTaken");
-    };
+  //printf("wait\n");
+  int res = WaitForSingleObject(eventTaken,INFINITE);
+  //printf("go\n");
+  switch (res) {
+  case WAIT_OBJECT_0: 
+    theEvent = E; 
+    break;      
+  default: 
+    runTimeError("Wait failiure for eventTaken");
+  };
 #endif
 
 #ifdef linux
@@ -663,6 +670,7 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
 };
 
 void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
+  // vInxSize and rInxSize = 0 - start using objSize
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
@@ -1057,7 +1065,7 @@ bool traceThreads = false;
 #else
   trace = fopen(thisBlock->traceFile,"w");
   thisBlock->trace = trace;
-  setbuf(trace, NULL);
+  //setbuf(trace, NULL);
 #endif
   Btemplate *enablee = 0;
   int suspendEnabled = 0;
@@ -2081,7 +2089,7 @@ bool traceThreads = false;
 #ifdef EVENT
 	mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 #endif
-	break;
+	break; 
       case rtnEventQ:
         arg1 = op1(bc,&glsc);
 #ifdef TRACE
