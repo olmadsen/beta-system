@@ -165,13 +165,20 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
 
 Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
   // vInxSize = rInxSize = 0 - use objSize
-  int i = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
-  // make precise calc
-  hSize = hSize + i;
-  //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
-  Btemplate *obj = (Btemplate*)heapAlloc(i);
+  int size = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
+  /* This should be the precise size, but check for vInxSize and rInxSize
+   * vInxSize > 0 ==> array ?
+   * int size = sizeof(Btemplate) + (objSize + vInxSize) * sizeof(int);
+   */
+  hSize = hSize + size;
+  //fprintf(trace,"allocTemplate(%i,%i) ",size, hSize);
+  Btemplate *obj = (Btemplate*)heapAlloc(size);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
+  int objSize = vSize(obj->desc);
+
+  if (objSize >= 10) 
+      printf("Inconsistent size: objSize: %i, vInxSize: %i rInxSize: %i\n",objSize,vInxSize,rInxSize);
   obj->id = ID; 
   obj->valOff = 0;
   obj->isObj = isObj;
@@ -179,6 +186,7 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   obj->rtop = 0;
   obj->lscTop = -1;
   obj->lsc = 0;
+  int i = 0;
   for (i = 1; i < 16; i++) obj->vfields[i] = 0;  // 16 is not ok - use exact size
   for (i = 1; i < 24; i++) putR(obj,i,NULL);  // stores in vfields so superflouos
   // bc 

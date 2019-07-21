@@ -394,7 +394,10 @@ void dumpDesc(FILE *trace, int xdescNo) {
     fprintf(trace,"%s",getString(desc_getInt2(desc,0)));
     fprintf(trace," descNo:%i vSize:%i rSize:%i originOff:%i\n"
 	    ,descNo(desc),VS,RS,desc_getInt2(desc,originOff_index));
-    if (VS >= 16) {
+    /* the tests for VS and RS are no longer needed since all fields
+     * are pæaced in the dynamixe array fields
+     */
+    if (VS >= 64) {
       fprintf(trace,"\n\n");
       fclose(trace);
       runTimeError("vSize too big");
