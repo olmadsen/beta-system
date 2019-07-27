@@ -2018,7 +2018,7 @@ bool traceThreads = false;
 	    fprintf(trace,"%i\n",V);
 #endif
 	    vPush(thisStack,V);
-	    break;
+	    break; 
 	  case 15: // sleep
 	    arg1 = vPop(thisStack);
 #ifdef TRACE
@@ -2637,7 +2637,7 @@ bool traceThreads = false;
 #else
   if (traceThreads){
     printf("\nStop: threadId: %i \n",threadId); 
-    if (hasThreads) printf("TRUE\n");
+    if (hasThreads) printf("HasThreads threadNo: %i\n",threadNo);
   }
 #endif
 

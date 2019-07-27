@@ -55,7 +55,7 @@ typedef struct Btemplate {
   int lscStack[16];
   int lscTop;
   int lsc;
-  int vfields[]; // flexible array
+  volatile int vfields[]; // flexible array
 } Btemplate;
 
 typedef struct Block {
