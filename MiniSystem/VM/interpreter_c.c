@@ -164,7 +164,6 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
 };
 
 Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
-  // vInxSize = rInxSize = 0 - use objSize
   int size = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
   /* This should be the precise size, but check for vInxSize and rInxSize
    * vInxSize > 0 ==> array ?
@@ -177,7 +176,7 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   obj->desc = getDesc(descNo);
   int objSize = vSize(obj->desc);
 
-  if (objSize >= 10) 
+  if (objSize >= 90) 
       printf("Inconsistent size: objSize: %i, vInxSize: %i rInxSize: %i\n",objSize,vInxSize,rInxSize);
   obj->id = ID; 
   obj->valOff = 0;
