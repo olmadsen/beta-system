@@ -14,7 +14,8 @@ do(* (if (astRef <> 65535) and (astRef >= 0) then
        astRef -> mstate.jcf.emitLineNumber
    if)
    *)
-   '\tnewImp'-> putline;
+   mstate.bvm.com(#do 'newImp'-> TT #)
+   
 ---byteCode_textOperand_out:doPart---
 do T[] -> mstate.textOperandArg[];
    
@@ -91,16 +92,15 @@ do (*_nop -> mstate.jcf.emit;*)
 ---byteCode_ldCst:doPart---
 do (if true
     // (- 128 <= C) and (C <= 127) then
-       '\tloadConstS: ' -> puttext;
+       C -> mstate.bvm.pushConst
     // (- common.two15 <= C) and (C <= (common.two15-1)) then
     else
        '\tloadConstX: ' -> puttext;
-   if);
-   C -> putint; newline
+   if)
    
 ---byteCode_ldNone:doPart---
 do (*aconst_null -> mstate.jcf.emit;*)
-   '\tloadNone'->putline
+   mstate.bvm.com(#do 'loadNone'->TT #)
    
 ---byteCode_ldValImpl:doPart---
 do (if A.isOrigin then
@@ -510,7 +510,7 @@ do (if isGpart then
    if)
    
 ---byteCode_return:doPart---
-do '\treturn'->putline;
+do mstate.bvm.com(#do 'return'->TT; #)
    
    (* (if RToff
     *     // 0 // 10 then 
@@ -532,7 +532,7 @@ do '\treturn'->putline;
 
 ---bytecode_endMethod:doPart---
 do (*mstate.jcf.labs.check_all_relocated;*)
-   '\tendmethod'->putline
+   mstate.bvm.com(#do 'endmethod'->TT #);
    
 ---byteCode_callPrim:doPart--
 do (T[],'Unknown') -> mstate.emitPrim
@@ -573,7 +573,11 @@ do (* when using package as in
     * 
     * Only 'myClass' should be used as thisFileName 
     *)
-   '\tclassDef: ' -> puttext; className[] -> putline;
+   mstate.bvm.com
+   (#do 'classDef: ' -> TT; className[] -> TT;
+      'formId: ' -> TT; formId[] -> TT; 
+      ' descNo: ' -> TT; descNo -> II #);
+   (className[],descNo,false,1,1) -> mstate.bvm.class;
    (# lastDot: @integer; 
       realClassName,fn: ^text
    do className.scanAll
@@ -651,14 +655,18 @@ do (*  mstate.jcf.EmitToFile;
     *        mstate.GenerateJvmClasses;
     *    if);
     *)
-   '\nendClass: ' -> puttext; mstate.thisclassName[] -> putline
+   mstate.bvm.com(#do 'endClass: ' -> TT; mstate.thisclassName[] -> TT #);;
+   (1,0,0,1) -> mstate.bvm.endClass;
+   
 
 --byteCode_endCodeSeg:doPart---
 do 
+   mstate.bvm.com(#do 'endcodeseg' -> TT #);
+   mstate.bvm.close;
+   mstate.BC.close
    
 --byteCode_methodDef:doPart--
-do 
-   '\tnewMethod: ' -> puttext; methodName[] -> putline;
+do mstate.bvm.com(#do'newMethod: ' -> TT; methodName[] -> TT; #);
    (* 0 -> mstate.numTempLocals;
     *    (# aux: @integer; {* 0 or 1 *}
     *       isStatic: @boolean;
@@ -742,7 +750,8 @@ do
    *)
 --byteCode_emitTextConst:doPart---
 do (* S[] -> mstate.jcf.emitLoadString;*)
-   '\temitTextConst: ' -> puttext; S[] -> putline
+   mstate.bvm.com(# do'\temitTextConst: ' -> TT; S[] -> TT #);
+   S[] -> mstate.bvm.pushText
    
 ---byteCode_close:doPart---
 do (* (if trace_init_close then
@@ -847,8 +856,15 @@ do (* (if newVirt then
     * localFilePath = '~beta/myproject' if foo is in betalib
     * I.e. BCname is the fill path and localFileptah is a local path
     *)
-do 
-   '\n\tinit byte code: ' -> puttext; BCname[] -> putline;
+   
+do (# FN: ^text
+   do (1,BCname.length - 2) -> BCname.sub -> FN[];
+      '..s' -> FN.append -> mstate.BC.name;
+      mstate.BC.openWrite;
+      mstate.BC[] -> mstate.bvm.init;
+      mstate.bvm.com(#do 'init byte code: ' -> TT; BCname[] -> TT;; FN[]->TT #);
+   #)
+   
    (* (if localFilePath[] = none then
     *        {* hack to signal that BCname is the currentFileName  *}
     *        183->trace(#do 'Init:setFile:BCname: ' -> xT; BCname[] -> xT#);
