@@ -1,0 +1,1015 @@
+(*ORIGIN 'classfile';*)
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/texthash';
+--LIB: attributes--
+
+traceDebuginfo:
+  (# exit false #);
+trace_labs: 
+  (# exit false #);
+
+calculateMaxLocals:
+  (# exit false #);
+
+
+(****** having this here yields a bad sementic error!!
+ * (# exit true #);
+ *)
+
+checkForInterfaceIndicators:
+  (# T: ^text
+  enter T[]
+  do (for i:T.lgth repeat
+          (if T.T[i]='|' then
+              '\nRemoving interface indicator in:\n\t'
+                -> screen.puttext; 
+              T[]->putline;
+              (i,i)-> T.delete;
+              'Result: \n\t' 
+                -> screen.puttext;
+              T[] -> screen.putline;
+              (dumpstack, 'Trace of call') -> stop;
+          if);
+     for);
+  #);
+
+JavaImage:
+  (#(* cf: @ClassFile;*)
+     
+     traceClassFile: @boolean;
+     traceClassFileName: @boolean;
+     display_warnings: @boolean;
+     
+     replace_dot_slash: (# exit true #);
+
+     check_dot_slash:
+       (# s: ^text;
+          have_warned: @boolean;
+       enter s[]
+       do '.' -> s.findAll
+          (# 
+          do (if display_warnings and not have_warned then
+                 '\n*** Warning: \'.\' found in \''->screen.puttext;
+                 s[] -> screen.puttext;
+                 '\'' -> screen.puttext;
+                 (if replace_dot_slash then
+                     '. Replaced by \'/\'' -> screen.putline;
+                  else
+                     screen.newline;
+                 if);
+                 true -> have_warned;
+             if);
+             (if replace_dot_slash then
+                 '/' -> S.T[inx]; (* replace *)
+             if);
+          #);
+          (if have_warned then
+              ' Result: ' -> screen.puttext;
+              s[] -> screen.putline;
+          if)
+       #);
+     
+     local_variables_always_live_until_exit: @
+       (* True if local variables should be marked as alive from first
+        * access and the rest of the method. Ideally only variables that
+        * are used in the exit part should have this property, but this
+        * cannot currently be distinguished
+        *)
+       boolean;
+     report_undefined_local_variable_use: @
+       boolean;
+     
+     thisClassIndex, superClassIndex: @integer;
+          
+     init:<
+       (# classfilename: ^text;
+       enter classfilename[]
+       do INNER;
+          (*classfilename[] -> cf.name;
+          constant_pool.init;
+          fields.init;*)
+       #);
+     
+     (* Handy shortcuts for often used operations *)
+     emit:
+       (# enter emitByte #);
+     emitByte:
+       (# B: @integer enter B do #);
+     emitShort:
+       (# B: @integer enter B do #);
+     emitLong:
+       (# B: @integer enter B do #);
+     emitMethodRef:
+       (# T: ^text enter T #);
+     emitInterfaceMethodRef:
+       (# T: ^text enter T #);
+     emitFieldRef:
+       (# T: ^text enter T #);
+     emitClassRef:
+       (# T: ^text enter T #);
+     emitLoadString:
+       (# index: @integer;
+       enter constant_pool.strings.addtext -> index
+       do (*(if index>255 then
+              ldc_w -> emit; index -> emitShort;
+           else
+              ldc -> emit; index -> emit;
+          if);*)
+       #);
+     emitLoadIntegerConstant:
+       (# index: @integer;
+       enter constant_pool.integers.add -> index
+       do (*(if index>255 then
+              ldc_w -> emit; index -> emitShort;
+           else
+              ldc -> emit; index -> emit;
+          if);   *)   
+       #);
+     emitRealConstantPrefix:
+       (# inx: @integer;
+       do (* Notice: the inx includes the extra increment by 1 
+           * on constant pool size dictated by doubles. But the one that 
+           * should be used for refering the double is the un-incremented one. 
+           * Thus we need to decrement the value emitted by 1 
+           *)
+          inx-1 -> emitShort 
+       #);
+     emitRealConstant: emitRealConstantPrefix
+       (* enter parameter: a BETA real *)
+       (# R: @real
+       enter R
+       #);
+     emitDoubleConstant: emitRealConstantPrefix
+       (* enter parameter: 2 BETA integers *)
+       (# R: @real
+       enter R
+       #);
+     emitPrivateFieldDef:
+       (# T: ^text enter T #);
+     emitPublicFieldDef:
+       (# T: ^text enter T #);
+     emitPublicSyntheticFieldDef:
+       (# T: ^text enter T #);
+     emitFieldDef:
+       (# T: ^text enter T #);
+     emitComment:
+       (# comment: ^text;
+       enter comment[]
+       do (*(if currentmethod._code[]<>NONE then
+              'comment: ' -> (comment.copy).prepend -> emitLoadString;
+              pop -> emit;
+           else
+              'EmitComment: No method defined yet. Cannot emit comment:\n  comment: '
+                -> screen.puttext;
+              comment[] -> screen.putline;
+          if);*)
+       #);
+     emitLineNumber:
+       (# line: @integer;
+       enter line
+       do (*(if currentmethod._code[]<>NONE then
+              (currentmethod.LIP, line) -> currentmethod.linenumber;
+          if);*)
+       #);
+     emitLocalVariableDefinition:
+       (# start_pc: @int16u; (* start_pc=65535 means not yet defined *)
+          length: @int16u; (* length=65535 means "lives through entire method" *)
+          name, type: ^text;
+       enter (start_pc, length, name[], type[])
+       do (*type[] -> checkForInterfaceIndicators;
+          (if local_variables_always_live_until_exit then
+              65535 -> length;
+          if);
+          (start_pc, length, name[], type[], currentmethod.numLocals)
+            -> currentmethod.variable_definition;
+          currentmethod.numLocals+1 -> currentmethod.numLocals;
+          (if calculateMaxLocals then
+              currentmethod.numLocals -> currentmethod._code.max_locals;
+          if);*)
+       #);
+     emitLocalVariableUse:
+       (# variable_index: @int16u;
+       enter variable_index
+       do (*(variable_index, currentmethod.LIP) -> currentmethod.variable_use*)
+       #);
+     emitExceptionHandlerDef:
+       (# 
+       enter currentmethod.exceptionhandler_def
+       #);
+     emitThrows:
+       (# 
+       enter currentmethod.throws
+       #);
+     
+     emitToFile:
+       (# (*e: @diskentry;
+          access_flags:< integerValue
+            (# 
+            do  ACC_PUBLIC %Bor ACC_SUPER -> value;
+               INNER;
+            #);*)
+       do(* currentmethod.fix_variables;
+          (if traceClassFile then
+              '\nWriting ' -> screen.puttext;
+              cf.name -> screen.putline;
+           else
+              (if traceClassFileName then
+                  '\n'
+                  ' [' -> screen.puttext;
+                  cf.name -> e.path;
+                  e.path.name -> screen.puttext;
+                  ']' -> screen.puttext;
+              if);
+          if);
+          cf.openWrite;
+          (JAVA_MAGIC, JAVA_MINOR, JAVA_MAJOR, access_flags, thisClassIndex, superClassIndex) 
+            -> cf.write(# trace::(# do traceClassFile->value #)#);
+          cf.close;*)
+       #);
+     
+     constant_pool: @
+       (# 
+          strings: @integerHashTable
+            (# (*entrytype::CF_CONSTANT_String_info;
+               addentry::(# do i->entry.string_index #);*)
+               
+            #);
+          classes: @integerHashTable
+            (# (*entrytype::CF_CONSTANT_Class_info;
+               addentry::(# do i->entry.name_index #);
+               addtext::(# do s[] -> check_dot_slash #)*)
+            #);
+          refstype: integerPairHashTable
+            (#(* entrytype::< cf.CONSTANT_ref_info;
+               addentry::<(# do (i1,i2)->(entry.class_index, entry.name_and_type_index) #);
+               addtext:
+                 (# c, n, t: ^text; index1, index2: @integer;
+                 enter (c[], n[] , t[])
+                 do t[] -> checkForInterfaceIndicators;
+                    c[] -> classes.addtext -> index1;
+                    (n[], t[]) -> name_types.addtext -> index2;
+                    (index1, index2) -> add -> index1;
+                 exit index1
+                 #);*)
+            #);
+          methodrefs: @refstype
+            (#(* entrytype::CF_CONSTANT_Methodref_info;*)
+            #);
+          interfacemethodrefs: @refstype
+            (# (*entrytype::CF_CONSTANT_InterfaceMethodref_info;*)
+            #);
+          fieldrefs: @refstype
+            (# (*entrytype::CF_CONSTANT_Fieldref_info;*)
+            #);
+          reals: @doubleHashTable
+            (# (*entrytype::CF_CONSTANT_Double_info;*)
+               addentry::
+                 (# 
+                 do(* d->entry.double; 
+                    cf.constant_pool.numdoubleslots+1->cf.constant_pool.numdoubleslots;*)
+                 #)
+            #);
+          doubles: @integerPairHashTable
+            (# (*entrytype::CF_CONSTANT_Double_info;*)
+               addentry::
+                 (# 
+                 do(* i1->entry.l1;
+                    i2->entry.l2;
+                    true->entry.use2longs;
+                    cf.constant_pool.numdoubleslots+1->cf.constant_pool.numdoubleslots;*)
+                 #)
+            #);
+          integers: @integerHashTable
+            (# (*entrytype::CF_CONSTANT_Integer_info;*)
+               (*addentry::(# do i->entry.bytes #)*)
+            #);
+          name_types: @integerPairHashTable
+            (# (*entrytype::CF_CONSTANT_NameAndType_info;*)
+              (* addentry::(# do (i1,i2)->(entry.name_index, entry.descriptor_index) #);*)
+               addtext:
+                 (# n, t: ^text; index1, index2: @integer;
+                 enter (n[] , t[])
+                 do n[] -> utf8strings.add -> index1; 
+                    t[] -> utf8strings.add -> index2; 
+                    (index1, index2) -> add -> index1;
+                 exit index1
+                 #);
+            #);
+          utf8strings: @texthashtable
+            (# (*entrytype::CF_CONSTANT_Utf8_info;
+               addentry::(# do t[]->entry.encode #)*)
+            #);
+          init:
+            (# 
+            do strings.init;
+               classes.init;
+               interfacemethodrefs.init;
+               methodrefs.init;
+               fieldrefs.init;
+               doubles.init;
+               name_types.init;
+               utf8strings.init;
+               integers.init;
+            #);
+       #);
+     
+     fields: @hashtable
+       (* Similar to integerPairHashtable below, but not part of constant_pool *)
+       (# (*info: ^CF_Field_info;*)
+          init:
+            (# 
+            do (*(if info[]<>NONE then
+                   info.write;
+               if);
+               &CF_Field_info[] -> info[];*)
+            #);
+          (*entrytype:< CF_Field_info;*)
+          addentry:<
+            (# (*entry: ^entrytype;*)
+               index: @integer;
+               i1, i2: @integer;
+               access_flags: @integer;
+            enter (access_flags,i1,i2)
+            do (*&entrytype[] -> entry[];
+               (access_flags, i1, i2) -> (entry.access_flags, entry.name_index, entry.descriptor_index);*)
+               INNER;
+              (* entry[] -> last_entry_added[] -> cf.fields.add;
+               cf.fields.count -> index;*)
+            exit index
+            #);
+          element::
+            (# i1, i2: @integer;
+               index: @integer (* index in cf.fields *);
+            #);
+          hashFunction::< 
+            (# do ((e.i1 + e.i2) mod range) ->value; #);
+          equal::< 
+            (# 
+            do (left.i1=right.i1) and (left.i2=right.i2) -> value;
+            #);
+          (*last_entry_added: ^entrytype;*)
+          add:
+            (# access_flags: @integer;
+               i1, i2: @integer;
+               E: ^element;
+            enter (access_flags, i1, i2)
+            do &element[]->E[];
+               (i1, i2) -> (E.i1, E.i2);
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do (i1=current.i1) and (i2=current.i2)->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do (access_flags, i1,i2) -> addentry -> E.index;
+                       E[]                   -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #);
+          addText:
+            (# fieldname, fieldtype: ^text;
+               name_index, descriptor_index: @integer;
+               access_flags:< integerValue
+                 (# 
+                 do (*§ ACC_PUBLIC -> value;*)
+                    INNER;
+                 #);
+               synthetic:< booleanvalue;
+            enter (fieldname[], fieldtype[])
+            do (* fieldType[] -> checkForInterfaceIndicators;
+                *                fieldname[] -> constant_pool.utf8strings.add -> name_index;
+                *                fieldtype[] -> constant_pool.utf8strings.add -> descriptor_index;
+                *                (access_flags, name_index, descriptor_index) -> add; 
+                *                (if synthetic then
+                *                    {* Add SYNTHETIC attribute to last_entry_added *}
+                *                    'Synthetic' 
+                *                      -> constant_pool.utf8strings.add 
+                *                      -> &CF_Synthetic_attribute 
+                *                      -> last_entry_added.attributes.add;
+                *                if);
+                *)
+            #);
+          
+          (* Shortcut uses of addtext *)
+          addText_private: addtext
+            (# access_flags::(# do (*§ACC_PRIVATE->value*) #)#);
+          addText_static: addtext
+            (# access_flags::(# do (*§ACC_PUBLIC %Bor ACC_STATIC ->value*) #)#);
+          addText_publicsynthetic: addtext
+            (# access_flags::(# do(*§ ACC_PUBLIC ->value*) #);
+               synthetic::truevalue;
+            #);
+       #);
+     
+     currentmethod: @
+       (#(*  info: ^CF_Method_info;
+          *           _code: ^CF_Code_attribute;
+          *           name, signature: ^text;
+          *           isStatic: @boolean;
+          *           numLocals: @int16u;
+          *           line_numbers: ^CF_LineNumberTable_attribute;
+          *           variables: ^CF_LocalVariableTable_attribute;
+          *           thrown_exceptions: ^CF_Exceptions_attribute;
+          *           LIP: (# exit {*_code.code_length*} 1 #);
+          *           LIP_beginning_of_line: @integer;
+          *)
+          new: 
+            (# access, maxstack, maxlocals: @integer;
+               name_index, descriptor_index, code_index: @integer;
+               name,signature: ^text
+            enter (access, name[], signature[], maxstack, maxlocals)
+            do (*§signature[] -> checkForInterfaceIndicators;
+               fix_variables;
+               -1 -> LIP_beginning_of_line;
+               (access %Band ACC_STATIC) <> 0 -> isStatic;
+               name[] -> constant_pool.utf8strings.add -> name_index;
+               signature[] -> check_dot_slash;
+               signature[] -> constant_pool.utf8strings.add -> descriptor_index;
+               (access, name_index, descriptor_index) 
+                 -> &CF_Method_info
+                 -> info[]
+                 -> cf.methods.add;
+               (if (access %Band ACC_NATIVE) = ACC_NATIVE then
+                   (* Do not generate code attribute * )
+                else
+                   'Code' -> constant_pool.utf8strings.add -> code_index;
+                   (if calculateMaxLocals then
+                       (* calculate maxlocals as locals are added * )
+                       0 -> maxlocals;
+                   if);
+                   (code_index, maxstack, maxlocals)
+                     -> &CF_Code_attribute 
+                     -> _code[]
+                     -> info.attributes.add;
+               if);
+               NONE -> line_numbers[];*)
+            #);
+          fix_variables:
+            (# 
+            do (* (if variables[]<>NONE then
+                *                    {* Complete local variable information of previous method *}
+                *                    {*(for i:variable_slots.range repeat
+                *                         (if variable_slots[i][]<>NONE then
+                *                             (if variable_slots[i].start_pc = 65535 then
+                *                                 0 -> variable_slots[i].start_pc;
+                *                             if);
+                *                             (if variable_slots[i].length = 65535 then
+                *                                 LIP-variable_slots[i].start_pc-1 -> variable_slots[i].length;
+                *                             if);
+                *                         if);
+                *                    for);*}
+                *                if);
+                *                0 -> numLocals;
+                *                NONE -> variables[];
+                *                1 -> variable_slots.new;
+                *)
+            #);
+          linenumber:
+            (# pc, line: @integer;
+              (* i: ^CF_LineNumber_info;*)
+            enter (pc, line)
+            do (*(if line_numbers[]=NONE then
+                   'LineNumberTable' 
+                     -> constant_pool.utf8strings.add
+                     -> &CF_LineNumberTable_attribute
+                     -> line_numbers[]
+                     -> _code.attributes.add;
+               if);
+               &CF_LineNumber_info[] -> i[] -> line_numbers.line_number_table.add;
+               (pc, line) -> i;
+               pc -> LIP_beginning_of_line;*)
+            #);
+          (*variable_slots: [1]^CF_LocalVariable_info;*)
+          variable_definition: 
+            (# name, type: ^text;
+               start_pc, length, name_index, descriptor_index, index: @integer;
+               (*i: ^CF_LocalVariable_info;*)
+            enter (start_pc, length, name[], type[], index)
+            do (* (if traceDebugInfo then
+                *                    'method '->screen.puttext;
+                *                    currentmethod.name[] -> screen.puttext;
+                *                    ': defining local var no '->screen.puttext;
+                *                    index -> screen.putint;
+                *                    ' ' -> screen.put;
+                *                    name[] -> screen.putline;
+                *                if);       
+                *                (if variables[]=NONE then
+                *                    'LocalVariableTable' 
+                *                      -> constant_pool.utf8strings.add
+                *                      -> &CF_LocalVariableTable_attribute
+                *                      -> variables[]
+                *                      -> _code.attributes.add;
+                *                if);
+                *                name[] -> constant_pool.utf8strings.add -> name_index;
+                *                type[] -> constant_pool.utf8strings.add -> descriptor_index;
+                *                &CF_LocalVariable_info[] -> i[] ->variables.local_variable_table.add;
+                *                (start_pc, length, name_index, descriptor_index, index) -> i;
+                *                (if index+1>variable_slots.range then
+                *                    (variable_slots.range, index+1-variable_slots.range)
+                *                      -> max
+                *                      -> variable_slots.extend;
+                *                if);
+                *                (if variable_slots[index+1][]=NONE then
+                *                    i[] -> variable_slots[index+1][];
+                *                 else
+                *                    'method '->screen.puttext;
+                *                    currentmethod.name[] -> screen.puttext;
+                *                    ': redefinition of variable no '
+                *                      -> screen.puttext;
+                *                    index -> screen.putint;
+                *                    screen.newline;
+                *                if);
+                *)
+            #);
+          variable_use:
+            (# index, pc: @int16u;
+            enter (index,pc)
+            do (* (if (index+1>variable_slots.range) or (variable_slots[index+1][]=NONE) then
+                *                    (if report_undefined_local_variable_use then
+                *                        'method '->screen.puttext;
+                *                        currentmethod.name[] -> screen.puttext;
+                *                        ': use of undefined variable no '
+                *                          -> screen.puttext;
+                *                        index -> screen.putint;
+                *                        screen.newline;
+                *                    if)
+                *                 else
+                *                    (if traceDebugInfo then 
+                *                        'method '->screen.puttext;
+                *                        currentmethod.name[] -> screen.puttext;
+                *                        ': correct use of variable no '
+                *                          -> screen.puttext;
+                *                        index -> screen.putint;
+                *                        ' at pc '->screen.puttext;
+                *                        pc -> screen.putint;
+                *                        screen.newline;
+                *                    if);
+                *                    (if variable_slots[index+1].start_pc=65535 then
+                *                        {* first use of slot#index *}
+                *                        (if (LIP_beginning_of_line<>-1) and
+                *                            (LIP_beginning_of_line<pc) then
+                *                            {* Mark variable as becoming alive from beginning
+                *                             * of line - makes the most sence when inspected 
+                *                             * in debugger
+                *                             *}
+                *                            LIP_beginning_of_line 
+                *                              -> variable_slots[index+1].start_pc;
+                *                         else
+                *                            pc -> variable_slots[index+1].start_pc;
+                *                        if)
+                *                    if);
+                *                    (if variable_slots[index+1].length<>65535 then
+                *                        {* 65535 means lives through entire method - fixed by fix_variables *}
+                *                        pc-variable_slots[index+1].start_pc 
+                *                          -> variable_slots[index+1].length;
+                *                    if);
+                *                if);
+                *)
+            #);
+          exceptionhandler_def:
+            (# start_pc, end_pc, handler_pc: @int16u;
+               catch_type: ^text;
+               catch_index: @int16u;
+               (*i: ^CF_Exception_info;*)
+            enter (start_pc, end_pc, handler_pc, catch_type[])
+            do (* (if catch_type[]=NONE then
+                *                    0 -> catch_index {* finally *};
+                *                 else
+                *                    catch_type[] -> constant_pool.classes.addtext -> catch_index;
+                *                if);
+                *                &CF_Exception_info[] -> i[] -> _code.exceptions.add;
+                *                (start_pc, end_pc, handler_pc, catch_index) -> i;
+                *)
+            #);
+          throws:
+            (# exception_type: ^text;
+               exception_index: @int16u;
+               (*i: ^CF_Exception_index_info;*)
+            enter exception_type[]
+            do (* (if thrown_exceptions[]=NONE then
+                *                    'Exceptions' 
+                *                      -> constant_pool.utf8strings.add
+                *                      -> &CF_Exceptions_attribute
+                *                      -> thrown_exceptions[]
+                *                      -> info.attributes.add;
+                *                if);
+                *                exception_type[] -> constant_pool.classes.addtext -> exception_index;
+                *                &CF_Exception_index_info[] -> i[] -> thrown_exceptions.exception_index_table.add;
+                *                exception_index -> i;
+                *)
+            #);
+       enter new
+       #);
+     
+     labs: @
+       (#
+          undefined: 
+            (* One larger than largest PC in JAVA. Zero will not work as there may be labels at PC=0 *) 
+            (# exit 0x10000 #);
+          adr: [0] @integer;
+          use: [0] ^loc;
+          loc: (# pc: @integer; next: ^loc #);
+          clear:
+            (# 
+            do (* (if trace_labs then
+                *                    '\n\nlabs.clear in method name: ' -> screen.puttext;
+                *                    currentmethod.name[] -> screen.putline;
+                *                if);
+                *                (for i:use.range repeat
+                *                     NONE->use[i][];
+                *                     undefined -> adr[i];
+                *                for);
+                *)
+            #);
+          check_range: @
+            (# l: @integer;
+               old_range: @integer;
+            enter l
+            do (* (if l=0 then
+                *                    'Use/definition of strange label L0' -> screen.putline;
+                *                if);
+                *                (if l > adr.range then
+                *                    adr.range -> old_range;
+                *                    l+adr.range->adr.extend;
+                *                    l+use.range->use.extend;
+                *                    (for i:adr.range-old_range repeat
+                *                         undefined -> adr[old_range+i];
+                *                    for);
+                *                if);
+                *)
+            #);
+          def: @
+            (# l,patchAdr,patchInst: @integer; s: ^loc
+            enter l
+            do(*  (if trace_labs then
+               *                    'labs: definition of L' -> screen.puttext;
+               *                    l -> screen.putint;
+               *                    ' at PC '-> screen.puttext;
+               *                    currentmethod.LIP -> screen.putint;
+               *                    screen.newline;
+               *                if);
+               *                l -> check_range;
+               *                currentmethod.LIP->adr[l];
+               *                use[l][]->s[];
+               *                none ->use[l][];
+               *                LL:
+               *                  (if s[] <> none then
+               *                      (if trace_labs then
+               *                          'labs:   patch short at ' -> screen.puttext;
+               *                          s.pc -> screen.putint;
+               *                          ' with ' -> screen.puttext;
+               *                          currentmethod.LIP+1-s.pc -> screen.putint;
+               *                          screen.newline;
+               *                      if);
+               *                      
+               *                      (s.pc+1, currentmethod.LIP+1-s.pc) 
+               *                        -> currentmethod._code.patchShort;
+               *                      s.next[]->s[];
+               *                      restart LL
+               *                  if)
+               *)
+            #);
+          off: @
+            (# l,of: @integer; s: ^loc; 
+               value: @integer;
+            enter l
+            do (* (if trace_labs then
+                *                    'labs: use of L' -> screen.puttext;
+                *                    l -> screen.putint;
+                *                    ' at PC '-> screen.puttext;
+                *                    currentmethod.LIP -> screen.putint;
+                *                    screen.newline;
+                *                if);
+                *                l -> check_range;
+                *                (if adr[l] = undefined then {* forward ref *}
+                *                    &loc[]->s[];
+                *                    currentmethod.LIP->s.pc;
+                *                    use[l][]->s.next[];
+                *                    s[]->use[l][];
+                *                    currentmethod.LIP-1->of; {* exits 0 *}
+                *                 else
+                *                    adr[l]->of
+                *                if);
+                *                of-currentmethod.LIP+1 -> value;
+                *                (if trace_labs then
+                *                    'labs: use of L' -> screen.puttext;
+                *                    l -> screen.putint;
+                *                    ' returns offset '-> screen.puttext;
+                *                    value -> screen.putint;
+                *                    screen.newline;
+                *                if);
+                *)
+            exit value
+            #);
+          check_all_relocated:
+            (# l: ^loc;
+            do (* (if trace_labs then
+                *                    'labs.check_all_relocated in method name: ' -> screen.puttext;
+                *                    currentmethod.name[] -> screen.putline;
+                *                if);
+                *                (for i:use.range repeat
+                *                     use[i][] -> l[];
+                *                     check_use:
+                *                       (if l[]<>NONE then
+                *                           '*** Unrelocated use of label L' -> screen.puttext;
+                *                           i->screen.putint;
+                *                           ' (use site: PC ' -> screen.puttext;
+                *                           l.pc -> screen.putint;
+                *                           ')' -> screen.putline;
+                *                           l.next[] -> l[];
+                *                           restart check_use;
+                *                       if);
+                *                for);
+                *)
+            #)
+       #);
+     
+     SourceFile:
+       (# file: ^text;
+          index1, index2: @integer;
+       enter file[]
+       do(*  'SourceFile' 
+          *             -> constant_pool.utf8strings.add 
+          *             -> index1;
+          *           file[] 
+          *             -> constant_pool.utf8strings.add 
+          *             -> index2;
+          *           (index1, index2) 
+          *             -> &CF_SourceFileValue_attribute
+          *             -> cf.attributes.add;
+          *)
+       #);
+     
+     emitInnerClassRef:
+       (# inner_class_name, outer_class_name, inner_name: ^text;
+          (*inner_class_info_index, outer_class_info_index, inner_name_index, *)
+          inner_class_access_flags: @integer;
+          innerclass_info: (*^CF_InnerClass_info;*) ^text
+       enter (inner_class_name[], outer_class_name[], inner_name[], inner_class_access_flags)
+       do (* Add the InnerClasses attribute to the classfile if not previously done *)
+          (* (if InnerClasses[]=NONE then
+           *               'InnerClasses' 
+           *                 -> constant_pool.utf8strings.add
+           *                 -> &CF_InnerClass_attribute
+           *                 -> InnerClasses[]
+           *                 -> cf.attributes.add;
+           *           if); 
+           *           
+           *           {* Add InnerClass_info to InnerClasses *}
+           *           (if inner_class_name[]<>NONE then
+           *               inner_class_name[]
+           *                 -> constant_pool.classes.addtext
+           *                 -> inner_class_info_index;
+           *           if);
+           *           (if outer_class_name[]<>NONE then
+           *               outer_class_name[] 
+           *                 -> constant_pool.classes.addtext
+           *                 -> outer_class_info_index;
+           *           if);
+           *           (if inner_name[]<>NONE then
+           *               inner_name[] 
+           *                 -> constant_pool.utf8strings.add 
+           *                 -> inner_name_index;
+           *           if);
+           *           &CF_InnerClass_info[]
+           *             -> innerclass_info[]
+           *             -> InnerClasses.classes.add;
+           *           (inner_class_info_index, outer_class_info_index, inner_name_index, inner_class_access_flags)
+           *             -> innerclass_info;
+           *)
+       #);
+     
+     (*     InnerClasses: ^CF_InnerClass_attribute*)
+     
+     CP_HashTable: hashTable
+       (# (*entrytype:< cf.entry;*)
+          addentry:<
+            (# (*entry: ^entrytype;*)
+               index: @integer
+            do (*&entrytype[] -> entry[];*)
+               INNER;
+               (*entry[] -> cf.constant_pool.add;
+               cf.constant_pool.count+cf.constant_pool.numdoubleslots -> index;*)
+            exit index
+            #);
+       #);
+     textHashTable: CP_hashTable
+       (# element::
+            (# t: ^text;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          addentry::< (# t: ^text enter t[]  do INNER #);
+          honeyM: @honeyMan;
+          init::<
+            (# 
+            do honeyM.init;
+            #);
+          hashFunction::< 
+            (# do e.t[]-> honeyM.hash ->value; #);
+          equal::< 
+            (# 
+            do left.t[]->right.t.equal->value;
+            #);
+          add:
+            (# T: ^text;
+               E: ^element;
+            enter T[]
+            do (*T[] -> checkForInterfaceIndicators;*)
+               &element[]->E[];
+               T[]->E.T[];
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do (T[]->current.t.equal)->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do T[] -> addentry -> E.index;
+                       E[] -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
+       #);
+     
+     integerHashTable: CP_hashTable
+       (# (*addentry::< (# i: @integer enter i do INNER #);*)
+          element::
+            (# i: @integer;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          hashFunction::< 
+            (# do (e.i mod range) ->value; #);
+          equal::< 
+            (# 
+            do left.i=right.i -> value;
+            #);
+          add:
+            (# i: @integer;
+               E: ^element;
+            enter i
+            do &element[]->E[];
+               i->E.i;
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do i=current.i->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do (*i   -> addentry -> E.index;
+                       E[] -> insert;*)
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #);
+          addtext:<
+            (# s: ^text; index: @integer;
+            enter s[] 
+            do INNER;
+               s[] -> constant_pool.utf8strings.add -> add -> index; 
+            exit index
+            #);
+       #);
+     
+     integerPairHashTable: CP_hashTable
+       (# addentry::< (# i1, i2: @integer enter (i1,i2) do INNER #);
+          element::
+            (# i1, i2: @integer;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          hashFunction::< 
+            (# do ((e.i1 + e.i2) mod range) ->value; #);
+          equal::< 
+            (# 
+            do (left.i1=right.i1) and (left.i2=right.i2) -> value;
+            #);
+          add:
+            (# i1, i2: @integer;
+               E: ^element;
+            enter (i1, i2)
+            do &element[]->E[];
+               (i1, i2) -> (E.i1, E.i2);
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do (i1=current.i1) and (i2=current.i2)->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do (i1,i2) -> addentry -> E.index;
+                       E[]     -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
+       #);
+     
+     doubleHashTable: CP_hashTable
+       (# addentry::< (# d: @real enter d do INNER #);
+          element::
+            (# d: @real;
+               index: @integer (* index in cf.constant_pool *);
+            #);
+          hashFunction::< 
+            (# do ((e.d -> value) mod range) ->value; #);
+          equal::< 
+            (# 
+            do left.d=right.d -> value;
+            #);
+          add:
+            (# d: @real;
+               E: ^element;
+            enter d
+            do &element[]->E[];
+               d->E.d;
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do d=current.d->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do d   -> addentry -> E.index;
+                       E[] -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
+       #);
+     
+     (* Class file structs with tracing controlled by local variable traceClassFile *)
+     (*CF_CONSTANT_Class_info: 
+       cf.CONSTANT_Class_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_ref_info: 
+       cf.CONSTANT_ref_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_Fieldref_info: 
+       cf.CONSTANT_Fieldref_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_Methodref_info: 
+       cf.CONSTANT_Methodref_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_InterfaceMethodref_info: 
+       cf.CONSTANT_InterfaceMethodref_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_String_info: 
+       cf.CONSTANT_String_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_U4_info: 
+       cf.CONSTANT_U4_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_Integer_info: 
+       cf.CONSTANT_Integer_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_Float_info: 
+       cf.CONSTANT_Float_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_Long_info: 
+       cf.CONSTANT_Long_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_Double_info: 
+       cf.CONSTANT_Double_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_NameAndType_info: 
+       cf.CONSTANT_NameAndType_info(# trace::(# do traceClassFile->value #)#);
+     CF_CONSTANT_Utf8_info: 
+       cf.CONSTANT_Utf8_info(# trace::(# do traceClassFile->value #)#);
+     CF_field_info: 
+       cf.field_info(# trace::(# do traceClassFile->value #)#);
+     CF_method_info: 
+       cf.method_info(# trace::(# do traceClassFile->value #)#);
+     CF_attribute_info:
+       cf.attribute_info(# trace::(# do traceClassFile->value #)#);
+     CF_Exception_info: 
+       cf.Exception_info(# trace::(# do traceClassFile->value #)#);
+     CF_Exception_index_info: 
+       cf.Exception_index_info(# trace::(# do traceClassFile->value #)#);
+     CF_InnerClass_info: 
+       cf.InnerClass_info(# trace::(# do traceClassFile->value #)#);
+     CF_LineNumber_info: 
+       cf.LineNumber_info(# trace::(# do traceClassFile->value #)#);
+     CF_LocalVariable_info: 
+       cf.LocalVariable_info(# trace::(# do traceClassFile->value #)#);
+     
+     
+     CF_ConstantValue_attribute: 
+       cf.ConstantValue_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Code_attribute: 
+       cf.Code_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Exceptions_attribute: 
+       cf.Exceptions_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_InnerClass_attribute: 
+       cf.InnerClass_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Synthetic_attribute: 
+       cf.Synthetic_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_SourceFileValue_attribute: 
+       cf.SourceFileValue_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_LineNumberTable_attribute: 
+       cf.LineNumberTable_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_LocalVariableTable_attribute: 
+       cf.LocalVariableTable_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Deprecated_attribute: 
+       cf.Deprecated_attribute(# trace::(# do traceClassFile->value #)#);*)
+     
+  #);
+
+
