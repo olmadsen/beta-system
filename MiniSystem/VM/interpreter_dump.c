@@ -380,7 +380,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 
 void dumpDesc(FILE *trace, int xdescNo) {
   ObjDesc desc;  
-  if ((desc = getDesc(xdescNo)) > 0 ) {
+  if ((int)(desc = getDesc(xdescNo)) > 0 ) {
     //fprintf(trace,"desc: %i ",desc);
     fprintf(trace,"\nClass ");
     //int i;

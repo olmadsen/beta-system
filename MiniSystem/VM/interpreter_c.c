@@ -34,6 +34,8 @@ typedef void *FILE;
 #include <netdb.h> 
 #include <pthread.h>
 #include <sched.h>
+#else
+#include <string.h>
 #endif
 
 #ifdef __ARDIUNO__ 
@@ -79,7 +81,7 @@ HANDLE allocMutex;
 int ZZ = 0;
 
 void *heapAlloc(int size) {
-  void *obj; char S[50];
+  void *obj; //char S[50];
   if (true) { 
 #ifdef linux
     int ret = pthread_mutex_lock( &mutex1 );
@@ -149,8 +151,10 @@ Btemplate *getR(Btemplate *obj,int inx){
       return (Btemplate *)obj->vfields[inx];
     } else {
       printf("getR: index error %i\n",inx);
+      return (Btemplate *)obj->vfields[inx]; // to fool compilere
     }
   }else{
+    return (Btemplate *)obj->vfields[inx]; // to fool compilere
   }
 };
 void putR(Btemplate *obj,int inx, Btemplate *X){  
@@ -370,7 +374,7 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
   E->org = org;
   E->isObj = (int) isObj;
   E->descNo = currentDescNo;
-  E->bcPos = bcPos;
+  E->bcPos = bcPos; 
   //printf("\nmkEvent: %i",E->type);
 
 #ifdef linux
@@ -417,7 +421,7 @@ int descNoOf(Btemplate * obj){
 #ifdef __arm__
 #else
 void dumpStack(FILE *trace,Btemplate *Z){
-  int i;
+  //int i;
   fprintf(trace,"\n\t");
   dumpVstack(trace,Z);
   dumpRstack(trace,Z);
@@ -486,7 +490,7 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
 #endif
 
   descs = (ObjDesc) heapAlloc(imageS);
-  memcpy(descs,descs_a,imageS); 
+  memcpy((void *)descs,descs_a,imageS); 
   newAlloc = newAlc;
   if (newAlloc) newAllocOff = 1;
 }
@@ -595,6 +599,8 @@ Event *getEvent(bool first){
     default: 
       runTimeError("Wait failiure for waitEvent");
     };
+#else
+  E = NULL; // to fool ESP32 compiler
 #endif
 #ifdef linux
 #elif defined  __CYGWIN__
@@ -1026,9 +1032,12 @@ DWORD WINAPI interpreter(LPVOID B){;
 
 #elif defined __arm__
 void  *interpreter(void *B){;
+#else
+  void  *interpreter(void *B){; // musy be fixed for ESF32
 #endif
   Block *thisBlock = (Block *)B;
-  int threadId = thisBlock->threadId;
+  int threadId;
+  threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
 
 #ifdef linux
@@ -1077,10 +1086,15 @@ bool traceThreads = false;
   Btemplate *enablee = 0;
   int suspendEnabled = 0;
   int timeToSuspend = 0;
-  ObjDesc bc = thisBlock->bc;
-  int glsc = thisBlock->glsc;
-  int currentDescNo = thisBlock->currentDescNo;
+  ObjDesc bc;
+  int glsc;
+  int currentDescNo;
   Btemplate *thisModule,*thisObj,*thisStack, *callee; // *eventProcessor;
+
+  bc = thisBlock->bc;
+  glsc = thisBlock->glsc;
+  currentDescNo = thisBlock->currentDescNo;
+
 
   void saveContext(){
     thisBlock->bc = bc;
@@ -2004,6 +2018,8 @@ bool traceThreads = false;
 	    V = cmpAndSwap((int)&X->vfields[arg1],0,arg2);
             V = 0x8899;
 	    V = __sync_val_compare_and_swap(&X->vfields[arg1],0,arg2);
+#else
+	    V = 0; // not used - fool ESP32 compiler
 #endif
 	    //printf("]");
 	    //printf("cmpAndSwap off: %i new: %i old: %i %s adr: %i\n"
@@ -2503,6 +2519,7 @@ bool traceThreads = false;
 	X = rPop(thisStack);
 	dinx = vPop(thisStack);
 	//isRindexed = vPop(thisStack);
+	isRindexed = 0; // not used
 	rangee = vPop(thisStack);
 	if (isXbeta) {
 	  saveContext();
@@ -2641,13 +2658,14 @@ bool traceThreads = false;
 #endif
 
   if (threadNo > 0) {
-    int j;
 #ifdef linux
+    int j;
     for (j=0; j < threadNo; j++) {
          pthread_join(pthreadArray[j],NULL);
 	 printf("Join of: %i\n",j);
       }
 #elif defined  __CYGWIN__
+    int j;
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
 
     for( j=0; j < threadNo; j++)
