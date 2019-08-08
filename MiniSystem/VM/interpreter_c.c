@@ -45,7 +45,7 @@ typedef void *FILE;
 #define HIGH 5
 #endif
 
-#define DUMP
+//#define DUMP
 //#define TRACE
 //#define EVENT
  
@@ -463,6 +463,8 @@ void *interpreter(void *B);
 DWORD WINAPI interpreter(LPVOID B);
 #elif defined __arm__
 void *interpreter(void *B);
+#else
+void *interpreter(void *B);
 #endif
 
 
@@ -508,7 +510,7 @@ void run_interpreter(bool isXB){
   int mainDescNo;
   FILE *trace = trace_t;;
   Block *thisBlock;
-
+  //printf("in run interpreter\n");
   isXbeta = isXB;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
@@ -563,6 +565,8 @@ void run_interpreter(bool isXB){
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 #elif defined __arm__
+  interpreter(thisBlock);
+#else
   interpreter(thisBlock);
 #endif
 
@@ -1026,16 +1030,18 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 
 #if defined(linux)
 void  *interpreter(void *B){;
-
+  
 #elif defined  __CYGWIN__
-DWORD WINAPI interpreter(LPVOID B){;
+  DWORD WINAPI interpreter(LPVOID B){;
 
 #elif defined __arm__
-void  *interpreter(void *B){;
+  void  *interpreter(void *B){;
 #else
-  void  *interpreter(void *B){; // musy be fixed for ESF32
+    void  *interpreter(void *B){; // musy be fixed for ESF32
+      //printf("In interpreter\n");
 #endif
-  Block *thisBlock = (Block *)B;
+
+    Block *thisBlock = (Block *)B;
   int threadId;
   threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
@@ -1079,10 +1085,12 @@ bool traceThreads = false;
 #ifdef __arm__
   //init_uart();
 #else
+  //printf("Before trace = fopen\n");
   trace = fopen(thisBlock->traceFile,"w");
   thisBlock->trace = trace;
   //setbuf(trace, NULL);
 #endif
+  //printf("After trace = fopen\n");
   Btemplate *enablee = 0;
   int suspendEnabled = 0;
   int timeToSuspend = 0;
@@ -1133,8 +1141,8 @@ bool traceThreads = false;
   mkEvent(start_event,0,thisObj,0,true,thisBlock->currentDescNo,thisBlock->glsc);
 #endif
   while (running)
-    { 
-      //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+    { //printf("Running\n");
+
       //printf("\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
 	timeToSuspend = timeToSuspend - 1;
@@ -1154,6 +1162,7 @@ bool traceThreads = false;
       fprintf(trace,"%i:\t",glsc);
 #endif
       opCode = bc[glsc]; glsc = glsc + 1;
+      //printf("*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (cnt == 0) {
 	//blink();
 	// pinMode(4,1);
@@ -1224,7 +1233,10 @@ bool traceThreads = false;
       case pushg:
 	arg1 = op1(bc,&glsc);
 	X = rPop(thisStack);
-	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	if (X == NULL) {
+	  printf("\n***pushg == NULL %i %i \n",arg1,(int)X);
+	  runTimeErrorX("Reference is NONE",thisObj,glsc);
+	}
 	arg2 = X->vfields[arg1 + X->valOff];
 #ifdef TRACE
 	fprintf(trace,"pushg %s[%i + %i] = %i\n",nameOf(X),arg1,X->valOff,arg2);
@@ -1235,7 +1247,10 @@ bool traceThreads = false;
 	arg1 = op1(bc,&glsc);
 	arg2 = vPop(thisStack);
 	X = rPop(thisStack);
-	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	if (X == NULL) {
+
+	  runTimeErrorX("Reference is NONE",thisObj,glsc);
+	}
 	arg3 = getV(X,arg1 + arg2 - 1);
         vPush(thisStack,arg3);
 #ifdef TRACE
@@ -1245,7 +1260,10 @@ bool traceThreads = false;
       case rpushg:
 	arg1 = op1(bc,&glsc);
 	X = rPop(thisStack);
-	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
+	if (X == NULL) {
+	  printf("\n***rpushg == NULL %i %i\n",arg1,(int)X);
+	  runTimeErrorX("Reference is NONE",thisObj,glsc);
+	}
 	Y = getR(X,arg1);
 	rPush(thisStack,Y);
 #ifdef TRACE
@@ -2114,6 +2132,7 @@ bool traceThreads = false;
 #endif
 	break; 
       case rtnEventQ:
+	//printf("rtnEventQ-A\n");
         arg1 = op1(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"rtnEventQ %i %s\n",arg1,nameOf(thisObj));
@@ -2121,6 +2140,7 @@ bool traceThreads = false;
 #ifdef EVENT
 	mkEvent(rtn_event,rTopElm(thisObj,0),thisObj,myCorigin(thisObj),false,currentDescNo,glsc);
 #endif        
+	//printf("rtnEventQ-B\n");
         break;
       case doEventQ:
 #ifdef TRACE
