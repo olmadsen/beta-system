@@ -297,12 +297,18 @@ void vPush(Btemplate *thisStack,int V){
 
 bool getIsObj(Btemplate *obj) {return obj->isObj; };
 
-
-
+void XdumpRstack(char *S,Btemplate *stack){
+  printf("\n%s: top: %i (",S,stack->rtop);
+  int i=0;
+  for (i = 0; i <= stack->rtop; i++) printf(" %i",(int)stack->rstack[i]);
+  printf(")");
+}
 void rPush(Btemplate *stack,Btemplate *R){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
   if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeErrorX("stack overflow",stack,-1);
   stack->rstack[stack->rtop] = R;
+  //XdumpRstack("rPush",stack);
+  //printf(" push: %i\n",(int)R);
 }
 
 // OBS! Whyx do we test -1 for vPop, rPop and rTopElm - and not 0 (zero)?
@@ -1143,7 +1149,6 @@ bool traceThreads = false;
   while (running)
     { //printf("Running\n");
 
-      //printf("\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
 	timeToSuspend = timeToSuspend - 1;
 	if (timeToSuspend <= 0) {
