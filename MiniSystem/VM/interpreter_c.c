@@ -43,6 +43,14 @@ typedef void *FILE;
 #include "mraa/gpio.h"
 #define LOW 0
 #define HIGH 5
+#elif defined __XTENSA__
+#include <stdio.h> 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "sdkconfig.h"
+
+#define BLINK_GPIO 23 // CONFIG_BLINK_GPIO - compiler complains!?
 #endif
 
 //#define DUMP
@@ -1646,7 +1654,7 @@ bool traceThreads = false;
         fprintf(trace,"invokeExternal: %i \n",arg1);
 #endif
 	switch (arg1) {
-	case 1:
+	case 1: // arm:pinmode
 	  arg3 = vPop(thisStack); // mode
 	  arg2 = vPop(thisStack); // pinno
 	  Y = rPop(thisStack); // origin - not used
@@ -1661,13 +1669,15 @@ bool traceThreads = false;
 	    {printf("OUTPUT\n"); mraa_gpio_dir(pin,MRAA_GPIO_OUT);}
 	  else 
 	    {mraa_gpio_dir(pin,MRAA_GPIO_IN);};
+#elif defined __XTENSA__
+          gpio_pad_select_gpio(BLINK_GPIO);
+	  gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
 #elif defined  __CYGWIN__
 	  printf("pinMode(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
-
 #endif
 	  break;
-	case 2:
+	case 2: // arm: digitalWrite
 	  arg3 = vPop(thisStack);
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
@@ -1681,6 +1691,8 @@ bool traceThreads = false;
 	    {mraa_gpio_write(pin,LOW);}
 	  else 
 	    {mraa_gpio_write(pin,HIGH);};
+#elif defined __XTENSA__
+	  gpio_set_level(BLINK_GPIO, arg3);
 #elif defined  __CYGWIN__
 	  printf("digitalWrite(%i,%i) not implemented for this platform\n",arg2,arg3);
 	  rPush(thisStack,Y); // just a dummy
@@ -2066,6 +2078,8 @@ bool traceThreads = false;
 	    usleep(arg1); // apparently in micro seconds
 #elif defined  __CYGWIN__
 	    Sleep(arg1); // apparently in milli seconds - no diff if arg1/1000!?
+#elif defined __XTENSA__
+	    vTaskDelay(arg1);
 #endif
 	    break;
 	  case 17: 
