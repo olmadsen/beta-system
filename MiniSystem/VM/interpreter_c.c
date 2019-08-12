@@ -49,6 +49,7 @@ typedef void *FILE;
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "sdkconfig.h"
+#include "freertos/semphr.h"
 
 #define BLINK_GPIO 23 // CONFIG_BLINK_GPIO - compiler complains!?
 #endif
@@ -84,6 +85,8 @@ unsigned char heap[10]; int heapTop; // not in use
 pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
 #elif defined  __CYGWIN__
 HANDLE allocMutex;
+#elif __XTENSA__
+SemaphoreHandle_t mutex1 = NULL;
 #endif
 
 int ZZ = 0;
@@ -101,6 +104,14 @@ void *heapAlloc(int size) {
     default:
       runTimeError("Wait failure: allocMutex");
     } ;
+#elif defined __XTENSA__
+  L:
+    if( xSemaphoreTake( mutex1, ( TickType_t ) 10 ) == pdTRUE ){
+      //printf("got mutex1\n");
+    }else {
+      //printf("waiting for mutex1\n");
+      goto L;
+    }
 #endif
     ZZ = ZZ + 1;
     if (ZZ > 1) runTimeError("Two or more in malloc");
@@ -109,8 +120,8 @@ void *heapAlloc(int size) {
     obj = malloc(size);
     //#endif
     if (obj == NULL) {
-        printf("Malloc failuere: %i\n",size);
-        runTimeError("Malloc failure\n");
+      printf("\n\nMalloc failure: %i\n",size);
+      runTimeError("Malloc failure\n");
     }
     ZZ = ZZ - 1;
 #ifdef linux 
@@ -119,6 +130,9 @@ void *heapAlloc(int size) {
 #elif defined  __CYGWIN__
     if (!ReleaseSemaphore(allocMutex,1,NULL))
       runTimeError("ReleaseSemaphoreError: allocMutex");
+#elif __XTENSA__
+    xSemaphoreGive( mutex1 );
+    //printf("realesed mutex1\n");
 #endif
        
     if (obj == NULL) {
@@ -525,6 +539,16 @@ void run_interpreter(bool isXB){
   FILE *trace = trace_t;;
   Block *thisBlock;
   //printf("in run interpreter\n");
+
+#ifdef __XTENSA__
+mutex1 = xSemaphoreCreateBinary();
+ if (mutex1 == NULL) { printf("Error in allocating semaphore\n");}
+ else{
+   printf("Semaphore succesfully created\n");
+   xSemaphoreGive(mutex1);
+}
+#endif
+
   isXbeta = isXB;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
@@ -2025,6 +2049,9 @@ bool traceThreads = false;
 	    extern void Bfork(void *,void *,int);
 	    Bfork(interpreter,B,threadNo + 1);
 #elif defined __XTENSA__
+
+	    if ((threadNo + 1 > 1)) threadNo = -1;
+	    //printf("Fork: %i \n",threadNo + 1);
 	    xTaskCreatePinnedToCore(&interpreter, "task0", 2048, B, 5, NULL, threadNo + 1); 
 #endif
 	    threadNo = threadNo + 1;
@@ -2130,6 +2157,14 @@ bool traceThreads = false;
 	    fprintf(trace," %s \n",nameOf(thisBlock->top));
 #endif
 	    rPush(thisStack,thisBlock->top);
+	    break;
+	  case 22: 
+#ifdef __XTENSA__
+	    arg1 = xPortGetCoreID();
+            vPush(thisStack,arg1);
+#else
+	    printf("\n***thisCoredId is not implemented for this platform!\n");
+#endif
 	    break;
 	  case 118: // asString
 	    saveContext();
