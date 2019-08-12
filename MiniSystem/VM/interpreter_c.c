@@ -2024,6 +2024,8 @@ bool traceThreads = false;
 #elif __arm__
 	    extern void Bfork(void *,void *,int);
 	    Bfork(interpreter,B,threadNo + 1);
+#elif defined __XTENSA__
+	    xTaskCreatePinnedToCore(&interpreter, "task0", 2048, B, 5, NULL, threadNo + 1); 
 #endif
 	    threadNo = threadNo + 1;
 	    hasThreads = true;
@@ -2047,14 +2049,54 @@ bool traceThreads = false;
             // we return 1 if failure and 0 if succes?
             // see if below!?
 #if defined  __CYGWIN__ || linux
+	    /* bool __sync_bool_compare_and_swap 
+	     *          (type *ptr, type oldval type newval, ...)
+	     * type __sync_val_compare_and_swap 
+	     *           (type *ptr, type oldval type newval, ...)
+	     * These builtins perform an atomic compare and swap. 
+	     * That is, if the current value of *ptr is oldval,
+	     * then write newval into *ptr.
+	     * The 'bool' version returns true if the comparison is successful 
+	     * and newval was written. The 'val' version returns the contents 
+	     * of *ptr before the operation. 
+	     */
 	    V = __sync_bool_compare_and_swap(&X->vfields[arg1],0,arg2);
+	    if (V) {V = 0;} else {V = 1;};
 #elif __arm__
 	    extern int cmpAndSwap(int adr, int old, int new); 
 	    V = cmpAndSwap((int)&X->vfields[arg1],0,arg2);
             V = 0x8899;
 	    V = __sync_val_compare_and_swap(&X->vfields[arg1],0,arg2);
+	    if (V) {V = 0;} else {V = 1;};
+#elif __XTENSA__
+	    /* From: 
+	     * https://github.com/espressif/esp-idf/blob/master/components/freertos/include/freertos/portmacro.h#L273
+	     * Wrapper for the Xtensa compare-and-set instruction. 
+	     * This subroutine will atomically compare
+	     * *addr to 'compare'. If *addr == compare, *addr is set to *set. 
+	     * *set is updated with the previous
+	     * value of *addr (either 'compare' or some other value.)
+	     *
+	     * Warning: From the ISA docs: in some (unspecified) cases, 
+	     * the s32c1i instruction may return the
+	     * *bitwise inverse* of the old mem if the mem wasn't written. 
+	     * This doesn't seem to happen on the
+	     * ESP32 (portMUX assertions would fail).
+	     *
+	     * static inline void uxPortCompareSet
+	     * (volatile uint32_t *addr, uint32_t compare, uint32_t *set) {
+	     *__asm__ __volatile__ (
+	     *  		    "WSR 	    %2,SCOMPARE1 \n"
+	     *  		    "S32C1I     %0, %1, 0	 \n"
+	     *  		    :"=r"(*set)
+	     *  		    :"r"(addr), "r"(compare), "0"(*set)
+	     *  		    );
+	     */
+	     uxPortCompareSet((uint32_t *)&X->vfields[arg1],0,(uint32_t *)&arg2);
+	     /* if arg2 = 0 then success else failure */
+	     V = arg2;
 #else
-	    V = 0; // not used - fool ESP32 compiler
+	     V = 0; // not used 
 #endif
 	    //printf("]");
 	    //printf("cmpAndSwap off: %i new: %i old: %i %s adr: %i\n"
@@ -2063,7 +2105,7 @@ bool traceThreads = false;
 	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i V: %i"
 		    ,arg2,arg3,nameOf(X),(int)&X->vfields[arg1],V);
 #endif
-	    if (V) {V = 0;} else {V = 1;}; 
+	    
 #ifdef TRACE  
 	    fprintf(trace,"%i\n",V);
 #endif
