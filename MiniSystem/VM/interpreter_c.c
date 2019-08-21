@@ -1126,7 +1126,7 @@ bool traceThreads = false;
   //printf("Before trace = fopen\n");
   trace = fopen(thisBlock->traceFile,"w");
   thisBlock->trace = trace;
-  //setbuf(trace, NULL);
+  setbuf(trace, NULL);
 #endif
   //printf("After trace = fopen\n");
   Btemplate *enablee = 0;
@@ -2740,7 +2740,7 @@ bool traceThreads = false;
 	  goto findActualSuper;
 	}
 	bc = codeFromDescNo(currentDescNo);
-	glsc = xlabs(currentDescNo,arg2) - 1;
+	glsc = xlabs(currentDescNo,arg2) - 1; 
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
 	break;
       case stop: 
