@@ -1117,7 +1117,7 @@ bool traceThreads = false;
 #ifdef __arm__
 #else
   if (traceThreads)
-    printf("*** C interpreter - threadId:%i\n",threadId);
+    printf("*** C interpreter - threadId: %i\n",threadId);
 #endif
   FILE * trace;
 #ifdef __arm__
@@ -2034,11 +2034,11 @@ bool traceThreads = false;
 #else
 	    if (sprintf (fileName,"traceF%i.s",threadNo) < 0) { printf("sprintf error\n");};
 #endif
-	    //printf("\n%s\n",fileName);
+
 	    B->traceFile = fileName;
 	    B->threadId = threadNo + 1; 
-#ifdef linux
 
+#ifdef linux
 	    pthread_attr_t attr;      // not used here - NULL may be
 	    pthread_attr_init(&attr); // for &attr in pthread_create
 	    int iret = 

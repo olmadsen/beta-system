@@ -236,7 +236,7 @@ enum {
 
 ObjDesc descs;
 
-unsigned char * stringTable;
+volatile unsigned char * stringTable;
 
 // NB! The byte order is inconsistent - sometimes big somtimes little endian
 unsigned int getInt2(int inx) {
