@@ -79,7 +79,12 @@ void RTE2(char *msg, int errNo){
   exit(-1);
 }
 
-unsigned char heap[10]; int heapTop; // not in use
+#define useBetaHeap true
+#define heapMax 50000000
+//unsigned char heap[10]; 
+volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
+// perhaps use malloc?
+int heapTop;
 
 #ifdef linux
 pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
@@ -117,7 +122,19 @@ void *heapAlloc(int size) {
     if (ZZ > 1) runTimeError("Two or more in malloc");
     //#ifdef __arm
     //#else
-    obj = malloc(size);
+    if (useBetaHeap) {
+      if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
+      //printf("heapTop after: %i size: %i",heapTop,size);
+      obj = (void *)&heap[heapTop];
+      //printf(" obj: %i\n", (int)obj);
+      heapTop = heapTop + size;
+      if (heapTop > heapMax) {
+	runTimeError("\n\n*** Heap overflow");
+	exit(1);
+      }
+    } else {
+      obj = malloc(size);
+    }
     //#endif
     if (obj == NULL) {
       printf("\n\nMalloc failure: %i\n",size);
