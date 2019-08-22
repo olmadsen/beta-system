@@ -98,71 +98,62 @@ int ZZ = 0;
 
 void *heapAlloc(int size) {
   void *obj; //char S[50];
-  if (true) { 
 #ifdef linux
-    int ret = pthread_mutex_lock( &mutex1 );
-    if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
+  int ret = pthread_mutex_lock( &mutex1 );
+  if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
 #elif defined  __CYGWIN__
-    switch(WaitForSingleObject(allocMutex,INFINITE)) {
-    case WAIT_OBJECT_0:
-      break;
-    default:
-      runTimeError("Wait failure: allocMutex");
-    } ;
+  switch(WaitForSingleObject(allocMutex,INFINITE)) {
+  case WAIT_OBJECT_0:
+    break;
+  default:
+    runTimeError("Wait failure: allocMutex");
+  } ;
 #elif defined __XTENSA__
-  L:
-    if( xSemaphoreTake( mutex1, ( TickType_t ) 10 ) == pdTRUE ){
-      //printf("got mutex1\n");
-    }else {
-      //printf("waiting for mutex1\n");
-      goto L;
-    }
+ L:
+  if( xSemaphoreTake( mutex1, ( TickType_t ) 10 ) == pdTRUE ){
+    //printf("got mutex1\n");
+  }else {
+    //printf("waiting for mutex1\n");
+    goto L;
+  }
 #endif
-    ZZ = ZZ + 1;
-    if (ZZ > 1) runTimeError("Two or more in malloc");
-    //#ifdef __arm
-    //#else
-    if (useBetaHeap) {
-      if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
-      //printf("heapTop after: %i size: %i",heapTop,size);
-      obj = (void *)&heap[heapTop];
-      //printf(" obj: %i\n", (int)obj);
-      heapTop = heapTop + size;
-      if (heapTop > heapMax) {
-	runTimeError("\n\n*** Heap overflow");
-	exit(1);
-      }
-    } else {
-      obj = malloc(size);
-    }
-    //#endif
-    if (obj == NULL) {
-      printf("\n\nMalloc failure: %i\n",size);
-      runTimeError("Malloc failure\n");
-    }
-    ZZ = ZZ - 1;
-#ifdef linux 
-    ret = pthread_mutex_unlock( &mutex1 );
-    if (ret > 0) RTE2("\n\n*** mutex_unlock error: ",ret);
-#elif defined  __CYGWIN__
-    if (!ReleaseSemaphore(allocMutex,1,NULL))
-      runTimeError("ReleaseSemaphoreError: allocMutex");
-#elif __XTENSA__
-    xSemaphoreGive( mutex1 );
-    //printf("realesed mutex1\n");
-#endif
-       
-    if (obj == NULL) {
-      RTE2("malloc failed; size: ",size);
-    }
-  } else { // never come here since if (true) above
-    /* void *obj = (void *)&heap[heapTop];
+  ZZ = ZZ + 1;
+  if (ZZ > 1) runTimeError("Two or more in malloc");
+  //#ifdef __arm
+  //#else
+  if (useBetaHeap) {
+    if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
+    //printf("heapTop after: %i size: %i",heapTop,size);
+    obj = (void *)&heap[heapTop];
+    //printf(" obj: %i\n", (int)obj);
     heapTop = heapTop + size;
-    if (heapTop > 10000000) {
+    if (heapTop > heapMax) {
       runTimeError("\n\n*** Heap overflow");
       exit(1);
-      };*/
-  };
+    }
+  } else {
+    obj = malloc(size);
+  }
+  //#endif
+  if (obj == NULL) {
+    printf("\n\nMalloc failure: %i\n",size);
+    runTimeError("Malloc failure\n");
+  }
+  ZZ = ZZ - 1;
+#ifdef linux 
+  ret = pthread_mutex_unlock( &mutex1 );
+  if (ret > 0) RTE2("\n\n*** mutex_unlock error: ",ret);
+#elif defined  __CYGWIN__
+  if (!ReleaseSemaphore(allocMutex,1,NULL))
+    runTimeError("ReleaseSemaphoreError: allocMutex");
+#elif __XTENSA__
+  xSemaphoreGive( mutex1 );
+  //printf("realesed mutex1\n");
+#endif
+       
+  if (obj == NULL) {
+    RTE2("malloc failed; size: ",size);
+  }
   return obj;
 }
 
