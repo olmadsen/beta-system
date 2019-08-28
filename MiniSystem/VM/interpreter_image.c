@@ -124,7 +124,8 @@ enum {
   jmpGT_event= 15,
   pop_event = 16,
   error_event = 17,
-  stop_event = 18
+  stop_event = 18,
+  scan_event = 19
 };
 
 // opcodes
@@ -367,6 +368,7 @@ int topDescNo(Btemplate *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
 Btemplate *myCorigin(Btemplate *obj){ 
   int inx;
   inx = desc_getInt2(obj->desc,originOff_index);
+  //printf("myCorigin: %i\n",inx);
   Btemplate * origin = 0;
   if (newAlloc){
     if (inx > 0) origin =(Btemplate *) obj->vfields[inx];

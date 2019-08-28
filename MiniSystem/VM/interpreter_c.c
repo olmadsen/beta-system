@@ -80,7 +80,7 @@ void RTE2(char *msg, int errNo){
 }
 
 #define useBetaHeap true
-#define heapMax 50000000
+#define heapMax 30000000 //100000
 //unsigned char heap[10]; 
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
 // perhaps use malloc?
@@ -94,6 +94,17 @@ HANDLE allocMutex;
 SemaphoreHandle_t mutex1 = NULL;
 #endif
 
+Btemplate *betaWorld;
+
+
+void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
+	      ,bool isObj,int currentDescNo,int bcPos);
+
+void doGC(Btemplate *root){
+  printf("\n\n*** Root: %s",nameOf(root));
+  mkEvent(scan_event,root,NULL,NULL,false,0,0);
+  printf("\nend doGC\n");
+}
 int ZZ = 0;
 
 void *heapAlloc(int size) {
@@ -128,6 +139,7 @@ void *heapAlloc(int size) {
     //printf(" obj: %i\n", (int)obj);
     heapTop = heapTop + size;
     if (heapTop > heapMax) {
+      doGC(betaWorld);
       runTimeError("\n\n*** Heap overflow");
       exit(1);
     }
@@ -399,11 +411,14 @@ HANDLE eventReady,eventTaken,eventProcessed;
 
 Event *theEvent = NULL;
 
+Event XE;
+
 void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 	       ,bool isObj,int currentDescNo,int bcPos){ 
   //printf("\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
   hSize = hSize + sizeof(Event);
-  Event *E = (Event *)heapAlloc(sizeof(Event));
+  //Event *E = (Event *)heapAlloc(sizeof(Event));
+  Event *E = &XE;
   E->type = type;
   E->caller = caller;
   E->thisObj = thisObj;
@@ -416,9 +431,7 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 #ifdef linux
   int res = 0;
 #elif defined  __CYGWIN__
-  //printf("wait\n");
   int res = WaitForSingleObject(eventTaken,INFINITE);
-  //printf("go\n");
   switch (res) {
   case WAIT_OBJECT_0: 
     theEvent = E; 
@@ -613,6 +626,7 @@ mutex1 = xSemaphoreCreateBinary();
 #elif defined __arm__
   interpreter(thisBlock);
 #else
+  printf("Calling interpreter\n");
   interpreter(thisBlock);
 #endif
 
@@ -1075,7 +1089,7 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 };
 
 #if defined(linux)
-void  *interpreter(void *B){;
+void  *interpreter(void *B){
   
 #elif defined  __CYGWIN__
   DWORD WINAPI interpreter(LPVOID B){;
@@ -1087,10 +1101,11 @@ void  *interpreter(void *B){;
       //printf("In interpreter\n");
 #endif
 
-    Block *thisBlock = (Block *)B;
-  int threadId;
+      Block *thisBlock = (Block *)B;
+      int threadId;
   threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
+  betaWorld = thisBlock->world;
 
 #ifdef linux
 #elif defined  __CYGWIN__
@@ -1130,6 +1145,8 @@ bool traceThreads = false;
   FILE * trace;
 #ifdef __arm__
   //init_uart();
+#elif defined __XTENSA__
+  trace = NULL;
 #else
   //printf("Before trace = fopen\n");
   trace = fopen(thisBlock->traceFile,"w");
@@ -2260,6 +2277,7 @@ bool traceThreads = false;
 #endif
 	X = rPop(thisStack); // should be assigned to eventprocessor.fields[1][]
 	thisBlock->world = X;
+	betaWorld = X;
 	break;
       case doSuper:
 	arg1 = op2(bc,&glsc);
