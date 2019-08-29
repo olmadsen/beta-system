@@ -100,8 +100,9 @@ enum {
   exitE_index = 28,
   labIndex = 30,
   literal_index = 34,
-  BC_index = 38,
-  vdtTable_index = 42,
+  GCinfo_index = 38,
+  BC_index = 42,
+  vdtTable_index = 46,
 };
 
 
@@ -418,5 +419,14 @@ int getLiteral(Btemplate *obj,int inx){
   int lit = desc_getInt2(obj->desc,getLiteralStart(obj) + (inx-1) *2);
   //printf("getLiteral %i %ch %i\n",inx,lit,lit);
   return lit;
+}
+
+int getGCinfoStart(Btemplate *obj){
+  return desc_getInt4(obj->desc,GCinfo_index);
+}
+
+int getGCoff(Btemplate *obj,int inx){
+  int off = desc_getInt2(obj->desc,getGCinfoStart(obj) + (inx-1) *2);
+  return off;
 }
 

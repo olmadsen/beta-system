@@ -44,17 +44,17 @@ typedef void *FILE;
 #define LOW 0
 #define HIGH 5
 #elif defined __XTENSA__
-#include <stdio.h> 
+#include <stdio.h>  
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 #include "freertos/semphr.h"
 
-#define BLINK_GPIO 23 // CONFIG_BLINK_GPIO - compiler complains!?
+#define BLINK_GPIO 23 // CONFIG_BLINK_GPIO - compiler complains!? 
 #endif
 
-//#define DUMP
+#define DUMP
 //#define TRACE
 //#define EVENT
  
@@ -74,11 +74,11 @@ void runTimeError(char *msg){
 void RTE2(char *msg, int errNo){
 #ifdef __arm__
 #else
-  printf("\n\n*** Run-time error: %s %i\n",msg,errNo);
-#endif
-  exit(-1);
-}
-
+  printf("\n\n*** Run-time error: %s %i\n",msg,errNo); 
+#endif 
+  exit(-1);  
+}  
+    
 #define useBetaHeap true
 #define heapMax 30000000 //100000
 //unsigned char heap[10]; 
@@ -87,15 +87,14 @@ volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
 int heapTop;
 
 #ifdef linux
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER; 
 #elif defined  __CYGWIN__
 HANDLE allocMutex;
-#elif __XTENSA__
+#elif __XTENSA__ 
 SemaphoreHandle_t mutex1 = NULL;
 #endif
 
 Btemplate *betaWorld;
-
 
 void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 	      ,bool isObj,int currentDescNo,int bcPos);
@@ -103,6 +102,8 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 void doGC(Btemplate *root){
   printf("\n\n*** Root: %s",nameOf(root));
   mkEvent(scan_event,root,NULL,NULL,false,0,0);
+
+  ObjDesc desc = root->desc;
   printf("\nend doGC\n");
 }
 int ZZ = 0;

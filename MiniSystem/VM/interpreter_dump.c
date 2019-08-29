@@ -17,7 +17,7 @@ void dumpStringTable(FILE *trace) {
 
 void dumpLiterals(FILE *trace,ObjDesc desc){
   int start = desc_getInt4(desc,literal_index);
-  int end = desc_getInt4(desc,BC_index);
+  int end = desc_getInt4(desc,GCinfo_index);
   int i,v;
 
   fprintf(trace,"Literals: ");
@@ -37,6 +37,19 @@ void dumpString(FILE *trace, int inx) { //fprintf(trace,"dumpString %i\n",inx);
   int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
   //fprintf(trace," %i:",length);
   for (i=0; i<length; i++) fprintf(trace,"%c",stringTable[4 + inx + 2 + i]);
+}
+
+void dumpGCinfo(FILE *trace,ObjDesc desc){
+  fprintf(trace,"GCinfo: ");
+  int start = desc_getInt4(desc,GCinfo_index);
+  int end = desc_getInt4(desc,BC_index);
+  int i,v; 
+  fprintf(trace,"start:%i end:%i ::",start,end);
+  for (i = start; i < end; i = i + 2) {
+    v = desc_getInt2(desc,start + (i - start));
+    fprintf(trace,"%i ",v);
+  }
+  fprintf(trace,"\n");
 }
 
 void dumpCode(FILE *trace, ObjDesc desc){
@@ -405,6 +418,7 @@ void dumpDesc(FILE *trace, int xdescNo) {
 
     if (RS >= 32) runTimeError("rSize too big");
     dumpLiterals(trace,desc);
+    dumpGCinfo(trace,desc);
     dumpCode(trace,desc);
   }
 }
