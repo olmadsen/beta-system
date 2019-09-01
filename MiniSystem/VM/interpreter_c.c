@@ -80,7 +80,8 @@ void RTE2(char *msg, int errNo){
 }  
     
 #define useBetaHeap true
-#define heapMax 30000000 //100000
+//#define heapMax 100000//30000000 //100000
+#define heapMax 30000000
 //unsigned char heap[10]; 
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
 // perhaps use malloc?
@@ -99,13 +100,89 @@ Btemplate *betaWorld;
 void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 	      ,bool isObj,int currentDescNo,int bcPos);
 
-void doGC(Btemplate *root){
-  printf("\n\n*** Root: %s",nameOf(root));
-  mkEvent(scan_event,root,NULL,NULL,false,0,0);
+Btemplate *getR(Btemplate *obj,int inx);
+void putR(Btemplate *obj,int inx, Btemplate *X);
+
+void doGCmark(Btemplate *root, int level){
+  //printf("\n\n*** Root: %s",nameOf(root));
+  //mkEvent(scan_event,root,NULL,NULL,false,0,0);
 
   ObjDesc desc = root->desc;
-  printf("\nend doGC\n");
+  //dumpGCinfo(thisBlock->trace,desc);
+  int start = desc_getInt4(desc,GCinfo_index);
+  int end = desc_getInt4(desc,BC_index);
+  int i,v; 
+  //printf("\n\n** Root:name: %s start:%i end:%i first:%i :: "
+  //,nameOf(root),start,end, getR(root,1));
+  if (((int)getR(root,1) & 0x1)  == 1 ) { return;}
+  //printf("\n");
+  for (i = start; i < end; i = i + 2) {
+    v = desc_getInt2(desc,start + (i - start));
+    int R = (int)getR(root,v);
+    //printf("v:%i R:%i\n",v,R);
+    if (R > 0) {
+      if (i == start) putR(root,v, (Btemplate *)(R | 0x1));
+      int j;
+      for (j = 0; j < level; j++) printf("-");
+      printf("--- %s att: %s, %i\n", nameOf(root),nameOf((Btemplate *)R), R);
+      //printf("%i \n",v);
+      doGCmark((Btemplate *)R, level + 1);
+    }
+  }
+  for (i=0; i < root->rtop; i++) {
+    printf("rStack:%s %i \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
+    doGCmark(root->rstack[i + 1],level + 1);
+  }
+
+  //printf("\nend doGC\n");
 }
+
+void doGCsweep(Btemplate *root){
+  int index = 0;
+  int free = 0;
+  while ((int) root < (int)&heap[heapMax] - 400 ) {
+    ObjDesc desc = root->desc;
+    //int size = sizeof(Btemplate) + (16 +  desc[vSize_index]) * sizeof(int) + 64
+;
+    int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
+    if (rSize(desc) == 1) {
+	printf("isIndexed ");
+	int i;
+	for (i = 0; i < 10; i++) printf("%i ",getV(root,i));
+	printf("\n");
+	for (i = 0; i < 400; i++) {
+	  printf(" %i ",(int)*(char *)((int)root + i));
+	  if ( i % 15 == 0) printf("\n");
+	}
+	printf("range:%i\n",getV(root,2));
+	size = size + (getV(root,2) + 0) * sizeof(int);
+    }else {
+
+    }
+
+    printf("%s %i ", nameOf(root),size);
+    if (((int)getR(root,1) & 0x1)  == 1) { 
+      printf("marked\n");
+    }else {
+      printf("notMarked\n");
+      free = free + size;
+    }
+    index = index + size;
+    root = (Btemplate *)(((int) root) + size);
+    int i;
+    //for (i = 0; i < 40; i++) printf(" %x ",heap[i]);
+    //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
+  }
+  printf("\nheapMax:%i used:%i Free:%i\n",heapMax,heapMax - free,free);
+}
+
+void doGC(Btemplate *root){
+  doGCmark(root,0);
+  //doGCmark(thisObj,0);
+  printf("\n*** doGCsweep: \n");
+  doGCsweep(root);
+}
+
 int ZZ = 0;
 
 void *heapAlloc(int size) {
@@ -137,9 +214,15 @@ void *heapAlloc(int size) {
     if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
     //printf("heapTop after: %i size: %i",heapTop,size);
     obj = (void *)&heap[heapTop];
+    /*if (heapTop < 50000) {
+      printf("size:%i ",size);
+      int i;
+      for (i = 0; i< 20; i++) printf(" %x ",getV(obj,i));
+      }*/
     //printf(" obj: %i\n", (int)obj);
     heapTop = heapTop + size;
     if (heapTop > heapMax) {
+      printf("\n");
       doGC(betaWorld);
       runTimeError("\n\n*** Heap overflow");
       exit(1);
@@ -200,7 +283,7 @@ Btemplate *getR(Btemplate *obj,int inx){
     return (Btemplate *)obj->vfields[inx]; // to fool compilere
   }
 };
-void putR(Btemplate *obj,int inx, Btemplate *X){  
+void putR(Btemplate *obj,int inx, Btemplate *X){
   if (newAlloc) {
     if ((0 < inx) && (inx <= 64)) {
       obj->vfields[inx] = (int)X;
