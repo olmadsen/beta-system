@@ -132,7 +132,7 @@ void doGCmark(Btemplate *root, int level){
   for (i=0; i < root->rtop; i++) {
     printf("rStack:%s %i \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
     doGCmark(root->rstack[i + 1],level + 1);
-  }
+  } 
 
   //printf("\nend doGC\n");
 }
@@ -142,10 +142,10 @@ void doGCsweep(Btemplate *root){
   int free = 0;
   while ((int) root < (int)&heap[heapMax] - 400 ) {
     ObjDesc desc = root->desc;
-    //int size = sizeof(Btemplate) + (16 +  desc[vSize_index]) * sizeof(int) + 64
+    //int size = sizeof(Btemplate) + (16 +  desc[objSize_index]) * sizeof(int) + 64
 ;
     int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
-    if (rSize(desc) == 1) {
+    if (isIndexed(desc) == 1) {
 	printf("isIndexed ");
 	int i;
 	for (i = 0; i < 10; i++) printf("%i ",getV(root,i));
@@ -304,10 +304,10 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   Btemplate *obj = (Btemplate*)heapAlloc(size);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
-  int objSize = vSize(obj->desc);
+  int objS = objSize(obj->desc);
 
-  if (objSize >= 90) 
-      printf("Inconsistent size: objSize: %i, vInxSize: %i rInxSize: %i\n",objSize,vInxSize,rInxSize);
+  if (objS >= 90) 
+      printf("Inconsistent size: objSize: %i, vInxSize: %i rInxSize: %i\n",objS,vInxSize,rInxSize);
   obj->id = ID; 
   obj->valOff = 0;
   obj->isObj = isObj;
@@ -317,7 +317,7 @@ Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSiz
   obj->lsc = 0;
   int i = 0;
   for (i = 1; i < 16; i++) obj->vfields[i] = 0;  // 16 is not ok - use exact size
-  for (i = 1; i < 24; i++) putR(obj,i,NULL);  // stores in vfields so superflouos
+  //for (i = 1; i < 24; i++) putR(obj,i,NULL);  // stores in vfields so superflouos
   // bc 
   return obj;
 }
@@ -395,7 +395,7 @@ int topOfLsc(Btemplate *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];}
 
 void dumpStackX(Btemplate *obj){
   Btemplate *X, *Y;
-  if (obj != NULL) {
+  if (obj != NULL) { 
     X = obj->rstack[1];
     Y = obj->rstack[2];
 #ifdef __arm__
@@ -415,7 +415,7 @@ void vPush(Btemplate *thisStack,int V){
     printf("\n\nvstack %s [",nameOf(thisStack)); // <<<<<<< OBS FIX
     for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
     printf("]\n");
-#endif
+#endif 
     runTimeErrorX("vstack overflow",thisStack,-1);
   }
   thisStack->vstack[thisStack->vtop] = V;

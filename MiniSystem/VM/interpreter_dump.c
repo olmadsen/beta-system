@@ -402,21 +402,20 @@ void dumpDesc(FILE *trace, int xdescNo) {
     //dumpString(getInt2(desc + 0 ));
     //    dumpString(desc[0] * 256 + desc[1]);
     //dumpString(desc_getInt2(desc,0));
-    int VS = vSize(desc);
-    int RS = rSize(desc);
+    int oS = objSize(desc);
+    int iI = isIndexed(desc);
     fprintf(trace,"%s",getString(desc_getInt2(desc,0)));
-    fprintf(trace," descNo:%i vSize:%i rSize:%i originOff:%i\n"
-	    ,descNo(desc),VS,RS,desc_getInt2(desc,originOff_index));
+    fprintf(trace," descNo:%i objSize:%i isIndexed:%i originOff:%i\n"
+	    ,descNo(desc),oS,iI,desc_getInt2(desc,originOff_index));
     /* the tests for VS and RS are no longer needed since all fields
      * are pæaced in the dynamixe array fields
      */
-    if (VS >= 64) {
+    if (oS >= 64) {
       fprintf(trace,"\n\n");
       fclose(trace);
-      runTimeError("vSize too big");
+      runTimeError("objSize too big");
     }
 
-    if (RS >= 32) runTimeError("rSize too big");
     dumpLiterals(trace,desc);
     dumpGCinfo(trace,desc);
     dumpCode(trace,desc);

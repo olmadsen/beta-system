@@ -18,8 +18,8 @@
    0: index of name in stringtable
    2: descNo 
    6: topDescNo  
-   10: vSize - size of value fields
-   14: rSize - size of reference fields
+   10: objSize - size of  fields
+   14: isIndexed - indexed object
    18: originOff
    20: procE
    22: alloE
@@ -90,8 +90,8 @@ enum {
   name_index = 0,
   descNo_index = 2,
   topDescNo_index = 6,
-  vSize_index = 10,
-  rSize_index = 14,
+  objSize_index = 10,
+  isIndexed_index = 14,
   originOff_index = 18,
   procE_index = 20,
   alloE_index = 22,
@@ -347,12 +347,12 @@ int descNo(ObjDesc desc){
   return desc_getInt4(desc,descNo_index);
 }
 
-int vSize(ObjDesc desc){
-  return desc_getInt4(desc,vSize_index);
+int objSize(ObjDesc desc){
+  return desc_getInt4(desc,objSize_index);
 }
 
-int rSize(ObjDesc desc){
-  return desc_getInt4(desc,rSize_index);
+int isIndexed(ObjDesc desc){
+  return desc_getInt4(desc,isIndexed_index);
 }
 
 
