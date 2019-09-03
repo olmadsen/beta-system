@@ -294,11 +294,15 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
 };
 
 Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
+  int objSz = objSize(getDesc(descNo));
+  if (vInxSize > 0) vInxSize = vInxSize + 2;
+  int xsize = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int) + 16;
+
   int size = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
-  /* This should be the precise size, but check for vInxSize and rInxSize
-   * vInxSize > 0 ==> array ?
-   * int size = sizeof(Btemplate) + (objSize + vInxSize) * sizeof(int);
-   */
+
+  //printf("BT:%i objSize:%i vInxSize:%i size:%i xs:%i\n",sizeof(Btemplate),objSz,vInxSize,size,xsize);
+
+
   hSize = hSize + size;
   //fprintf(trace,"allocTemplate(%i,%i) ",size, hSize);
   Btemplate *obj = (Btemplate*)heapAlloc(size);
