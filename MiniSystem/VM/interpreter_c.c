@@ -109,7 +109,7 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 Btemplate *getR(Btemplate *obj,int inx);
 void putR(Btemplate *obj,int inx, Btemplate *X);
 
-void doGCmark(Btemplate *root, int level){
+void doGCmark(Block *ctx,Btemplate *root, int level){
   //printf("\n\n*** Root: %s",nameOf(root));
   //mkEvent(scan_event,root,NULL,NULL,false,0,0);
 
@@ -132,20 +132,23 @@ void doGCmark(Btemplate *root, int level){
       for (j = 0; j < level; j++) printf("-");
       printf("--- %s att: %s, %i\n", nameOf(root),nameOf((Btemplate *)R), R);
       //printf("%i \n",v);
-      doGCmark((Btemplate *)R, level + 1);
+      doGCmark(ctx,(Btemplate *)R, level + 1);
     }
   }
   for (i=0; i < root->rtop; i++) {
     printf("rStack:%s %i \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
-    doGCmark(root->rstack[i + 1],level + 1);
+    doGCmark(ctx,root->rstack[i + 1],level + 1);
   } 
 
   //printf("\nend doGC\n");
 }
 
-void doGCsweep(Btemplate *root){
+void doGCsweep(Block *ctx,Btemplate *root){
   int index = 0;
   int free = 0;
+  Btemplate * lastUnmarked = NULL;
+  Btemplate * unmarkedEnd = NULL;
+ 
   while ((int) root < (int)&heap[heapMax] - 400 ) {
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
@@ -170,9 +173,20 @@ void doGCsweep(Btemplate *root){
     printf("%s %i ", nameOf(root),size);
     if (((int)getR(root,1) & 0x1)  == 1) { 
       printf("marked\n");
+      if (lastUnmarked != NULL) {
+	unmarkedEnd = root;
+	printf("Free interval %i %i %5i\n"
+	       ,(int)lastUnmarked,(int)unmarkedEnd - 4,(int)unmarkedEnd - (int)lastUnmarked);
+	lastUnmarked = NULL;
+      }
     }else {
-      printf("notMarked\n");
+      printf("notMarked: ");
       free = free + size;
+      if (lastUnmarked == NULL) {// met an unMarked obj
+	printf(" %i\n",(int)lastUnmarked);
+	lastUnmarked = root;
+      }
+      printf("\n");
     }
     index = index + size;
     root = (Btemplate *)(((int) root) + size);
@@ -183,18 +197,19 @@ void doGCsweep(Btemplate *root){
   printf("\nheapMax:%i used:%i Free:%i\n",heapMax,heapMax - free,free);
 }
 
-void doGC(Btemplate *root){
-  doGCmark(root,0);
-  //doGCmark(thisObj,0);
+void doGC(Block *ctx,Btemplate *root){
+  doGCmark(ctx,root,0);
+  printf("\n***  Mark thisObj:");
+  doGCmark(ctx,ctx->thisObj,0);
   printf("\n*** doGCsweep: \n");
-  doGCsweep(root);
+  doGCsweep(ctx,root);
 }
 
 int ZZ = 0;
 
 //#define withTimeOutX
 
-void *heapAlloc(int size) {
+void *heapAlloc(Block *ctx,int size) {
   void *obj; //char S[50];
 #ifdef linux
   int ret = pthread_mutex_lock( &mutex1 );
@@ -248,7 +263,7 @@ void *heapAlloc(int size) {
     heapTop = heapTop + size;
     if (heapTop > heapMax) {
       printf("\n");
-      doGC(betaWorld);
+      doGC(ctx,betaWorld);
       runTimeError("\n\n*** Heap overflow");
       exit(1);
     }
@@ -337,7 +352,7 @@ Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, 
 
   hSize = hSize + size;
   //fprintf(trace,"allocTemplate(%i,%i) ",size, hSize);
-  Btemplate *obj = (Btemplate*)heapAlloc(size);
+  Btemplate *obj = (Btemplate*)heapAlloc(ctx,size);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   int objS = objSize(obj->desc);
@@ -660,7 +675,7 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
 
-  descs = (ObjDesc) heapAlloc(imageS);
+  descs = (ObjDesc) heapAlloc(NULL,imageS);
   memcpy((void *)descs,descs_a,imageS); 
   newAlloc = newAlc;
   if (newAlloc) newAllocOff = 1;
@@ -693,7 +708,7 @@ mutex1 = xSemaphoreCreateBinary();
   isXbeta = isXB;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
-  thisBlock = (Block *)heapAlloc(sizeof(Block));
+  thisBlock = (Block *)heapAlloc(NULL,sizeof(Block));
   // OBS trace not defined here!
   thisBlock->trace = trace;
   thisBlock->bc = descs;
@@ -2150,7 +2165,8 @@ bool traceThreads = true;
 #ifdef TRACE
 	    fprintf(trace,"fork A ");
 #endif
-	    Block *B = (Block *)heapAlloc(sizeof(Block));
+	    // should we use heapAlloc here? Is not a Beta object
+	    Block *B = (Block *)heapAlloc(thisBlock,sizeof(Block));
 #ifdef TRACE
 	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	 
 #endif   
@@ -2178,7 +2194,8 @@ bool traceThreads = true;
 	    //,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
 #endif
 	    B->glsc = 0;
-	    char *fileName = heapAlloc(12);
+	    // should we use heapAlloc here? Is not a Beta object
+	    char *fileName = heapAlloc(thisBlock,12);
 #ifdef __arm__
 
 #else
@@ -2195,7 +2212,10 @@ bool traceThreads = true;
 	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
 #elif defined  __CYGWIN__
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
+#ifdef withGC
 	    printf("Thread: %i threadId: %i\n",hThreadArray[threadNo],GetThreadId(hThreadArray[threadNo]));
+#endif
+
 #elif __arm__
 	    extern void Bfork(void *,void *,int);
 	    Bfork(interpreter,B,threadNo + 1);
