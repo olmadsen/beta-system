@@ -80,11 +80,17 @@ void RTE2(char *msg, int errNo){
 }  
     
 #define useBetaHeap true
-//#define heapMax 100000//30000000 //100000
+//#define withGC
+
+#ifdef withGC
+#define heapMax 100000
+#else
 #define heapMax 30000000
-//unsigned char heap[10]; 
+#endif
+
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
-// perhaps use malloc?
+// perhaps use malloc to initialize heap?
+
 int heapTop;
 
 #ifdef linux
@@ -142,9 +148,10 @@ void doGCsweep(Btemplate *root){
   int free = 0;
   while ((int) root < (int)&heap[heapMax] - 400 ) {
     ObjDesc desc = root->desc;
-    //int size = sizeof(Btemplate) + (16 +  desc[objSize_index]) * sizeof(int) + 64
-;
-    int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
+    int objZ = objSize(desc);
+    int size = sizeof(Btemplate) + (objZ + 1 + 0) * sizeof(int);
+    //int size = sizeof(Btemplate) + (16 +  desc[objSize_index]) * sizeof(int) + 64;
+    //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
     if (isIndexed(desc) == 1) {
 	printf("isIndexed ");
 	int i;
@@ -155,7 +162,7 @@ void doGCsweep(Btemplate *root){
 	  if ( i % 15 == 0) printf("\n");
 	}
 	printf("range:%i\n",getV(root,2));
-	size = size + (getV(root,2) + 0) * sizeof(int);
+	size = size + (getV(root,2) + 2) * sizeof(int);
     }else {
 
     }
@@ -185,18 +192,36 @@ void doGC(Btemplate *root){
 
 int ZZ = 0;
 
+//#define withTimeOutX
+
 void *heapAlloc(int size) {
   void *obj; //char S[50];
 #ifdef linux
   int ret = pthread_mutex_lock( &mutex1 );
   if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
+
 #elif defined  __CYGWIN__
+#ifdef withTimeOut
+  bool B=true;
+  while (B) {
+    switch(WaitForSingleObject(allocMutex,0L)) {
+    case WAIT_OBJECT_0: 
+      B = false;
+      break;
+    case WAIT_TIMEOUT: 
+      printf("Thread %d: wait timed out\n", GetCurrentThreadId());
+      break; 
+    }
+  }
+#else
   switch(WaitForSingleObject(allocMutex,INFINITE)) {
   case WAIT_OBJECT_0:
     break;
   default:
     runTimeError("Wait failure: allocMutex");
   } ;
+#endif
+
 #elif defined __XTENSA__
  L:
   if( xSemaphoreTake( mutex1, ( TickType_t ) 10 ) == pdTRUE ){
@@ -293,12 +318,19 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
   }
 };
 
-Btemplate *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
+Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
   int objSz = objSize(getDesc(descNo));
+  // vInxSize is range of indexed object, fields[0:1] must be included
   if (vInxSize > 0) vInxSize = vInxSize + 2;
-  int xsize = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int) + 16;
+  // next compute of size works for doGC but not for coroutines!?
+  // objZ + 1 is because fiels[0] is not used - betaVM counts from 1
 
+#ifdef withGC
+  int size = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int);// + 16;
+#else
+  // next one seems to work also for coroutines
   int size = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
+#endif
 
   //printf("BT:%i objSize:%i vInxSize:%i size:%i xs:%i\n",sizeof(Btemplate),objSz,vInxSize,size,xsize);
 
@@ -606,7 +638,7 @@ void *interpreter(void *B);
 
 
 void allocMain(Block *thisBlock,int descNo){ 
-  thisBlock->thisModule = allocTemplate(1000,descNo,true,0,0);
+  thisBlock->thisModule = allocTemplate(thisBlock,1000,descNo,true,0,0);
   thisBlock->thisObj = thisBlock->thisModule;
   thisBlock->thisStack = thisBlock->thisModule;
 };
@@ -772,7 +804,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
-  ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
+  ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
@@ -803,7 +835,7 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
-  ctx->callee = allocTemplate(newId(ctx),descNo,isObj,vInxSize,rInxSize);
+  ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,vInxSize,rInxSize);
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
@@ -839,7 +871,7 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
-  ctx->callee = allocTemplate(newId(ctx),descNo,false,vInxSize,rInxSize);
+  ctx->callee = allocTemplate(ctx,newId(ctx),descNo,false,vInxSize,rInxSize);
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i\n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
@@ -908,12 +940,12 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
   fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
   if (isRindexed == 0) {
-    ctx->callee = allocTemplate(newId(ctx),descNo,isObj,rangee,0);
+    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,rangee,0);
   } else {
     if (rangee > 132) {
       runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
     };
-    ctx->callee = allocTemplate(newId(ctx),descNo,isObj,0,rangee);
+    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,0,rangee);
   };
   putR(ctx->callee,1,origin); // store origin
   ctx->callee->vfields[dinx + newAllocOff] = rangee; 
@@ -928,7 +960,7 @@ void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
 #ifdef TRACE
   fprintf(ctx->trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
 #endif
-  Btemplate * X = allocTemplate(newId(ctx),getStrucRefDescNo(),0,0,0);
+  Btemplate * X = allocTemplate(ctx,newId(ctx),getStrucRefDescNo(),0,0,0);
   if (isVirtual) inx = vdtTable(ctx->trace,origin,inx);
   X->vfields[1] = inx;
   putR(X,2,origin);
@@ -1223,7 +1255,11 @@ void  *interpreter(void *B){
   //CPU_SET(threadId,&mask);
 #endif
 
-bool traceThreads = false;
+#ifdef withGC
+bool traceThreads = true;
+#else
+ bool traceThreads = false;
+#endif
 
 #ifdef __arm__
 #else
@@ -2118,7 +2154,8 @@ bool traceThreads = false;
 #ifdef TRACE
 	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	 
 #endif   
-	    X = allocTemplate(newId(thisBlock),threadStubDescNo,true,0,0);
+	    // B is not initialized - see belwo
+	    X = allocTemplate(B,newId(thisBlock),threadStubDescNo,true,0,0);
 #ifdef TRACE
 	    fprintf(trace,"fork C");
 #endif
@@ -2158,6 +2195,7 @@ bool traceThreads = false;
 	      pthread_create(&pthreadArray[threadNo],&attr,interpreter,(void *)B);
 #elif defined  __CYGWIN__
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
+	    printf("Thread: %i threadId: %i\n",hThreadArray[threadNo],GetThreadId(hThreadArray[threadNo]));
 #elif __arm__
 	    extern void Bfork(void *,void *,int);
 	    Bfork(interpreter,B,threadNo + 1);
