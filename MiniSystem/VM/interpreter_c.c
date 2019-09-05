@@ -109,6 +109,11 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 Btemplate *getR(Btemplate *obj,int inx);
 void putR(Btemplate *obj,int inx, Btemplate *X);
 
+// **************** Garbage collector ***********************
+int noOfFreeBlocks = 0;
+Btemplate * lastFreeStart = NULL;
+Btemplate * lastFreeEnd = NULL;
+
 void doGCmark(Block *ctx,Btemplate *root, int level){
   //printf("\n\n*** Root: %s",nameOf(root));
   //mkEvent(scan_event,root,NULL,NULL,false,0,0);
@@ -147,13 +152,15 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
   //printf("\nend doGC\n");
 }
 
-void doGCsweep(Block *ctx,Btemplate *root){
+Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   int index = 0;
   int free = 0;
-  int noOfFreeBlocks = 0;
+  Btemplate *firstFreeStart = NULL;
+  Btemplate *firstFreeEnd = NULL;
   Btemplate * lastUnmarked = NULL;
   Btemplate * unmarkedEnd = NULL;
- 
+
+
   while ((int) root < (int)&heap[heapMax] - 400 ) {
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
@@ -171,8 +178,6 @@ void doGCsweep(Block *ctx,Btemplate *root){
 	}
 	printf("range:%i\n",getV(root,2));*/
 	size = size + (getV(root,2) + 2) * sizeof(int);
-    }else {
-
     }
 
     printf("%s %i ", nameOf(root),size);
@@ -183,9 +188,22 @@ void doGCsweep(Block *ctx,Btemplate *root){
       putR(root,1,(Btemplate *)(V & 0xFFFFFFFE));
       printf("marked %x %x\n",V,getR(root,1));
       if (lastUnmarked != NULL) {
+	if (lastFreeStart != NULL) { // previous free block points to this block
+	  *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
+	}
 	unmarkedEnd = root;
+	lastFreeStart = lastUnmarked;
+	lastFreeEnd = unmarkedEnd;
+
+	*(int*)lastFreeStart = (int)lastFreeEnd;  
+	*(int*)((int)lastFreeStart + 4) = 0;
+
+	if (firstFreeStart == NULL) {
+	  firstFreeStart = lastFreeStart;
+	  firstFreeEnd= lastFreeEnd;
+	}
 	noOfFreeBlocks = noOfFreeBlocks + 1;
-	printf("\n-----Free interval %i %i %5i\n\n"
+	printf("\n-----Free interval %x %x %5i\n\n"
 	       ,(int)lastUnmarked,(int)unmarkedEnd - 4,(int)unmarkedEnd - (int)lastUnmarked);
 	lastUnmarked = NULL;
       }
@@ -204,14 +222,47 @@ void doGCsweep(Block *ctx,Btemplate *root){
   }
   printf("\nheapMax:%i used:%i Free:%i free blocks: %i\n"
 	 ,heapMax,heapMax - free,free,noOfFreeBlocks);
+  printf("\nFirst free: %x %x Last free: %x %x "
+	 ,(int)firstFreeStart, (int)firstFreeEnd - 4
+	 ,(int)lastFreeStart,(int)lastFreeEnd - 4);
+  return firstFreeStart;
+}
+
+void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
+  int mapStart = (int)firstFreeStart + 4;
+  int mapEnd = (int)firstFreeStart + (noOfFreeBlocks - 1 ) * 8;
+  int lastFreeSize = (int)lastFreeEnd - (int)lastFreeStart;
+
+  printf("\n\n**** doGCcompact: root:%x firstFreeStart:%x \n",
+	 (int)root,(int)firstFreeStart);
+  printf("**** noOfFreeBlocks: %i lastFreeSize: %i \n", 
+	 noOfFreeBlocks,lastFreeSize);
+
+  if (noOfFreeBlocks * 8 > (lastFreeSize - 8)) {
+    printf("\n\n*** GC error: not enough space to map in last free blocks\n");
+    printf(" *** noOfFreeBlocks: %i lastFreeSize: %i\n"
+	   ,noOfFreeBlocks,lastFreeSize);
+  }
+
+  Btemplate *R = firstFreeStart;
+  while (R != NULL) {
+    printf("Free block:%x end:%x next:%x\n",
+	   (int)R,*(int *)R, *(int*)((int)R+4));
+    R = (Btemplate *)*(int*)((int)R+4);
+  }
+
+
 }
 
 void doGC(Block *ctx,Btemplate *root){
+  Btemplate *firstFreeStart;
   doGCmark(ctx,root,0);
   printf("\n***  Mark thisObj:");
   doGCmark(ctx,ctx->thisObj,0);
   printf("\n*** doGCsweep: \n");
-  doGCsweep(ctx,root);
+  firstFreeStart = doGCsweep(ctx,root);
+  doGCcompact(ctx,root,firstFreeStart);
+
 }
 
 int ZZ = 0;
