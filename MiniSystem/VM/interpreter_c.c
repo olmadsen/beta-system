@@ -112,7 +112,7 @@ void putR(Btemplate *obj,int inx, Btemplate *X);
 // **************** Garbage collector ***********************
 int noOfFreeBlocks = 0;
 Btemplate * lastFreeStart = NULL;
-Btemplate * lastFreeEnd = NULL;
+Btemplate * nextUsed = NULL;
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
   //printf("\n\n*** Root: %s",nameOf(root));
@@ -193,14 +193,14 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 	}
 	unmarkedEnd = root;
 	lastFreeStart = lastUnmarked;
-	lastFreeEnd = unmarkedEnd;
+	nextUsed = unmarkedEnd;
 
-	*(int*)lastFreeStart = (int)lastFreeEnd;  
+	*(int*)lastFreeStart = (int)nextUsed;  //nextUsedBlock
 	*(int*)((int)lastFreeStart + 4) = 0;
 
 	if (firstFreeStart == NULL) {
 	  firstFreeStart = lastFreeStart;
-	  firstFreeEnd= lastFreeEnd;
+	  firstFreeEnd= nextUsed;
 	}
 	noOfFreeBlocks = noOfFreeBlocks + 1;
 	printf("\n-----Free interval %x %x %5i\n\n"
@@ -224,14 +224,22 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 	 ,heapMax,heapMax - free,free,noOfFreeBlocks);
   printf("\nFirst free: %x %x Last free: %x %x "
 	 ,(int)firstFreeStart, (int)firstFreeEnd - 4
-	 ,(int)lastFreeStart,(int)lastFreeEnd - 4);
+	 ,(int)lastFreeStart,(int)nextUsed - 4);
   return firstFreeStart;
+}
+
+int getIheap(Btemplate *R, int inx){
+  return *(int*)((int)R + inx);
+}
+
+Btemplate *getBTheap(Btemplate *R, int inx){
+  return (Btemplate *)*(int*)((int)R + inx);
 }
 
 void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
   int mapStart = (int)firstFreeStart + 4;
   int mapEnd = (int)firstFreeStart + (noOfFreeBlocks - 1 ) * 8;
-  int lastFreeSize = (int)lastFreeEnd - (int)lastFreeStart;
+  int lastFreeSize = (int)nextUsed - (int)lastFreeStart;
 
   printf("\n\n**** doGCcompact: root:%x firstFreeStart:%x \n",
 	 (int)root,(int)firstFreeStart);
@@ -243,14 +251,28 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
     printf(" *** noOfFreeBlocks: %i lastFreeSize: %i\n"
 	   ,noOfFreeBlocks,lastFreeSize);
   }
-
-  Btemplate *R = firstFreeStart;
-  while (R != NULL) {
-    printf("Free block:%x end:%x next:%x\n",
-	   (int)R,*(int *)R, *(int*)((int)R+4));
-    R = (Btemplate *)*(int*)((int)R+4);
+  Btemplate * nextUsed;
+  Btemplate * nextFree;
+  int nextUsedSize;
+  Btemplate *free = firstFreeStart;
+  while (free != NULL) {
+    nextUsed = getBTheap(free,0);
+    nextFree = getBTheap(free,4);
+    if (nextFree != 0) {
+      nextUsedSize = (int)nextFree - (int)nextUsed;
+      
+      printf("Free:%x nextUsed:%x, nextUsedSize:%i nextFree:%x\n",
+	     (int)free,(int)nextUsed,nextUsedSize,nextFree);
+      memcpy((unsigned char *)nextUsed,(unsigned char *)free,nextUsedSize);
+      // add to map
+    } else {
+      printf("Free:%x nextUsed:%x, nextFree:%x\n",
+	     (int)free,(int)nextUsed,nextFree);
+    }
+    free = nextFree;
   }
 
+  // update references
 
 }
 
