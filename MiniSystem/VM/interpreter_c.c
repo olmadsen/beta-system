@@ -126,7 +126,11 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
     v = desc_getInt2(desc,start + (i - start));
     int R = (int)getR(root,v);
     //printf("v:%i R:%i\n",v,R);
-    if (R > 0) {
+    if (R > 0) { // R > 0 does not make sense?
+      // objects with globals[] do not have an origin field, i.e. we may need a GC-field
+      // otherwise we may get too many live objects
+      //%if B %then% %else where B is a boolean and B=1 is an example
+      // and we may during sweep set B := 1 (true) - which is wrong
       if (i == start) putR(root,v, (Btemplate *)(R | 0x1));
       int j;
       for (j = 0; j < level; j++) printf("-");
@@ -146,6 +150,7 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
 void doGCsweep(Block *ctx,Btemplate *root){
   int index = 0;
   int free = 0;
+  int noOfFreeBlocks = 0;
   Btemplate * lastUnmarked = NULL;
   Btemplate * unmarkedEnd = NULL;
  
@@ -157,14 +162,14 @@ void doGCsweep(Block *ctx,Btemplate *root){
     //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
     if (isIndexed(desc) == 1) {
 	printf("isIndexed ");
-	int i;
+	/*int i;
 	for (i = 0; i < 10; i++) printf("%i ",getV(root,i));
 	printf("\n");
 	for (i = 0; i < 400; i++) {
 	  printf(" %i ",(int)*(char *)((int)root + i));
 	  if ( i % 15 == 0) printf("\n");
 	}
-	printf("range:%i\n",getV(root,2));
+	printf("range:%i\n",getV(root,2));*/
 	size = size + (getV(root,2) + 2) * sizeof(int);
     }else {
 
@@ -172,21 +177,24 @@ void doGCsweep(Block *ctx,Btemplate *root){
 
     printf("%s %i ", nameOf(root),size);
     if (((int)getR(root,1) & 0x1)  == 1) { 
-      printf("marked\n");
+      int V = (int)getR(root,1);
+      //int i;
+      //for (i = 0; i < 10; i++) printf("i:%i V:%x\n",i, getV(root,i));
+      putR(root,1,(Btemplate *)(V & 0xFFFFFFFE));
+      printf("marked %x %x\n",V,getR(root,1));
       if (lastUnmarked != NULL) {
 	unmarkedEnd = root;
-	printf("Free interval %i %i %5i\n"
+	noOfFreeBlocks = noOfFreeBlocks + 1;
+	printf("\n-----Free interval %i %i %5i\n\n"
 	       ,(int)lastUnmarked,(int)unmarkedEnd - 4,(int)unmarkedEnd - (int)lastUnmarked);
 	lastUnmarked = NULL;
       }
     }else {
-      printf("notMarked: ");
+      printf("notMarked:\n");
       free = free + size;
       if (lastUnmarked == NULL) {// met an unMarked obj
-	printf(" %i\n",(int)lastUnmarked);
 	lastUnmarked = root;
       }
-      printf("\n");
     }
     index = index + size;
     root = (Btemplate *)(((int) root) + size);
@@ -194,7 +202,8 @@ void doGCsweep(Block *ctx,Btemplate *root){
     //for (i = 0; i < 40; i++) printf(" %x ",heap[i]);
     //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
   }
-  printf("\nheapMax:%i used:%i Free:%i\n",heapMax,heapMax - free,free);
+  printf("\nheapMax:%i used:%i Free:%i free blocks: %i\n"
+	 ,heapMax,heapMax - free,free,noOfFreeBlocks);
 }
 
 void doGC(Block *ctx,Btemplate *root){
