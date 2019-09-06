@@ -160,7 +160,6 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   Btemplate * lastUnmarked = NULL;
   Btemplate * unmarkedEnd = NULL;
 
-
   while ((int) root < (int)&heap[heapMax] - 400 ) {
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
@@ -220,7 +219,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     //for (i = 0; i < 40; i++) printf(" %x ",heap[i]);
     //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
   }
-  printf("\nheapMax:%i used:%i Free:%i free blocks: %i\n"
+  printf("\nheapMax:%i used:%i Free:%i free blocks: %i "
 	 ,heapMax,heapMax - free,free,noOfFreeBlocks);
   printf("\nFirst free: %x %x Last free: %x %x "
 	 ,(int)firstFreeStart, (int)firstFreeEnd - 4
@@ -255,23 +254,26 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
   Btemplate * nextFree;
   int nextUsedSize;
   Btemplate *free = firstFreeStart;
+  Btemplate * newTop = free;
   while (free != NULL) {
     nextUsed = getBTheap(free,0);
     nextFree = getBTheap(free,4);
     if (nextFree != 0) {
       nextUsedSize = (int)nextFree - (int)nextUsed;
       
-      printf("Free:%x nextUsed:%x, nextUsedSize:%i nextFree:%x\n",
-	     (int)free,(int)nextUsed,nextUsedSize,nextFree);
-      memcpy((unsigned char *)nextUsed,(unsigned char *)free,nextUsedSize);
+      printf("Free:%x nextUsed:%x, nextUsedSize:%i nextFree:%x newTop: %x\n",
+	     (int)free,(int)nextUsed,nextUsedSize,nextFree,newTop);
+      memcpy((unsigned char *)nextUsed,(unsigned char *)newTop,nextUsedSize);
+      newTop = (Btemplate *)((int)newTop + nextUsedSize);
       // add to map
     } else {
-      printf("Free:%x nextUsed:%x, nextFree:%x\n",
-	     (int)free,(int)nextUsed,nextFree);
+      printf("Free:%x nextUsed:%x, nextFree:%x newTop: %x\n",
+	     (int)free,(int)nextUsed,nextFree,newTop);
     }
     free = nextFree;
   }
-
+  printf("\n*** GCcompact done: newTop: %x  heapTop: %x freed:%i\n",
+	 newTop,(int)&heap[heapTop], (int)&heap[heapTop] - (int)newTop);
   // update references
 
 }
