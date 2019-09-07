@@ -110,6 +110,7 @@ Btemplate *getR(Btemplate *obj,int inx);
 void putR(Btemplate *obj,int inx, Btemplate *X);
 
 // **************** Garbage collector ***********************
+Btemplate *lastFreeInHeap;
 int noOfFreeBlocks = 0;
 Btemplate * lastFreeStart = NULL;
 Btemplate * nextUsed = NULL;
@@ -198,7 +199,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   Btemplate * lastUnmarked = NULL;
   Btemplate * unmarkedEnd = NULL;
 
-  while ((int) root < (int)&heap[heapMax] - 200 ) { // OBS! Check 400!
+  while ((int) root < (int)lastFreeInHeap) {//(int)&heap[heapMax] - 200 ) { // OBS! Check 200!
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
     int size = sizeof(Btemplate) + (objZ + 1 + 0) * sizeof(int);
@@ -259,6 +260,10 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     //for (i = 0; i < 40; i++) printf(" %x ",heap[i]);
     //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
   }
+  *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
+  *(int*)((int)lastUnmarked) = 0;
+  *(int*)((int)lastUnmarked + 4) = 0;
+
   printf("\nheapMax:%i used:%i Free:%i free blocks: %i "
 	 ,heapMax,heapMax - free,free,noOfFreeBlocks);
   printf("\nFirst free: %x %x Last free: %x %x "
@@ -401,7 +406,7 @@ void *heapAlloc(Block *ctx,int size) {
     if (heapTop > (heapMax - 8)) {
 	// (heapTop - 8) since we need space for a free block at the end
       printf("\n");
-
+      lastFreeInHeap =(Btemplate *)&heap[heapTop];
       doGC(ctx,betaWorld);
       runTimeError("\n\n*** Heap overflow");
       exit(1);
