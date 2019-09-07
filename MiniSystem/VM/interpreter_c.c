@@ -297,6 +297,7 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
       printf("Free:%x nextUsed:%x, nextUsedSize:%i nextFree:%x newTop: %x\n",
 	     (int)free,(int)nextUsed,nextUsedSize,nextFree,newTop);
       memcpy((unsigned char *)newTop,(unsigned char *)nextUsed,nextUsedSize);
+      printf("After move: %s %x\n",nameOf(newTop),(int)newTop);
       newTop = (Btemplate *)((int)newTop + nextUsedSize);
       // add to map
     } else {
@@ -314,8 +315,9 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 void doGCupdateRefs(Block *ctx,Btemplate *root){
 
   while (root < newTop) {
-    printf("Update:root: %s %x\n",nameOf(root),(int)root);
     ObjDesc desc = root->desc;
+    printf("Update:root: %s %x size:%i\n",nameOf(root),(int)root,sizeOfDesc(root));
+
     int start = desc_getInt4(desc,GCinfo_index);
     int end = desc_getInt4(desc,BC_index);
     Btemplate *R, *Rn;
@@ -396,6 +398,14 @@ void *heapAlloc(Block *ctx,int size) {
   if (useBetaHeap) {
     if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
     //printf("heapTop after: %i size: %i",heapTop,size);
+    if (heapTop > (heapMax - 8)) {
+	// (heapTop - 8) since we need space for a free block at the end
+      printf("\n");
+
+      doGC(ctx,betaWorld);
+      runTimeError("\n\n*** Heap overflow");
+      exit(1);
+    }
     obj = (void *)&heap[heapTop];
     /*if (heapTop < 50000) {
       printf("size:%i ",size);
@@ -404,12 +414,6 @@ void *heapAlloc(Block *ctx,int size) {
       }*/
     //printf(" obj: %i\n", (int)obj);
     heapTop = heapTop + size;
-    if (heapTop > heapMax) {
-      printf("\n");
-      doGC(ctx,betaWorld);
-      runTimeError("\n\n*** Heap overflow");
-      exit(1);
-    }
   } else {
     obj = malloc(size);
   }
