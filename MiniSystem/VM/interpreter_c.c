@@ -124,6 +124,7 @@ int mapInx = 0;
 
 Btemplate * newHeapTop = NULL;
 int newHT = 0;
+int freedInHeap = 0;
 
 int getIheap(Btemplate *R, int inx){
   return *(int*)((int)R + inx);
@@ -321,6 +322,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     }else {
       printf("notMarked\n");
       free = free + size;
+      freedInHeap = freedInHeap + size;
       if (lastUnmarked == NULL) {// met an unMarked obj
 	lastUnmarked = root;
       }
@@ -432,9 +434,30 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
   ctx->thisObj = mapRef(ctx->thisObj);
   ctx->thisStack = mapRef(ctx->thisStack);
   ctx->callee = mapRef(ctx->callee);
+  ctx->thisModule = mapRef(ctx->thisModule);
+  ctx->enablee = mapRef(ctx->enablee);
+  ctx->top = mapRef(ctx->top);
+  ctx->world = mapRef(ctx->world);
+}
+
+void doGCclearHeap() {
+  int i;
+  for (i = heapTop; i < heapMax; i++) {heap[i] = 0; }
 }
 
 void doGC(Block *ctx,Btemplate *root){
+  noOfFreeBlocks = 0;
+  lastFreeStart = NULL;
+  nextUsed = NULL;
+  mapStart = NULL; 
+  mapEnd = NULL;
+  mapInx = 0;
+  newHeapTop = NULL;
+  newHT = 0;
+  freedInHeap = 0;
+
+  printf("\n*****dogc\n");
+  printf("\n**** doGC thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
   Btemplate *firstFreeStart;
   fprintf(ctx->trace,"\n***** doGC *****\n");
   doGCmark(ctx,root,0);
@@ -444,7 +467,11 @@ void doGC(Block *ctx,Btemplate *root){
   firstFreeStart = doGCsweep(ctx,root);
   doGCcompact(ctx,root,firstFreeStart);
   doGCupdateRefs(ctx,root);
-  heapTop = newHT;
+  heapTop = heapTop - freedInHeap;
+  doGCclearHeap();
+  printf("\n*** after doGC: thisObj: %x %s ",ctx->thisObj,nameOf(ctx->thisObj));
+  printf("\n              thisStack: %x %s ",ctx->thisStack,nameOf(ctx->thisStack));
+  printf("\n              heapTop:%i &heap[0]: %x  heapObj: %x\n",heapTop,&heap[1],&heap[heapTop]);
 }
 
 int ZZ = 0;
@@ -2016,7 +2043,7 @@ bool traceThreads = true;
       case toSuper:
 	arg1 = op2(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"toSuper %i",arg1);
+	fprintf(trace,"toSuper %i thisObj: %s",arg1,nameOf(thisObj));
 #endif
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
@@ -2065,11 +2092,12 @@ bool traceThreads = true;
 	arg2 = op2(bc,&glsc);
         arg3 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"invoke %i %i %i ",arg1,arg2,arg3);
+	fprintf(trace,"invoke %i %i %i thisObj: %s",arg1,arg2,arg3,nameOf(thisObj));
 #endif
 	saveContext();
         invokeObj(thisBlock,arg1,arg2,0,0);
 	restoreContext();
+	fprintf(trace,"thisObj: %s thisStack: %s\n",nameOf(thisObj),nameOf(thisStack));
 	break;
       case invokeVal:
 	arg1 = op2(bc,&glsc);
@@ -3170,7 +3198,9 @@ bool traceThreads = true;
 #endif
 #ifdef __arm__
 #else
-	printf("glsc: %i, op: %i",glsc,bc[glsc - 1]);
+	printf("\n\n***Illegal byte code: glsc: %i, op: %i\n",glsc,bc[glsc - 1]);
+	printf("thisObj: %x %s \n",thisObj,nameOf(thisObj));
+	printf("thisStack: %x %s \n",thisStack,nameOf(thisStack));
 #endif
 	runTimeError("Illegal byte code");
 	break;
