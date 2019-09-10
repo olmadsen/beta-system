@@ -222,7 +222,7 @@ Btemplate * mapRef(Btemplate * oldRef){
 }
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
-  //printf("\n\n*** Root: %s",nameOf(root));
+  //printf("\n\n*** Root: %s\n",nameOf(root));
   //mkEvent(scan_event,root,NULL,NULL,false,0,0);
 
   ObjDesc desc = root->desc;
@@ -247,14 +247,14 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
       // and we may during sweep set B := 1 (true) - which is wrong
       //if (i == start) putR(root,v, (Btemplate *)(R | 0x1));
       int j;
-      for (j = 0; j < level; j++) printf("-");
-      printf("--- %s att: %s, %i\n", nameOf(root),nameOf((Btemplate *)R), R);
+      //for (j = 0; j < level; j++) printf("-");
+      //printf(" %s att: %s, %x\n", nameOf(root),nameOf((Btemplate *)R), R);
       //printf("%i \n",v);
       doGCmark(ctx,(Btemplate *)R, level + 1);
     }
   }
   for (i=0; i < root->rtop; i++) {
-    printf("rStack:%s %i \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
+    printf("rStack:%s %x \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
     doGCmark(ctx,root->rstack[i + 1],level + 1);
   } 
 
@@ -270,6 +270,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   Btemplate * unmarkedEnd = NULL;
 
   while ((int) root < (int)lastFreeInHeap) {//(int)&heap[heapMax] - 200 ) { // OBS! Check 200!
+    printf("while: %x\n",(int)root);
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
     int size = sizeof(Btemplate) + (objZ + 1 + 0) * sizeof(int);
@@ -291,10 +292,10 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     printf("root:%x ",root);
     printf("%s %i ", nameOf(root),size);
     if (((int)getR(root,0) & 0x1)  == 1) { 
-      int V = (int)getR(root,1);
+      int V = (int)getR(root,0);
       //int i;
       //for (i = 0; i < 10; i++) printf("i:%i V:%x\n",i, getV(root,i));
-      printf("root[1]:%x ",getR(root,1));
+      printf("root[0]:%x ",getR(root,0));
       putR(root,0,(Btemplate *)(V & 0xFFFFFFFE));
       printf("marked\n");
       if (lastUnmarked != NULL) {
@@ -327,12 +328,20 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 	lastUnmarked = root;
       }
     }
-
+    //printf("continue: %i %i\n",index,size);
+    int i,v;
+    v = (int)root->desc;
+    //printf("rootA: %x desc: %x\n",(int)root,v);
     root = (Btemplate *)(((int) root) + size);
-    int i;
-    //for (i = 0; i < 40; i++) printf(" %x ",heap[i]);
+    //printf("root: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
+    //v = (int)root->desc;
+    //printf("rootB: %x desc: %x\n",(int)root,v);
+    //for (i = 0; i < 40; i = i + 4) printf(" %x ",*(int *)((int)v + i));
+
+    //for (i = 0; i < 40; i++) printf(" : %x ",heap[index + i]);
     //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
   }
+  printf("done\n");
   *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
   *(int*)((int)lastUnmarked) = 0;
   *(int*)((int)lastUnmarked + 4) = 0;
@@ -456,7 +465,7 @@ void doGC(Block *ctx,Btemplate *root){
   newHT = 0;
   freedInHeap = 0;
 
-  printf("\n*****dogc\n");
+  printf("\n*****dogc: lastFreeInHeap: %x \n",lastFreeInHeap);
   printf("\n**** doGC thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
   Btemplate *firstFreeStart;
   fprintf(ctx->trace,"\n***** doGC *****\n");
@@ -2102,7 +2111,7 @@ bool traceThreads = true;
 	saveContext();
         invokeObj(thisBlock,arg1,arg2,0,0);
 	restoreContext();
-	fprintf(trace,"thisObj: %s thisStack: %s\n",nameOf(thisObj),nameOf(thisStack));
+	//fprintf(trace,"thisObj: %s thisStack: %s\n",nameOf(thisObj),nameOf(thisStack));
 	break;
       case invokeVal:
 	arg1 = op2(bc,&glsc);
