@@ -396,15 +396,15 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 
 void doGCupdateRefs(Block *ctx,Btemplate *root){
   printMapRef();
-  printf("\n*** sweep of new heap:\n");
+  printf("\n*** sweep of new heap betaWorld: %x\n",betaWorld);
   Btemplate * X = root;
   while (X < newHeapTop) {
     printf("obj: %x %s \n",(int)X,nameOf(X));;
     X = (Btemplate *)((int) X + sizeOfDesc(X));
-  }
+    }
   while (root < newHeapTop) {
-    ObjDesc desc = root->desc;
-    printf("Update: %s %x size:%i\n",nameOf(root),(int)root,sizeOfDesc(root));
+    ObjDesc desc = root->desc; 
+    //printf("Update: %s %x size:%i\n",nameOf(root),(int)root,sizeOfDesc(root));
 
     int start = desc_getInt4(desc,GCinfo_index);
     int end = desc_getInt4(desc,BC_index);
@@ -416,16 +416,16 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
     for (i = start; i < end; i = i + 2) {
       v = desc_getInt2(desc,start + (i - start));
       R = getR(root,v);
-      printf("oldRef: %x inx: %i ",(int)R,v);
+      //printf("oldRef: %x inx: %i ",(int)R,v);
       Rn = mapRef(R);
-      printf("newRef: %s %x \n",nameOf(Rn),(int)Rn);
+      //printf("newRef: %s %x \n",nameOf(Rn),(int)Rn);
       if (Rn != R) putR(root,v,Rn);
     }
     for (i=0; i < root->rtop; i++) {
       R = root->rstack[i + 1];
-      printf("rStack:oldRef:%x ",(int)R);
+      //printf("rStack:oldRef:%x ",(int)R);
       Rn = mapRef(R);
-      printf(" new: %x %s\n",(int)Rn,nameOf(Rn));
+      //printf(" new: %x %s\n",(int)Rn,nameOf(Rn));
       if (Rn != R)  root->rstack[i + 1] = Rn;
     }
     root = (Btemplate *)((int) root + sizeOfDesc(root));
@@ -463,6 +463,11 @@ void doGC(Block *ctx,Btemplate *root){
   doGCmark(ctx,root,0);
   printf("\n***  Mark thisObj:");
   doGCmark(ctx,ctx->thisObj,0);
+  doGCmark(ctx,ctx->thisStack,0);
+  if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
+  if (ctx->enablee != NULL) doGCmark(ctx,ctx->enablee,0);
+  if (ctx->top != NULL) doGCmark(ctx,ctx->top,0);
+  doGCmark(ctx,ctx->world,0);
   printf("\n*** doGCsweep: \n");
   firstFreeStart = doGCsweep(ctx,root);
   doGCcompact(ctx,root,firstFreeStart);
@@ -522,7 +527,7 @@ void *heapAlloc(Block *ctx,int size) {
   if (useBetaHeap) {
     if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
     //printf("heapTop after: %i size: %i",heapTop,size);
-    if (heapTop > (heapMax - 8)) {
+    if ((heapTop + size) > (heapMax - 8)) {
 	// (heapTop - 8) since we need space for a free block at the end
       printf("\n");
       lastFreeInHeap =(Btemplate *)&heap[heapTop];
@@ -622,7 +627,7 @@ Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, 
   hSize = hSize + size;
   //fprintf(trace,"allocTemplate(%i,%i) ",size, hSize);
   Btemplate *obj = (Btemplate*)heapAlloc(ctx,size);
-  //fprintf(trace,"template allocated: %i\n",vInxSize);
+  //fprintf(ctx->trace,"\ntemplate obj: %x: %i %i %i\n",(int)obj,descNo,vInxSize,size);
   obj->desc = getDesc(descNo);
   int objS = objSize(obj->desc);
 
