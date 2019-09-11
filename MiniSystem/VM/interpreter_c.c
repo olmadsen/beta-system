@@ -270,18 +270,21 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   Btemplate * unmarkedEnd = NULL;
 
   while ((int) root < (int)lastFreeInHeap) {//(int)&heap[heapMax] - 200 ) { // OBS! Check 200!
-    printf("while: %x\n",(int)root);
+    //printf("while: %x \n",(int)root);
+    //printf("while: %x %s\n",(int)root,nameOf(root));
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
     int size = sizeof(Btemplate) + (objZ + 1 + 0) * sizeof(int);
     //int size = sizeof(Btemplate) + (16 +  desc[objSize_index]) * sizeof(int) + 64;
     //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
     if (isIndexed(desc) == 1) {
-	printf("isIndexed ");
-	/*int i;
-	for (i = 0; i < 10; i++) printf("%i ",getV(root,i));
+      printf("isIndexed: objZ: %i size: %i",objZ,size);
+	int i,range;
+	range = getV(root,2);
+	printf(" 0:%x 1: %x 2: %i:: ",getV(root,0),getV(root,1),getV(root,2));
+	for (i = 3; i < range + 3; i++) printf("%i ",getV(root,i));
 	printf("\n");
-	for (i = 0; i < 400; i++) {
+	/*for (i = 0; i < 400; i++) {
 	  printf(" %i ",(int)*(char *)((int)root + i));
 	  if ( i % 15 == 0) printf("\n");
 	}
@@ -331,13 +334,20 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     //printf("continue: %i %i\n",index,size);
     int i,v;
     v = (int)root->desc;
-    //printf("rootA: %x desc: %x\n",(int)root,v);
-    root = (Btemplate *)(((int) root) + size);
-    //printf("root: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
-    //v = (int)root->desc;
-    //printf("rootB: %x desc: %x\n",(int)root,v);
-    //for (i = 0; i < 40; i = i + 4) printf(" %x ",*(int *)((int)v + i));
+    printf("rootA: %x desc: %x\n",(int)root,v);
 
+    root = (Btemplate *)(((int) root) + size);
+
+    //printf("root: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
+    printf("desc from descNo = 66:  %x\n",(int)getDesc(66));
+    v = (int)root->desc;
+    if (v == 0) root = (Btemplate *)((int)root + 4);
+    if (false) {printf("rootB: %x lastFreeInHeap: %x desc == 0\n",(int)root,(int)lastFreeInHeap,v);}
+    else {
+      printf("rootB: %x lastFreeInHeap: %x desc: %x\n",(int)root,(int)lastFreeInHeap,v);
+      for (i = 0; i < 40; i = i + 4) printf(" %x ",*(int *)((int)root + i));
+      printf("\n");
+    }
     //for (i = 0; i < 40; i++) printf(" : %x ",heap[index + i]);
     //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
   }
@@ -439,7 +449,7 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
     }
     root = (Btemplate *)((int) root + sizeOfDesc(root));
   }
-  printf("mapRef: thisObj: %x  new: %x\n",ctx->thisObj,mapRef(ctx->thisObj));
+  printf("mapRef: thisObj: %x  new: %x %s\n",ctx->thisObj,mapRef(ctx->thisObj),nameOf(ctx->thisObj));
   ctx->thisObj = mapRef(ctx->thisObj);
   ctx->thisStack = mapRef(ctx->thisStack);
   ctx->callee = mapRef(ctx->callee);
@@ -447,6 +457,7 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
   ctx->enablee = mapRef(ctx->enablee);
   ctx->top = mapRef(ctx->top);
   ctx->world = mapRef(ctx->world);
+  ctx->origin = mapRef(ctx->origin);
 }
 
 void doGCclearHeap() {
@@ -476,6 +487,7 @@ void doGC(Block *ctx,Btemplate *root){
   if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
   if (ctx->enablee != NULL) doGCmark(ctx,ctx->enablee,0);
   if (ctx->top != NULL) doGCmark(ctx,ctx->top,0);
+  if (ctx->origin != NULL) doGCmark(ctx,ctx->origin,0);
   doGCmark(ctx,ctx->world,0);
   printf("\n*** doGCsweep: \n");
   firstFreeStart = doGCsweep(ctx,root);
@@ -1237,6 +1249,7 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
 #ifdef TRACE
   fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
+  ctx->origin = origin;
   if (isRindexed == 0) {
     ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,rangee,0);
   } else {
@@ -1245,6 +1258,7 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
     };
     ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,0,rangee);
   };
+  origin = ctx->origin;
   putR(ctx->callee,1,origin); // store origin
   ctx->callee->vfields[dinx + newAllocOff] = rangee; 
   // int i=0;

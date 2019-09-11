@@ -67,6 +67,7 @@ typedef struct Block {
   int threadId;
   char *traceFile;
   FILE *trace;
+  Btemplate * origin;
 } Block;
 
 typedef struct Event {
