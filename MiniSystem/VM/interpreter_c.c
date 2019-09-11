@@ -239,14 +239,8 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
     v = desc_getInt2(desc,start + (i - start));
     int R = (int)getR(root,v);
     //printf("v:%i R:%i\n",v,R);
-    if (R > 0) { // R > 0 does not make sense?
-      // objects with globals[] do not have an origin field, 
-      // i.e. we may need a GC-field
-      // otherwise we may get too many live objects
-      // %if B %then% %else where B is a boolean and B=1 is an example
-      // and we may during sweep set B := 1 (true) - which is wrong
-      //if (i == start) putR(root,v, (Btemplate *)(R | 0x1));
-      int j;
+    if (R > 0) {  // R == 0 implies R is none
+      //int j;
       //for (j = 0; j < level; j++) printf("-");
       //printf(" %s att: %s, %x\n", nameOf(root),nameOf((Btemplate *)R), R);
       //printf("%i \n",v);
@@ -257,7 +251,6 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
     printf("rStack:%s %x \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
     doGCmark(ctx,root->rstack[i + 1],level + 1);
   } 
-
   //printf("\nend doGC\n");
 }
 
@@ -272,34 +265,16 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   while ((int) root < (int)lastFreeInHeap) {//(int)&heap[heapMax] - 200 ) { // OBS! Check 200!
     //printf("while: %x \n",(int)root);
     //printf("while: %x %s\n",(int)root,nameOf(root));
-    ObjDesc desc = root->desc;
-    int objZ = objSize(desc);
-    int size = sizeof(Btemplate) + (objZ + 1 + 0) * sizeof(int);
-    //int size = sizeof(Btemplate) + (16 +  desc[objSize_index]) * sizeof(int) + 64;
-    //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
-    if (isIndexed(desc) == 1) {
-      printf("isIndexed: objZ: %i size: %i",objZ,size);
-	int i,range;
-	range = getV(root,2);
-	printf(" 0:%x 1: %x 2: %i:: ",getV(root,0),getV(root,1),getV(root,2));
-	for (i = 3; i < range + 3; i++) printf("%i ",getV(root,i));
-	printf("\n");
-	/*for (i = 0; i < 400; i++) {
-	  printf(" %i ",(int)*(char *)((int)root + i));
-	  if ( i % 15 == 0) printf("\n");
-	}
-	printf("range:%i\n",getV(root,2));*/
-	size = size + (getV(root,2) + 2) * sizeof(int);
-    }
+    int size = sizeOfDesc(root);
 
     printf("root:%x ",root);
     printf("%s %i ", nameOf(root),size);
-    if (((int)getR(root,0) & 0x1)  == 1) { 
+    if (getV(root,0) == 1) { 
       int V = (int)getR(root,0);
       //int i;
       //for (i = 0; i < 10; i++) printf("i:%i V:%x\n",i, getV(root,i));
-      printf("root[0]:%x ",getR(root,0));
-      putR(root,0,(Btemplate *)(V & 0xFFFFFFFE));
+      //printf("root[0]:%x ",getR(root,0));
+      putV(root,0,0);
       printf("marked\n");
       if (lastUnmarked != NULL) {
 	if (lastFreeStart != NULL) { // previous free block points to this block
