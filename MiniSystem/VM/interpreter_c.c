@@ -604,35 +604,16 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
 };
 
 Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
-  int objSz = objSize(getDesc(descNo));
-  // vInxSize is range of indexed object, fields[0:1] must be included
-  //if (vInxSize > 0) vInxSize = vInxSize + 2;
-  // next compute of size works for doGC but not for coroutines!?
-  // objZ + 1 is because fiels[0] is not used - betaVM counts from 1
-
-  int size;
-#ifdef withGC
-  size = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int);// + 16;
-#else
-  // next one seems to work also for coroutines
-  if (true)
-    size = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int);
-  else
-    size = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
-#endif
-
+  int objS = objSize(getDesc(descNo));
+  int size = sizeof(Btemplate) + (objS + 1 + vInxSize) * sizeof(int);
+ 
   //printf("BT:%i objSize:%i vInxSize:%i size:%i xs:%i\n",sizeof(Btemplate),objSz,vInxSize,size,xsize);
-
 
   hSize = hSize + size;
   //fprintf(trace,"allocTemplate(%i,%i) ",size, hSize);
   Btemplate *obj = (Btemplate*)heapAlloc(ctx,size);
   //fprintf(ctx->trace,"\ntemplate obj: %x: %i %i %i\n",(int)obj,descNo,vInxSize,size);
   obj->desc = getDesc(descNo);
-  int objS = objSize(obj->desc);
-
-  if (objS >= 90) 
-      printf("Inconsistent size: objSize: %i, vInxSize: %i rInxSize: %i\n",objS,vInxSize,rInxSize);
   obj->id = ID; 
   obj->valOff = 0;
   obj->isObj = isObj;
@@ -641,9 +622,8 @@ Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, 
   obj->lscTop = -1;
   obj->lsc = 0;
   int i = 0;
-  for (i = 1; i < 16; i++) obj->vfields[i] = 0;  // 16 is not ok - use exact size
-  //for (i = 1; i < 24; i++) putR(obj,i,NULL);  // stores in vfields so superflouos
-  // bc 
+  for (i = 0; i < objS + 1 +vInxSize; i++) obj->vfields[i] = 0; 
+
   return obj;
 }
 
@@ -1231,6 +1211,11 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
   fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
   ctx->origin = origin;
+  // indexed[0] = 0
+  // indexed[1] = origin
+  // indexed[2] = range
+  // indexed[3] = 1st element
+  // must add 2 to range below
   if (isRindexed == 0) {
     ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,rangee + 2,0);
   } else {
