@@ -606,15 +606,19 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
 Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
   int objSz = objSize(getDesc(descNo));
   // vInxSize is range of indexed object, fields[0:1] must be included
-  if (vInxSize > 0) vInxSize = vInxSize + 2;
+  //if (vInxSize > 0) vInxSize = vInxSize + 2;
   // next compute of size works for doGC but not for coroutines!?
   // objZ + 1 is because fiels[0] is not used - betaVM counts from 1
 
+  int size;
 #ifdef withGC
-  int size = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int);// + 16;
+  size = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int);// + 16;
 #else
   // next one seems to work also for coroutines
-  int size = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
+  if (true)
+    size = sizeof(Btemplate) + (objSz + 1 + vInxSize) * sizeof(int);
+  else
+    size = sizeof(Btemplate) + (16 + vInxSize) * sizeof(int) + 64;
 #endif
 
   //printf("BT:%i objSize:%i vInxSize:%i size:%i xs:%i\n",sizeof(Btemplate),objSz,vInxSize,size,xsize);
@@ -1089,7 +1093,9 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
+  ctx->origin = origin;
   ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,vInxSize,rInxSize);
+  origin = ctx->origin;
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
@@ -1204,7 +1210,7 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
 #ifdef TRACE
   fprintf(ctx->trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
 #endif
-  //printf("allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
+  printf("OBS! May not work: allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
   if (isRindexed == 0) {
     
     allocObj(ctx,origin,descNo,isObj,rangee,0);
@@ -1226,12 +1232,12 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
 #endif    
   ctx->origin = origin;
   if (isRindexed == 0) {
-    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,rangee,0);
+    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,rangee + 2,0);
   } else {
     if (rangee > 132) {
       runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
     };
-    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,0,rangee);
+    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,0,rangee + 2);
   };
   origin = ctx->origin;
   putR(ctx->callee,1,origin); // store origin
