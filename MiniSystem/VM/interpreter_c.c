@@ -148,14 +148,14 @@ int sizeOfDesc(Btemplate * root){
     //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
     if (isIndexed(desc) == 1) {
 	printf("isIndexed ");
-	/*int i;
-	for (i = 0; i < 10; i++) printf("%i ",getV(root,i));
+	int i;
+	for (i = 0; i < 15; i++) printf("%i ",getV(root,i));
 	printf("\n");
-	for (i = 0; i < 400; i++) {
+	/*for (i = 0; i < 400; i++) {
 	  printf(" %i ",(int)*(char *)((int)root + i));
 	  if ( i % 15 == 0) printf("\n");
-	}
-	printf("range:%i\n",getV(root,2));*/
+	  }*/
+	printf("range:%i\n",getV(root,2));
 	size = size + (getV(root,2) + 2) * sizeof(int);
     }
     return size;
@@ -326,11 +326,16 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     //for (i = 0; i < 40; i++) printf(" : %x ",heap[index + i]);
     //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
   }
-  printf("done\n");
+  printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
+	 ,(int)lastUnmarked,nameOf(lastUnmarked),(int)lastFreeStart,nameOf(lastFreeStart));
   *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
-  *(int*)((int)lastUnmarked) = 0;
-  *(int*)((int)lastUnmarked + 4) = 0;
-  setMap(lastFreeStart,lastUnmarked);
+  if (lastUnmarked != NULL) {
+    *(int*)((int)lastUnmarked) = 0;
+    *(int*)((int)lastUnmarked + 4) = 0;
+  }
+  else
+    printf("!!! lastUnMarked is NULL: lastFreeStart: %i\n",lastFreeStart);
+  setMap(lastFreeStart,lastUnmarked); // what if NULL?
   newHT = index;
 
   printf("\nheapMax:%i used:%i Free:%i free blocks: %i newHeapTop:%i"
@@ -395,7 +400,13 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
   while (X < newHeapTop) {
     printf("obj: %x %s \n",(int)X,nameOf(X));;
     X = (Btemplate *)((int) X + sizeOfDesc(X));
-    }
+    printf("X: %x \n",(int)X);
+    //printf("X: %s \n",nameOf(X));
+    int i;
+    for (i = 0; i < 24; i= i + 4)
+      printf(" %i ",(int)*(int *)((int)X + i));
+    printf("\n");
+  }
   while (root < newHeapTop) {
     ObjDesc desc = root->desc; 
     //printf("Update: %s %x size:%i\n",nameOf(root),(int)root,sizeOfDesc(root));
@@ -1291,9 +1302,9 @@ void QallocTextObject(Block *ctx,int litInx){
     char ch = getLiteral(X, litInx + i + 1);
     ctx->callee->vfields[dinx + 1 + i + newAllocOff] = ch;
   }
-  // printf("\nfinal string:  range=%i %i %i %i %i %i \n", rangee
-  // ,ctx->callee->vfields[0],ctx->callee->vfields[1],ctx->callee->vfields[2]
-  // ,ctx->callee->vfields[3], ctx->callee->vfields[4]);
+  /* printf("\nQallocTextObject:  range = %i ", rangee);
+     for (i = 0; i < 40; i++) printf(" i: %i",getV(ctx->callee,i));
+     printf("\n"); */
 }
 
 char *mkCstring(Btemplate *T){
@@ -1343,7 +1354,7 @@ void  ConvertIndexedAsString(Block *ctx) {
   int i;
   //for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
   
-  QallocIndexed(ctx,0,getTextDescNo(),1,1,length + 1,0);
+  QallocIndexed(ctx,0,getTextDescNo(),1,1,length,0);
   while (X->vfields[length + 1] == 0 ) length = length - 1;
   putR(ctx->callee,1,getR(ctx->world,3)); // origin - a bloody hack
   ctx->callee->vfields[1 + newAllocOff] = length; // done in QallocIndexed?
