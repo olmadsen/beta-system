@@ -113,6 +113,10 @@ int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
+#define traceGC_0
+//#define traceGC_1
+//#define traceGC_2
+
 Btemplate *lastFreeInHeap;
 int noOfFreeBlocks = 0;
 Btemplate * lastFreeStart = NULL;
@@ -154,7 +158,7 @@ int sizeOfDesc(Btemplate * root){
     //int size = sizeof(Btemplate) + (16 +  desc[objSize_index]) * sizeof(int) + 64;
     //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
     if (isIndexed(desc) == 1) {
-	printf("isIndexed ");
+      //printf("isIndexed ");
 	/*int i;
 	for (i = 0; i < 15; i++) printf("%i ",getV(root,i));
 	printf("\n");*/
@@ -175,7 +179,7 @@ void setMap(Btemplate *start, Btemplate *end){
 }
 
 void addMapRef(Btemplate * oldRef,Btemplate * newRef){
-  printf("addMapRef:old: %x adjust: %i new: %x\n", oldRef,(int)oldRef - (int)newRef,newRef);
+  //printf("addMapRef:old: %x adjust: %i new: %x\n", oldRef,(int)oldRef - (int)newRef,newRef);
   putBTheap(mapStart,mapInx,oldRef);
   putIheap(mapStart,mapInx + 4,(int)oldRef - (int)newRef);
   mapInx = mapInx + 8;
@@ -184,12 +188,12 @@ void addMapRef(Btemplate * oldRef,Btemplate * newRef){
 void printMapRef(){
   Btemplate *R;
   int inx;
-  printf("printMap: mapStart: %x mapInx: %i\n",mapStart,mapInx);
+  //printf("printMap: mapStart: %x mapInx: %i\n",mapStart,mapInx);
   for (inx = 0; inx < mapInx; inx = inx + 8) {
     R = getBTheap(mapStart,inx);
-    printf("Ref:%i %x off: %x %i %s\n",inx,R, getIheap(mapStart, inx + 4),
-	   getIheap(mapStart, inx + 4),
-	   nameOf((Btemplate *) ((int)R - getIheap(mapStart, inx + 4))));
+    //printf("Ref:%i %x off: %x %i %s\n",inx,R, getIheap(mapStart, inx + 4),
+    //	   getIheap(mapStart, inx + 4),
+    //	   nameOf((Btemplate *) ((int)R - getIheap(mapStart, inx + 4))));
 }
 }
 Btemplate * mapRef(Btemplate * oldRef){
@@ -229,8 +233,9 @@ Btemplate * mapRef(Btemplate * oldRef){
 }
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
+#if defined traceGC_2
   printf("\n\n*** Root: %s\n",nameOf(root));
-  //mkEvent(scan_event,root,NULL,NULL,false,0,0);
+#endif
 
   ObjDesc desc = root->desc;
   //dumpGCinfo(thisBlock->trace,desc);
@@ -245,7 +250,7 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
   for (i = start; i < end; i = i + 2) {
     v = desc_getInt2(desc,start + (i - start));
     int R = (int)getR(root,v);
-    printf("v:%i R:%x\n",v,R);
+    //printf("v:%i R:%x\n",v,R);
     if (R > 0) {  // R == 0 implies R is none
       //int j;
       //for (j = 0; j < level; j++) printf("-");
@@ -259,7 +264,7 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
     exit(-1);
   }
   for (i=0; i < root->rtop; i++) {
-    printf("rStack:%s %x \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
+    //printf("rStack:%s %x \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
     doGCmark(ctx,root->rstack[i + 1],level + 1);
   } 
   //printf("\nend doGC\n");
@@ -278,15 +283,17 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     //printf("while: %x %s\n",(int)root,nameOf(root));
     int size = sizeOfDesc(root);
 
-    printf("root:%x ",root);
-    printf("%s %i ", nameOf(root),size);
+    //printf("root:%x ",root);
+    //printf("%s %i ", nameOf(root),size);
     if (getV(root,0) == 1) { 
-      int V = (int)getR(root,0);
       //int i;
       //for (i = 0; i < 10; i++) printf("i:%i V:%x\n",i, getV(root,i));
       //printf("root[0]:%x ",getR(root,0));
       putV(root,0,0);
+#if defined traceGC_2
       printf("marked\n");
+#endif
+
       if (lastUnmarked != NULL) {
 	if (lastFreeStart != NULL) { // previous free block points to this block
 	  *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
@@ -303,14 +310,20 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 	  firstFreeEnd= nextUsed;
 	}
 	noOfFreeBlocks = noOfFreeBlocks + 1;
+#if defined traceGC_2
 	printf("\n-----Free interval %x %x %5i\n\n"
 	       ,(int)lastUnmarked,(int)unmarkedEnd - 4,(int)unmarkedEnd - (int)lastUnmarked);
+#endif
+
 	lastUnmarked = NULL;
 
       }
       index = index + size;
     }else {
+#if defined traceGC1
       printf("notMarked\n");
+#endif
+
       free = free + size;
       freedInHeap = freedInHeap + size;
       if (lastUnmarked == NULL) {// met an unMarked obj
@@ -320,40 +333,38 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     //printf("continue: %i %i\n",index,size);
     int i,v;
     v = (int)root->desc;
-    printf("rootA: %x desc: %x\n",(int)root,v);
+    // printf("rootA: %x desc: %x\n",(int)root,v);
 
     root = (Btemplate *)(((int) root) + size);
 
     //printf("root: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
-    printf("desc from descNo = 66:  %x\n",(int)getDesc(66));
     v = (int)root->desc;
     if (v == 0) root = (Btemplate *)((int)root + 4);
-    if (false) {printf("rootB: %x lastFreeInHeap: %x desc == 0\n",(int)root,(int)lastFreeInHeap,v);}
-    else {
-      printf("rootB: %x lastFreeInHeap: %x desc: %x\n",(int)root,(int)lastFreeInHeap,v);
+
+    /*printf("rootB: %x lastFreeInHeap: %x desc: %x\n",(int)root,(int)lastFreeInHeap,v);
       for (i = 0; i < 40; i = i + 4) printf(" %x ",*(int *)((int)root + i));
-      printf("\n");
-    }
-    //for (i = 0; i < 40; i++) printf(" : %x ",heap[index + i]);
-    //printf(" %s %i %i\n",nameOf(root),(int)root,(int)&heap[heapMax]);
+      printf("\n");*/
   }
-  printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
-	 ,(int)lastUnmarked,nameOf(lastUnmarked),(int)lastFreeStart,nameOf(lastFreeStart));
+  //printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
+  //	 ,(int)lastUnmarked,nameOf(lastUnmarked),(int)lastFreeStart,nameOf(lastFreeStart));
   *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
   if (lastUnmarked != NULL) {
     *(int*)((int)lastUnmarked) = 0;
     *(int*)((int)lastUnmarked + 4) = 0;
   }
-  else
-    printf("!!! lastUnMarked is NULL: lastFreeStart: %i\n",lastFreeStart);
+  //else
+    //printf("!!! lastUnMarked is NULL: lastFreeStart: %i\n",lastFreeStart);
   setMap(lastFreeStart,lastUnmarked); // what if NULL?
   newHT = index;
 
+#if defined traceGC_1
   printf("\nheapMax:%i used:%i Free:%i free blocks: %i newHeapTop:%i"
 	 ,heapMax,heapMax - free,free,noOfFreeBlocks,newHT);
   printf("\nFirst free: %x %x Last free: %x %x "
 	 ,(int)firstFreeStart, (int)firstFreeEnd - 4
 	 ,(int)lastFreeStart,(int)nextUsed - 4);
+#endif
+
   return firstFreeStart;
 }
 
@@ -363,10 +374,12 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
   //int mapEnd = (int)firstFreeStart + (noOfFreeBlocks - 1 ) * 8;
   int lastFreeSize = (int)nextUsed - (int)lastFreeStart;
 
+#if defined traceGC_1
   printf("\n\n**** doGCcompact: root:%x firstFreeStart:%x \n",
 	 (int)root,(int)firstFreeStart);
   printf("**** noOfFreeBlocks: %i lastFreeSize: %i \n", 
 	 noOfFreeBlocks,lastFreeSize);
+#endif
 
   if (noOfFreeBlocks * 8 > (lastFreeSize - 8)) {
     printf("\n\n*** GC error: not enough space to map in last free blocks\n");
@@ -385,8 +398,8 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
     //                 v                   v         
     nextUsed = getBTheap(free,0);
     nextFree = getBTheap(free,4);
-    if ( (nextFree == NULL) & (nextUsed != NULL)) {
-      printf("\n\n!!! OBS (nextFree == NULL) & (nextUsed != NULL))\n");
+    if ((nextFree == NULL) & (nextUsed != NULL)) {
+      //printf("\n\n!!! OBS (nextFree == NULL) & (nextUsed != NULL))\n");
       //exit(-1);
     }
     if (nextUsed != 0) {
@@ -394,28 +407,28 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 	nextUsedSize = (int)nextFree - (int)nextUsed;
       } else 
 	nextUsedSize = (int)(int)lastFreeInHeap - (int)nextUsed;
-      printf("Free:%x nextUsed:%x %s, nextUsedSize:%i nextFree:%x newHeapTop: %x\n",
-	     (int)free,(int)nextUsed,nameOf(nextUsed),nextUsedSize,nextFree,newHeapTop);
+      //printf("Free:%x nextUsed:%x %s, nextUsedSize:%i nextFree:%x newHeapTop: %x\n",
+      //     (int)free,(int)nextUsed,nameOf(nextUsed),nextUsedSize,nextFree,newHeapTop);
       memcpy((void *)newHeapTop,(void *)nextUsed,nextUsedSize);
-      printf("memcpy: %s %x\n",nameOf(newHeapTop),newHeapTop);
+      //printf("memcpy: %s %x\n",nameOf(newHeapTop),newHeapTop);
       addMapRef(nextUsed,newHeapTop);
       newHeapTop = (Btemplate *)((int)newHeapTop + nextUsedSize);      
     }
     free = nextFree;
   }
+#if defined traceGC_1
   printf("\n*** GCcompact done: newHeapTop: %x  heapTop: %x freed:%i\n",
 	 newHeapTop,(int)&heap[heapTop], (int)&heap[heapTop] - (int)newHeapTop);
-  // update references
-
+#endif
 }
 
 void doGCupdateRefs(Block *ctx,Btemplate *root){
-  printf("\n\n*** UpdateRefs: %x %s\n\n",(int)root,nameOf(root));
+  //printf("\n\n*** UpdateRefs: %x %s\n\n",(int)root,nameOf(root));
   printMapRef();
-  printf("\n*** sweep of new heap betaWorld: %x\n",betaWorld);
+  //printf("\n*** sweep of new heap betaWorld: %x\n",betaWorld);
   Btemplate * X = root;
   while (X < newHeapTop) {
-    printf("obj: %x %s \n",(int)X,nameOf(X));;
+    //printf("obj: %x %s \n",(int)X,nameOf(X));;
     X = (Btemplate *)((int) X + sizeOfDesc(X));
     //printf("X: %x \n",(int)X);
     //printf("X: %s \n",nameOf(X));
@@ -424,7 +437,10 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
       printf(" %i ",(int)*(int *)((int)X + i));
       printf("\n");*/
   }
+#if defined traceGC_1
   printf("newHeapTop: %x \n\nUpdating trefs: \n\n",(int)newHeapTop);
+#endif
+
   while (root < newHeapTop) {
     ObjDesc desc = root->desc; 
     //printf("Update: %s %x size:%i\n",nameOf(root),(int)root,sizeOfDesc(root));
@@ -442,8 +458,8 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
       Rn = mapRef(R);
       if (Rn != R) {
 	putR(root,v,Rn);
-	printf("oldRef: %x inx: %i ",(int)R,v);
-	printf("newRef: %s %x \n",nameOf(Rn),(int)Rn);
+	//printf("oldRef: %x inx: %i ",(int)R,v);
+	//printf("newRef: %s %x \n",nameOf(Rn),(int)Rn);
       }
     }
     for (i=0; i < root->rtop; i++) {
@@ -453,8 +469,8 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
 
       if (Rn != R) {
 	root->rstack[i + 1] = Rn;
-	printf("rStack:oldRef:%x ",(int)R);
-	printf(" new: %x %s\n",(int)Rn,nameOf(Rn));
+	//printf("rStack:oldRef:%x ",(int)R);
+	//printf(" new: %x %s\n",(int)Rn,nameOf(Rn));
       }
     }
     if (isIndexed(desc)) {
@@ -465,7 +481,11 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
     }
     root = (Btemplate *)((int) root + sizeOfDesc(root));
   }
+
+#if defined traceGC_2
   printf("mapRef: thisObj: %x  new: %x %s\n",ctx->thisObj,mapRef(ctx->thisObj),nameOf(ctx->thisObj));
+#endif
+
   ctx->thisObj = mapRef(ctx->thisObj);
   ctx->thisStack = mapRef(ctx->thisStack);
   ctx->callee = mapRef(ctx->callee);
@@ -491,13 +511,23 @@ void doGC(Block *ctx,Btemplate *root){
   newHeapTop = NULL;
   newHT = 0;
   freedInHeap = 0;
+  Btemplate *firstFreeStart;
 
+#if defined traceGC_0
+  printf("<GC>");
+#endif
+
+#if defined traceGC_1
   printf("\n*****dogc: lastFreeInHeap: %x \n",lastFreeInHeap);
   printf("\n**** doGC thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
-  Btemplate *firstFreeStart;
   fprintf(ctx->trace,"\n***** doGC *****\n");
+#endif
+
   doGCmark(ctx,root,0);
+#if defined traceGC_1
   printf("\n***  Mark thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
+#endif
+
   doGCmark(ctx,ctx->thisObj,0);
   doGCmark(ctx,ctx->thisStack,0);
   if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
@@ -505,15 +535,17 @@ void doGC(Block *ctx,Btemplate *root){
   if (ctx->top != NULL) doGCmark(ctx,ctx->top,0);
   if (ctx->origin != NULL) doGCmark(ctx,ctx->origin,0);
   doGCmark(ctx,ctx->world,0);
-  printf("\n*** doGCsweep: \n");
   firstFreeStart = doGCsweep(ctx,root);
   doGCcompact(ctx,root,firstFreeStart);
   doGCupdateRefs(ctx,root);
   heapTop = heapTop - freedInHeap;
   doGCclearHeap();
+#if defined traceGC_1
   printf("\n*** after doGC: thisObj: %x %s ",ctx->thisObj,nameOf(ctx->thisObj));
   printf("\n              thisStack: %x %s ",ctx->thisStack,nameOf(ctx->thisStack));
   printf("\n              heapTop:%i &heap[0]: %x  heapObj: %x\n",heapTop,&heap[1],&heap[heapTop]);
+#endif
+
 }
 
 int ZZ = 0;
@@ -566,7 +598,6 @@ void *heapAlloc(Block *ctx,int size) {
     //printf("heapTop after: %i size: %i",heapTop,size);
     if ((heapTop + size) > (heapMax - 8)) {
 	// (heapTop - 8) since we need space for a free block at the end
-      printf("\n");
       lastFreeInHeap =(Btemplate *)&heap[heapTop];
       doGC(ctx,betaWorld);
       //runTimeError("\n\n*** Heap overflow");
