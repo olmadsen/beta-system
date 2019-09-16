@@ -229,7 +229,7 @@ Btemplate * mapRef(Btemplate * oldRef){
 }
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
-  //printf("\n\n*** Root: %s\n",nameOf(root));
+  printf("\n\n*** Root: %s\n",nameOf(root));
   //mkEvent(scan_event,root,NULL,NULL,false,0,0);
 
   ObjDesc desc = root->desc;
@@ -245,7 +245,7 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
   for (i = start; i < end; i = i + 2) {
     v = desc_getInt2(desc,start + (i - start));
     int R = (int)getR(root,v);
-    //printf("v:%i R:%i\n",v,R);
+    printf("v:%i R:%x\n",v,R);
     if (R > 0) {  // R == 0 implies R is none
       //int j;
       //for (j = 0; j < level; j++) printf("-");
