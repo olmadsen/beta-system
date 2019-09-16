@@ -155,8 +155,6 @@ int sizeOfDesc(Btemplate * root){
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
     int size = sizeof(Btemplate) + (objZ + 1 + 0) * sizeof(int);
-    //int size = sizeof(Btemplate) + (16 +  desc[objSize_index]) * sizeof(int) + 64;
-    //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
     if (isIndexed(desc) == 1) {
       //printf("isIndexed ");
 	/*int i;
@@ -174,8 +172,7 @@ int sizeOfDesc(Btemplate * root){
 
 void setMap(Btemplate *start, Btemplate *end){
   mapStart = (Btemplate *)((int)start + 8);
-  mapEnd = (Btemplate *) ((int)end + 8);
-  
+  mapEnd = (Btemplate *) ((int)end + 8);  
 }
 
 void addMapRef(Btemplate * oldRef,Btemplate * newRef){
@@ -194,7 +191,7 @@ void printMapRef(){
     //printf("Ref:%i %x off: %x %i %s\n",inx,R, getIheap(mapStart, inx + 4),
     //	   getIheap(mapStart, inx + 4),
     //	   nameOf((Btemplate *) ((int)R - getIheap(mapStart, inx + 4))));
-}
+  }
 }
 Btemplate * mapRef(Btemplate * oldRef){
   Btemplate * newRef;
@@ -278,7 +275,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   Btemplate * lastUnmarked = NULL;
   Btemplate * unmarkedEnd = NULL;
 
-  while ((int) root < (int)lastFreeInHeap) {//(int)&heap[heapMax] - 200 ) { // OBS! Check 200!
+  while ((int) root < (int)lastFreeInHeap) {
     //printf("while: %x \n",(int)root);
     //printf("while: %x %s\n",(int)root,nameOf(root));
     int size = sizeOfDesc(root);
@@ -316,21 +313,18 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 #endif
 
 	lastUnmarked = NULL;
-
       }
       index = index + size;
     }else {
 #if defined traceGC1
       printf("notMarked\n");
 #endif
-
       free = free + size;
       freedInHeap = freedInHeap + size;
       if (lastUnmarked == NULL) {// met an unMarked obj
 	lastUnmarked = root;
       }
     }
-    //printf("continue: %i %i\n",index,size);
     int i,v;
     v = (int)root->desc;
     // printf("rootA: %x desc: %x\n",(int)root,v);
@@ -398,10 +392,6 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
     //                 v                   v         
     nextUsed = getBTheap(free,0);
     nextFree = getBTheap(free,4);
-    if ((nextFree == NULL) & (nextUsed != NULL)) {
-      //printf("\n\n!!! OBS (nextFree == NULL) & (nextUsed != NULL))\n");
-      //exit(-1);
-    }
     if (nextUsed != 0) {
       if (nextFree != 0) {
 	nextUsedSize = (int)nextFree - (int)nextUsed;
