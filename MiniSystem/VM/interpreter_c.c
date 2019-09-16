@@ -140,6 +140,13 @@ Btemplate *putBTheap(Btemplate *R, int inx, Btemplate *S){
   *(int*)((int)R + inx) = (int)S;
 }
 
+void checkInHeap(Btemplate *obj){
+  if ((int) obj > (int)&heap[heapTop] | (int)obj < 0) {
+    printf("\n\n*****************' object not in heap: %x %i\n",(int)obj,(int)obj);
+    exit(-1);
+  }
+};
+
 int sizeOfDesc(Btemplate * root){
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
@@ -148,14 +155,14 @@ int sizeOfDesc(Btemplate * root){
     //int size = sizeof(Btemplate) + (16 +  0) * sizeof(int) + 64;    
     if (isIndexed(desc) == 1) {
 	printf("isIndexed ");
-	int i;
+	/*int i;
 	for (i = 0; i < 15; i++) printf("%i ",getV(root,i));
-	printf("\n");
+	printf("\n");*/
 	/*for (i = 0; i < 400; i++) {
 	  printf(" %i ",(int)*(char *)((int)root + i));
 	  if ( i % 15 == 0) printf("\n");
 	  }*/
-	printf("range:%i\n",getV(root,2));
+	//printf("range:%i\n",getV(root,2));
 	size = size + (getV(root,2) + 2) * sizeof(int);
     }
     return size;
@@ -403,6 +410,7 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 }
 
 void doGCupdateRefs(Block *ctx,Btemplate *root){
+  printf("\n\n*** UpdateRefs: %x %s\n\n",(int)root,nameOf(root));
   printMapRef();
   printf("\n*** sweep of new heap betaWorld: %x\n",betaWorld);
   Btemplate * X = root;
@@ -416,7 +424,7 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
       printf(" %i ",(int)*(int *)((int)X + i));
       printf("\n");*/
   }
-  printf("newHeapTop: %x \n",(int)newHeapTop);
+  printf("newHeapTop: %x \n\nUpdating trefs: \n\n",(int)newHeapTop);
   while (root < newHeapTop) {
     ObjDesc desc = root->desc; 
     //printf("Update: %s %x size:%i\n",nameOf(root),(int)root,sizeOfDesc(root));
@@ -431,22 +439,28 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
     for (i = start; i < end; i = i + 2) {
       v = desc_getInt2(desc,start + (i - start));
       R = getR(root,v);
-      //printf("oldRef: %x inx: %i ",(int)R,v);
       Rn = mapRef(R);
-      //printf("newRef: %s %x \n",nameOf(Rn),(int)Rn);
-      if (Rn != R) putR(root,v,Rn);
+      if (Rn != R) {
+	putR(root,v,Rn);
+	printf("oldRef: %x inx: %i ",(int)R,v);
+	printf("newRef: %s %x \n",nameOf(Rn),(int)Rn);
+      }
     }
     for (i=0; i < root->rtop; i++) {
       R = root->rstack[i + 1];
-      //printf("rStack:oldRef:%x ",(int)R);
+
       Rn = mapRef(R);
-      //printf(" new: %x %s\n",(int)Rn,nameOf(Rn));
-      if (Rn != R)  root->rstack[i + 1] = Rn;
+
+      if (Rn != R) {
+	root->rstack[i + 1] = Rn;
+	printf("rStack:oldRef:%x ",(int)R);
+	printf(" new: %x %s\n",(int)Rn,nameOf(Rn));
+      }
     }
     if (isIndexed(desc)) {
       R = getR(root,1);
       Rn = mapRef(R);
-      printf("updateRefs:isIndexed: %x new: %x\n",R,Rn);
+      //printf("updateRefs:isIndexed: %x new: %x\n",R,Rn);
       if (Rn != R) putR(root,1,Rn);
     }
     root = (Btemplate *)((int) root + sizeOfDesc(root));
@@ -609,6 +623,7 @@ int hSize = 0;
 
 
 Btemplate *getR(Btemplate *obj,int inx){ 
+  checkInHeap(obj);
   if (newAlloc){
     if ((0 <= inx) && (inx <= 64)) {
       return (Btemplate *)obj->vfields[inx];
@@ -621,6 +636,7 @@ Btemplate *getR(Btemplate *obj,int inx){
   }
 };
 void putR(Btemplate *obj,int inx, Btemplate *X){
+  checkInHeap(obj);
   if (newAlloc) {
     if ((0 <= inx) && (inx <= 64)) {
       obj->vfields[inx] = (int)X;
@@ -763,6 +779,7 @@ void XdumpRstack(char *S,Btemplate *stack){
 }
 void rPush(Btemplate *stack,Btemplate *R){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
+  checkInHeap(R);
   if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeErrorX("stack overflow",stack,-1);
   stack->rstack[stack->rtop] = R;
   //XdumpRstack("rPush",stack);
@@ -781,6 +798,7 @@ Btemplate *rPop(Btemplate *stack){
   //Btemplate *R = stack->rstack[stack->rtop];
   // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
   if ((stack->rtop = stack->rtop - 1) < -1) runTimeErrorX("rStack underflow",stack,-1);
+  checkInHeap(stack->rstack[stack->rtop + 1]);
   return stack->rstack[stack->rtop + 1];
 }
 
@@ -788,6 +806,7 @@ Btemplate *rPop(Btemplate *stack){
 // but is not necessarily correct
 Btemplate *rTopElm(Btemplate*stack,int inx){
   if ((stack->rtop - inx) < -1) runTimeErrorX("rStack underflow:rTopElm",stack,-1);
+  checkInHeap(stack->rstack[stack->rtop - inx]);
   return stack->rstack[stack->rtop - inx];
 }
 
@@ -1133,7 +1152,11 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
+
+  ctx->origin = origin;
   ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,vInxSize,rInxSize);
+  origin = ctx->origin;
+
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
@@ -1169,7 +1192,9 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
+
   ctx->callee = allocTemplate(ctx,newId(ctx),descNo,false,vInxSize,rInxSize);
+
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i\n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
@@ -1665,6 +1690,7 @@ bool traceThreads = true;
 #ifdef TRACE
 	fprintf(trace,"pushthis\n");
 #endif
+	checkInHeap(thisObj);
 	rPush(thisStack,thisObj);
 	break;
       case pushC: 
