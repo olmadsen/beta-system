@@ -231,7 +231,7 @@ Btemplate * mapRef(Btemplate * oldRef){
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
 #if defined traceGC_2
-  printf("\n\n*** Root: %s\n",nameOf(root));
+  printf("*** Root: %s %x\n",nameOf(root),(int)root);
 #endif
 
   ObjDesc desc = root->desc;
@@ -276,12 +276,11 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   Btemplate * unmarkedEnd = NULL;
 
   while ((int) root < (int)lastFreeInHeap) {
-    //printf("while: %x \n",(int)root);
-    //printf("while: %x %s\n",(int)root,nameOf(root));
     int size = sizeOfDesc(root);
-
-    //printf("root:%x ",root);
-    //printf("%s %i ", nameOf(root),size);
+#if defined traceGC_2
+    printf("root:%x ",root);
+    printf("%s %i ", nameOf(root),size);
+#endif
     if (getV(root,0) == 1) { 
       //int i;
       //for (i = 0; i < 10; i++) printf("i:%i V:%x\n",i, getV(root,i));
@@ -316,7 +315,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
       }
       index = index + size;
     }else {
-#if defined traceGC1
+#if defined traceGC_2
       printf("notMarked\n");
 #endif
       free = free + size;
@@ -325,8 +324,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 	lastUnmarked = root;
       }
     }
-    int i,v;
-    v = (int)root->desc;
+    int i,v; v = (int)root->desc;
     // printf("rootA: %x desc: %x\n",(int)root,v);
 
     root = (Btemplate *)(((int) root) + size);
@@ -339,8 +337,16 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
       for (i = 0; i < 40; i = i + 4) printf(" %x ",*(int *)((int)root + i));
       printf("\n");*/
   }
-  //printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
-  //	 ,(int)lastUnmarked,nameOf(lastUnmarked),(int)lastFreeStart,nameOf(lastFreeStart));
+  if (lastFreeStart == NULL) {
+    lastFreeStart = lastUnmarked;
+    noOfFreeBlocks = 1;
+    nextUsed = lastFreeInHeap; // hack
+  }
+#if defined traceGC_2
+  printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
+  	 ,(int)lastUnmarked,nameOf(lastUnmarked),(int)lastFreeStart,nameOf(lastFreeStart));
+#endif
+
   *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
   if (lastUnmarked != NULL) {
     *(int*)((int)lastUnmarked) = 0;
@@ -511,6 +517,10 @@ void doGC(Block *ctx,Btemplate *root){
   printf("\n*****dogc: lastFreeInHeap: %x \n",lastFreeInHeap);
   printf("\n**** doGC thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
   fprintf(ctx->trace,"\n***** doGC *****\n");
+#endif
+
+#if defined traceGC_1
+  printf("\ndoGCmark\n");
 #endif
 
   doGCmark(ctx,root,0);
