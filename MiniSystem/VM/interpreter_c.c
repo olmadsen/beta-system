@@ -193,9 +193,9 @@ void printMapRef(){
     //	   nameOf((Btemplate *) ((int)R - getIheap(mapStart, inx + 4))));
   }
 }
+
 Btemplate * mapRef(Btemplate * oldRef){
-  Btemplate * newRef;
-  Btemplate *R, *last;
+  Btemplate * newRef, *R, *last;
 
   R = getBTheap(mapStart,0);
   //printf("mapRef: %x tryFirst: %x \n",(int)oldRef,(int)R);
@@ -207,11 +207,6 @@ Btemplate * mapRef(Btemplate * oldRef){
     R = getBTheap(mapStart,inx);
     //printf("  try: %x adjust: %i\n",(int)R, getIheap(mapStart, inx + 4));
     if (oldRef < R) {
-      //printf("return\n");
-      //newRef = (Btemplate *)((int) last - getIheap(mapStart, inx + 4));
-      //printf("mapRef: old: %x adj: %i new: %x\n", 
-      //	     (int)last,getIheap(mapStart, inx + 4),(int)newRef);
-      //return newRef;
       break;
     }
     last = R;
@@ -219,12 +214,9 @@ Btemplate * mapRef(Btemplate * oldRef){
   }
   newRef = (Btemplate *)((int) oldRef - getIheap(mapStart, lastInx + 4));
   /*printf("lastInx:%i  mapInx:%i\n",lastInx,mapInx);
-  printf("mapRef:old: %x adj: %i \n",
-	 (int)oldRef,getIheap(mapStart, lastInx + 4));
-  printf("new: %x %s\n",(int)newRef,nameOf(newRef));
-  int i;*/
-  /*for (i =0; i< 10; i++)
-    printf("%i: %x ", i * 4, getIheap(newRef,i * 4));*/
+    printf("mapRef:old: %x adj: %i \n",
+    (int)oldRef,getIheap(mapStart, lastInx + 4));
+    printf("new: %x %s\n",(int)newRef,nameOf(newRef)); */
 
   return newRef;
 }
@@ -331,7 +323,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 
     //printf("root: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
     v = (int)root->desc;
-    if (v == 0) root = (Btemplate *)((int)root + 4);
+    if (v == 0) root = (Btemplate *)((int)root + 4); // ???
 
     /*printf("rootB: %x lastFreeInHeap: %x desc: %x\n",(int)root,(int)lastFreeInHeap,v);
       for (i = 0; i < 40; i = i + 4) printf(" %x ",*(int *)((int)root + i));
@@ -340,7 +332,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   if (lastFreeStart == NULL) {
     lastFreeStart = lastUnmarked;
     noOfFreeBlocks = 1;
-    nextUsed = lastFreeInHeap; // hack
+    nextUsed = lastFreeInHeap; // hack 
   }
 #if defined traceGC_2
   printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
@@ -368,7 +360,6 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   return firstFreeStart;
 }
 
-
 void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
   //int mapStart = (int)firstFreeStart + 4;
   //int mapEnd = (int)firstFreeStart + (noOfFreeBlocks - 1 ) * 8;
@@ -382,20 +373,17 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 #endif
 
   if (noOfFreeBlocks * 8 > (lastFreeSize - 8)) {
-    printf("\n\n*** GC error: not enough space to map in last free blocks\n");
+    printf("\n\n*** GC error: ");
+    printf("not enough space for reference map in last free block\n");
     printf(" *** noOfFreeBlocks: %i lastFreeSize: %i\n"
 	   ,noOfFreeBlocks,lastFreeSize);
   }
 
-  Btemplate * nextUsed;
-  Btemplate * nextFree;
+  Btemplate * nextUsed,* nextFree;
   int nextUsedSize;
   Btemplate *free = firstFreeStart;
   newHeapTop = free;
   while (free != NULL) {
-    // free == newHreapTop ? 
-    //             newHeapTop          nextUsed      
-    //                 v                   v         
     nextUsed = getBTheap(free,0);
     nextFree = getBTheap(free,4);
     if (nextUsed != 0) {
