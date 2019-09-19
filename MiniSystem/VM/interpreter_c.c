@@ -80,7 +80,7 @@ void RTE2(char *msg, int errNo){
 }  
     
 #define useBetaHeap true
-//#define withGC
+#define withGC
 
 #ifdef withGC
 #define heapMax 100000
@@ -960,12 +960,8 @@ void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
 }
 
 
-#ifdef linux
-void *interpreter(void *B);
-#elif defined  __CYGWIN__
+#ifdef   __CYGWIN__
 DWORD WINAPI interpreter(LPVOID B);
-#elif defined __arm__
-void *interpreter(void *B);
 #else
 void *interpreter(void *B);
 #endif
@@ -3265,8 +3261,8 @@ bool traceThreads = true;
 #ifdef __arm__
 #else
 	printf("\n\n***Illegal byte code: glsc: %i, op: %i\n",glsc,bc[glsc - 1]);
-	printf("thisObj: %x %s \n",thisObj,nameOf(thisObj));
-	printf("thisStack: %x %s \n",thisStack,nameOf(thisStack));
+	printf("thisObj: %x %s \n",(int)thisObj,nameOf(thisObj));
+	printf("thisStack: %x %s \n",(int)thisStack,nameOf(thisStack));
 #endif
 	runTimeError("Illegal byte code");
 	break;
