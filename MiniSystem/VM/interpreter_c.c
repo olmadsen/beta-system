@@ -249,7 +249,7 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
     }
   }
   if (root->rstack[0] != NULL) {
-    printf("rstack != NULL: %x \n",root->rstack[0]);
+    printf("rstack != NULL: %x \n",(int)root->rstack[0]);
     exit(-1);
   }
   for (i=0; i < root->rtop; i++) {
@@ -485,7 +485,7 @@ void doGCclearHeap() {
   for (i = heapTop; i < heapMax; i++) {heap[i] = 0; }
 }
 
-void doGC(Block *ctx,Btemplate *root){
+void doBGC(Block *ctx,Btemplate *root){
   noOfFreeBlocks = 0;
   lastFreeStart = NULL;
   nextUsed = NULL;
@@ -587,7 +587,7 @@ void *heapAlloc(Block *ctx,int size) {
     if ((heapTop + size) > (heapMax - 8)) {
 	// (heapTop - 8) since we need space for a free block at the end
       lastFreeInHeap =(Btemplate *)&heap[heapTop];
-      doGC(ctx,betaWorld);
+      doBGC(ctx,betaWorld);
       //runTimeError("\n\n*** Heap overflow");
       //exit(1);
     }
