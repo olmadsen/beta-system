@@ -63,6 +63,13 @@ typedef void *FILE;
  
 #define MAX_THREADS 5
 
+#ifdef linux
+  pthread_t pthreadArray[MAX_THREADS];
+#elif defined  __CYGWIN__
+  HANDLE  hThreadArray[MAX_THREADS];
+#endif
+int threadNo = 0;
+
 void runTimeError(char *msg){
 #ifdef __arm__
 #else
@@ -80,7 +87,7 @@ void RTE2(char *msg, int errNo){
 }  
     
 #define useBetaHeap true
-#define withGC
+//#define withGC
 
 #ifdef withGC
 #define heapMax 100000
@@ -1584,12 +1591,7 @@ void  *interpreter(void *B){
 #endif
 #endif
 
-#ifdef linux
-  pthread_t pthreadArray[MAX_THREADS];
-#elif defined  __CYGWIN__
-  HANDLE  hThreadArray[MAX_THREADS];
-#endif
-  int threadNo = 0;
+
   bool hasThreads = false;
 
 #ifdef linux
@@ -3279,10 +3281,11 @@ bool traceThreads = true;
   }
 #endif
 
-  if (threadNo > 0) {
+  //if (threadNo > 0) {
+  if (thisBlock->threadId == 0) {
 #ifdef linux
     int j;
-    for (j=0; j < threadNo; j++) {
+    for (j = 0; j < threadNo; j++) {
          pthread_join(pthreadArray[j],NULL);
 	 printf("Join of: %i\n",j);
       }
@@ -3290,7 +3293,7 @@ bool traceThreads = true;
     int j;
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
 
-    for( j=0; j < threadNo; j++)
+    for(j = 0; j < threadNo; j++)
       { if (traceThreads) printf("Close\n");
 	CloseHandle(hThreadArray[j]);
       };
