@@ -1631,7 +1631,7 @@ bool traceThreads = true;
   ObjDesc bc;
   int glsc;
   int currentDescNo;
-  Btemplate *thisModule,*thisObj,*thisStack, *callee; // *eventProcessor;
+  Btemplate *thisModule = NULL,*thisObj,*thisStack, *callee; // *eventProcessor;
 
   bc = thisBlock->bc;
   glsc = thisBlock->glsc;
