@@ -273,7 +273,9 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   Btemplate *firstFreeEnd = NULL;
   Btemplate * lastUnmarked = NULL;
   Btemplate * unmarkedEnd = NULL;
-
+#ifdef traceGC_1
+  printf("\n***** doGCsweep *****\n");
+#endif
   while ((int) root < (int)lastFreeInHeap) {
     int size = sizeOfDesc(root);
 #if defined traceGC_2
@@ -324,11 +326,12 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
       }
     }
     int i,v; v = (int)root->desc;
-    // printf("rootA: %x desc: %x\n",(int)root,v);
+    //printf("rootA: %x desc: %x\n",(int)root,v);
 
     root = (Btemplate *)(((int) root) + size);
-
-    //printf("root: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
+    /*for (i = 0; i < 10; i++) printf(" %x ",getV(root,i));
+    printf("\n");
+    printf("rootB: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);*/
     v = (int)root->desc;
     if (v == 0) root = (Btemplate *)((int)root + 4); // ???
 
@@ -492,6 +495,32 @@ void doGCclearHeap() {
   for (i = heapTop; i < heapMax; i++) {heap[i] = 0; }
 }
 
+void suspendThreads(Block *ctx){
+  printf("\n**** Suspend threads: thisThreadId: %i threadNo: %i\n", 
+	 ctx->threadId, threadNo);
+  int no;
+  for (no = 1; no <= threadNo; no++) {
+    printf("Try suspend: %i thread: %i\n",no,(int)hThreadArray[no]);
+    if ((no != ctx->threadId) && (hThreadArray[no] != NULL)) {
+      printf("\n--- Suspend thread: %i\n",no);
+      if (SuspendThread(hThreadArray[no]) < 0 ) 
+	  printf("\n**** SuspendThread failed\n");
+    } else {
+      printf("\n--- do not suspend: %i\n",no);
+    }
+    printf("\n....................\n");
+  }
+}
+
+void resumeThreads(Block *ctx){
+  printf("\n**** Resume threads: thisThreadId: %i threadNo: %i\n", 
+	 ctx->threadId, threadNo);
+  int no;
+  for (no = 1; no <= threadNo; no++)
+    if ((no != ctx->threadId) && (hThreadArray[no] != NULL))
+      ResumeThread(hThreadArray[no]);
+}
+
 void doBGC(Block *ctx,Btemplate *root){
   noOfFreeBlocks = 0;
   lastFreeStart = NULL;
@@ -507,12 +536,17 @@ void doBGC(Block *ctx,Btemplate *root){
 #if defined traceGC_0
   printf("<GC>");
 #endif
+  suspendThreads(ctx);
+  printf("\n*** After suspendThreads\n");
 
+#ifdef TRACE
+  fprintf(ctx->trace,"\n***** doGC *****\n");
+#endif
 #if defined traceGC_1
   printf("\n*****dogc: lastFreeInHeap: %x \n",lastFreeInHeap);
   printf("\n**** doGC thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
-  fprintf(ctx->trace,"\n***** doGC *****\n");
 #endif
+
 
 #if defined traceGC_1
   printf("\ndoGCmark\n");
@@ -535,6 +569,7 @@ void doBGC(Block *ctx,Btemplate *root){
   doGCupdateRefs(ctx,root);
   heapTop = heapTop - freedInHeap;
   doGCclearHeap();
+  resumeThreads(ctx);
 #if defined traceGC_1
   printf("\n*** after doGC: thisObj: %x %s ",ctx->thisObj,nameOf(ctx->thisObj));
   printf("\n              thisStack: %x %s ",ctx->thisStack,nameOf(ctx->thisStack));
@@ -2500,7 +2535,8 @@ bool traceThreads = true;
 	    fprintf(trace,"fork A ");
 #endif
 	    // should we use heapAlloc here? Is not a Beta object
-	    Block *B = (Block *)heapAlloc(thisBlock,sizeof(Block));
+	    //Block *B = (Block *)heapAlloc(thisBlock,sizeof(Block));
+	    Block *B = (Block *)malloc(sizeof(Block));
 #ifdef TRACE
 	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	 
 #endif   
@@ -2529,7 +2565,8 @@ bool traceThreads = true;
 #endif
 	    B->glsc = 0;
 	    // should we use heapAlloc here? Is not a Beta object
-	    char *fileName = heapAlloc(thisBlock,12);
+	    //char *fileName = heapAlloc(thisBlock,12);
+	    char *fileName = (char *)malloc(12);
 #ifdef __arm__
 
 #else
@@ -2537,7 +2574,8 @@ bool traceThreads = true;
 #endif
 
 	    B->traceFile = fileName;
-	    B->threadId = threadNo + 1; 
+	    //threadNo = threadNo + 1;
+	    B->threadId = threadNo + 1;
 
 #ifdef linux
 	    pthread_attr_t attr;      // not used here - NULL may be
@@ -2547,7 +2585,9 @@ bool traceThreads = true;
 #elif defined  __CYGWIN__
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 #ifdef withGC
-	    printf("Thread: %i threadId: %i\n",hThreadArray[threadNo],GetThreadId(hThreadArray[threadNo]));
+	    printf("CreateThread: threadNo: %i handle: %i threadId: %i\n",
+		   threadNo,hThreadArray[threadNo],
+		   GetThreadId(hThreadArray[threadNo]));
 #endif
 
 #elif __arm__
