@@ -121,8 +121,8 @@ void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
 #define traceGC_0
-//#define traceGC_1
-//#define traceGC_2
+#define traceGC_1
+#define traceGC_2
 
 Btemplate *lastFreeInHeap;
 int noOfFreeBlocks = 0;
@@ -153,7 +153,7 @@ Btemplate *putBTheap(Btemplate *R, int inx, Btemplate *S){
 
 void checkInHeap(Btemplate *obj){
   if ((int) obj > (int)&heap[heapTop] | (int)obj < 0) {
-    printf("\n\n*****************' object not in heap: %x %i\n",(int)obj,(int)obj);
+    printf("\n\n***************** object not in heap: %x %i\n",(int)obj,(int)obj);
     exit(-1);
   }
 };
