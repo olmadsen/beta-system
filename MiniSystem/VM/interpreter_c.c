@@ -158,6 +158,25 @@ void checkInHeap(Btemplate *obj){
   }
 };
 
+#ifdef __CYGWIN__
+HANDLE awaitGC[MAX_THREADS];
+#endif
+
+int threadStatus[MAX_THREADS];
+#define t_running 0
+#define t_suspended 1
+#define t_stopped 2
+
+boolean gcInProgress = FALSE;
+
+Block *contexts[MAX_THREADS];
+ 
+void waitForGC(Block *ctx){
+  threadStatus[ctx->threadId] = t_suspended;
+  contexts[ctx->threadId] = ctx;
+
+}
+
 int sizeOfDesc(Btemplate * root){
     ObjDesc desc = root->desc;
     int objZ = objSize(desc);
@@ -556,7 +575,7 @@ void doBGC(Block *ctx,Btemplate *root){
 #if defined traceGC_1
   printf("\n***  Mark thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
 #endif
-
+  gcInProgress = TRUE;
   doGCmark(ctx,ctx->thisObj,0);
   doGCmark(ctx,ctx->thisStack,0);
   if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
@@ -575,7 +594,7 @@ void doBGC(Block *ctx,Btemplate *root){
   printf("\n              thisStack: %x %s ",ctx->thisStack,nameOf(ctx->thisStack));
   printf("\n              heapTop:%i &heap[0]: %x  heapObj: %x\n",heapTop,&heap[1],&heap[heapTop]);
 #endif
-
+  gcInProgress = FALSE;;
 }
 
 int ZZ = 0;
@@ -584,10 +603,10 @@ int ZZ = 0;
 
 void *heapAlloc(Block *ctx,int size) {
   void *obj; //char S[50];
+  if (gcInProgress) waitForGC(ctx);
 #ifdef linux
   int ret = pthread_mutex_lock( &mutex1 );
   if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
-
 #elif defined  __CYGWIN__
 #ifdef withTimeOut
   bool B=true;
