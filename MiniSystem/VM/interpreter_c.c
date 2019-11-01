@@ -62,6 +62,10 @@ typedef void *FILE;
 #include "interpreter_image.c"
  
 #define MAX_THREADS 5
+/* the main program has threadId = 0
+ * threads started using fork has threadId = 1,2, ...
+ * Note a forked thread is stored in thraedArray[threadId - 1], ...
+ */
 
 #ifdef linux
   pthread_t pthreadArray[MAX_THREADS];
@@ -121,8 +125,8 @@ void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
 #define traceGC_0
-#define traceGC_1
-#define traceGC_2
+//#define traceGC_1
+//#define traceGC_2
 
 Btemplate *lastFreeInHeap;
 int noOfFreeBlocks = 0;
