@@ -62,9 +62,17 @@ typedef void *FILE;
 #include "interpreter_image.c"
  
 #define MAX_THREADS 5
-/* the main program has threadId = 0
- * threads started using fork has threadId = 1,2, ...
- * Note a forked thread is stored in thraedArray[threadId - 1], ...
+int threadNo = 0;
+
+/* thisBlock->threadId is the id of a given tread
+ * The main program has threadId = 0
+ * Threads started using fork has threadId = 1,2, ..., threadNo
+ * Status of each thread is stored in threadStatus[threadId]
+ * threadNo is number of threads started using fork
+ * Note the system id of a forked thread is stored in 
+ *     hThreadArray[threadId - 1], pthreadarray[threadId - 1], ...
+ * This threadNo and threadId does not correspond: threadId = threadNo + 1
+ * may be confusing
  */
 
 #ifdef linux
@@ -72,7 +80,6 @@ typedef void *FILE;
 #elif defined  __CYGWIN__
   HANDLE  hThreadArray[MAX_THREADS];
 #endif
-int threadNo = 0;
 
 void runTimeError(char *msg){
 #ifdef __arm__
@@ -522,15 +529,23 @@ void suspendThreads(Block *ctx){
   printf("\n**** Suspend threads: thisThreadId: %i threadNo: %i\n", 
 	 ctx->threadId, threadNo);
   int no;
-  for (no = 1; no <= threadNo; no++) {
-    printf("Try suspend: %i thread: %i\n",no,(int)hThreadArray[no]);
-    if ((no != ctx->threadId) && (hThreadArray[no] != NULL)) {
-      printf("\n--- Suspend thread: %i\n",no);
-      if (SuspendThread(hThreadArray[no]) < 0 ) 
+  for (no = 0; no < threadNo; no++) {
+    printf("\nTry suspend:threadNo: %i threadId: %i",no, no + 1);
+    if (no > 0) 
+      printf("sysThreadId: %i\n",(int)hThreadArray[no]);
+    else
+      printf("main thread\n");
+    if (no != (ctx->threadId - 1)) {
+      if ((no > 0) && (hThreadArray[no] != NULL)) {
+	printf("\n--- Suspend threadNo: %i threadId: %i\n",no, no + 1);
+	if (SuspendThread(hThreadArray[no]) < 0 ) 
 	  printf("\n**** SuspendThread failed\n");
-    } else {
-      printf("\n--- do not suspend: %i\n",no);
+      } else {
+	printf("\n--- do not suspend threadNo: %i threadId: %i\n",no, no + 1);
+      }
     }
+    else
+      printf("\n--- do not suspend main thread\n");
     printf("\n....................\n");
   }
 }
