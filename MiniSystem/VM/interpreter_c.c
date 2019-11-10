@@ -132,7 +132,7 @@ void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
 #define traceGC_0
-//#define traceGC_1
+#define traceGC_1
 //#define traceGC_2
 
 Btemplate *lastFreeInHeap;
@@ -531,12 +531,13 @@ void suspendThreads(Block *ctx){
   int no;
   for (no = 0; no < threadNo; no++) {
     printf("\nTry suspend:threadNo: %i threadId: %i",no, no + 1);
-    if (no > 0) 
+    // suspend main thread
+    if (ctx->threadId > 0) 
       printf("sysThreadId: %i\n",(int)hThreadArray[no]);
     else
       printf("main thread\n");
     if (no != (ctx->threadId - 1)) {
-      if ((no > 0) && (hThreadArray[no] != NULL)) {
+      if (hThreadArray[no] != NULL) {
 	printf("\n--- Suspend threadNo: %i threadId: %i\n",no, no + 1);
 	if (SuspendThread(hThreadArray[no]) < 0 ) 
 	  printf("\n**** SuspendThread failed\n");
@@ -551,12 +552,21 @@ void suspendThreads(Block *ctx){
 }
 
 void resumeThreads(Block *ctx){
-  printf("\n**** Resume threads: thisThreadId: %i threadNo: %i\n", 
-	 ctx->threadId, threadNo);
+  printf("\n**** Resume threads: thisThreadId: %i subThreadNo: %i noOfSubThreads: %i\n", 
+	 ctx->threadId, ctx->threadId - 1,threadNo);
   int no;
-  for (no = 1; no <= threadNo; no++)
-    if ((no != ctx->threadId) && (hThreadArray[no] != NULL))
-      ResumeThread(hThreadArray[no]);
+  for (no = 0; no < threadNo; no++) {
+    if (no != (ctx->threadId - 1)) {
+      if (hThreadArray[no] != NULL) {
+	printf("\nresume threadNo: %i threadId: %i\n",no,no + 1);
+	ResumeThread(hThreadArray[no]);
+      } else
+	printf("\n--- do not resume threadNo: %i threadId: %i\n",no, no + 1);
+    } else {
+      printf("\n--- do not resume threadNo: %i threadId: %i\n",no, no + 1);
+    }
+  }
+  printf("\nend of resumeThreads\n");
 }
 
 void doBGC(Block *ctx,Btemplate *root){
