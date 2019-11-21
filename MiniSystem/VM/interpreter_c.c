@@ -181,20 +181,27 @@ int threadStatus[MAX_THREADS];
 boolean gcInProgress = FALSE;
 
 Block *contexts[MAX_THREADS];
+
+void dumpObj(FILE *trace,char *name,Btemplate *X);
  
+
+
 void waitAllThreadsStopped(Block *ctx) {
   printf("waitAllThreadsStopped threadId: %i\n",ctx->threadId);
   int no;
- loop:
+
   for (no = 0; no <= threadNo; no++) {
     if (no == ctx->threadId) {
       printf("thisThreadId: %i\n",no);
-    }else {
+    } else {
+    loop:
       if (threadStatus[no] == t_running) {
-	printf("thread running: %i thisObj %s\n",no,nameOf(ctx->thisObj));
+	printf("thread running: %i \n", no);
+	//dumpObj(stdout,"thread.thisObj",ctx->thisObj);
+
 	Sleep(100);
 	goto loop;
-      }else {
+      } else {
 	printf("thread not running: %i\n",no);
       }
     }
@@ -203,8 +210,8 @@ void waitAllThreadsStopped(Block *ctx) {
 
 void waitForGC(Block *ctx){
   printf("waitForGC threadNo: %i\n",ctx->threadId);
-  threadStatus[ctx->threadId] = t_suspended;
   contexts[ctx->threadId] = ctx;
+  threadStatus[ctx->threadId] = t_suspended;
  loop:
   Sleep(100);
   if (threadStatus[ctx->threadId] == t_suspended) goto loop;
@@ -461,8 +468,8 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
   if (noOfFreeBlocks * 8 > (lastFreeSize - 8)) {
     printf("\n\n*** GC error: ");
     printf("not enough space for reference map in last free block\n");
-    printf(" *** noOfFreeBlocks: %i lastFreeSize: %i\n"
-	   ,noOfFreeBlocks,lastFreeSize);
+    printf("*** noOfFreeBlocks * 8: %i lastFreeSize - 8: %i\n"
+	   ,noOfFreeBlocks * 8,lastFreeSize - 8);
   }
 
   Btemplate * nextUsed,* nextFree;
@@ -555,7 +562,7 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
   for (no = 0; no <= threadNo; no++){
     Block *cty = contexts[no];
     if (cty == NULL) {
-      printf("Update contetxs, cty == NULL, threadId: %i\n",no);
+      printf("Update contexts, cty == NULL, threadId: %i\n",no);
     }else {
 #if defined traceGC_2
       printf("mapRef: thisObj: %x  new: %x %s\n",cty->thisObj,mapRef(cty->thisObj),nameOf(cty->thisObj));
@@ -610,7 +617,10 @@ void resumeThreads(Block *ctx){
   int no;
   if (true) {
     for (no = 0; no <= threadNo; no++){
-      if (threadStatus[no] == t_suspended) threadStatus[no] = t_running;
+      if (threadStatus[no] == t_suspended) {
+	threadStatus[no] = t_running;
+	printf("Resumed:threadId: %i\n",no);
+      }
     }
   }else{
     for (no = 0; no < threadNo; no++) {
@@ -641,7 +651,7 @@ void doBGC(Block *ctx,Btemplate *root){
   Btemplate *firstFreeStart;
 
 #if defined traceGC_0
-  printf("<GC threadNo: %i>",ctx->threadId);
+  printf("\n<<<<<<GC threadNo: %i>\n",ctx->threadId);
 #endif
   // suspendThreads(ctx);
   //printf("\n*** After suspendThreads\n");
@@ -710,7 +720,7 @@ void *heapAlloc(Block *ctx,int size) {
   if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
 #elif defined  __CYGWIN__
 #ifdef withTimeOut
-  bool B=true;
+  bool B = true;
   while (B) {
     switch(WaitForSingleObject(allocMutex,0L)) {
     case WAIT_OBJECT_0: 
@@ -1850,7 +1860,11 @@ bool traceThreads = true;
       fprintf(trace,"%i:\t",glsc);
 #endif
       opCode = bc[glsc]; glsc = glsc + 1;
-      //printf("*** Opcode: %i, glsc: %i\n",opCode,glsc);
+      if (gcInProgress) {
+	printf("Interpreter:gcInProgress: threadNo: %i %s\n",threadId,nameOf(thisObj));
+      }
+      // printf("*** Opcode: %i, glsc: %i\n",opCode,glsc);
+
       if (cnt == 0) {
 	//blink();
 	// pinMode(4,1);
@@ -2690,7 +2704,7 @@ bool traceThreads = true;
 #ifdef __arm__
 
 #else
-	    if (sprintf (fileName,"traceF%i.s",threadNo) < 0) { printf("sprintf error\n");};
+	    if (sprintf (fileName,"traceF%i.s",threadNo + 1) < 0) printf("sprintf error\n");
 #endif
 
 	    B->traceFile = fileName;
@@ -3382,7 +3396,9 @@ bool traceThreads = true;
 #endif
 	if (gcInProgress) {
 	  printf("Break: gcInProgress threadId: %i\n",thisBlock->threadId);
+	  saveContext();
 	  waitForGC(thisBlock);
+	  restoreContext;
 	}
 	X = thisObj;
 	for (i = 0; i < arg1; i++) { 
@@ -3416,7 +3432,7 @@ bool traceThreads = true;
 	break;
       case stop: 
 #ifdef TRACE
-	fprintf(trace,"\nstop - threadId: %i\n",threadId);
+	fprintf(trace,"stop - threadId: %i\n",threadId);
 #endif
 	running = false;
 	threadStatus[thisBlock->threadId] = t_stopped;
