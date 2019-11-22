@@ -336,7 +336,7 @@ void doGCmarkContexts(){
       printf("ctx == NULL threaNo: %i\n",no);
     }else{
 #if defined traceGC_1
-      printf("\n***  Mark thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
+      printf("****  Mark thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
 #endif
       doGCmark(ctx,ctx->thisObj,0);
       doGCmark(ctx,ctx->thisStack,0);
@@ -459,7 +459,7 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
   int lastFreeSize = (int)nextUsed - (int)lastFreeStart;
 
 #if defined traceGC_1
-  printf("\n\n**** doGCcompact: root:%x firstFreeStart:%x \n",
+  printf("\n**** doGCcompact: root:%x firstFreeStart:%x \n",
 	 (int)root,(int)firstFreeStart);
   printf("**** noOfFreeBlocks: %i lastFreeSize: %i \n", 
 	 noOfFreeBlocks,lastFreeSize);
@@ -470,6 +470,7 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
     printf("not enough space for reference map in last free block\n");
     printf("*** noOfFreeBlocks * 8: %i lastFreeSize - 8: %i\n"
 	   ,noOfFreeBlocks * 8,lastFreeSize - 8);
+    runTimeError("Garbage collection disrupted\n");
   }
 
   Btemplate * nextUsed,* nextFree;
@@ -494,7 +495,7 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
     free = nextFree;
   }
 #if defined traceGC_1
-  printf("\n*** GCcompact done: newHeapTop: %x  heapTop: %x freed:%i\n",
+  printf("\n**** GCcompact done: newHeapTop: %x  heapTop: %x freed:%i\n",
 	 newHeapTop,(int)&heap[heapTop], (int)&heap[heapTop] - (int)newHeapTop);
 #endif
 }
@@ -564,7 +565,7 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
     if (cty == NULL) {
       printf("Update contexts, cty == NULL, threadId: %i\n",no);
     }else {
-#if defined traceGC_2
+#if defined traceGC_1
       printf("mapRef: thisObj: %x  new: %x %s\n",cty->thisObj,mapRef(cty->thisObj),nameOf(cty->thisObj));
 #endif
 
@@ -670,7 +671,7 @@ void doBGC(Block *ctx,Btemplate *root){
 
 
 #if defined traceGC_1
-  printf("\ndoGCmark\n");
+  printf("\n**** doGCmark\n");
 #endif
 
   doGCmark(ctx,root,0); // root  = BETAworld
@@ -706,7 +707,7 @@ void doBGC(Block *ctx,Btemplate *root){
 
 int ZZ = 0;
 
-//#define withTimeOutX
+#define withTimeOut
 
 void *heapAlloc(Block *ctx,int size) {
   void *obj; //char S[50];
@@ -727,17 +728,32 @@ void *heapAlloc(Block *ctx,int size) {
       B = false;
       break;
     case WAIT_TIMEOUT: 
-      printf("Thread %d: wait timed out\n", GetCurrentThreadId());
+      //printf("Thread %d: wait timed out\n", GetCurrentThreadId());
+      if (gcInProgress) {
+	printf("heapAlloc:allocMutex:busy: %i\n",ctx->threadId);
+	waitForGC(ctx);
+      } else {
+	//Sleep(100);
+	switch(WaitForSingleObject(allocMutex,INFINITE)) {
+	case WAIT_OBJECT_0:
+	  B = false;
+	  break;
+	default:
+	  runTimeError("Wait failure: allocMutex");
+	} ;
+      }
       break; 
     }
   }
 #else
+  if (ctx != NULL) printf("heapAlloc:beforeM.signal: %i\n",ctx-> threadId);
   switch(WaitForSingleObject(allocMutex,INFINITE)) {
   case WAIT_OBJECT_0:
     break;
   default:
     runTimeError("Wait failure: allocMutex");
   } ;
+  if (ctx != NULL) printf("heapAlloc:afterM.signal: %i\n",ctx-> threadId);
 #endif
 
 #elif defined __XTENSA__
@@ -1860,9 +1876,9 @@ bool traceThreads = true;
       fprintf(trace,"%i:\t",glsc);
 #endif
       opCode = bc[glsc]; glsc = glsc + 1;
-      if (gcInProgress) {
+      /*if (gcInProgress) {
 	printf("Interpreter:gcInProgress: threadNo: %i %s\n",threadId,nameOf(thisObj));
-      }
+	}*/
       // printf("*** Opcode: %i, glsc: %i\n",opCode,glsc);
 
       if (cnt == 0) {
