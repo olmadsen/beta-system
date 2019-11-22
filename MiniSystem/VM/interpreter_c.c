@@ -184,12 +184,9 @@ Block *contexts[MAX_THREADS];
 
 void dumpObj(FILE *trace,char *name,Btemplate *X);
  
-
-
 void waitAllThreadsStopped(Block *ctx) {
   printf("waitAllThreadsStopped threadId: %i\n",ctx->threadId);
   int no;
-
   for (no = 0; no <= threadNo; no++) {
     if (no == ctx->threadId) {
       printf("thisThreadId: %i\n",no);
@@ -197,8 +194,6 @@ void waitAllThreadsStopped(Block *ctx) {
     loop:
       if (threadStatus[no] == t_running) {
 	printf("thread running: %i \n", no);
-	//dumpObj(stdout,"thread.thisObj",ctx->thisObj);
-
 	Sleep(100);
 	goto loop;
       } else {
@@ -263,7 +258,6 @@ void printMapRef(){
 
 Btemplate * mapRef(Btemplate * oldRef){
   Btemplate * newRef, *R, *last;
-
   R = getBTheap(mapStart,0);
   //printf("mapRef: %x tryFirst: %x \n",(int)oldRef,(int)R);
   if ((int) oldRef < (int)R) return oldRef;
@@ -273,9 +267,7 @@ Btemplate * mapRef(Btemplate * oldRef){
   for (inx = 8; inx < mapInx; inx = inx + 8) {
     R = getBTheap(mapStart,inx);
     //printf("  try: %x adjust: %i\n",(int)R, getIheap(mapStart, inx + 4));
-    if (oldRef < R) {
-      break;
-    }
+    if (oldRef < R)  break;
     last = R;
     lastInx = inx;
   }
@@ -654,8 +646,6 @@ void doBGC(Block *ctx,Btemplate *root){
 #if defined traceGC_0
   printf("\n<<<<<<GC threadNo: %i>\n",ctx->threadId);
 #endif
-  // suspendThreads(ctx);
-  //printf("\n*** After suspendThreads\n");
   gcInProgress = TRUE;
   contexts[ctx->threadId] = ctx;
   waitAllThreadsStopped(ctx);
@@ -667,29 +657,11 @@ void doBGC(Block *ctx,Btemplate *root){
 #if defined traceGC_1
   printf("\n*****dogc: lastFreeInHeap: %x \n",lastFreeInHeap);
   printf("\n**** doGC thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
-#endif
-
-
-#if defined traceGC_1
   printf("\n**** doGCmark\n");
 #endif
 
   doGCmark(ctx,root,0); // root  = BETAworld
-  if (true) {
-    doGCmarkContexts();
-  } else {
-#if defined traceGC_1
-    printf("\n***  Mark thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
-#endif
-
-    doGCmark(ctx,ctx->thisObj,0);
-    doGCmark(ctx,ctx->thisStack,0);
-    if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
-    if (ctx->enablee != NULL) doGCmark(ctx,ctx->enablee,0);
-    if (ctx->top != NULL) doGCmark(ctx,ctx->top,0);
-    if (ctx->origin != NULL) doGCmark(ctx,ctx->origin,0);
-    doGCmark(ctx,ctx->world,0);
-  }
+  doGCmarkContexts();
 
   firstFreeStart = doGCsweep(ctx,root);
   doGCcompact(ctx,root,firstFreeStart);
@@ -723,7 +695,7 @@ void *heapAlloc(Block *ctx,int size) {
 #ifdef withTimeOut
   bool B = true;
   while (B) {
-    switch(WaitForSingleObject(allocMutex,0L)) {
+    switch(WaitForSingleObject(allocMutex,2L)) {
     case WAIT_OBJECT_0: 
       B = false;
       break;
@@ -733,14 +705,16 @@ void *heapAlloc(Block *ctx,int size) {
 	printf("heapAlloc:allocMutex:busy: %i\n",ctx->threadId);
 	waitForGC(ctx);
       } else {
-	//Sleep(100);
-	switch(WaitForSingleObject(allocMutex,INFINITE)) {
+	//rintf("heapAlloc:sleep\n");
+	//Sleep(1);
+	//printf("heapAlloc:sleep:after\n");
+	/*switch(WaitForSingleObject(allocMutex,INFINITE)) {
 	case WAIT_OBJECT_0:
 	  B = false;
 	  break;
 	default:
 	  runTimeError("Wait failure: allocMutex");
-	} ;
+	  } ;*/
       }
       break; 
     }
