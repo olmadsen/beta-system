@@ -132,7 +132,7 @@ void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
 #define traceGC_0
-#define traceGC_1
+//#define traceGC_1
 //#define traceGC_2
 
 Btemplate *lastFreeInHeap;
@@ -668,13 +668,14 @@ void doBGC(Block *ctx,Btemplate *root){
   doGCupdateRefs(ctx,root);
   heapTop = heapTop - freedInHeap;
   doGCclearHeap();
-  resumeThreads(ctx);
+
 #if defined traceGC_1
   printf("\n*** after doGC: thisObj: %x %s ",ctx->thisObj,nameOf(ctx->thisObj));
   printf("\n              thisStack: %x %s ",ctx->thisStack,nameOf(ctx->thisStack));
   printf("\n              heapTop:%i &heap[0]: %x  heapObj: %x\n",heapTop,&heap[1],&heap[heapTop]);
 #endif
-  gcInProgress = FALSE;;
+  gcInProgress = FALSE;
+  resumeThreads(ctx);
 }
 
 int ZZ = 0;
@@ -686,6 +687,7 @@ void *heapAlloc(Block *ctx,int size) {
   if (gcInProgress) {
     printf("heapAlloc:waitForGC: %i\n",ctx->threadId);
     waitForGC(ctx);
+    printf("heapAlloc:waitForGC:after:waitForGC: %i\n",ctx->threadId);
   }
 
 #ifdef linux
@@ -704,6 +706,7 @@ void *heapAlloc(Block *ctx,int size) {
       if (gcInProgress) {
 	printf("heapAlloc:allocMutex:busy: %i\n",ctx->threadId);
 	waitForGC(ctx);
+	printf("heapAlloc:allocMutex:remuse:after:waitForGC\n");
       } else {
 	//rintf("heapAlloc:sleep\n");
 	//Sleep(1);
@@ -3388,7 +3391,8 @@ bool traceThreads = true;
 	  printf("Break: gcInProgress threadId: %i\n",thisBlock->threadId);
 	  saveContext();
 	  waitForGC(thisBlock);
-	  restoreContext;
+	  printf("Break: gcInProgress:resumed threadId: %i\n",thisBlock->threadId);
+	  restoreContext();
 	}
 	X = thisObj;
 	for (i = 0; i < arg1; i++) { 
