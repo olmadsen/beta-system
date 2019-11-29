@@ -57,7 +57,9 @@ typedef void *FILE;
 #define DUMP
 //#define TRACE
 //#define EVENT
- 
+    
+#define useBetaHeap true
+//#define withGC 
 
 #include "interpreter_image.c"
  
@@ -96,9 +98,6 @@ void RTE2(char *msg, int errNo){
 #endif 
   exit(-1);  
 }  
-    
-#define useBetaHeap true
-//#define withGC
 
 #ifdef withGC
 #define heapMax 100000
@@ -131,7 +130,7 @@ int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
-#define traceGC_0
+//#define traceGC_0
 //#define traceGC_1
 //#define traceGC_2
 
@@ -185,32 +184,32 @@ Block *contexts[MAX_THREADS];
 void dumpObj(FILE *trace,char *name,Btemplate *X);
  
 void waitAllThreadsStopped(Block *ctx) {
-  printf("waitAllThreadsStopped threadId: %i\n",ctx->threadId);
+  //printf("waitAllThreadsStopped threadId: %i\n",ctx->threadId);
   int no;
   for (no = 0; no <= threadNo; no++) {
     if (no == ctx->threadId) {
-      printf("thisThreadId: %i\n",no);
+      //printf("thisThreadId: %i\n",no);
     } else {
     loop:
       if (threadStatus[no] == t_running) {
-	printf("thread running: %i \n", no);
+	//printf("thread running: %i \n", no);
 	Sleep(100);
 	goto loop;
       } else {
-	printf("thread not running: %i\n",no);
+	//printf("thread not running: %i\n",no);
       }
     }
   }
 }
 
 void waitForGC(Block *ctx){
-  printf("waitForGC threadNo: %i\n",ctx->threadId);
+  //printf("waitForGC threadNo: %i\n",ctx->threadId);
   contexts[ctx->threadId] = ctx;
   threadStatus[ctx->threadId] = t_suspended;
  loop:
   Sleep(100);
   if (threadStatus[ctx->threadId] == t_suspended) goto loop;
-  printf("waitForGC resumed threadNo: %i\n",ctx->threadId);
+  //printf("waitForGC resumed threadNo: %i\n",ctx->threadId);
 }
 
 int sizeOfDesc(Btemplate * root){
@@ -281,8 +280,12 @@ Btemplate * mapRef(Btemplate * oldRef){
 }
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
+  //printf("doGCmark %x\n",(int)root);
+  //printf("doGCmark %s\n",nameOf(root));
+  if (root == NULL) {printf("mark:root:NULL\n#"); return; 
+  }
 #if defined traceGC_2
-  printf("*** Root: %s %x\n",nameOf(root),(int)root);
+  printf("*** mark:root: %s %x\n",nameOf(root),(int)root);
 #endif
 
   ObjDesc desc = root->desc;
@@ -290,9 +293,9 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
   int start = desc_getInt4(desc,GCinfo_index);
   int end = desc_getInt4(desc,BC_index);
   int i,v; 
-  //printf("\n\n** Root:name: %s start:%i end:%i first:%i :: "
+  //printf("** Root:name: %s start:%i end:%i first:%i :: "
   //,nameOf(root),start,end, getR(root,1));
-  if (((int)getR(root,0) & 0x1)  == 1 ) { return;}
+  if (((int)getR(root,0) & 0x1)  == 1 ) {  return;}
   putV(root,0,1);
   //printf("\n");
   for (i = start; i < end; i = i + 2) {
@@ -300,11 +303,12 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
     int R = (int)getR(root,v);
     //printf("v:%i R:%x\n",v,R);
     if (R > 0) {  // R == 0 implies R is none
-      //int j;
-      //for (j = 0; j < level; j++) printf("-");
-      //printf(" %s att: %s, %x\n", nameOf(root),nameOf((Btemplate *)R), R);
-      //printf("%i \n",v);
+      /*int j;
+      for (j = 0; j < level; j++) printf("-");
+      printf(" %s att: %s, %x\n", nameOf(root),nameOf((Btemplate *)R), R);
+      printf("%i \n",v);*/
       doGCmark(ctx,(Btemplate *)R, level + 1);
+      //printf("\nend doGCmark:inner:1\n");
     }
   }
   if (root->rstack[0] != NULL) {
@@ -314,8 +318,9 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
   for (i=0; i < root->rtop; i++) {
     //printf("rStack:%s %x \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
     doGCmark(ctx,root->rstack[i + 1],level + 1);
+    //printf("\nend doGCmark:inner:2\n");
   } 
-  //printf("\nend doGC\n");
+  //printf("\nend doGCmark\n");
 }
 
 
@@ -324,20 +329,27 @@ void doGCmarkContexts(){
   Block *ctx;
   for (no = 0; no <= threadNo; no++) {
     ctx = contexts[no];
-    if (ctx == NULL) {
-      printf("ctx == NULL threaNo: %i\n",no);
+    if (ctx == NULL) {;
+      //printf("ctx == NULL threaNo: %i\n",no);
     }else{
 #if defined traceGC_1
       printf("****  Mark thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
+      printf("****  Mark thisStack: %x %s\n",ctx->thisStack, nameOf(ctx->thisStack));
+      printf("****  Mark world: %x %s\n",ctx->world, nameOf(ctx->world));
 #endif
       doGCmark(ctx,ctx->thisObj,0);
       doGCmark(ctx,ctx->thisStack,0);
       if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
       if (ctx->enablee != NULL) doGCmark(ctx,ctx->enablee,0);
       if (ctx->top != NULL) doGCmark(ctx,ctx->top,0);
-      if (ctx->origin != NULL) doGCmark(ctx,ctx->origin,0);
+      //printf("aaaaa5\n");      
+      if (ctx->origin != NULL) {
+	doGCmark(ctx,ctx->origin,0);
+      }      
+      //printf("aaaaa6\n");      
       doGCmark(ctx,ctx->world,0);
-    }
+          }
+    //printf("doGCmarkContexts:endLoop:no: %i\n",no);
   }
 }
 
@@ -354,7 +366,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   while ((int) root < (int)lastFreeInHeap) {
     int size = sizeOfDesc(root);
 #if defined traceGC_2
-    printf("root:%x ",root);
+    printf("sweep:root:%x ",root);
     printf("%s %i ", nameOf(root),size);
 #endif
     if (getV(root,0) == 1) { 
@@ -554,8 +566,9 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
   int no;
   for (no = 0; no <= threadNo; no++){
     Block *cty = contexts[no];
-    if (cty == NULL) {
-      printf("Update contexts, cty == NULL, threadId: %i\n",no);
+    if (cty == NULL) {;
+      
+      //printf("Update contexts, cty == NULL, threadId: %i\n",no);
     }else {
 #if defined traceGC_1
       printf("mapRef: thisObj: %x  new: %x %s\n",cty->thisObj,mapRef(cty->thisObj),nameOf(cty->thisObj));
@@ -605,30 +618,16 @@ void suspendThreads(Block *ctx){
 }
 
 void resumeThreads(Block *ctx){
-  printf("\n**** Resume threads: thisThreadId: %i subThreadNo: %i noOfSubThreads: %i\n", 
-	 ctx->threadId, ctx->threadId - 1,threadNo);
+  /*printf("\n**** Resume threads: thisThreadId: %i subThreadNo: %i noOfSubThreads: %i\n", 
+    ctx->threadId, ctx->threadId - 1,threadNo);*/
   int no;
-  if (true) {
-    for (no = 0; no <= threadNo; no++){
-      if (threadStatus[no] == t_suspended) {
-	threadStatus[no] = t_running;
-	printf("Resumed:threadId: %i\n",no);
-      }
-    }
-  }else{
-    for (no = 0; no < threadNo; no++) {
-      if (no != (ctx->threadId - 1)) {
-	if (hThreadArray[no] != NULL) {
-	  printf("\nresume threadNo: %i threadId: %i\n",no,no + 1);
-	  ResumeThread(hThreadArray[no]);
-	} else
-	  printf("\n--- do not resume threadNo: %i threadId: %i\n",no, no + 1);
-      } else {
-	printf("\n--- do not resume threadNo: %i threadId: %i\n",no, no + 1);
-      }
+  for (no = 0; no <= threadNo; no++){
+    if (threadStatus[no] == t_suspended) {
+      threadStatus[no] = t_running;
+      //printf("Resumed:threadId: %i\n",no);
     }
   }
-  printf("\nend of resumeThreads\n");
+  //printf("\nend of resumeThreads\n");
 }
 
 void doBGC(Block *ctx,Btemplate *root){
@@ -649,7 +648,7 @@ void doBGC(Block *ctx,Btemplate *root){
   gcInProgress = TRUE;
   contexts[ctx->threadId] = ctx;
   waitAllThreadsStopped(ctx);
-  printf("*** After waitForAllThreads\n");
+  //printf("*** After waitForAllThreads\n");
 
 #ifdef TRACE
   fprintf(ctx->trace,"\n***** doGC *****\n");
@@ -669,10 +668,11 @@ void doBGC(Block *ctx,Btemplate *root){
   heapTop = heapTop - freedInHeap;
   doGCclearHeap();
 
-#if defined traceGC_1
+#if defined traceGC_0
   printf("\n*** after doGC: thisObj: %x %s ",ctx->thisObj,nameOf(ctx->thisObj));
   printf("\n              thisStack: %x %s ",ctx->thisStack,nameOf(ctx->thisStack));
-  printf("\n              heapTop:%i &heap[0]: %x  heapObj: %x\n",heapTop,&heap[1],&heap[heapTop]);
+  printf("\n              heapTop:%i &heap[0]: %x  heapObj: %x noOfFreeBlocks: %i\n"
+	 ,heapTop,&heap[1],&heap[heapTop],noOfFreeBlocks);
 #endif
   gcInProgress = FALSE;
   resumeThreads(ctx);
@@ -685,9 +685,9 @@ int ZZ = 0;
 void *heapAlloc(Block *ctx,int size) {
   void *obj; //char S[50];
   if (gcInProgress) {
-    printf("heapAlloc:waitForGC: %i\n",ctx->threadId);
+    //printf("heapAlloc:waitForGC: %i\n",ctx->threadId);
     waitForGC(ctx);
-    printf("heapAlloc:waitForGC:after:waitForGC: %i\n",ctx->threadId);
+    //printf("heapAlloc:waitForGC:after:waitForGC: %i\n",ctx->threadId);
   }
 
 #ifdef linux
@@ -704,11 +704,11 @@ void *heapAlloc(Block *ctx,int size) {
     case WAIT_TIMEOUT: 
       //printf("Thread %d: wait timed out\n", GetCurrentThreadId());
       if (gcInProgress) {
-	printf("heapAlloc:allocMutex:busy: %i\n",ctx->threadId);
+	//printf("heapAlloc:allocMutex:busy: %i\n",ctx->threadId);
 	waitForGC(ctx);
-	printf("heapAlloc:allocMutex:remuse:after:waitForGC\n");
+	//printf("heapAlloc:allocMutex:remuse:after:waitForGC\n");
       } else {
-	//rintf("heapAlloc:sleep\n");
+	//printf("heapAlloc:sleep\n");
 	//Sleep(1);
 	//printf("heapAlloc:sleep:after\n");
 	/*switch(WaitForSingleObject(allocMutex,INFINITE)) {
@@ -723,14 +723,14 @@ void *heapAlloc(Block *ctx,int size) {
     }
   }
 #else
-  if (ctx != NULL) printf("heapAlloc:beforeM.signal: %i\n",ctx-> threadId);
+  //if (ctx != NULL) printf("heapAlloc:beforeM.signal: %i\n",ctx-> threadId);
   switch(WaitForSingleObject(allocMutex,INFINITE)) {
   case WAIT_OBJECT_0:
     break;
   default:
     runTimeError("Wait failure: allocMutex");
   } ;
-  if (ctx != NULL) printf("heapAlloc:afterM.signal: %i\n",ctx-> threadId);
+  //if (ctx != NULL) printf("heapAlloc:afterM.signal: %i\n",ctx-> threadId);
 #endif
 
 #elif defined __XTENSA__
@@ -1322,8 +1322,9 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
-#ifdef event
-  mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,isObj,ctx->currentDescNo,ctx->glsc,false);
+#ifdef EVENT
+  // OBS! Y is note declared
+  //mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,isObj,ctx->currentDescNo,ctx->glsc,false);
 #endif
 };
 
@@ -1362,8 +1363,9 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
-#ifdef event
-  mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,isObj,ctx->currentDescNo,ctx->glsc,false);
+#ifdef EVENT
+  // OBS! Y is not declared
+  //mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,isObj,ctx->currentDescNo,ctx->glsc,false);
 #endif
 };
 
@@ -1393,9 +1395,11 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
-#ifdef event
+#ifdef EVENT
+  // OBS! Y is not declared
+  // arg 4 : 2 should be origin?
   // we should probably save ctx->thisObj in Y here: caller
-  mkAllocEvent(alloc_event,Y,ctx->thisObj,origin,false,ctx->currentDescNo,ctx->glsc,false);
+  // mkAllocEvent(alloc_event,Y,ctx->thisObj,2,false,ctx->currentDescNo,ctx->glsc,false);
 #endif
 };
 
@@ -2657,7 +2661,9 @@ bool traceThreads = true;
 #ifdef TRACE
 	    fprintf(trace,"fork ");
 #endif
-	    Y = rPop(thisStack);
+	    //Y = rPop(thisStack); dont pop to Y if GC
+	    Y = Y;
+	    
 #ifdef TRACE
 	    fprintf(trace,"fork A ");
 #endif
@@ -2669,6 +2675,7 @@ bool traceThreads = true;
 #endif   
 	    // B is not initialized - see belwo
 	    X = allocTemplate(B,newId(thisBlock),threadStubDescNo,true,0,0);
+	    Y = rPop(thisStack); // ensure Y is ok after GC
 #ifdef TRACE
 	    fprintf(trace,"fork C");
 #endif
@@ -3388,10 +3395,10 @@ bool traceThreads = true;
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 #endif
 	if (gcInProgress) {
-	  printf("Break: gcInProgress threadId: %i\n",thisBlock->threadId);
+	  //printf("Break: gcInProgress threadId: %i\n",thisBlock->threadId);
 	  saveContext();
 	  waitForGC(thisBlock);
-	  printf("Break: gcInProgress:resumed threadId: %i\n",thisBlock->threadId);
+	  //printf("Break: gcInProgress:resumed threadId: %i\n",thisBlock->threadId);
 	  restoreContext();
 	}
 	X = thisObj;
