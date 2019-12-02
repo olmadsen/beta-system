@@ -237,20 +237,20 @@ void setMap(Btemplate *start, Btemplate *end){
 }
 
 void findAndSetMap(Btemplate * firstFreeStart,int noOfFreeBlocks){
-  printf("\nFindAdSetMap:\n");
+  //printf("\nFindAdSetMap:\n");
   Btemplate * start = firstFreeStart;
 
   while ((int)start != 0){
     int size = getIheap(start,0) - (int)start;
-    printf("size: %i\n",size);
+    //printf("size: %i\n",size);
     if ((size - 8) > (noOfFreeBlocks * 8)) {
-      printf("Bingo! %x %x\n",(int)start,getIheap(start,0));
+      //printf("Bingo! %x %x\n",(int)start,getIheap(start,0));
       setMap(start,getBTheap(start,0));
       return;
     }
-    printf("Free:%x: nextFwdUsed:%x nextFwdFree:%x nextBackFree:%x size: %i\n"
+    /*printf("Free:%x: nextFwdUsed:%x nextFwdFree:%x nextBackFree:%x size: %i\n"
 	   ,(int)start,getIheap(start,0),getIheap(start,4),getIheap(start,8)
-	   ,getIheap(start,0) - (int)start);
+	   ,getIheap(start,0) - (int)start);*/
     start = getBTheap(start,8);
   }
   printf("\n\n*** GC error: ");
@@ -507,14 +507,6 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 	 noOfFreeBlocks,lastFreeSize);
 #endif
 
-  /* if (noOfFreeBlocks * 8 > (lastFreeSize - 8)) {
-    printf("\n\n*** GC error: ");
-    printf("not enough space for reference map in last free block\n");
-    printf("*** noOfFreeBlocks * 8: %i lastFreeSize - 8: %i\n"
-	   ,noOfFreeBlocks * 8,lastFreeSize - 8);
-    runTimeError("Garbage collection disrupted\n");
-    }*/
-
   Btemplate * nextUsed,* nextFree;
   int nextUsedSize;
   Btemplate *free = firstFreeStart;
@@ -701,7 +693,7 @@ void doBGC(Block *ctx,Btemplate *root){
   doGCmarkContexts();
 
   firstFreeStart = doGCsweep(ctx,root);
-  printFreeBlocks(lastFreeStart);
+  //printFreeBlocks(lastFreeStart);
   findAndSetMap(lastFreeStart,noOfFreeBlocks);
   doGCcompact(ctx,root,firstFreeStart);
   doGCupdateRefs(ctx,root);
