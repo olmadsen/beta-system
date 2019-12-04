@@ -118,7 +118,8 @@ HANDLE allocMutex;
 SemaphoreHandle_t mutex1 = NULL;
 #endif
 
-Btemplate *betaWorld;
+Btemplate *mainObj = NULL;
+Btemplate *betaWorld = NULL;
 
 void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 	      ,bool isObj,int currentDescNo,int bcPos);
@@ -163,7 +164,8 @@ Btemplate *putBTheap(Btemplate *R, int inx, Btemplate *S){
 
 void checkInHeap(Btemplate *obj){
   if ((int) obj > (int)&heap[heapTop] | (int)obj < 0) {
-    printf("\n\n***************** object not in heap: %x %i\n",(int)obj,(int)obj);
+    printf("\n\nGC error *** object not in heap: %x heapTop\n"
+	   ,(int)obj,(int)&heap[heapTop]);
     exit(-1);
   }
 };
@@ -319,9 +321,9 @@ Btemplate * mapRef(Btemplate * oldRef){
 void doGCmark(Block *ctx,Btemplate *root, int level){
   //printf("doGCmark %x\n",(int)root);
   //printf("doGCmark %s\n",nameOf(root));
-  if (root == NULL) {printf("mark:root:NULL\n#"); return; 
-  }
-#if defined traceGC_2
+  if (root == NULL) return; 
+#if defined traceGC_1
+  printf("*** mark:root: %x lasFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
   printf("*** mark:root: %s %x\n",nameOf(root),(int)root);
 #endif
 
@@ -436,7 +438,6 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 	printf("\n-----Free interval %x %x %5i\n\n"
 	       ,(int)lastUnmarked,(int)unmarkedEnd - 4,(int)unmarkedEnd - (int)lastUnmarked);
 #endif
-
 	lastUnmarked = NULL;
       }
       index = index + size;
@@ -450,16 +451,18 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
 	lastUnmarked = root;
       }
     }
+    /*printf("sweep:1:\n");
     int i,v; v = (int)root->desc;
-    //printf("rootA: %x desc: %x\n",(int)root,v);
+    printf("rootA: %x desc: %x\n",(int)root,v);*/
 
     root = (Btemplate *)(((int) root) + size);
+    //printf("sweep:2: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
     /*for (i = 0; i < 10; i++) printf(" %x ",getV(root,i));
     printf("\n");
     printf("rootB: %x lastFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);*/
-    v = (int)root->desc;
-    if (v == 0) root = (Btemplate *)((int)root + 4); // ???
-
+    /*v = (int)root->desc;
+    if (v == 0) { printf("v==0\n"); root = (Btemplate *)((int)root + 4); }// ???
+    */
     /*printf("rootB: %x lastFreeInHeap: %x desc: %x\n",(int)root,(int)lastFreeInHeap,v);
       for (i = 0; i < 40; i = i + 4) printf(" %x ",*(int *)((int)root + i));
       printf("\n");*/
@@ -470,8 +473,9 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
     nextUsed = lastFreeInHeap; // hack 
   }
 #if defined traceGC_2
-  printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
-  	 ,(int)lastUnmarked,nameOf(lastUnmarked),(int)lastFreeStart,nameOf(lastFreeStart));
+  printf("sweep:Z %x %x \n",(int)lastUnmarked,(int)lastFreeStart);
+  /* printf("done: lastUnmarked: %x %s lastFreeStart: %x %s\n"
+     ,(int)lastUnmarked,nameOf(lastUnmarked),(int)lastFreeStart,nameOf(lastFreeStart));*/
 #endif
 
   *(int*)((int)lastFreeStart + 4) = (int)lastUnmarked;
@@ -481,7 +485,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   }
   //else
     //printf("!!! lastUnMarked is NULL: lastFreeStart: %i\n",lastFreeStart);
-  setMap(lastFreeStart,lastUnmarked); // what if NULL?
+  //setMap(lastFreeStart,lastUnmarked); // what if NULL?
   newHT = index;
 
 #if defined traceGC_1
@@ -689,7 +693,7 @@ void doBGC(Block *ctx,Btemplate *root){
   printf("\n**** doGCmark\n");
 #endif
 
-  doGCmark(ctx,root,0); // root  = BETAworld
+  doGCmark(ctx,root,0); // root  = mainObj
   doGCmarkContexts();
 
   firstFreeStart = doGCsweep(ctx,root);
@@ -784,7 +788,7 @@ void *heapAlloc(Block *ctx,int size) {
     if ((heapTop + size) > (heapMax - 8)) {
 	// (heapTop - 8) since we need space for a free block at the end
       lastFreeInHeap =(Btemplate *)&heap[heapTop];
-      doBGC(ctx,betaWorld);
+      doBGC(ctx,mainObj);
       //runTimeError("\n\n*** Heap overflow");
       //exit(1);
     }
@@ -1156,29 +1160,32 @@ void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
     obj->rtop = 0;} // 
 }
 
-
 #ifdef   __CYGWIN__
 DWORD WINAPI interpreter(LPVOID B);
 #else
 void *interpreter(void *B);
 #endif
 
-
 void allocMain(Block *thisBlock,int descNo){ 
-  thisBlock->thisModule = allocTemplate(thisBlock,1000,descNo,true,0,0);
+  mainObj = allocTemplate(thisBlock,1000,descNo,true,0,0);
+  thisBlock->thisModule = mainObj;
   thisBlock->thisObj = thisBlock->thisModule;
   thisBlock->thisStack = thisBlock->thisModule;
+  thisBlock->callee = NULL;
+  thisBlock->enablee = NULL;
+  thisBlock->top = NULL;
+  thisBlock->world = NULL;
+  thisBlock->origin = NULL;  
+  //printf("mainObj: %x %s\n",(int)mainObj,nameOf(mainObj));
 };
 
-
-
 FILE *trace_t;
+
 #ifdef __arm__
 #else
 // Only called from betaVM and runbeta.c
 void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
   FILE *trace;
-
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
   trace_t = trace; // hack
@@ -1186,9 +1193,14 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
 #elif defined  __CYGWIN__
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
-
+  //printf("size: %i\n", imageS);
+  //descs = (ObjDesc) malloc(imageS);
   descs = (ObjDesc) heapAlloc(NULL,imageS);
   memcpy((void *)descs,descs_a,imageS); 
+  /*int i;
+  for (i = 0; i <100; i++) printf(" %i ",descs[i]);
+  printf("\n");*/
+
   newAlloc = newAlc;
   if (newAlloc) newAllocOff = 1;
 }
@@ -1220,7 +1232,8 @@ mutex1 = xSemaphoreCreateBinary();
   isXbeta = isXB;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
-  thisBlock = (Block *)heapAlloc(NULL,sizeof(Block));
+  thisBlock = (Block *)malloc(sizeof(Block));
+  //thisBlock = (Block *)heapAlloc(NULL,sizeof(Block));
   // OBS trace not defined here!
   thisBlock->trace = trace;
   thisBlock->bc = descs;
@@ -1232,7 +1245,7 @@ mutex1 = xSemaphoreCreateBinary();
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
 #endif
-  allocMain(thisBlock,mainDescNo);
+
   thisBlock->bc = getByteCode(getDesc(mainDescNo));
   thisBlock->currentDescNo = mainDescNo;
   stringTable = descs + getStringTableIndex();
@@ -1243,7 +1256,7 @@ mutex1 = xSemaphoreCreateBinary();
   thisBlock->glsc = 0; 
   thisBlock->threadId = 0;
   thisBlock->traceFile = "trace.s";
-
+  allocMain(thisBlock,mainDescNo);
 #ifdef DUMP
   fprintf(trace,"**** Execute:\n\n");
 #endif
@@ -1771,7 +1784,7 @@ void  *interpreter(void *B){
       int threadId;
   threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
-  betaWorld = thisBlock->world;
+  //betaWorld = thisBlock->world;
 
 #ifdef linux
 #elif defined  __CYGWIN__
