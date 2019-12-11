@@ -131,8 +131,8 @@ int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
-//#define traceGC_0
-//#define traceGC_1
+#define traceGC_0
+#define traceGC_1
 //#define traceGC_2
 
 Btemplate *lastFreeInHeap;
@@ -319,12 +319,18 @@ Btemplate * mapRef(Btemplate * oldRef){
 }
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
-  //printf("doGCmark %x\n",(int)root);
-  //printf("doGCmark %s\n",nameOf(root));
   if (root == NULL) return; 
 #if defined traceGC_1
-  printf("*** mark:root: %x lasFreeInHeap: %x\n",(int)root,(int)lastFreeInHeap);
-  printf("*** mark:root: %s %x\n",nameOf(root),(int)root);
+  int j;
+  for (j = 0; j < 80; j = j + 4)
+    printf(" %x ",getIheap(root,j));
+  printf("\n");
+  if (getIheap(root,0) == 0x61f114) {
+    printf("Got 0x61f114\n");
+    //root = (Btemplate *) ((int) root + 8);
+  }
+  printf("*** mark:root: %x ",(int)root);
+  printf(" %s\n",nameOf(root));
 #endif
 
   ObjDesc desc = root->desc;
@@ -337,6 +343,10 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
   if (((int)getR(root,0) & 0x1)  == 1 ) {  return;}
   putV(root,0,1);
   //printf("\n");
+  if (isIndexed(desc)) {
+    printf("Mark:GotIndexed: %x %s %x\n",(int)root,nameOf(root),getR(root,1));
+    doGCmark(ctx,getR(root,1),level + 1);
+  }
   for (i = start; i < end; i = i + 2) {
     v = desc_getInt2(desc,start + (i - start));
     int R = (int)getR(root,v);
@@ -560,10 +570,17 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
   while (root < newHeapTop) {
     ObjDesc desc = root->desc; 
     //printf("Update: %s %x size:%i\n",nameOf(root),(int)root,sizeOfDesc(root));
+    Btemplate *R, *Rn;
 
+    if (isIndexed(desc)) {
+      printf("Update_isIndexed:origin: %x %s\n",(int)root,nameOf(root));
+      R = getR(root,1);
+      Rn = mapRef(R);
+      if (Rn != R) putR(root,1,Rn);
+    }
     int start = desc_getInt4(desc,GCinfo_index);
     int end = desc_getInt4(desc,BC_index);
-    Btemplate *R, *Rn;
+
     int i,v; 
     //printf("\n\n** Root:name: %s start:%i end:%i first:%i :: "
     //,nameOf(root),start,end, getR(root,1));
@@ -1193,10 +1210,14 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
 #elif defined  __CYGWIN__
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
+  //FILE *ddd = fopen("descsX.lst","w");
   //printf("size: %i\n", imageS);
   //descs = (ObjDesc) malloc(imageS);
   descs = (ObjDesc) heapAlloc(NULL,imageS);
   memcpy((void *)descs,descs_a,imageS); 
+  //int i; for (i = 0; i < imageS; i++) fprintf(ddd," %x\n",descs[i]);
+  //fprintf(ddd,"\n");
+  //fclose(ddd);
   /*int i;
   for (i = 0; i <100; i++) printf(" %i ",descs[i]);
   printf("\n");*/
@@ -1240,10 +1261,8 @@ mutex1 = xSemaphoreCreateBinary();
 
 #ifdef DUMP
   int imageS = getImageSize();
-  fprintf(trace,"C interpreter: mainDescNo: %i imageS: %i\n",mainDescNo,imageS);
-  //int i;
-  //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
-  fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
+  fprintf(trace,"C interpreter: mainDescNo: %i imageS: %i mainDesc: %x\n"
+	  ,mainDescNo,imageS,(int)getDesc(mainDescNo));
 #endif
 
   thisBlock->bc = getByteCode(getDesc(mainDescNo));
