@@ -320,10 +320,18 @@ Btemplate * mapRef(Btemplate * oldRef){
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
   if (root == NULL) return; 
+  if (((int)getR(root,0) & 0x1)  == 1 ) return;
+  putV(root,0,1);
+
 #if defined traceGC_1
   int j;
-  for (j = 0; j < 80; j = j + 4)
+  for (j = 0; j < sizeof(Btemplate); j = j + 4) {
+    printf(" %x ",getIheap(root,j - (sizeof(Btemplate) / 4)));
+    }
+  printf("\n");
+  for (j = 0; j < 64; j = j + 4) {
     printf(" %x ",getIheap(root,j));
+  }
   printf("\n");
   if (getIheap(root,0) == 0x61f114) {
     printf("Got 0x61f114\n");
@@ -334,71 +342,51 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
 #endif
 
   ObjDesc desc = root->desc;
-  //dumpGCinfo(thisBlock->trace,desc);
-  int start = desc_getInt4(desc,GCinfo_index);
-  int end = desc_getInt4(desc,BC_index);
-  int i,v; 
-  //printf("** Root:name: %s start:%i end:%i first:%i :: "
-  //,nameOf(root),start,end, getR(root,1));
-  if (((int)getR(root,0) & 0x1)  == 1 ) {  return;}
-  putV(root,0,1);
-  //printf("\n");
   if (isIndexed(desc)) {
     printf("Mark:GotIndexed: %x %s %x\n",(int)root,nameOf(root),getR(root,1));
     doGCmark(ctx,getR(root,1),level + 1);
   }
+
+  //dumpGCinfo(thisBlock->trace,desc);
+  int start = desc_getInt4(desc,GCinfo_index);
+  int end = desc_getInt4(desc,BC_index);
+  int i; 
   for (i = start; i < end; i = i + 2) {
-    v = desc_getInt2(desc,start + (i - start));
-    int R = (int)getR(root,v);
-    //printf("v:%i R:%x\n",v,R);
-    if (R > 0) {  // R == 0 implies R is none
-      /*int j;
-      for (j = 0; j < level; j++) printf("-");
-      printf(" %s att: %s, %x\n", nameOf(root),nameOf((Btemplate *)R), R);
-      printf("%i \n",v);*/
-      doGCmark(ctx,(Btemplate *)R, level + 1);
-      //printf("\nend doGCmark:inner:1\n");
-    }
+    int refInx = desc_getInt2(desc,start + (i - start));
+    Btemplate *R = (Btemplate *)getR(root,refInx);
+    if (R != NULL) doGCmark(ctx,R,level + 1);
   }
   if (root->rstack[0] != NULL) {
     printf("rstack != NULL: %x \n",(int)root->rstack[0]);
     exit(-1);
   }
   for (i=0; i < root->rtop; i++) {
-    //printf("rStack:%s %x \n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);  
+    //printf("rStack:%s %x\n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);
     doGCmark(ctx,root->rstack[i + 1],level + 1);
     //printf("\nend doGCmark:inner:2\n");
   } 
   //printf("\nend doGCmark\n");
 }
 
-
 void doGCmarkContexts(){
   int no;
   Block *ctx;
   for (no = 0; no <= threadNo; no++) {
     ctx = contexts[no];
-    if (ctx == NULL) {;
-      //printf("ctx == NULL threaNo: %i\n",no);
-    }else{
+    if (ctx != NULL) {
 #if defined traceGC_1
-      printf("****  Mark thisObj: %x %s\n",ctx->thisObj, nameOf(ctx->thisObj));
-      printf("****  Mark thisStack: %x %s\n",ctx->thisStack, nameOf(ctx->thisStack));
-      printf("****  Mark world: %x %s\n",ctx->world, nameOf(ctx->world));
+      printf("***  Mark thisObj: %x %s\n",ctx->thisObj,nameOf(ctx->thisObj));
+      printf("***  Mark thisStack: %x %s\n",ctx->thisStack,nameOf(ctx->thisStack));
+      printf("***  Mark world: %x %s\n",ctx->world, nameOf(ctx->world));
 #endif
       doGCmark(ctx,ctx->thisObj,0);
       doGCmark(ctx,ctx->thisStack,0);
       if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
       if (ctx->enablee != NULL) doGCmark(ctx,ctx->enablee,0);
       if (ctx->top != NULL) doGCmark(ctx,ctx->top,0);
-      //printf("aaaaa5\n");      
-      if (ctx->origin != NULL) {
-	doGCmark(ctx,ctx->origin,0);
-      }      
-      //printf("aaaaa6\n");      
+      if (ctx->origin != NULL) doGCmark(ctx,ctx->origin,0);
       doGCmark(ctx,ctx->world,0);
-          }
-    //printf("doGCmarkContexts:endLoop:no: %i\n",no);
+    }
   }
 }
 
@@ -1210,17 +1198,10 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
 #elif defined  __CYGWIN__
   allocMutex = CreateSemaphore(NULL,1,1,NULL);
 #endif
-  //FILE *ddd = fopen("descsX.lst","w");
-  //printf("size: %i\n", imageS);
+
   //descs = (ObjDesc) malloc(imageS);
   descs = (ObjDesc) heapAlloc(NULL,imageS);
   memcpy((void *)descs,descs_a,imageS); 
-  //int i; for (i = 0; i < imageS; i++) fprintf(ddd," %x\n",descs[i]);
-  //fprintf(ddd,"\n");
-  //fclose(ddd);
-  /*int i;
-  for (i = 0; i <100; i++) printf(" %i ",descs[i]);
-  printf("\n");*/
 
   newAlloc = newAlc;
   if (newAlloc) newAllocOff = 1;
