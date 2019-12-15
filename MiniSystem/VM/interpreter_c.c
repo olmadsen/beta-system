@@ -585,8 +585,8 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 }
 
 void doGCupdateRefs(Block *ctx,Btemplate *root){
-  //printf("\n\n*** UpdateRefs: %x %s\n\n",(int)root,nameOf(root));
-  //printMapRef();
+  printf("\n\n*** UpdateRefs: %x %s\n\n",(int)root,nameOf(root));
+  printMapRef();
   //printf("\n*** sweep of new heap betaWorld: %x\n",betaWorld);
   Btemplate * X = root;
   while (X < newHeapTop) {
@@ -775,7 +775,7 @@ void doBGC(Block *ctx,Btemplate *root){
   doGCupdateRefs(ctx,root);
 
   doGCclearHeap();
-  //doGCcheckHeap(root);
+  doGCcheckHeap(root);
 
 #if defined traceGC_0
   printf("\n*** after doGC:\n");
