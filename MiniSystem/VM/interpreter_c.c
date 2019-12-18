@@ -100,7 +100,7 @@ void RTE2(char *msg, int errNo){
 }  
 
 #ifdef withGC
-#define heapMax 100000
+#define heapMax 30000
 #else
 #define heapMax 30000000
 #endif
@@ -131,7 +131,7 @@ int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
-#define traceGC_0
+//#define traceGC_0
 //#define traceGC_1
 //#define traceGC_2
 
@@ -196,7 +196,7 @@ void waitAllThreadsStopped(Block *ctx) {
     loop:
       if (threadStatus[no] == t_running) {
 	//printf("thread running: %i \n", no);
-	Sleep(100);
+	//Sleep(100);
 	goto loop;
       } else {
 	//printf("thread not running: %i\n",no);
@@ -210,7 +210,7 @@ void waitForGC(Block *ctx){
   contexts[ctx->threadId] = ctx;
   threadStatus[ctx->threadId] = t_suspended;
  loop:
-  Sleep(100);
+  //Sleep(100);
   if (threadStatus[ctx->threadId] == t_suspended) goto loop;
   //printf("waitForGC resumed threadNo: %i\n",ctx->threadId);
 }
@@ -585,8 +585,8 @@ void doGCcompact(Block *ctx,Btemplate *root, Btemplate *firstFreeStart){
 }
 
 void doGCupdateRefs(Block *ctx,Btemplate *root){
-  printf("\n\n*** UpdateRefs: %x %s\n\n",(int)root,nameOf(root));
-  printMapRef();
+  //printf("\n\n*** UpdateRefs: %x %s\n\n",(int)root,nameOf(root));
+  //printMapRef();
   //printf("\n*** sweep of new heap betaWorld: %x\n",betaWorld);
   Btemplate * X = root;
   while (X < newHeapTop) {
@@ -746,13 +746,17 @@ void doBGC(Block *ctx,Btemplate *root){
   freedInHeap = 0;
   Btemplate *firstFreeStart;
 
-#if defined traceGC_0
-  printf("\n<<<<<<GC threadNo: %i>\n",ctx->threadId);
-#endif
+  //#if defined traceGC_0
+  printf("\n<GC threadNo: %i ...",ctx->threadId);
+  //#endif
   gcInProgress = TRUE;
   contexts[ctx->threadId] = ctx;
   waitAllThreadsStopped(ctx);
-  //printf("*** After waitForAllThreads\n");
+  int no; 
+  for (no = 0; no <=threadNo; no++) 
+    if (no != ctx->threadId) 
+      if (threadStatus[no] == t_running) 
+	printf("thread is running: %i threadId: %i\n",no,ctx->threadId);
 
 #ifdef TRACE
   fprintf(ctx->trace,"\n***** doGC *****\n");
@@ -775,7 +779,7 @@ void doBGC(Block *ctx,Btemplate *root){
   doGCupdateRefs(ctx,root);
 
   doGCclearHeap();
-  doGCcheckHeap(root);
+  //doGCcheckHeap(root);
 
 #if defined traceGC_0
   printf("\n*** after doGC:\n");
@@ -793,6 +797,10 @@ void doBGC(Block *ctx,Btemplate *root){
 #endif
   gcInProgress = FALSE;
   resumeThreads(ctx);
+  for (no = 0; no <=threadNo; no++) 
+    if (threadStatus[no] == t_suspended) 
+	printf("thread is suspended: %i threadId: %i\n",no,ctx->threadId);
+  printf("end:GC>\n");
 }
 
 int ZZ = 0;
@@ -800,18 +808,11 @@ int ZZ = 0;
 #define withTimeOut
 
 void *heapAlloc(Block *ctx,int size) {
-  void *obj; //char S[50];
-  if (gcInProgress) {
-    //printf("heapAlloc:waitForGC: %i\n",ctx->threadId);
-    waitForGC(ctx);
-    //printf("heapAlloc:waitForGC:after:waitForGC: %i\n",ctx->threadId);
-  }
-
+  void *obj;
 #ifdef linux
   int ret = pthread_mutex_lock( &mutex1 );
   if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
 #elif defined  __CYGWIN__
-#ifdef withTimeOut
   bool B = true;
   while (B) {
     switch(WaitForSingleObject(allocMutex,2L)) {
@@ -824,31 +825,10 @@ void *heapAlloc(Block *ctx,int size) {
 	//printf("heapAlloc:allocMutex:busy: %i\n",ctx->threadId);
 	waitForGC(ctx);
 	//printf("heapAlloc:allocMutex:remuse:after:waitForGC\n");
-      } else {
-	//printf("heapAlloc:sleep\n");
-	//Sleep(1);
-	//printf("heapAlloc:sleep:after\n");
-	/*switch(WaitForSingleObject(allocMutex,INFINITE)) {
-	case WAIT_OBJECT_0:
-	  B = false;
-	  break;
-	default:
-	  runTimeError("Wait failure: allocMutex");
-	  } ;*/
       }
       break; 
     }
   }
-#else
-  //if (ctx != NULL) printf("heapAlloc:beforeM.signal: %i\n",ctx-> threadId);
-  switch(WaitForSingleObject(allocMutex,INFINITE)) {
-  case WAIT_OBJECT_0:
-    break;
-  default:
-    runTimeError("Wait failure: allocMutex");
-  } ;
-  //if (ctx != NULL) printf("heapAlloc:afterM.signal: %i\n",ctx-> threadId);
-#endif
 
 #elif defined __XTENSA__
  L:
