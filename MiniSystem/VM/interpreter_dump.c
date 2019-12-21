@@ -346,7 +346,8 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case allocIndexed:
 	arg1 = op2(bc,&glsc);
 	arg2 = op1(bc,&glsc);
-	fprintf(trace,"allocIndexed %i %i",arg1,arg2);
+	arg3 = op1(bc,&glsc);
+	fprintf(trace,"allocIndexed %i %i %i",arg1,arg2,arg3);
 	break;
       case mkStrucRef: 
 	fprintf(trace,"mkStrucRef");
