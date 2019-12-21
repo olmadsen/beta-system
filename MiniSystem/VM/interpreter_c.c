@@ -59,7 +59,7 @@ typedef void *FILE;
 //#define EVENT
     
 #define useBetaHeap true
-//#define withGC 
+#define withGC 
 
 #include "interpreter_image.c"
  
