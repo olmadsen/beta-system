@@ -59,7 +59,7 @@ typedef void *FILE;
 //#define EVENT
     
 #define useBetaHeap true
-#define withGC 
+//#define withGC 
 
 #include "interpreter_image.c"
  
@@ -165,8 +165,10 @@ Btemplate *putBTheap(Btemplate *R, int inx, Btemplate *S){
 
 void checkInHeap(Btemplate *obj){
   if ((int) obj > (int)&heap[heapTop] | (int)obj < 0) {
-    printf("\n\nGC error *** object not in heap: %x &heap{heapTop]: %x\n"
-	   ,(int)obj,(int)&heap[heapTop]);
+    printf("\n\n*** GC error:\n");
+    printf("Object not in heap: %8x %i\n",(int)obj,(int)obj);
+    printf("          &heap[0]: %8x\n",(int)&heap[0]);
+    printf("    &heap[heapTop]: %8x\n",(int)&heap[heapTop]);
     exit(-1);
   }
 };
@@ -211,7 +213,8 @@ void waitForGC(Block *ctx){
   threadStatus[ctx->threadId] = t_suspended;
  loop:
   //Sleep(100);
-  if (threadStatus[ctx->threadId] == t_suspended) goto loop;
+  //if (threadStatus[ctx->threadId] == t_suspended) goto loop;
+  if (gcInProgress) goto loop;
   //printf("waitForGC resumed threadNo: %i\n",ctx->threadId);
 }
 
@@ -400,6 +403,7 @@ void doGCmarkContexts(){
       if (ctx->thisModule != NULL) doGCmark(ctx,ctx->thisModule,0);
       if (ctx->enablee != NULL) doGCmark(ctx,ctx->enablee,0);
       if (ctx->top != NULL) doGCmark(ctx,ctx->top,0);
+      //printf("f %x\n",(int)ctx->origin);
       if (ctx->origin != NULL) doGCmark(ctx,ctx->origin,0);
       doGCmark(ctx,ctx->world,0);
     }
@@ -768,7 +772,6 @@ void doBGC(Block *ctx,Btemplate *root){
   //doGCcheckHeap(root);
   doGCmark(ctx,root,0); // root  = mainObj
   doGCmarkContexts();
-
 #ifdef traceGC_1
   printBlocks(root);
 #endif
@@ -780,7 +783,6 @@ void doBGC(Block *ctx,Btemplate *root){
   doGCcompact(ctx,root,firstFreeStart);
   heapTop = heapTop - freedInHeap;
   doGCupdateRefs(ctx,root);
-
   doGCclearHeap();
 #ifdef traceGC_1
   doGCcheckHeap(root);
@@ -800,11 +802,12 @@ void doBGC(Block *ctx,Btemplate *root){
   printf("noOfFreeBlocks: %i free : %6i bytes: %8i \n"
 	 ,noOfFreeBlocks, heapMax- heapTop,(heapMax - heapTop) * 4);
 #endif
-  gcInProgress = FALSE;
+
   resumeThreads(ctx);
   for (no = 0; no <=threadNo; no++) 
     if (threadStatus[no] == t_suspended) 
 	printf("thread is suspended: %i threadId: %i\n",no,ctx->threadId);
+  gcInProgress = FALSE;
   //printf("end:GC>\n");
 }
 
@@ -1552,7 +1555,7 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
 #ifdef TRACE
   fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
-  //printf("QallocIndexed: %x",(int)origin);
+  //printf("QallocIndexed: %x\n",(int)origin);
   //printf(" %s\n",nameOf(origin));
   ctx->origin = origin;
   // indexed[0] = 0
@@ -1571,6 +1574,7 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
   origin = ctx->origin;
   putR(ctx->callee,1,origin); // store origin
   ctx->callee->vfields[dinx + newAllocOff] = rangee; 
+  // printf("QallocIndexedB: %x\n",(int)origin);
   // int i=0;
   // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
   // printf(" dinx = %i %i\n", dinx, rangee);
@@ -2817,6 +2821,7 @@ bool traceThreads = true;
 	    B->currentDescNo = threadStubDescNo;
 	    B->top = Y;
 	    B->world = thisBlock->world;
+	    B->origin = NULL;
 #ifdef TRACE
 	    //printf("\ncurrentDescNo: %i %i %i threadNo: %i\n"
 	    //,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
@@ -3172,6 +3177,7 @@ bool traceThreads = true;
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
+	fprintf(trace,"sendv %i %x",arg1,thisBlock->origin);
 	allocQObj(thisBlock,thisBlock->origin,arg2,false,0,0);
 	restoreContext();
 
