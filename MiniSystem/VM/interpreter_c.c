@@ -131,9 +131,9 @@ int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
-//#define traceGC_0
-//#define traceGC_1
-//#define traceGC_2
+#define traceGC_0
+#define traceGC_1
+#define traceGC_2
 
 Btemplate *lastFreeInHeap;
 int noOfFreeBlocks = 0;
@@ -728,7 +728,7 @@ void doGCcheckHeap(Btemplate *root){
     for (i = start; i < end; i = i + 2) {
       int refInx = desc_getInt2(desc,start + (i - start));
       Btemplate *R = (Btemplate *)getR(root,refInx);
-      printf("   rField:%i  %x ",refInx,(int)R);
+      printf(" %2i: %6x",refInx,(int)R);
       if (R != NULL) {
 	printf(" %s\n",nameOf(R));
       } else printf(" NONE\n");
@@ -795,7 +795,7 @@ void doBGC(Block *ctx,Btemplate *root){
   printf("mainObj       : %x %s\n",(int)mainObj,nameOf(mainObj));
   printf("&heap[0]      : %x\n",&heap[0]);
   printf("heapTop       : %6i\n",heapTop);
-  printf("heapMax       : %i\n",heapMax);
+  printf("heapMax       : %6i\n",heapMax);
   printf("heap[heapTop] : %x\n",&heap[heapTop]);
   printf("noOfUsedBlocks: %i inUse: %6i bytes: %8i\n"
 	 ,noOfUsedBlocks, heapTop,heapTop * 4);
@@ -2801,7 +2801,16 @@ bool traceThreads = true;
 #ifdef TRACE
 	    fprintf(trace,"fork B threadStbNo: %i ",threadStubDescNo);	 
 #endif   
-	    // B is not initialized - see belwo
+	    // B is not initialized - see below
+	    // a problem if a GC is started by allocTemplate!
+	    B->thisModule = NULL;
+	    B->thisObj = thisObj;
+	    B->thisStack = thisStack;
+	    B->bc = NULL;
+	    B->currentDescNo = 0;
+	    B->top = thisObj;
+	    B->world = NULL;
+	    B->origin = NULL;
 	    X = allocTemplate(B,newId(thisBlock),threadStubDescNo,true,0,0);
 	    Y = rPop(thisStack); // ensure Y is ok after GC
 #ifdef TRACE
@@ -2873,6 +2882,7 @@ bool traceThreads = true;
 	    X = rPop(thisStack);
 	    //printf("Obj: %s\n",nameOf(X));
 	    arg3 = X->vfields[arg1];
+	    //printf("cmpAndSwap %i %i %x\n",arg1,arg2,(int)X);
 	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
 	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
 	    //printf("[");
@@ -2945,6 +2955,9 @@ bool traceThreads = true;
 #ifdef TRACE  
 	    fprintf(trace,"%i\n",V);
 #endif
+	    /*printf("bbb: %x %x %x \n"
+		   ,(int)thisStack,(int)&heap[0],(int)&heap[heapTop]);
+		   printf(" %s\n",nameOf(thisStack));*/
 	    vPush(thisStack,V);
 	    break; 
 	  case 15: // sleep
@@ -3177,7 +3190,6 @@ bool traceThreads = true;
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
-	fprintf(trace,"sendv %i %x",arg1,thisBlock->origin);
 	allocQObj(thisBlock,thisBlock->origin,arg2,false,0,0);
 	restoreContext();
 
@@ -3528,8 +3540,11 @@ bool traceThreads = true;
 	  //printf("Break: gcInProgress threadId: %i\n",thisBlock->threadId);
 	  saveContext();
 	  waitForGC(thisBlock);
-	  //printf("Break: gcInProgress:resumed threadId: %i\n",thisBlock->threadId);
 	  restoreContext();
+	  printf("Break: gcInProgress:resumed threadId: %i thisObj: %x"
+		 ,thisBlock->threadId,thisObj);
+	  printf(" %s \n",nameOf(thisObj));
+
 	}
 	X = thisObj;
 	for (i = 0; i < arg1; i++) { 
