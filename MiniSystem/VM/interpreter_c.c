@@ -719,15 +719,17 @@ void doGCcheckHeap(Btemplate *root){
     printf("Obj: %x %s\n",(int)root,nameOf(root));
     ObjDesc desc = root->desc;
     if (isIndexed(desc)) {
-	printf("   origin: %x",getR(root,1));
-	printf(" %s\n",nameOf(getR(root,1)));
-      }
+      checkInHeap(root);
+      printf("   origin: %x",getR(root,1));
+      printf(" %s\n",nameOf(getR(root,1)));
+    }
     int start = desc_getInt4(desc,GCinfo_index);
     int end = desc_getInt4(desc,BC_index);
     int i; 
     for (i = start; i < end; i = i + 2) {
       int refInx = desc_getInt2(desc,start + (i - start));
       Btemplate *R = (Btemplate *)getR(root,refInx);
+      checkInHeap(R);
       printf(" %2i: %6x",refInx,(int)R);
       if (R != NULL) {
 	printf(" %s\n",nameOf(R));
@@ -1699,7 +1701,6 @@ void  ConvertIndexedAsString(Block *ctx) {
   */
   ctx->origin = X;
   QallocIndexed(ctx,X,getTextDescNo(),1,1,length,0);
-  X = ctx->origin;
   //printf("X: %x %s\n",(int)X,nameOf(X));
 
   while (X->vfields[length + 1] == 0 ) length = length - 1;
