@@ -131,9 +131,9 @@ int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
 void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
-#define traceGC_0
-#define traceGC_1
-#define traceGC_2
+//#define traceGC_0
+//#define traceGC_1
+//#define traceGC_2
 
 Btemplate *lastFreeInHeap;
 int noOfFreeBlocks = 0;
@@ -1954,7 +1954,7 @@ bool traceThreads = true;
 
   int opCode,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
   int dinx,isRindexed,rangee,i;
-  bool running = true; 
+  bool running = true, doTrace = false; 
   Btemplate *X, *Y;
 
   int cnt = 0;
@@ -1989,7 +1989,8 @@ bool traceThreads = true;
       /*if (gcInProgress) {
 	printf("Interpreter:gcInProgress: threadNo: %i %s\n",threadId,nameOf(thisObj));
 	}*/
-      // printf("*** Opcode: %i, glsc: %i\n",opCode,glsc);
+      if (doTrace) 
+	printf("*** %i %s: Op: %i, glsc: %i\n",threadId,nameOf(thisObj),opCode,glsc);
 
       if (cnt == 0) {
 	//blink();
@@ -3542,17 +3543,20 @@ bool traceThreads = true;
 	  saveContext();
 	  waitForGC(thisBlock);
 	  restoreContext();
-	  printf("Break: gcInProgress:resumed threadId: %i thisObj: %x"
-		 ,thisBlock->threadId,thisObj);
-	  printf(" %s \n",nameOf(thisObj));
-
+	  //printf("Break: gcInProgress:resumed threadId: %i thisObj: %x"
+	  //	 ,thisBlock->threadId,thisObj);
+	  //printf(" %s \n",nameOf(thisObj));
+	  //doTrace = true;
 	}
 	X = thisObj;
 	for (i = 0; i < arg1; i++) { 
 	  //fprintf(trace,"popCallStackA: %s \n",nameOf(X));
+	  if (doTrace) printf("popCallStackA: %s \n",nameOf(X));
 	  X = myCorigin(X);
+	  if (doTrace) printf("popCallStackB: %s \n",nameOf(X));
 	}
 	//fprintf(trace,"popCallStackB: %s \n",nameOf(X));
+	if (doTrace) printf("popCallStackC: %s \n",nameOf(X));
 	/* We need to test for none if the stack does not contain X
 	 * Same  for traversing super
 	 */
