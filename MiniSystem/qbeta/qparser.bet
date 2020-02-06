@@ -272,7 +272,9 @@ parser: AbstractSyntaxTree
               lex; 
               FinalPtn -> ptnKind
            else
-              syntaxError
+              3 -> syntaxError;
+              errorDecl[] -> D[];
+              leave pDecl
           if);
           pObjectGenerator -> OD[];
           OD.IS.ifBasic; (* some kind og hack - uglye*)
@@ -368,7 +370,8 @@ parser: AbstractSyntaxTree
           if);
           (if lex.symb = lex.symbols.value then
               lex;
-              pValue -> sig.val[] -> sig.append
+              pValue -> sig.val[] -> sig.append;
+              (*'Sig: ' -> puttext; sig.doPT -> putline; *)
           if);
           (*'Sig: ' -> puttext; sig.doPT -> putline;*)
        exit sig[]
@@ -593,11 +596,15 @@ parser: AbstractSyntaxTree
           &lexer[] -> lex[];
           0 -> inn.setPos;
           inn[] -> lex.initWithText;
-          (*false -> hasSyntaxError;*)
+          false -> hasSyntaxError;
           0 -> inn.setPos;
           lex;
           inner;
-          (* (if hasSyntaxError then ... *)
+          (if hasSyntaxError then
+              xsyntaxError -> errs[] (* check if this is ever used, including
+                                      * exit errors[] below
+                                      *)
+          if);
           oldlex[] -> lex[];
        exit errs[]
        #);
@@ -608,21 +615,22 @@ parser: AbstractSyntaxTree
        #);
      parseItemsText::
        (# ind: @integer
-       do 
+       do '**** parseItemsText: ' -> putline; inn[] -> putline;
           L:
             (#
             do inn[] -> mkItems
                (# xsyntaxerror::
                     (#
-                    do 'Syntax error' -> putline;
+                    do 'Syntax errors: ' -> putline;
                        errorStream[] -> errors[];
+                       errors[] -> putline;
                        leave L
                     #)
-               #) -> (errors[],IS[])
-            #);
-          '**** parseItemsText: ' -> putline; inn[] -> putline;
-          '**** after parse: ' -> putline; IS.doPT -> putline;
+               #) -> (errors[],IS[]);
+               '**** after parse: ' -> putline; IS.doPT -> putline;
+            #)
        #);
+     hasSyntaxError, withPos: @boolean;
      SyntaxError:
        (# n: @integer
        enter n
@@ -631,9 +639,36 @@ parser: AbstractSyntaxTree
           newline;
           3 -> lex.printlines;
           newline;
+
+          true -> hasSyntaxError;
           inner;
-          (failureTrace (*dumpStack*),'Syntax error in:\n'->lex.fileName.prepend)  
-            -> stop
+          
+          (if lex.errorStream[] = none then &text[] -> lex.errorStream[] if);
+          lex.oldPos -> lex.errorStream.putint; ' ' -> lex.errorStream.put;
+
+          lex.nextCh.pos -> lex.errorStream.putint; ' ' -> lex.errorStream.put;
+          'Syntax error (' -> lex.errorStream.puttext;
+          n -> lex.errorStream.putint;')' -> lex.errorStream.put;
+          
+          ' expected symbols: ' -> lex.errorStream.puttext;          
+          '?' -> lex.errorStream.put; (* temporary *)
+          lex.errorStream.newLine;
+          skip:
+            (#
+            do lex; 
+               (if lex.symb = lex.symbols.eos then leave skip if);
+               (if lex.symb = lex.symbols.semicolon then
+                   (*lex*)
+               else
+                   restart skip
+               if)
+            #);
+          (if true then
+              lex.errorStream[] -> putline;              
+           else
+              (failureTrace (*dumpStack*),'Syntax error in:\n'->lex.fileName.prepend)  
+                -> stop
+          if)
         #);
      genTokenStream: superParser
        (# ind: @integer
@@ -703,6 +738,8 @@ parser: AbstractSyntaxTree
            -> main[];
          (* main.doPT -> putline;*)
          (*rootModule.doPP -> putline;*)
-         inner
+         (if not hasSyntaxError then
+             inner
+         if)
      if);
   #)
