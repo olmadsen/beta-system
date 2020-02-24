@@ -119,6 +119,60 @@ ObjectContent:
                if);
             exit error
             #);
+          checkName:
+            (# N: ^Text; ch: @char; msg: ^text;
+               filter:
+                 (* convert 'xxx: ^' to 'xxx'
+                  * should be fixed so we avoid ': ^'
+                  *)
+                 (# T: ^text; S: @text
+                 enter T[]
+                 do (for i: T.length repeat
+                         i -> T.inxGet -> ch;
+                         (if ch = ':' then leave filter if);
+                         ch -> S.put
+                    for)
+                 exit S[] 
+                 #)
+            enter N[]
+            do (if N.length > 0 then
+                   (if (1 -> N.inxGet -> ascii.isLetter) then
+                       (for i: N.length - 1 repeat
+                            i + 1 -> N.inxGet -> ch;
+                            (if true
+                             // ch -> ascii.isLetter
+                             // ch -> ascii.isDigit
+                             // (ch = '_') or (ch = '$') or (ch = '%') then
+                             else
+                                'Illegal character "' -> msg[];
+                                ch -> msg.put; '"' -> msg.put;
+                                ' in "' -> msg.append;
+                                N[] -> msg.append; '"' -> msg.put;
+                                leave checkName
+                            if)
+                       for)
+                    else
+                       'First letter of "' -> msg[]; N[] -> msg.append;
+                       '" must be a letter: ' -> msg.append;
+                       leave checkName
+                   if)
+                else
+                   'Name is empty' -> msg[];
+                   leave checkName
+               if);
+               (* check for double decl *)
+               (for i: dclNames.range repeat
+                    'matxh: ' -> puttext; dclNames[i][]->filter -> puttext;
+                    ' with: ' -> puttext; N[] -> putline;
+                    (if (N[] -> (dclNames[i][] -> filter).equalNCS) then
+                        '"' -> msg[];
+                        N[] -> msg.append;
+                        '"' -> msg.put;
+                        ' is alreday an attribute' -> msg.append;
+                        leave checkName
+               if)for)
+            exit msg[]
+            #);
           addModule: (* called from worldWindow:textPasteModuleHandler *)
             (# index: @integer;
                name: ^Text;
@@ -286,18 +340,9 @@ ObjectContent:
                   F: ^file;
                   beforeNode: ^Tree.TopNode;
                   errors: ^Stream
-               do 
-                  extendReps; (* range + 1 -> range *)
-                  (for i: handles.range - inx repeat
-                       handles.range - i + 1 -> ix;
-                       handles[ix - 1][] -> handles[ix][];
-                       DCLs[ix - 1][] -> DCLs[ix][];
-                       dclNames[ix - 1][] -> dclNames[ix][];
-                  for);
-                  
-                  name -> att; ':' -> att.put; ' ' -> att.put; 
+               do name -> att; ':' -> att.put; ' ' -> att.put; 
                   (* consider browserItem above : and cons of new/oldName
-                   * kind is insufficient - we need to user parser::kinds
+                   * kind is insufficient - we need to use parser::kinds
                    *)
                   (if kind  (* FIX *)
                    // '@' then
@@ -318,8 +363,7 @@ ObjectContent:
                           (newDecl[],path1[]) 
                             -> compile.mkDeclX -> (errors[],dcl[]);
                       if);
-                      '*** errors:'->putline;
-                      errors[] -> putline
+                      '*** errors:'->putline; errors[] -> putline
                    // '/' // '#' then
                       (* name: dir exists -> name/name.bet exists? Error
                        *                     else create name.bet
@@ -373,32 +417,35 @@ ObjectContent:
                   if);
                   ('addItem',newDecl[]) -> LG.TTn;
                   ('Decl',dcl.doPT) -> LG.TTn;
+                  
+                  
+                  extendReps; (* range + 1 -> range *)
+                  (for i: handles.range - inx repeat
+                       handles.range - i + 1 -> ix;
+                       handles[ix - 1][] -> handles[ix][];
+                       DCLs[ix - 1][] -> DCLs[ix][];
+                       dclNames[ix - 1][] -> dclNames[ix][];
+                  for);
                   dcl[] -> DCLs[inx][];
-                  att[] -> dclNames[inx][];
-
+                  att[] -> dclNames[inx][];                
+                  (dclNames[inx][],dcl.sort,thisModule,this(handle)[]) 
+                    -> &Handle 
+                    -> handles[inx][];
                   (if inx < DCLs.range then
                       DCLs[inx+1][] -> beforeNode[];
                   if);
-                  'AddItem: "'->puttext; att[]->puttext; '"' -> putline;
                   
-                  (dclNames[inx][],dcl.sort,thisModule,this(handle)[]) 
-                    -> &Handle -> handles[inx][];
-                  
-                  'theEntry: '->puttext; 
-                  theEntry[] -> getPatternName -> puttext;
-                  ' | ' -> puttext;
-                  theEntry.doPT -> putline;
-                  'dcl:\n' -> puttext;
-                  dcl.doPt -> putline;
+                  'AddItem: "'->puttext; att[]->puttext; '"' -> putline;            
+                  'theEntry: '->puttext; theEntry[] -> getPatternName -> puttext;
+                  ' | ' -> puttext; theEntry.doPT -> putline;
+                  'dcl:\n' -> puttext; dcl.doPt -> putline;                  
                   (if beforeNode[] <> NONE then
-                      'before: ' -> puttext;
-                      beforeNode.doPT -> putline;
+                      'before: ' -> puttext; beforeNode.doPT -> putline;
                   if);
                   '*** insert at: ' -> puttext; theEntry.label -> putline;
                   (dcl[],beforeNode[]) -> theEntry.doInsert;
                   
-                  'modified: ' -> puttext;
-                  theEntry.doPt -> putline;
+                  'modified: ' -> puttext;theEntry.doPt -> putline;
                   markAsChanged
                #)
             exit att[]
