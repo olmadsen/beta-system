@@ -272,6 +272,8 @@ betaVM:
      
      prim: @Primitives;
      
+     stopErrors: ^text;
+     
      fatalError:
        (# errNo: @integer; M: @text
        enter errNo
@@ -281,7 +283,9 @@ betaVM:
              '\tLSC: ' -> msg.puttext; glsc -> msg.putint;
              inner fatalError;
              (*M[] -> msg.puttext;*)
+             (* 'Fatal:'->putline; msg[] -> putline;*)
              (thisObj[],glsc,msg[]) -> errorEvent;
+             msg[] -> stopErrors[]
           #)
        #);
      
@@ -1071,7 +1075,10 @@ betaVM:
                          
                          (* ('call',true,out[])  -> thisObj.dump;*)
                          thisStack.rpop -> callee[];
-                         (if callee[] = none then 6 -> fatalError if);
+                         (if callee[] = none then 
+                             6 -> fatalError ;
+                             leave doCall
+                         if);
                          callee.myId -> out.puttext;
                          (if withEnablingSuspend then
                              callee[] -> enablee[]
@@ -1317,7 +1324,9 @@ betaVM:
                      // codes.pushg then
                         'pushg' -> exe;
                         thisStack.rpop -> X[];
-                        (if X[] = none then 3 -> fatalError if);
+                        (if X[] = none then
+                            3 -> fatalError; leave loop
+                        if);
                         op1 -> off;
                         (if thisStack.valOff > 0 then 
                             ' +$ ' -> out.puttext;
@@ -1331,15 +1340,15 @@ betaVM:
                         thisStack.vpop -> value;
                         'originAdjust:' -> out.puttext; value -> out.putint; ' '-> out.put;
                         thisStack.rpop -> X[];
-                        (if X[] = none then 3 -> fatalError if);
-                        off + value - 1 -> X.get -> top1 -> thisStack.vpush;
+                        (if X[] = none then 3 -> fatalError; leave loop if);
+                        off  + value - 1 -> X.get -> top1 -> thisStack.vpush;
                         (X[],off + value - 1 ,top1) -> VtoOut;
                      // codes.rpushg then
                         'rpushg' -> exe;
                         thisStack.rpop -> X[];
                         op1 -> off;
                         (*('rpushg:',true,screen[]) -> X.dump;*)
-                        (if X[] = none then 3 -> fatalError if);
+                        (if X[] = none then 3 -> fatalError; leave loop if);
                         off -> X.rget -> Y[];
                         Y[]-> thisStack.rpush;
                         (X[],off,Y[]) -> RtoOut;
@@ -1488,7 +1497,7 @@ betaVM:
                      // codes.storeg  then
                         'storeg' -> exe;
                         thisStack.rpop -> X[];
-                        (if X[] = none then 3 -> fatalError if);
+                        (if X[] = none then 3 -> fatalError; leave loop if);
                         thisStack.vpop -> value;
                         op1 -> off;
                         (if thisStack.valOff > 0 then 
@@ -1504,16 +1513,14 @@ betaVM:
                         thisStack.vpop -> value;
                         'originAdjust:' -> out.puttext; value -> out.putint; ' '-> out.put;
                         thisStack.rpop -> X[];
-                        (if X[] = none then 3 -> fatalError if);
+                        (if X[] = none then 3 -> fatalError; leave Loop if);
                         thisStack.vpop -> inx;
                         (off + inx - 1,value) -> X.put;
                         (X[],off + value - 1 ,top1) -> VtoOut
                      // codes.rstoreg  then
                         'rstoreg' -> exe;
                         thisStack.rpop -> X[];
-                        (if X[] = none then
-                            3 -> fatalError
-                        if);
+                        (if X[] = none then 3 -> fatalError; leave loop if);
                         thisStack.rpop -> Y[];
                         (op1 -> off,Y[]) -> X.rput;
                         (X[],off,Y[]) -> rToOut;
@@ -1548,9 +1555,7 @@ betaVM:
                         'xstoreg' -> exe;op1 -> off; op1 -> isValueObj; op1 -> size;
                         stacksToOut; out.newline;
                         thisStack.rpop -> X[];
-                        (if X[] = none then
-                            3 -> fatalError
-                        if);
+                        (if X[] = none then 3 -> fatalError; leave loop if);
                         X[] -> R[];
                         thisStack.vpop -> inx;
                         (if isValueObj = 1 then thisStack.vPop -> value (* not used *) if);
@@ -1561,7 +1566,6 @@ betaVM:
                         (X[],off + inx + newAllocOff,value) -> VtoOut;
                         ('xstoreg:',true,out[]) -> R.dump;
                         (thisObj[],thisStack[],true,R[],off,true,inx,thisCode.descInx,glsc,value) -> vStoreEvent
-                        
                        // codes.xrstoreg then
                         'xrstoreg' -> exe; op1 -> off;
                         stacksToOut; out.newline;
@@ -1699,7 +1703,7 @@ betaVM:
                         op1 -> dinx;
                         thisObj.rpop -> X[]; 
 
-                        (if X[] = none then 3 -> fatalError if);
+                        (if X[] = none then 3 -> fatalError; leave loop if);
                         
                         (*('sendv:',true,screen[]) -> X.dump;
                          ('sendv:',true,screen[]) -> thisObj.dump;*)
@@ -1707,7 +1711,7 @@ betaVM:
                         (X.myObjDesc).vdtTable[dinx] -> descInx; 
                         descInx -> out.putint; out.newline; 
                         
-                        (if descInx = 0 then 8 -> fatalError if);
+                        (if descInx = 0 then 8 -> fatalError; leave loop if);
                         (* copy of send below *)
                         (descInx,false,0,0) -> allocTemplate -> callee[];
                         callee.myId -> out.puttext; 
@@ -2327,10 +2331,16 @@ betaVM:
                         do 'Op-code: ' -> M.puttext; thisCode.B[glsc] -> M.putint;
                            M.newline;
                            thisCode.B[glsc] -> out.putint; glsc+1 -> glsc;
-                        #)
+                        #);
+                        leave loop
                     if);
-                    (if (glsc <= thisCode.top) and not doTerminate then
-                        restart Loop 
+                    (if stopErrors[] <> none then
+                        '*** Fatal error: ' -> putline;
+                        stopErrors[] -> putline
+                     else
+                        (if (glsc <= thisCode.top) and not doTerminate then
+                            restart Loop 
+                        if);
                     if);
 
                     false -> isRunning;
@@ -2349,8 +2359,14 @@ betaVM:
                         restart main
                     if)
                  #);
-               'End of betaVM'->putline;
+               (if stopErrors[] <> none then
+                   '**** Fatal errors: ' -> putline;
+                   stopErrors[] -> putline
+                else
+                   'End of betaVM'->putline;
+               if);
                done
             #)
+       exit 2
        #)
   #)
