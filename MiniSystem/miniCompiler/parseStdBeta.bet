@@ -1,27 +1,39 @@
 ORIGIN 'parser';
 INCLUDE '~beta/sysutils/envstring'
 ---parserlib:attributes---
-FragmentEntry: node
-  (# path,fileName: ^text
-  enter(path[],fileName[])
-  do inner
-  #);
+
 FragmentDir: FragmentEntry
   (# length:: (# do 11 (*?*) -> value #);
      PT::
        (#
-       do (pos,length) -> block
+       do (if not expand then true -> expand; doExpand if);
+          (pos,length) -> block
           (#
           do 'Fragments: ' -> lx.append;
              (*(pos+2,break) -> mkBreak1;*)
+             scanSons
+             (# F: ^FragmentEntry 
+             do current[] -> F[];
+                (if f.fileName[] <> none then
+                    F.fileName[] -> lx.append;
+                    ' ' -> lx.put;
+                 else
+                    ' filename none' -> lx.append
+                if);
+                (*(pos, break) -> F.pt*)
+             #)
           #)
        #);
+     label:: (#do 'dir:' -> lab[] #);
      getEntries::
        (#
-       do sons.scan
+       do '**   FragmentDir:getEntries:'->putline;
+          (if not expand then true -> expand; doExpand if);
+          scanSons
           (# F: ^FragmentEntry 
           do current[] -> F[];
-             (F.fileName[] ,F[]) -> add #)
+             (F.fileName[] ,F[]) -> add 
+          #)
        #);
      entity:: (# do  this(fragmentDir)[] -> E[] #);
      sort::
@@ -33,6 +45,7 @@ FragmentDir: FragmentEntry
           this(fragmentDir)[] -> S[]
        #);
      kind:: (# do '/' -> ch #);
+     skind:: (# do ': /' -> S[] #);
      doExpand:
        (#
        do (path[],true) -> getBetaDirectories
@@ -48,7 +61,8 @@ FragmentDir: FragmentEntry
                     (current[] -> (path.copy).append,current[],false) -> FragmentDir -> append
                 if);
                 current[] -> putline
-          #)#)
+          #)#);
+          (*'**** FragmentDir:sons:'->putline; scanSons(#do current.dopt -> putline #)*)
        #);
 
      expand: @boolean
@@ -63,11 +77,12 @@ FragmentDir: FragmentEntry
 
 FragmentFile: FragmentEntry
   (# PT:: (# do 'FragmentFile'-> lx.append #);
+     label:: (#do 'file:' -> lab[] #);
      getEntries::
        (#
        do ('Props',props[]) -> add;
           (if frags[] <> none then
-              frags.sons.scan
+              frags.scanSons
               (# F: ^fragment 
               do current[] -> F[]; 
                  (F.name.lexemSy,F[]) -> add 
@@ -76,6 +91,7 @@ FragmentFile: FragmentEntry
      sort:: (# do this(fragmentFile)[] -> S[] #);
      entity:: (# do this(fragmentFile)[] -> E[] #);
      kind:: (# do ' ' -> ch #);
+     skind:: (# do ': /' -> S[] #);
      Props:  ^Properties;
      Frags: ^Fragments;
   do 'Parse: ' -> puttext; fileName[] -> putline;
@@ -89,13 +105,14 @@ FragmentFile: FragmentEntry
   #);
 Properties: node
   (# length:: (# do 400 -> value #);
-     PT:: (# do sons.scan(# do current.PT; ';' -> lx.put; lx.newline #)#);
+     PT:: (# do scanSons(# do current.PT; ';' -> lx.put; lx.newline #)#);
      getEntries:: 
-       (# do sons.scan(# P: ^Property do current[] -> P[]; (P.name,current[]) -> add #)
+       (# do scanSons(# P: ^Property do current[] -> P[]; (P.name,current[]) -> add #)
        #);
      sort:: (# do this(Properties)[] -> S[]#);
      entity:: (# do this(Properties)[] -> E[]#);
      kind:: (# do ' '-> ch #);
+     skind:: (# do ': ' -> S[] #);
   do L:
        (if lex.symb 
         // lex.symbols.idf then
@@ -112,14 +129,15 @@ Properties: node
   #);
 Property: node
   (# length:: (# do 100 -> value #);
-     PT:: (# do sons.scan (# do current.PT; ' ' -> lx.put  #)#);
+     PT:: (# do scanSons (# do current.PT; ' ' -> lx.put  #)#);
      name: 
        (# N: ^text 
-       do L: sons.scan(# do current.lexemSy -> N[]; leave L #) 
+       do L: scanSons(# do current.lexemSy -> N[]; leave L #) 
        exit N[] #);
      sort:: (# do this(Property)[] -> S[] #);    
      entity:: (# do this(Property)[] -> E[] #);  
      kind:: (# do ' '-> ch #);
+     skind:: (# do ': ' -> S[] #);
   do L:
        (if lex.symb
         // lex.symbols.textSy then
@@ -137,9 +155,17 @@ Property: node
        if);
   #);
 Fragments: node
-  (# sort:: (# do this(Fragments)[] -> S[] #);
+  (# PT:: (# do '--Fragments'-> lx.puttext #);
+     label:: (# do '***Ftagments:' -> lab[] #);
+     sort:: (# do this(Fragments)[] -> S[] #);
      entity:: (# do this(Fragments)[] -> E[] #);
+     getEntries::
+       (#
+       do '**** Fragments:getEntries:' -> putline;
+          scanSons(# F: ^Fragment do current[] -> F[]; (F.name.item[],cat[]) -> add #)
+       #);
      kind:: (# do '-'-> ch #);
+     skind:: (#do ': -' -> S[] #);
      name,cat,language: ^Lexem
   do  loop:
        (if lex.symb = lex.symbols.idf then
@@ -168,7 +194,8 @@ Fragments: node
                        // 'descriptor' -> (cat.lexemSy).equalNCS 
                        // 'descriptorForm' -> (cat.lexemSy).equalNCS then
                           (name[],cat[],language[]) -> ObjDescFrag -> append;
-                       // 'attributes' -> (cat.lexemSy).equalNCS then
+                       // 'attributes' -> (cat.lexemSy).equalNCS 
+                       // 'attribute' -> (cat.lexemSy).equalNCS then
                           (name[],cat[],language[]) -> AttFrag -> append
                        // 'doPart' -> (cat.lexemSy).equalNCS then 
                           (name[],cat[],language[]) -> doPartFrag -> append
@@ -195,23 +222,29 @@ Fragments: node
       if);
   #);
 Fragment: node
-  (# PT:: (# do 'Fragment'-> lx.append #);
+  (# (*PT:: (# do 'Fragment'-> lx.append #);
+     label:: (#do '::fragment'-> lab[] #);*)
     (* entity:: (# do this(Fragment)[] -> E[] #);
      sort:: (# do this(Fragment)[] -> S[] #);*)
      kind:: (# do '-' -> ch #);
+     skind:: (# do ': -' -> S[] #);
      name,cat,language: ^Lexem
   enter(name[],cat[],language[])
   do inner
   #);
 ObjDescFrag: Fragment
-  (# getentries::(#do OD.getentries -> (names[],entries[]) #);
+  (# PT:: (# do 'ObjDescFrag' -> lx.puttext #);
+     label:: (# do 'ObjDescFrag' -> lab[] #);
+     getentries::(#do OD.getentries -> (names[],entries[]) #);
      entity:: (# do OD[] -> E[] #);
      sort:: (# do OD[] -> S[] #);
      OD: ^ObjectDesc
   do PatternDen -> ObjectDesc -> OD[]
   #);
 AttFrag: Fragment
-  (# length:: (# do att.length -> value #);
+  (# PT:: (# do 'AttFrag'->lx.puttext #);
+     label:: (#do 'AttFrag:'->lab[] #);
+     length:: (# do att.length -> value #);
      getentries::(#do att.getEntries -> (names[],entries[]) #);
      entity:: (# do att[] -> E[] #);
      sort:: (# do att[] -> S[] #);
@@ -220,7 +253,9 @@ AttFrag: Fragment
   do Attributes -> att[]
   #);
 doPartFrag: Fragment
-  (# length::(# #);
+  (# PT:: (# do 'doPartFrag' -> lx.puttext #);
+     label:: (# do 'doPartFrag' -> lab[] #);
+     length::(# #);
      getEntries:: (# do ('Do-part',ACP[]) -> add #);
      ACP: ^ActionPart 
   do ActionPart -> ACP[]
@@ -229,11 +264,14 @@ doPartFrag: Fragment
 do '\n---ParseStdBeta:'->putline;
    
    (# StdPath: ^text;
-      FD: ^FragmentDir
+      FD: ^FragmentDir;
+      name: @Lexem
    do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
       (if stdpath[] = none then 'none'->putline if);
       StdPath[] -> putline;
-      (StdPath[],'',true) -> FragmentDir -> FD[] -> betaLib[];
-      FD.doPT -> putline
+      (StdPath[],'',true) -> FragmentDir -> FD[];
+      'A fragment' -> name.item[];
+      (name[],FD[]) -> FragmentModule -> betaLib[];
+      (*FD.doPT -> putline*)
    #)
    
