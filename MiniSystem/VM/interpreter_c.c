@@ -182,7 +182,7 @@ int threadStatus[MAX_THREADS];
 #define t_suspended 1
 #define t_stopped 2
 
-boolean gcInProgress = FALSE;
+bool gcInProgress = false;
 
 Block *contexts[MAX_THREADS];
 
@@ -293,11 +293,11 @@ void addMapRef(Btemplate * oldRef,Btemplate * newRef){
 void printMapRef(){
   Btemplate *R;
   int inx;
-  printf("\nprintMap: mapStart: %x mapInx: %i\n",mapStart,mapInx);
+  printf("\nprintMap: mapStart: %x mapInx: %i\n",(int)mapStart,mapInx);
   for (inx = 0; inx < mapInx; inx = inx + 8) {
     R = getBTheap(mapStart,inx);
-    printf("Ref:%x index:%i start: %x adjust: %x %i %s\n"
-	   ,(int)mapStart,inx,R, getIheap(mapStart, inx + 4),
+    printf("Ref:%x index:%i stoart: %x adjust: %x %i %s\n"
+	   ,(int)mapStart,inx,(int)R, getIheap(mapStart, inx + 4),
     	   getIheap(mapStart, inx + 4),
     	   nameOf((Btemplate *) ((int)R - getIheap(mapStart, inx + 4))));
   }
@@ -674,6 +674,7 @@ void doGCclearHeap() {
   for (i = heapTop; i < heapMax; i++) {heap[i] = 0; }
 }
 
+#ifdef __CYGWIN__
 void suspendThreads(Block *ctx){
   printf("\n**** Suspend threads: thisThreadId: %i threadNo: %i\n", 
 	 ctx->threadId, threadNo);
@@ -681,6 +682,7 @@ void suspendThreads(Block *ctx){
   for (no = 0; no < threadNo; no++) {
     printf("\nTry suspend:threadNo: %i threadId: %i",no, no + 1);
     // suspend main thread
+
     if (ctx->threadId > 0) 
       printf("sysThreadId: %i\n",(int)hThreadArray[no]);
     else
@@ -699,6 +701,7 @@ void suspendThreads(Block *ctx){
     printf("\n....................\n");
   }
 }
+#endif
 
 void resumeThreads(Block *ctx){
   /*printf("\n**** Resume threads: thisThreadId: %i subThreadNo: %i noOfSubThreads: %i\n", 
@@ -720,7 +723,7 @@ void doGCcheckHeap(Btemplate *root){
     ObjDesc desc = root->desc;
     if (isIndexed(desc)) {
       checkInHeap(root);
-      printf("   origin: %x",getR(root,1));
+      printf("   origin: %x",(int)getR(root,1));
       printf(" %s\n",nameOf(getR(root,1)));
     }
     int start = desc_getInt4(desc,GCinfo_index);
@@ -754,7 +757,7 @@ void doBGC(Block *ctx,Btemplate *root){
 #if defined traceGC_0
   printf("\n<GC threadNo: %i ...",ctx->threadId);
 #endif
-  gcInProgress = TRUE;
+  gcInProgress = true;
   contexts[ctx->threadId] = ctx;
   waitAllThreadsStopped(ctx);
   int no; 
@@ -809,7 +812,7 @@ void doBGC(Block *ctx,Btemplate *root){
   for (no = 0; no <=threadNo; no++) 
     if (threadStatus[no] == t_suspended) 
 	printf("thread is suspended: %i threadId: %i\n",no,ctx->threadId);
-  gcInProgress = FALSE;
+  gcInProgress = false;
   //printf("end:GC>\n");
 }
 
