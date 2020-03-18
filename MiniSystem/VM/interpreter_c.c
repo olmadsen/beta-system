@@ -1505,7 +1505,7 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->thisObj = ctx->callee;
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
-#ifdef TRACEc
+#ifdef TRACE
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
