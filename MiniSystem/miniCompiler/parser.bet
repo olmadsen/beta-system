@@ -803,7 +803,7 @@ parser: AbstractSyntaxTree
           isReferenced: @boolean; (* instances of this descriptor may be referenced
                                    * as opposed to only being executed as a proc
                                    *)
-          markAsSuper: (# do true -> isSuper #);
+          markAsSuper::< (# do true -> isSuper; inner #);
           isSuper: @boolean; (* this desc is used as a super pattern *)
           isSingular:< booleanValue;
           singularObjectDesc:< (# objDsc: ^objectDesc do inner exit objDsc[]#);
@@ -1606,6 +1606,7 @@ parser: AbstractSyntaxTree
                      if)
                #)#)
             #);
+          markAsSuper::(#do 'Evaluation:'-> puttext; dopt -> putline; tra.markAsSuper #);
           (* eval: exp -> trans1 -> trans2 
            * trans: 
            * exp: E1 op E2
@@ -1613,7 +1614,7 @@ parser: AbstractSyntaxTree
            *)
           gen::< (# LMR: @char enter LMR do inner #); 
           tra: ^Trans
-       do pExp -> append; 
+       do pExp -> tra[] -> append; 
           L:
             (if lex.symb = lex.symbols.assign then 
                 lex;
@@ -1624,6 +1625,12 @@ parser: AbstractSyntaxTree
      Trans: Node
        (# PT::< (# do inner #);
           Gen::< (# LMR: @char enter LMR do inner #);     
+          markAsSuper::<
+            (#
+            do 'Trans:markAsSuper:' -> puttext; dopt -> putline;
+               scanSons(#do 'transSon:'-> puttext; current.dopt -> putline;current.markAsSuper #);
+               inner
+            #)
        do inner
        #);
 
@@ -1783,21 +1790,20 @@ parser: AbstractSyntaxTree
                   (if lex.symb = lex.symbols.begin then
                       '\n!!!!! In module "' -> puttext;           
                       thisModuleName[] -> puttext;
-                      '", ComputedRemote as super may not work!\n\n' -> puttext; 
-                      
+                      '", ComputedRemote as super may not work!\n' -> puttext;
                       3 -> lex.printlines;
                       newline;
-                      (# PD: ^PatternDen; AD: ^AttributeDenotation; N: ^NAmeApl;
-                         OE: ^ObjEval
+                      tra.markAsSuper;
+                      (# PD: ^PatternDen; AD: ^AttributeDenotation; OE: ^ObjEval
                       do &PatternDen[] -> PD[];
                          &AttributeDenotation[] -> AD[];
-                         &nameApl[] -> N[];
-                         &ObjEval[] -> OE[];
-                         true -> N.isSupPtn -> N.isEmpty;
-                         N[] -> AD.NA[] -> AD.append;
+                         &ObjEval[] -> OE[];                         
+                         tra[] 
+                           -> ComputedRemoteAsDenotation
+                           -> AD.NA[]
+                           -> AD.append;
                          AD[] -> PD.AD[] -> PD.append;
-                         
-                         PD[]  -> objectDesc -> OE.OS[] -> OE.append;
+                         PD[] -> objectDesc -> OE.OS[] -> OE.append;
                          OE[] -> tra[]
                       #)
                   if)
@@ -1858,6 +1864,7 @@ parser: AbstractSyntaxTree
           (# PD: ^PatternDen
           do PatternDen -> PD[];
              (if lex.symb = lex.symbols.begin then
+                 PD.markAsSuper;
                  PD[] -> ObjectDesc -> OS[] -> Append
               else
                  PD[] -> OS[] -> Append
@@ -1929,6 +1936,12 @@ parser: AbstractSyntaxTree
                   ')' -> lx.put;
                #)
             #);
+          markAsSuper:: 
+            (# 
+            do 'EvalList:markAsSuper' -> putline; dopt -> putline;
+               scanSons(# do 'Son: ' -> puttext; current.dopp -> putline;
+                          current.markAsSuper #)
+            #);          
        do Loop:
             (# do
                Evaluation -> Append;
@@ -1944,6 +1957,7 @@ parser: AbstractSyntaxTree
        #);
      ComputedRemote:< trans (*Should be a denotation*)
        (# PP:: (# do 'ComputedRemote'-> lx[] #);
+          label::(#do 'ComputedRemote' -> lx[] #);
           length:: (# do tra.length + NA.length -> value (* ??*)#); 
           PT:: 
             (# 
@@ -1952,6 +1966,7 @@ parser: AbstractSyntaxTree
                '.' -> lx.put;
                NA.PT
             #);
+          markAsSuper:: (# do 'CR:markAsSuper' -> putline; tra.markAsSuper #);
           tra: ^Trans;
           NA: ^NameApl;
           isRef: @boolean
@@ -1974,8 +1989,10 @@ parser: AbstractSyntaxTree
        #);
      ComputedRemoteAsDenotation:< Denotation
        (# PP:: (# do 'ComputedRemoteAsDenotation' -> lx[] #);
+          label::(#do 'ComputedRemoteAsDenotation' -> lx[] #);
           length:: (# do CR.length -> value #);
           PT::(# do CR.PT #);
+          markAsSuper:: (# do 'CRAD:markAsSuper' -> putline; CR.markAsSuper #);
           CR: ^ComputedRemote
        enter CR[] -> append
        #);
@@ -2293,6 +2310,8 @@ parser: AbstractSyntaxTree
           PP:: (#do 'PatternDen' -> lx[] #);
           length:: (# do AD.length -> value #);
           PT:: (# do (pos,break) -> AD.PT  #);
+          markAsSuper:: (# do 'patternDen:markAsSuper:'->puttext; dopt -> putline;
+                           AD.markAsSuper #);
           name: (# exit AD.name #);
           AD: ^AttributeDenotation;
           isSuper: (# enter AD.isSuper #)
@@ -2518,6 +2537,13 @@ parser: AbstractSyntaxTree
             enter isSup 
             do L: scanSons(#do current[] -> NA[]; isSup -> NA.isSuper; leave L #)
             #);
+          markAsSuper::
+            (#
+            do 'AD:markAsSuper:'-> puttext; dopt -> putline;
+               L:
+                 scanSons(#do current.markAsSuper; true -> isSuper; leave L #)
+            #);
+                          
           doAlloc:< (# (*ND: ^nameDecl enter ND[]*) do 'AD:bingo' -> putline; inner #);
           on: integerValue
             (# NA: ^nameApl;
@@ -2674,6 +2700,12 @@ parser: AbstractSyntaxTree
              *)
             (# do father.theModule -> md[] #);
           isNameApl:: (# do this(nameApl)[] -> Na[] #);
+          markAsSuper:: 
+            (# 
+            do  
+               'NameApl:maskAsSuper: ' -> puttext; dopt -> putline;
+               true -> isSuper
+            #);
           getDeclModule::
             (# d: ^Decl;
                item: ^ModuleItem
