@@ -176,6 +176,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg2 = op1(bc,&glsc);
 	fprintf(trace,"alloc %i %i",arg1,arg2);
 	break;
+      case tstOriginNone:
+	fprintf(trace,"tstOriginNone");
+	break;
       case invoke:
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);

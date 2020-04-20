@@ -2448,7 +2448,13 @@ bool traceThreads = true;
 	saveContext();
 	allocObj(thisBlock,rPop(thisBlock->thisStack),arg1,arg2,0,0);
 	restoreContext();
-
+	break;
+      case tstOriginNone:
+#ifdef TRACE
+	fprintf(trace,"tstOriginNone");
+#endif
+	if (rTopElm(thisStack,0) == NULL)
+	  runTimeErrorX("Origin of invoke is NONE",thisObj,glsc); 
 	break;
       case invoke:
 	arg1 = op2(bc,&glsc);

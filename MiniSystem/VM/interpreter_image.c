@@ -233,7 +233,8 @@ enum {
   vassign = 103,
   saveAndSetThis = 104,
   restoreThis = 105,
-  pushValue = 106
+  pushValue = 106,
+  tstOriginNone = 107
 };
 
 
