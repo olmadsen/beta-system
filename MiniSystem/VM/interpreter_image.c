@@ -234,7 +234,8 @@ enum {
   saveAndSetThis = 104,
   restoreThis = 105,
   pushValue = 106,
-  tstOriginNone = 107
+  tstOriginNone = 107,
+  saveStringOrigin = 108
 };
 
 

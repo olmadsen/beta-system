@@ -120,6 +120,7 @@ SemaphoreHandle_t mutex1 = NULL;
 
 Btemplate *mainObj = NULL;
 Btemplate *betaWorld = NULL;
+Btemplate *stringOrigin = NULL;
 
 void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 	      ,bool isObj,int currentDescNo,int bcPos);
@@ -3086,6 +3087,12 @@ bool traceThreads = true;
 	X = rPop(thisStack); // should be assigned to eventprocessor.fields[1][]
 	thisBlock->world = X;
 	betaWorld = X;
+	break;
+      case saveStringOrigin:
+#ifdef TRACE
+	fprintf(trace,"saveStringOrigin");
+#endif
+	stringOrigin = thisObj;
 	break;
       case doSuper:
 	arg1 = op2(bc,&glsc);

@@ -232,6 +232,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld ");
 	break;
+      case saveStringOrigin:
+	fprintf(trace,"saveStringOrigin ");
+	break;
       case doSuper:
 	fprintf(trace,"doSuper %i",op2(bc,&glsc));
 	break;
