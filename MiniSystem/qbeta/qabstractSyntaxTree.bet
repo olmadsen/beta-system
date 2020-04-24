@@ -686,6 +686,47 @@ AbstractSyntaxTree: Tree
                #)
             exit(superOrgOff,level) 
             #);
+          scanAllItemDecls:
+            (# currentDcl: ^Decl;
+               superOrgOff,level: @integer
+            do (if (superDesc[] <> none) and (superDesc[] <> objectDecl.desc) then
+                   &superDesc.scanAllItemDecls
+                   (#
+                   do currentDcl[] -> this(scanAllItemDecls).currentDcl[];
+                      inner scanAllItemDecls
+                   #) -> (superOrgOff,level)
+               if);
+               scanDecls
+               (#
+               do currentDcl[] -> this(scanAllItemDecls).currentDcl[];
+                  inner scanAllItemDecls
+               #)
+            exit(superOrgOff,level) 
+            #);
+                    
+          scanItemArgs:
+            (# currentArg: ^Decl
+            do scanAllItemDecls
+               (# 
+               do currentDcl[] -> this(scanItemArgs).currentArg[];
+                  (*current.doPT -> putline;*)
+                  (if currentArg.isInArg and not currentArg.isVirtual then
+                      inner scanItemArgs
+                  if)
+               #)
+            #);
+          scanItemArgsReverse:
+            (# currentArg: ^Decl
+            do scanReverse
+               (# OT: ^Item
+               do (if (current[] -> OT[]).isDecl then
+                      current[] -> this(scanItemArgsReverse).currentArg[];
+                      (*current.doPT -> putline;*)
+                      (if currentArg.isInArg and not currentArg.isVirtual then
+                          inner scanItemArgsReverse
+                  if)if)
+               #)
+            #);
           theObjectGenerator:: (# do father[] -> OGx[] #);
           collectSimple::
             (#
@@ -1034,12 +1075,15 @@ AbstractSyntaxTree: Tree
             do (if printOffOn then
                    '('->lx.put; off -> lx.putint; ')'-> lx.put;
                if);
+               (if isInArg then '>> ' -> lx.puttext if);
+               (if isOutArg then '<< ' -> lx.puttext if);
                inner 
             #);
           isArg: @boolean;
           sig: ^Signature;
           off: @integer;
           qoff: [1] @integer; noOfVar: @integer;
+          isInArg,isOutArg: @boolean;
           objSize:< IntegerValue;
           isDecl:: TrueValue;
           isPatternDecl:< BooleanValue;
@@ -1546,15 +1590,42 @@ AbstractSyntaxTree: Tree
           BreakPattern:< SpecialPattern(##);
           OtherPrimPattern:< SpecialPattern(##);
           isCore:: (#do OG.IS.isCore -> value #);
-          scanArgs:
-            (# current: ^Decl; superPtn: ^Pattern
+          noOfArgs: IntegerValue
+            (# superPtn: ^Pattern
             do (if (OG.super <> none) and
                    not OG.super.lastHasActualArgs and
                    (OG.super.ATd[] <> none) then
-                   &(OG.super.ATd[]->superPtn[]).scanArgs
-                   (#do current[] -> this(scanArgs).current[]; inner scanArgs #)
+                   &(OG.super.ATd[]->superPtn[]).noOfArgs -> value
                if);
-               sig.scanArgs(# do currentArg[] -> current[] ;inner scanArgs #);
+               (*'*** noOfArgs: ' -> puttext; sig.dopt -> puttext;
+               ' ' -> put; value -> putint;*)
+               value + sig.args.length -> value;
+               (* ' -> put; value -> putint; newline*)
+            #);
+          scanArgs:
+            (# currentArg: ^Decl; superPtn: ^Pattern
+            do (if noOfArgs = 0 then
+                   (* Formal args may be declared as: >> A: ?integer *)
+                   OG.IS.scanItemArgs
+                   (#
+                   do currentArg[] -> this(scanArgs).currentArg[];
+                      inner scanArgs 
+                   #)
+               else (* Formal args in signature as in foo(A: ?integer, ...) *)
+               (if (OG.super <> none) and
+                   not OG.super.lastHasActualArgs and
+                   (OG.super.ATd[] <> none) then
+                   &(OG.super.ATd[]->superPtn[]).scanArgs
+                   (#
+                   do currentArg[] -> this(scanArgs).currentArg[]; 
+                      inner scanArgs 
+                   #)
+               if);
+                   sig.scanArgs
+                   (# 
+                   do currentArg[] -> this(scanArgs).currentArg[];
+                      inner scanArgs 
+               #)if)
             #);
           getReturnOG:
             (# OGx: ^ObjectGenerator
