@@ -4,7 +4,12 @@ INCLUDE 'qvirtual'
 ---lib:attributes---
 checkRecursive: (# exit true #);
 semchecker: checker
-  (# Module::<
+  (# doCheckQual:
+       (# srcQual,dstQual: ^ObjectGenerator
+       enter(srcQual[],dstQual[])
+       do  (* repeat code from DataItem - but perhaps in checkQual in Decl? *)
+       #);
+     Module::<
        (# semcheck:: 
             (# encModule:
                  (# org: ^Items; 
@@ -118,10 +123,6 @@ semchecker: checker
                if)
             #);
           checkQual::                               
-            (* Note: before we had left / right from Beta: Left -> Right
-             * for rQual and lQual
-             * Now we shifted to srcQual - sourceQual and dstQual -destinationQual
-             *)
             (# error:
                  (#
                  do (if reportSemErr then
@@ -267,7 +268,55 @@ semchecker: checker
           (if E.ATd[] <> none then E.ATd.isPatternDecl -> value if)
        #); 
      pattern::<
-       (# checkActualArgs::
+       (# checkQual::
+            (* We come here for assignments of the form
+             *    (this Spped) := exp
+             * where 
+             *    Speed: integer{... }
+             *    Point: Value{ ... }
+             *    Record: { ... }
+             * This pattern must be a value of sub of basic 
+             * - the latter may later be desclared as sub of Value
+             *)
+            (# trace: (# exit false #)
+            do (if trace then
+                   '**** Pattern:checkQual:\n' -> puttext; dopt -> puttext;
+                   '\n**   :isAssign:' -> puttext; isAssign -> putBoolean;
+                   ':srcOG: "' -> puttext; srcOg.dopt -> puttext; 
+                   '"\n' -> puttext;
+                   '**   isValueObj:' -> puttext; OG.isValueObj -> putBoolean;
+                   ':isBasic:' -> puttext; isBasic -> putBoolean;
+                   newline;
+               if);
+               (if isAssign then
+                   (if true 
+                    // OG.isValueObj then 
+                       '**** pattern:checkQual:isValueObj:' -> putline;
+                       '**   check assignTo: \n' -> puttext;
+                       doPT -> putline;
+                       '**  from: "' -> puttext; srcOG.doPT -> puttext;
+                       '"\n\n' -> puttext
+                    // isBasic then 
+                       '**** pattern:checkQual:isBasic:shouldNotHappen' 
+                         -> putline;
+                    // isBasicValue then 
+                       '**** pattern:checkQual:isBasicValue:' -> putline;
+                       '**   check assignTo: \n' -> puttext;
+                       doPT -> putline;
+                       '**  from: "' -> puttext; srcOG.doPT -> puttext;
+                       '"\n\n' -> puttext
+                    else 
+                       (* Bad message - should be fixed *)
+                       srcOG[] -> SemanticError
+                       (#
+                       do srcOG.doPT -> msg;
+                          ' cannot be assigned to :\n' -> msg;
+                          dopt -> msg
+                       #)
+                   if)           
+               if)
+            #);
+          checkActualArgs::
             (# A: [6] ^Decl; inx,top: @ integer;
             do (if traceGetQual then
                    '\nCheck: ' -> puttext; actualArgs.doPT -> putline;
@@ -713,24 +762,30 @@ semchecker: checker
             #);
           getQual::
             (# E: ^Exp; 
-            do (*'Invocation:' -> puttext; doPT -> putline;*)
+            do (*'Invocation:getQual:' -> puttext; doPT -> putline;*)
                scanSons(# do current[] -> E[] #);
                ('Invocation:getQual',E[]) -> display;
-               E.getQual -> qual[]
+               (if E[] <> none then
+                   E.getQual -> qual[]
+               if)
             #);
+          getActualReceiver::
+            (#
+            do (last).getActualReceiver -> rec[]
+            #)
        #);
      ObjectInvocation::<
        (# semCheck::
             (# receiver: ^Exp; ptn: ^Pattern
-            do (*'>>> ObjectInvication:semCheck: rec: ' -> puttext;
+            do (*'**** ObjectInvocation:semCheck:rec:"' -> puttext;
                rec.doPT -> puttext;
-                ' <- ' -> puttext; args.doPT -> puttext;*)
+                '" invoke:"' -> puttext; args.doPT -> puttext; '"'->putline*)
                (if (ATd.primNo <> rAssign_prim) and (ATd.primNo <> vAssign_prim) then
                    (*' Atd: ' -> puttext; ATd.doPT -> putline;*)
                    (if ATd.primno
-                    // inner_prim //this_prim
+                    // inner_prim // this_prim
                     // restart_prim // leave_prim 
-                    // indexedPut_prim  then
+                    // indexedPut_prim then
                        true -> noArgsCheck
                     // ifThen_prim then
                     else
@@ -739,16 +794,22 @@ semchecker: checker
                            (*'#PTN: '->puttext; ptnId.T[] -> putline*)
                         else
                            (if not noArgsCheck then
+                               (* check that args can be assigned to the 
+                                * formal arguments of the receiver rec *)
                                args[] -> ATd.checkActualArgs
                        if)if)
                    if)
                 else
                    (* pattern is assignment := *)
-                   (*' Q:= rec.ATd: ' -> puttext;*)
                    rec[] -> receiver[];
-                   (*receiver.Atd.doPt -> putline;*)
-                   (*'** assign: ' -> puttext; rec.dopt -> puttext;
-                   ' ' -> puttext; dopt -> putline;*)
+                   
+                   (*'**** assign: "' -> puttext; rec.label -> puttext;
+                   '"' -> put; rec.dopt -> puttext;
+                   '" := "' -> puttext; dopt -> puttext; '"' -> putline;
+                   (if receiver.ATd.primNo = this_prim then
+                       '**   this:true'->putline;
+                   if);*)
+                   
                    args.scanArgs
                    (# i: @integer
                    do (if (i + 1 -> i) > 1 then
@@ -758,7 +819,18 @@ semchecker: checker
                              receiver.doPT -> puttext; '"' -> put; newline
                           #)
                       if);
-                      (*current.dopt -> putline;*)
+                     (* '**   arg:"' -> puttext; current.dopt -> puttext;
+                      '"' -> putline;*)
+                     (* (if receiver.ATd.primNo = this_prim then
+                          receiver.scanSons
+                          (# i: @integer
+                          do (if (i + 1 -> i) = 2 then
+                                 '%thisArg: ' -> puttext; 
+                                 current.dopt -> putline;
+                             if)
+                      #)if);*)
+                      receiver.getActualReceiver -> receiver[];
+                      (* check that current can be assigned to receiver  *)
                       (current[],true) -> receiver.ATd.checkQual 
                    #);
                if)
@@ -829,7 +901,19 @@ semchecker: checker
                     else
                        'qual is none' -> putline
                if)if)
-            #);          
+            #);      
+          getActualReceiver::
+            (#
+            do (if ATD.primNo = this_prim then
+                   args.scanSons
+                   (# i: @integer; OG: ^ObjectGenerator
+                   do (if (i + 1 -> i) = 2 then
+                          (*'** primArg:'->puttext; current.doPT -> putline;*)
+                          ((current[] -> OG[]).super).last -> rec[]
+                      if)
+                   #)
+               if)
+            #)
        #);
      BracketedExp::<
        (# getQual::
@@ -840,6 +924,10 @@ semchecker: checker
             (# Px: ^OGpath 
             do P[] -> IV.pathToDcl -> P[];
                
+            #);
+          getActualReceiver::
+            (#
+            do IV.getActualReceiver -> rec[];
             #);
        #);
      Const::<
