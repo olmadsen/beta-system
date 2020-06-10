@@ -727,7 +727,7 @@ checker: Parser
           alloc::
             (# fOG: ^ObjectGenerator
             do (if IT[] <> none then (* IT is none if top module *)
-                   (if OG.isSimpleValue then
+                   (if OG.isBasicValue then
                        IT.vsize + 1 -> IT.vsize -> off
                     else
                        IT.rsize + 1 -> IT.rsize -> off
@@ -743,7 +743,7 @@ checker: Parser
                    OG.IS[] -> D[]
                if);
             #);
-          isSimpleValue: booleanValue(# do OG.isSimpleValue -> value #);
+          isBasicValue:: (# do OG.isBasicValue -> value #);
           objDescEQ::<
             (#
             do (if trace then 'DataItem: ' -> puttext; newline if);
@@ -771,6 +771,27 @@ checker: Parser
                (if OG.primNo = string_prim then
                    origin[] -> org[]; true -> org.isStringModule
                if)
+            #);
+          isBasicValue:: 
+            (# DI: ^DataItem; 
+            do (*'pattern:isBasicValue' -> putline;
+                dopt -> putline;*)
+               (if not isBasicValueCalled then
+                        (*  For a pattern
+                         *    foo(...) -> res: ? foo ...
+                         * isBasicValue is called on the foo return value
+                         * giving a recursive call of isBasicValue
+                         *)
+                   true -> isBasicValueCalled;
+                   (if (sig.getReturnDecl -> DI[]) <> none then
+                            (if DI.isBasicValue -> value then
+                                (*' return value is basic value'->putline;*)
+                                false -> isBasicValueCalled;
+                                leave isBasicValue
+               if)if)if);
+               true -> isBasicValueCalled;
+               OG.isBasicValue -> value ;
+               false -> isBasicValueCalled;
             #);
           isVirtual:: (#do ptnKind <> PlainPtn -> value #);
           isVirtualObject::
@@ -1057,7 +1078,7 @@ checker: Parser
                inner;
             #);
          
-          isRecursive,isRec: @boolean;
+          isRecursive,isRec,isBasicValueCalled: @boolean;
           entity:: (#do OG.entity -> E[] #);
           skind:: (# do ': ' -> S[] #);
           getEntries:: (# do OG.getEntries -> (names[],entries[]) #);
@@ -1207,9 +1228,9 @@ checker: Parser
                    (none,origin[],origin[],true) -> IS.check 
                if);
             #);
-          isSimpleValue: BooleanValue
-            (* This OG is a simple value like integer, boolean of char
-             * or exp/function returning  asimple value: a + b, (max(a,b), ...
+          isBasicValue: BooleanValue
+            (* This OG is a basic value like integer, boolean of char
+             * or exp/function returning a simple value: a + b, (max(a,b), ...
              * ObjectGeneration in (the rightside)
              * C: = integer(12)   -- refer to pattern integer
              * C: = 12
@@ -1229,8 +1250,8 @@ checker: Parser
              * 3.2          -- OG not simpleValue?
              *)
             (# q: ^ObjectGenerator; pNo: @integer
-            do (*'*** isSimpleValue: ' -> puttext; 
-               (if sig[] <> none then sig.dopt -> puttext else '#S:'->puttext if);*)
+            do (*'*** isBasicValue:\n' -> puttext; 
+               doPT -> putline;*)
                (*primNo -> putint; newline;
                doPT -> putline;
                '>>> super:qual:'->putline;*)
@@ -1238,30 +1259,54 @@ checker: Parser
                 else
                    q.doPT -> putline;
                 if);*)
-               (if primNo
-                // integer_prim
-                // 61 (* + *)
-                // 62 (* - *)
-                // char_prim
-                // boolean_prim 
-                   then
-                   true -> value;
-                   leave isSimpleValue
-               if);
-               (if (super.getQual -> q[]) <> none then
-                   q.primNo -> pNo;
+               (if true then
+                   (if IS.isEmpty then
+                       (*'\nsuper.ATd:'->puttext; super.ATd.dopt -> putline;*)
+                       (if super.ATd.isBasicValue -> value then
+                           (*' super is basic' -> putline*)
+                       if)
+                    else
+                       (if IS.primNo
+                        // integer_prim
+                        // 61 (* + *)
+                        // 62 (* - *)
+                        // char_prim
+                        // boolean_prim 
+                           then
+                           true -> value; 
+                       if);   
+                   if)
                 else
-                   primNo -> pNo;
+                   (if primNo
+                    // integer_prim
+                    // 61 (* + *)
+                    // 62 (* - *)
+                    // char_prim
+                    // boolean_prim 
+                       then
+                       true -> value;
+                       leave isBasicValue
+                   if);
+                   (if (super.getQual -> q[]) <> none then
+                       q.primNo -> pNo;
+                    else
+                       primNo -> pNo;
+                   if);
+                   (if pNo
+                    // integer_prim
+                    // char_prim
+                    // boolean_prim 
+                       then
+                       true -> value
+                   if);
                if);
-               (if pNo
-                // integer_prim
-                // char_prim
-                // boolean_prim 
-                   then
-                   true -> value
-               if);
+              (* (if value then
+                   '** is basicValue'->putline;
+                else
+                   '** is not basicValue'->putline;
+               if)*)
                (*'**   pNo:'->puttext; pNo -> putint;
-               ':isSimpleValue:' -> puttext; value -> putBoolean; newline*)
+               ':gotBasicValue:' -> puttext; value -> putBoolean; newline*)
             #);
           isObjectDesc: booleanValue
             (* this can be a singular or pattern defined ObjectDesc:
