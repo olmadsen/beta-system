@@ -1500,6 +1500,7 @@ AbstractSyntaxTree: Tree
           getEntries:: (# do OG.getEntries -> (names[],entries[]) #);
           entity:: (# do OG[] -> E[] #);
           isBasic:: (#do OG.isBasic -> value #);
+          isBasicValue:: (# do OG.isBasicValue -> value #);
           replaceEntity::
             (#
             do (if false then
@@ -1572,7 +1573,6 @@ AbstractSyntaxTree: Tree
           ptnKind: @integer;
           isBasicPtn: @boolean;
           vDcl: ^Decl; 
-          isBasic:: (# do OG.IS.isBasic -> value #);
           primNo:: 
             (#
             do (if OG.IS.props[] <> none then 
@@ -1582,6 +1582,28 @@ AbstractSyntaxTree: Tree
                        0 -> value
                    if)
                if)
+            #);
+          isBasic:: (# do OG.IS.isBasic -> value #);
+          isBasicValueCalled: @boolean;
+          isBasicValue:: 
+            (# DI: ^DataItem; 
+            do (*'pattern:isBasicValue' -> putline; dopt -> putline;*)
+               (if not isBasicValueCalled then
+                   (*  For a pattern
+                    *    foo(...) -> res: ? foo ...
+                    * isBasicValue is called on the foo return value
+                    * giving a recursive call of isBasicValue
+                    *)
+                   true -> isBasicValueCalled;
+                   (if (sig.getReturnDecl -> DI[]) <> none then
+                       (if DI.isBasicValue -> value then
+                           (*' return value is basic value'->putline;*)
+                           false -> isBasicValueCalled;
+                           leave isBasicValue
+               if)if)if);
+               true -> isBasicValueCalled;
+               OG.isBasicValue -> value;
+               false -> isBasicValueCalled;
             #);
           SpecialPattern:
             (# invoke:< 
@@ -1803,8 +1825,89 @@ AbstractSyntaxTree: Tree
                        IS.isBasic -> value
                if)if)
             #); 
-          (* Super, super.ATd, etc is a mess
-           * isValue (in DataItem) and isValueObj (here) is also a mess
+ isBasicValue: BooleanValue
+            (* This OG is a basic value like integer, boolean of char
+             * or exp/function returning a simple value: a + b, (max(a,b), ...
+             * ObjectGeneration in (the rightside)
+             * C: = integer(12)   -- refer to pattern integer
+             * C: = 12
+             * C: = a + b         -- pattern +
+             * C: = foo(e1,e2,e3) -- pattern foo
+             * C: = X             -- data-item X
+             * V: ? a + b         -- and simialr for variable
+             * V:= foo(e1,e2,e3)  -- and assignment
+             * And they may be singular
+             * 1:   OG - non-singular
+             * 1.1  OG - integer, boolean, char ==> true
+             * 1.2     - else get possible return value
+             * 2:   {...} - singular, no super
+             * 2.1        - primno = integer, char, boolean
+             * 3:   OG{...} - singular with super
+             * 3.1          -- return value of OG
+             * 3.2          -- OG not simpleValue?
+             *)
+            (# q: ^ObjectGenerator; pNo: @integer
+            do (*'*** isBasicValue:\n' -> puttext; 
+               doPT -> putline;*)
+               (*primNo -> putint; newline;
+               doPT -> putline;
+               '>>> super:qual:'->putline;*)
+               (*(if (super.getQual -> q[]) = none then 'none' -> putline
+                else
+                   q.doPT -> putline;
+                if);*)
+               (if true then
+                   (if IS.isEmpty then
+                       (*'\nsuper.ATd:'->puttext; super.ATd.dopt -> putline;*)
+                       (if super.ATd.isBasicValue -> value then
+                           (*' super is basic' -> putline*)
+                       if)
+                    else
+                       (if IS.primNo
+                        // integer_prim
+                        // 61 (* + *)
+                        // 62 (* - *)
+                        // char_prim
+                        // boolean_prim 
+                           then
+                           true -> value; 
+                       if);   
+                   if)
+                else
+                   (if primNo
+                    // integer_prim
+                    // 61 (* + *)
+                    // 62 (* - *)
+                    // char_prim
+                    // boolean_prim 
+                       then
+                       true -> value;
+                       leave isBasicValue
+                   if);
+                   (if (super.getQual -> q[]) <> none then
+                       q.primNo -> pNo;
+                    else
+                       primNo -> pNo;
+                   if);
+                   (if pNo
+                    // integer_prim
+                    // char_prim
+                    // boolean_prim 
+                       then
+                       true -> value
+                   if);
+               if);
+              (* (if value then
+                   '** is basicValue'->putline;
+                else
+                   '** is not basicValue'->putline;
+               if)*)
+               (*'**   pNo:'->puttext; pNo -> putint;
+               ':gotBasicValue:' -> puttext; value -> putBoolean; newline*)
+            #);
+          (* Super is never none, super.ATd[] = none implies no super pattern*)
+          
+           (* isValue (in DataItem) and isValueObj (here) is also a mess
            * isValueObj should be a property of OG and Decl
            * clean-it up
            *)
