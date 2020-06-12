@@ -58,14 +58,43 @@ AbstractSyntaxTree: Tree
      Node: TopNode
        (# vNode::< Node; 
           PT::<
-            (# printComment:
+            (# atEol: BooleanValue
+                 (#
+                 do (lx.length > 0) 
+                    and ((lx.length -> lx.inxGet) = ascii.newline)
+                      -> value
+                 #);
+               standAlone: BooleanValue
+                 (# ch: @char; ix: @integer
+                 do lx.length -> ix; '"' -> put;
+                    L:
+                      (if ix > 0 then                        
+                          ix -> lx.inxGet -> ch; ch -> put;
+                          (if commentBefore then 'B'->put else 'A' -> put if);
+                        (if true
+                         // ch = ascii.newline then
+                            true -> value;
+                            leave standAlone
+                         // ch <= ' ' then;
+                            ix - 1 -> ix;
+                            restart L
+                        if)
+                     else
+                        true -> value
+                      if);
+                    '"'->put
+                 #);
+               printComment:
                  (# ix: @integer
                  do (if comment[] <> none then
                         comment.setPos;                   
                         1 -> ix;
                         emit:
-                          (# doBreak: @boolean
-                          do (ix -> comment.inxGet) = '<' -> doBreak;
+                          (# doBreak,isAlone: @boolean; oldPos: @integer
+                          do (* pos -> oldPos;
+                             standAlone -> isAlone;*)
+                             (ix -> comment.inxGet) = '<' -> doBreak;
+
                              (if doBreak then 
                                  comment.get;
                                  comment.getint - 2 -> pos;
@@ -87,7 +116,8 @@ AbstractSyntaxTree: Tree
                                     comment.pos + 1 -> ix;
                                     restart emit 
                              if) #);
-                             (if doBreak and commentBefore then
+                             (if doBreak (*and commentBefore *)
+                                 or isAlone or (oldPos =0 ) then
                                  (pos,true) -> mkBreak;
                              if)
                           #)
@@ -394,7 +424,7 @@ AbstractSyntaxTree: Tree
           (* Bindings from compiler_IF *)
           moduleName:: (# do DI.sig.id.copy -> N[] #);
           getEntries:: (# do DI.getEntries -> (names[],entries[]) #);
-          entity:: (# do DI.entity -> E[] #);
+          entity:: (# do (*this(module)[]*) DI.entity -> E[] #);
           theModule::(# do this(Module)[] -> MD[] #);
           isAmodule:: (# do &iModule[] -> M[]; this(Module)[] -> M.M[] #);
           getOrigin:: (# do origin[] -> org[] #);
@@ -647,23 +677,51 @@ AbstractSyntaxTree: Tree
             (# 
             do (* pos -> lx.putint;'<'->lx.put;*)
                (pos,length) -> block
-               (#
+               (# ptn: ^Pattern; DI: ^DataItem
                do (* '{' -> lx.put; beginPos -> lx.putint; ' ' -> lx.put;*)
                   (if (props[] <> none) and (props.length > 0) then
                       (pos,false) -> props.PT;
                       (pos,true) -> mkbreak
                   if);
                   inner PT;
-                  scanSons
-                  (# 
-                  do (if not isFirst or (incl[] <> none) and (incl.son[] <> none) then
-                         (pos,break) -> current.PT; 
-                         (if not isLast then
-                             (pos,true) -> mkbreak
-                     if)if)
+                  (if true then
+                      (if (incl[] <> none) and (incl.son[] <> none) then
+                          (pos,break) -> incl.PT;
+
+                      if);
+                      (if father.father## // pattern## 
+                          (* checker must be called before sig is defined *)
+                          (*sig[] <> none*) then
+                          (pos,break,true) -> (father.father[] -> ptn[]).sig.args.PT;
+                          (if ptn.sig.val[] <> none then
+                              (pos,true) -> ptn.sig.val.PT;
+                              (pos,true) -> mkbreak
+                          if)
+                       // dataItem## then
+                          (pos,break,true) -> (father.father[] -> DI[]).sig.args.PT
+                       else
+                          (*father.father.label -> lx.puttext;*)
+                      if);
+                      scanSons
+                      (#
+                      do (if not isFirst then
+                             (pos,break) -> current.PT; 
+                             (if not isLast then
+                                 (pos,true) -> mkbreak
+                         if)if)
+                      #)
+                   else
+                      scanSons
+                      (# 
+                      do (if not isFirst or (incl[] <> none) and (incl.son[] <> none) then
+                             (pos,break) -> current.PT; 
+                             (if not isLast then
+                                 (pos,true) -> mkbreak
+                         if)if)
+                      #)
+                  if)
                   #);
                   (*'}'-> lx.put*)
-               #)
             #);
           length::
             (#
@@ -1100,6 +1158,7 @@ AbstractSyntaxTree: Tree
             do (if printOffOn then
                    '('->lx.put; off -> lx.putint; ')'-> lx.put;
                if);
+
                (if isInArg then '>> ' -> lx.puttext if);
                (if isOutArg then '<< ' -> lx.puttext if);
                inner 
@@ -1211,16 +1270,26 @@ AbstractSyntaxTree: Tree
      Signature:< Scope
        (* In xbeta, Signature have subpatterns UnarySignature, etc *)
        (# PT:: 
-            (# 
-            do (if type[] <> none then
-                   (pos,break) -> type.PT;
-                   (if val[] <> none then (pos,break) -> val.PT if)
+            (# inDecl: @boolean
+            enter inDecl
+            do (if inDecl then
+                   (if type[] <> none then
+                       type.id[] -> lx.puttext; 
+                       (if type## = Binary## then ' '-> lx.put if)
+                    else
+                       ' type is none ' -> lx.puttext
+                   if)
                 else
-                   scanSons
-                   (#do (pos,break) -> current.PT; 
-                      (if not isLast then ' ' -> lx.put if)
-                   #);
-                      (*(if val[] <> none then val.PT if)*)
+                   (if type[] <> none then
+                       (pos,break,inDecl) -> type.PT;
+                       (if val[] <> none then (pos,break) -> val.PT if)
+                    else
+                       scanSons
+                       (#do (pos,break) -> current.PT; 
+                          (if not isLast then ' ' -> lx.put if)
+                       #);
+                          (*(if val[] <> none then val.PT if)*)
+                   if)
                if)
             #);
           length:: 
@@ -1237,22 +1306,29 @@ AbstractSyntaxTree: Tree
           PP::(# do Label -> lx.append #);
           display:: (# do 'Signature:'->putline #);
           type: ^SigType;
-          SigType: Node (# id: ^text enter id[] do id[] -> name -> append #);
+          SigType: Node 
+            (# id: ^text;
+               PT::< (# inDecl: @boolean enter inDecl do inner #);
+            enter id[] 
+            do id[] -> name -> append 
+            #);
           Unary:< SigType
             (# Label:: (# do 'UnaryPtn' -> lab[] #);
                PT:: (# do id[] -> lx.puttext #);
             #);
           Binary:< SigType
             (# label :: (# do 'Binary' -> lab[] #);
-               PT:: (# do id[] -> lx.puttext; ' ' -> lx.put; (pos,break) -> args.PT #);
+               PT:: (# do id[] -> lx.puttext;
+                       ' ' -> lx.put; (pos,break,inDecl) -> args.PT #);
             #);
           Function:< SigType
             (# label:: (# do 'Function' -> lx[] #);
-               PT:: (# do id[] -> lx.puttext; (pos,break) -> args.PT #)
+               PT:: (# do id[] -> lx.puttext;
+                       (pos,break,inDecl) -> args.PT #)
             #);
           KeyWord:< SigType
             (# label :: (# do 'KeyWord' -> lab[] #);
-               PT:: (#do (pos,break) -> args.PT #);
+               PT:: (#do (pos,break,inDecl) -> args.PT #);
             #);
           getReturnOG:
             (* unify with getReturn below *)
@@ -1352,7 +1428,8 @@ AbstractSyntaxTree: Tree
      Arguments:< Node
        (# elm:< Item;
           PT:: 
-            (# 
+            (# inDecl: @boolean
+            enter inDecl
             do (if true
                 // isBinary then 
                    scanSons(# do (pos,break) -> current.PT #);
@@ -1362,12 +1439,21 @@ AbstractSyntaxTree: Tree
                    do (pos,break) -> current.PT; (if not isLast then ' ' -> lx.put if) 
                    #)
                 // isFunction then 
-                   '(' -> lx.put;
-                    scanSons
-                   (# 
-                   do (pos,break) -> current.PT; (if not isLast then ',' -> lx.put if) 
-                   #);
-                   ')' -> lx.put
+                   (if inDecl then
+                       scanSons
+                       (# 
+                       do 'in ' -> lx.puttext;
+                          (pos,break) -> current.PT; 
+                          (pos,break) -> mkBreak
+                       #);
+                    else
+                       '(' -> lx.put;
+                       scanSons
+                       (# 
+                       do (pos,break) -> current.PT; (if not isLast then ',' -> lx.put if) 
+                       #);
+                       ')' -> lx.put
+                   if)
                 else
                    (* unary *) 
                    scanSons(# do (pos,break) -> current.PT #);
@@ -1450,7 +1536,11 @@ AbstractSyntaxTree: Tree
        (# PT::
             (#
             do (if son[] <> none then 
-                   ' -> ' -> lx.append;
+                   (if true then
+                       'out ' -> lx.append
+                    else
+                       ' -> ' -> lx.append;
+                   if);
                    scanSons
                    (# 
                    do (pos,break) -> current.PT; 
@@ -1472,16 +1562,31 @@ AbstractSyntaxTree: Tree
      DataItem:< Decl
        (# PT:: 
             (# 
-            do (pos,break) -> sig.PT;
+            do (pos,break,true) -> sig.PT;
                ':' -> lx.put;
                (*Qoff[1] -> lx.putint; ' ' -> lx.put;*)
-               ' ' -> lx.put;               
-               (if isConst then
-                   '=' -> lx.put
+               ' ' -> lx.put;     
+               (if true then
+                   (if isConst then
+                       (if isValue then
+                           'val' -> lx.puttext
+                        else
+                           'obj' -> lx.puttext
+                       if)
+                    else
+                       (if isValue then
+                           'var' -> lx.puttext
+                        else
+                           'ref' -> lx.puttext
+                   if)if)
                 else
-                   '?' -> lx.put
+                   (if isConst then
+                       '=' -> lx.put
+                    else
+                       '?' -> lx.put
+                   if);
+                   (if isValue then '$' -> lx.put else '^' -> lx.put if);
                if);
-               (if isValue then '$' -> lx.put else '^' -> lx.put if);
                ' ' -> lx.put; 
                (pos,break) -> OG.PT 
             #);
@@ -1527,7 +1632,14 @@ AbstractSyntaxTree: Tree
           PP:: (# do label -> lx.append #);
           PT::< 
             (# 
-            do (pos,break) -> sig.PT; ':' -> lx.put;
+            do (if false then 
+                   (if sig.type[] <> none then
+                       sig.type.id[] -> lx.puttext;
+                       ':' -> lx.put;
+                   if)
+                else                       
+                   (pos,break,true) -> sig.PT; ':' -> lx.put;                   
+               if);
                (if ptnKind
                 // virtualPtn then '<' -> lx.put
                 // furtherPtn then ':' -> lx.put; '<' -> lx.put
@@ -1843,7 +1955,7 @@ AbstractSyntaxTree: Tree
                        IS.isBasic -> value
                if)if)
             #); 
- isBasicValue: BooleanValue
+          isBasicValue: BooleanValue
             (* This OG is a basic value like integer, boolean of char
              * or exp/function returning a simple value: a + b, (max(a,b), ...
              * ObjectGeneration in (the rightside)
@@ -2090,7 +2202,7 @@ AbstractSyntaxTree: Tree
                super[] -> superX[];
                none -> son[];
                superX[] -> append; 
-               IS[] -> append
+               IS[] -> append;
             #);
           enclosingImperative::
             (#
@@ -2367,7 +2479,8 @@ AbstractSyntaxTree: Tree
           Unary: InvType 
             (# Label:: (# do 'ObjectInvocation_Unary' -> lab[] #);
                PP:: (# do Label -> lx.append #);
-               PT:: (# do (pos,break) -> ptnId.PT; (pos,break) -> args.PT #);
+               PT:: (# do (pos,break) -> ptnId.PT; 
+                       (pos,break,false) -> args.PT #);
                length:: (# do ptnId.length + args.length -> value #);
             #);
           Binary: InvType
@@ -2376,7 +2489,7 @@ AbstractSyntaxTree: Tree
                PT::
                  (#
                  do (pos,break) -> ptnId.PT; ' '-> lx.put;
-                    (pos,break) -> args.pt
+                    (pos,break,false) -> args.pt
                  #);
                length:: (# do ptnId.length + 1 + args.length -> value #);
                dot:: (# do ' ' -> T[] #);
@@ -2386,7 +2499,7 @@ AbstractSyntaxTree: Tree
                PP:: (# do Label -> lx.append #);
                PT:: 
                  (# 
-                 do (pos,break) -> ptnId.PT; (pos,break) -> args.PT #);
+                 do (pos,break) -> ptnId.PT; (pos,break,false) -> args.PT #);
                length:: 
                  (# do scanSons(# do current.length + value -> value #)#);
             #);
@@ -2399,7 +2512,7 @@ AbstractSyntaxTree: Tree
                     (if (pos + length) < lineWidth then  
                         (* 'KW: < lineWidth: pos: '-> puttext; pos -> putint;
                          ' length: ' -> puttext; length -> putint ; newline;*)
-                        (pos,false) -> args.PT
+                        (pos,false,false) -> args.PT
                      else                            
                         (* 'KW: > lineWidth:pos: ' -> puttext; pos -> putint;
                         ' length: '->puttext; length -> putint; newline;*)
