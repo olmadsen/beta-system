@@ -2476,6 +2476,18 @@ bool traceThreads = true;
         invokeValObj(thisBlock,arg1,arg2);
 	restoreContext();
 	break;
+      case boxedInvokeVal:
+	arg1 = op2(bc,&glsc);
+	arg2 = op2(bc,&glsc);
+	cSaveReturn(thisObj,currentDescNo,glsc);
+	callee = rPop(thisStack);
+	rPush(callee,thisObj);
+	rPush(callee,thisStack);
+	thisObj = callee;
+	saveContext();
+        invokeValObj(thisBlock,arg1,arg2);
+	restoreContext();
+	break;
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
 #ifdef TRACE

@@ -64,6 +64,20 @@ do (# doPrimElse: BooleanValue
                 else
                    true -> value       
         if)if)#);
+      boxedInvokeVal:
+        (# id: ^text; dNo: @integer; useReturnValue: @boolean;
+           DI: ^DataItem
+        enter(id[],dNo,useReturnValue)
+        do (id[],dNo,OG.objSize) -> cd.boxedInvokeVal;
+           (* the return from BoxedInvodeVal is quite tricky 
+            * Saved return in boxedInvokeVal is set to after cd.rtn 
+            * since the invokeValue in boxedInvokeValue
+            * will return to cd.mvStack and we must avoid executing
+            * the code below twice - see also betaVM::boxedInvokeVal
+            *)
+           cd.mvStack;
+           cd.rtn;
+        #);
       N:^ Node; di: ^DataItem; var: ^Variant; isVal,isObj: @boolean
    do (if doPrimElse then
           (* Cases: E is an invocation of a pattern as in E, rec.E, R.rec.E, .
@@ -111,8 +125,7 @@ do (# doPrimElse: BooleanValue
                        #);
                   #) -> var[];
                   (if var[] <> none then
-                      (* var.print;  
-                       og.qvariants.print*)
+                      (* var.print; og.qvariants.print*)
                   if)
                else 
                   (* receiver and rec.atd is module 
@@ -129,13 +142,13 @@ do (# doPrimElse: BooleanValue
           (# di: ^dataItem; ptn: ^Pattern; isStatic: @boolean; N: ^Node
           do (if ptnkind // virtualptn // furtherptn // finalptn then
                  (if true
-                  // rec.atd.isdataitem then
-                     rec.atd[] -> di[];
-                     di.og.isvalueobj or di.isconst -> isstatic
-                  // rec.atd.ispattern then
+                  // rec.ATd.isDataItem then
+                     rec.ATd[] -> DI[];
+                     DI.og.isValueObj or DI.isConst -> isStatic
+                  // rec.ATd.isPattern then
                      (if rec[] <> e[] then (* we should eliminate rec=e *)
                          (* 'rec: ispattern:'->puttext; rec.dopt -> putline;*)
-                         rec.atd[] -> ptn[]; 
+                         rec.ATd[] -> ptn[]; 
                          (*ptn.sig.dopt -> putline; e.dopt -> putline;*)
                          
                          (ptn.getreturnog).isvalueobj 
@@ -143,7 +156,7 @@ do (# doPrimElse: BooleanValue
                          (ptn.og.primno = indexedget_prim)
                            -> isstatic
                  if)if);
-                 (if isstatic then
+                 (if isStatic then
                      (sig.id[],og.is.newdescno,staticoff,true) 
                        -> cd.invoke
                   else
@@ -151,15 +164,20 @@ do (# doPrimElse: BooleanValue
                  if)
               else 
                  (if not isPrimitivePtn then 
-                     cd.com(#do 'invoke:var:'->tt; var[]=none -> bb; 
-                              og.is.newdescno -> ii #);
-                     (if og.isvalueobj then
+                     (if OG.isValueObj then
                          (if staticoff = 0 then
-                             cd.com(#do 'invokeval:x:staticoff=0:'->tt;
-                                      sig.id[] -> tq#);
-                             0 -> cd.pushconst
+                             sig.getReturn -> DI[];
+                             (if (DI[] <> none) and DI.OG.isBasicValue then
+                                 (sig.id[],OG.is.newdescno,useReturnValue) 
+                                 -> BoxedInvokeVal
+                              else
+                                 cd.com(#do 'pattern:invoke:valueObj:asArg:'->TT;
+                                          sig.id[] -> TQ #);
+                                 0 -> cd.pushconst
+                             if)
                           else
-                             (sig.id[],og.is.newdescno,staticoff - 1) -> cd.invokeval;
+                             (sig.id[],OG.is.newdescno,staticoff - 1) 
+                               -> cd.invokeval;
                          if);
                          true -> isval
                       else
@@ -172,7 +190,8 @@ do (# doPrimElse: BooleanValue
                              (* check if E is a const ref that must be marked
                               * as an object.
                               * A clean-up is needed - also for virtuals above *)
-                             (if (rec.ATd.father.father.father[] -> N[]).isDataItem then
+                             (if (rec.ATd.father.father.father[] 
+                                   -> N[]).isDataItem then
                                  rec.ATd.father.father.father[] -> DI[];
                                  DI.isConst -> isObj;
                                  cd.com(#do 'bingo:DI'->TT; DI.dopt -> TT #)
@@ -198,7 +217,8 @@ do (# D: ^DataItem; recP: ^Pattern; destIsVal,srcIsVal: @boolean
           rec.ATd[] -> D[];
       (if true
        // D.OG.isBasicValue // D.OG.primNo = value_prim then 
-          (*  D.OG.primNo = value_prim for handling _v: ?Value in integer, char and boolean *)
+          (*  D.OG.primNo = value_prim for handling _v: ?Value 
+           * in integer, char and boolean *)
           cd.com(#do'#Store simple value: ' -> TT; rec.dopt -> TQ #)  
        // D.OG.isValueObj then 
           cd.com(#do '>Assign:StoreValue:rec:' -> TT; rec.dopt -> TQ; 

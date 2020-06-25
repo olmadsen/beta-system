@@ -218,7 +218,7 @@ enum {
   toSuper = 88,
   innera = 89,
   invoke = 90,
-  invokev = 91,
+  boxedInvokeVal = 91,
   innerP = 92,
   rpopThisObj = 93,
   rtnEventQ = 94,

@@ -190,6 +190,11 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg2 = op2(bc,&glsc);
 	fprintf(trace,"invokeVal %i %i",arg1,arg2);
 	break;
+      case boxedInvokeVal:
+	arg1 = op2(bc,&glsc);
+	arg2 = op2(bc,&glsc);
+	fprintf(trace,"boxedInvokeVal %i %i",arg1,arg2);
+	break;	
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
 	fprintf(trace,"invokeExternal %i",arg1);
