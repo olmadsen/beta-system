@@ -230,7 +230,9 @@ parser: AbstractSyntaxTree
           Loop:
             (# D: ^Decl
             do (if lex.symb 
-                // lex.symbols.inArg // lex.symbols.value (* -> also used  for return value - fix *) then
+                // lex.symbols.inArg // lex.symbols.outArg then
+                   pDecl -> D[] -> I.append;
+                (*// lex.symbols.inArg then
                    lex;
                    (if lex.symb = lex.symbols.idf then
                        pDecl -> D[] -> I.append;
@@ -245,7 +247,7 @@ parser: AbstractSyntaxTree
                        true -> D.isOutArg
                     else
                        syntaxError 
-                   if)
+                   if)*)
                 // lex.symbols.idf then
                    (* Here we do lookahead of 1-3 symbols to determine
                     * if the next item is a DECLARATION or an EXPRESSION
@@ -274,13 +276,20 @@ parser: AbstractSyntaxTree
                 // lex.symbols.special then
                    (* More lookahead *)
                    (if (2 -> lex.peekNext) 
-                    // lex.symbols.colon 
+                    // lex.symbols.colon (* nevher happne with ne arg syntax? *)
                     // lex.symbols.virtual 
                        then
                        pDecl -> I.append
                     else
-                       pObjectGenerator -> I.append
-                   if)
+                       (if (1 -> lex.peekNext) = lex.symbols.colon then
+                           (* Needed for new syntx for arguments:
+                            *    ++ :
+                            *       in V: var integer
+                            *)
+                           pDecl -> I.append
+                        else
+                           pObjectGenerator -> I.append
+                   if)if)
                 // lex.symbols.keyword then
                    (* More lookahead *)
                    (if (1 -> lex.sym.inxGet) = '@' then
@@ -341,97 +350,104 @@ parser: AbstractSyntaxTree
        #);
      pDecl:
        (# D: ^Decl; sig: ^Signature; OD: ^ObjectGenerator; ptnKind: @integer;
-          P: ^Pattern
+          P: ^Pattern; isInArg,isOutArg: @boolean
        do (if false and newKWS then
               'pDecl: ' -> puttext; lex.current -> putline
           if);
-          pSignature -> sig[];
-          (if lex.symb
-           // lex.symbols.colon then
-              (* plainPtn or data-item *)
+          (if lex.symb 
+           // lex.symbols.inArg then
               lex;
-              (if lex.symb 
-               // lex.symbols.constRef then 
-                  lex;
-                  (true,false,sig[]) -> pDataItem -> D[];
-                  leave pDecl
-               // lex.symbols.varRef then
-                  lex;
-                  (false,false,sig[]) -> pDataItem -> D[];
-                  leave pDecl
-               // lex.symbols.constVal then 
-                  lex;
-                  (true,true,sig[]) -> pDataItem -> D[];
-                  leave pDecl
-               // lex.symbols.varVal then
-                  lex;
-                  (false,true,sig[]) -> pDataItem -> D[];
-                  leave pDecl 
-                  
-               else
-                  plainPtn -> ptnKind
-              if);
-           // lex.symbols.virtual then
-              lex; 
-              virtualPtn -> ptnKind               
-           // lex.symbols.further then
-              lex; 
-              furtherPtn-> ptnKind
-           // lex.symbols.final then
-              lex; 
-              FinalPtn -> ptnKind
-           else
-              3 -> syntaxError;
-              errorDecl[] -> D[];
-              leave pDecl
+              true -> isInArg
+           // lex.symbols.outArg then
+              lex;
+              true -> isOutArg            
           if);
-          pObjectGenerator -> OD[];
-          
-          (if false then
-              (sig[],ptnKind,OD[]) -> handleProps -> D[]
-           else
-              OD.IS.handleProps;           
-          (if OD.IS.primNo 
-           // rAssign_prim // vAssign_prim then
-              (sig[],OD[],ptnKind) -> AssignmentPtnGen -> P[] -> D[]
-           // restart_prim // leave_prim then
-              (sig[],OD[],ptnKind) -> BreakPtnGen -> P[] -> D[]; 
-           // indexedPut_prim 
-           // indexedGet_prim
-           // stringGet_prim
-           // indexed_prim
-           // asString_prim then
-              (sig[],OD[],ptnKind) -> IndexedPtnGen -> P[] -> D[]
-           // put_prim // ifthen_prim // inner_prim // none_prim
-           // suspend_prim // resume_prim 
-           // disable_prim // enable_prim // attach_prim
-           // cmpAndSwap_prim // fork_prim // sleep_prim // thisCore_prim 
-           // file_open_prim // file_get_prim 
-           // file_eof_prim // file_close_prim 
-           // dumpObj_prim then
-              (sig[],OD[],ptnKind) -> OtherPrimPtnGen -> P[] -> D[]
-           else              
-              (sig[],OD[],ptnKind) -> GeneralPtnGen -> P[] -> D[]; 
-          if);
-          OD.IS.isPrimitive -> P.isPrimitivePtn;
-          (if D.primNo
-           // object_prim then D[] -> objectDecl[]
-           // none_prim then D[] -> noneDecl[]
-           // integer_prim then D[] -> integerDecl[]
-           // char_prim then D[] -> charDecl[]
-           // string_prim then D[] -> stringDecl[]
-           // boolean_prim then D[] -> booleanDecl[]
-           // error_prim then D[] -> errorDecl[]
-           // this_prim then D[] -> thisDecl[]
-           // thisCore_prim then D[] -> thisCoreDecl[]
-           // Resume_prim then D[] -> resumeDecl[]
-           // ifThen_prim then D[] -> ifThenDecl[]
-           // indexed_prim then D[] -> IndexedDecl[]
-           else
-              (if D.isCore 
-               // core_prim then D[] -> coreDecl[]                            
-          if)if)
-          if)
+          pSignature -> sig[];
+          L:
+            (#
+            do (if lex.symb
+                // lex.symbols.colon then
+                   (* plainPtn or data-item *)
+                   lex;
+                   (if lex.symb 
+                    // lex.symbols.constRef then 
+                       lex;
+                       (true,false,sig[]) -> pDataItem -> D[];
+                       leave L
+                    // lex.symbols.varRef then
+                       lex;
+                       (false,false,sig[]) -> pDataItem -> D[];
+                       leave L
+                    // lex.symbols.constVal then 
+                       lex;
+                       (true,true,sig[]) -> pDataItem -> D[];
+                       leave L
+                    // lex.symbols.varVal then
+                       lex;
+                       (false,true,sig[]) -> pDataItem -> D[];
+                       leave L                  
+                    else
+                       plainPtn -> ptnKind
+                   if);
+                // lex.symbols.virtual then
+                   lex; 
+                   virtualPtn -> ptnKind               
+                // lex.symbols.further then
+                   lex; 
+                   furtherPtn-> ptnKind
+                // lex.symbols.final then
+                   lex; 
+                   FinalPtn -> ptnKind
+                else
+                   3 -> syntaxError;
+                   errorDecl[] -> D[];
+                   leave L
+               if);
+               pObjectGenerator -> OD[];
+               
+               OD.IS.handleProps;           
+               (if OD.IS.primNo 
+                // rAssign_prim // vAssign_prim then
+                   (sig[],OD[],ptnKind) -> AssignmentPtnGen -> P[] -> D[]
+                // restart_prim // leave_prim then
+                   (sig[],OD[],ptnKind) -> BreakPtnGen -> P[] -> D[]; 
+                // indexedPut_prim 
+                // indexedGet_prim
+                // stringGet_prim
+                // indexed_prim
+                // asString_prim then
+                   (sig[],OD[],ptnKind) -> IndexedPtnGen -> P[] -> D[]
+                // put_prim // ifthen_prim // inner_prim // none_prim
+                // suspend_prim // resume_prim 
+                // disable_prim // enable_prim // attach_prim
+                // cmpAndSwap_prim // fork_prim // sleep_prim // thisCore_prim 
+                // file_open_prim // file_get_prim 
+                // file_eof_prim // file_close_prim 
+                // dumpObj_prim then
+                   (sig[],OD[],ptnKind) -> OtherPrimPtnGen -> P[] -> D[]
+                else              
+                   (sig[],OD[],ptnKind) -> GeneralPtnGen -> P[] -> D[]; 
+               if);
+               OD.IS.isPrimitive -> P.isPrimitivePtn;
+               (if D.primNo
+                // object_prim then D[] -> objectDecl[]
+                // none_prim then D[] -> noneDecl[]
+                // integer_prim then D[] -> integerDecl[]
+                // char_prim then D[] -> charDecl[]
+                // string_prim then D[] -> stringDecl[]
+                // boolean_prim then D[] -> booleanDecl[]
+                // error_prim then D[] -> errorDecl[]
+                // this_prim then D[] -> thisDecl[]
+                // thisCore_prim then D[] -> thisCoreDecl[]
+                // Resume_prim then D[] -> resumeDecl[]
+                // ifThen_prim then D[] -> ifThenDecl[]
+                // indexed_prim then D[] -> IndexedDecl[]
+                else
+                   (if D.isCore = core_prim then D[] -> coreDecl[]
+               if)if);
+            #);
+          isInArg -> D.isInArg;
+          isOutArg -> D.isOutArg;
        exit D[]
        #);
      pSignature:
@@ -490,8 +506,12 @@ parser: AbstractSyntaxTree
               lex.sym[] -> sym[];
               lex;
               Arguments -> args[]; true -> args.isBinary;
-              pArgument -> args.append;
-              (sym[],args[],false) -> BinarySigGen -> sig[]
+              (if lex.symb = lex.symbols.colon then
+                  (sym[],args[],false) -> UnarySigGen -> sig[]
+               else
+                  pArgument -> args.append;
+                  (sym[],args[],false) -> BinarySigGen -> sig[]
+              if)
           if);
           (if lex.symb = lex.symbols.value then
               lex;
