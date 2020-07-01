@@ -1263,6 +1263,7 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
   FILE *trace;
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
+  //setbuf(stdout, NULL);
   trace_t = trace; // hack
 #ifdef linux
 #elif defined  __CYGWIN__
@@ -2350,7 +2351,8 @@ bool traceThreads = true;
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
 #ifdef TRACE
-	fprintf(trace,"\n\tFROM %s(%i,%i,%s) ",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+	fprintf(trace,"\n\tFROM thisObj:'%s'(descNo:%i,glsc:%i,thisStack:'%s') \n"
+		,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 #endif
 	X = thisObj;
 	thisStack = rPop(thisObj);
@@ -2360,7 +2362,8 @@ bool traceThreads = true;
 	bc = codeFromDescNo(currentDescNo);
         if (! isXbeta)rPush(thisStack,X);
 #ifdef TRACE
-	fprintf(trace,"TO %s(%i,%i,%s)",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+	fprintf(trace,"\tTO thisObj:'%s'(descNo:%i,glsc:%i,thisStack:'%s')"
+		,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 	dumpStack(trace,thisStack);
 #endif
 #ifdef EVENT
@@ -2781,6 +2784,7 @@ bool traceThreads = true;
 	    putch(arg2);
 #else
 	    printf("%c",(char)arg2);
+	    //fflush(stdout);
 #endif
 	    break;
 	  case 10: // attach
@@ -3186,7 +3190,7 @@ bool traceThreads = true;
 	currentDescNo = dscNo;
 	bc = codeFromDescNo(dscNo);
 #ifdef TRACE
-        fprintf(trace," descNo: %i bc: %i glsc: %i\n",dscNo,(int)bc,glsc);
+        fprintf(trace," TO descNo: %i bc: %i glsc: %i\n",dscNo,(int)bc,glsc);
 #endif
 	break;
       case innerExit:
