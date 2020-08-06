@@ -36,6 +36,14 @@ semchecker: checker
             (# do (*'ModuleItem:getQual: ' -> puttext; dopt -> putline;*)
                md.DI.getQual -> qual[]
             #);
+          getV_qual::
+            (#
+            do (if traceGetV_qual then
+                   '*** ModuleItem:getV_qual:' -> puttext;
+                   sig.doPT -> putline;
+               if);
+               MD.DI.OG[] -> qual[]
+            #);
           pathToDcl::
             (#
             do (if traceGetV_qual then
@@ -48,13 +56,24 @@ semchecker: checker
      DataItem::<
        (# getV_qual::
             (#
-            do (if trc then
+            do (if traceGetV_qual or trc then
                    '*** DataItem:getV_qual: ' -> puttext;
                    doPT -> putline
                if);
-               encOG[] -> OG.getV_Qual -> qual[]; (* added encOG[] - ok? *)
-               (if ('R_test'-> sig.id.equal) then
-                   'Decl:GetV_qual: ' -> puttext; dopt -> putline
+               (if true then
+                   (if OG.IS.isEmpty then
+                       (* X: var TTT -- TT not virtual
+                        * R: ref Person -- ditto
+                        * S: obj Record -- virtual 
+                        *)
+                       (if not OG.super.ATd.isVirtual then
+                           OG.getQual -> qual[]
+                       if)
+                    else
+                       OG[] -> qual[]
+                   if)
+                else
+                   encOG[] -> OG.getV_Qual -> qual[]; (* added encOG[] - ok? *)
                if);
             #);
           pathToDcl::
@@ -64,9 +83,13 @@ semchecker: checker
             (#
             do (if trc or traceGetV_qual then
                    '*** DataItems:pathToDcl:' -> puttext; sig.doPT -> putline;
-                   (*doPT -> putline;*)
+                   P.print;
                if);               
-               P[]-> OG.pathToDcl -> P[]
+               P[]-> OG.pathToDcl -> P[];
+               (if trc or traceGetV_qual then
+                   '--- DataItems:pathToDcl:' -> puttext; sig.doPT -> putline;
+                   P.print
+               if)
             #);
           getQual:: 
             (# 
@@ -388,7 +411,7 @@ semchecker: checker
                    #)
                if);
             #);
-          getV_Qual ::
+          getV_Qual::
             (* P: S ... 
              * F(...): G ...
              * A(...) -> V: ? T: S ...
@@ -401,25 +424,28 @@ semchecker: checker
              *   bar(...) -> R: ? foo: ...
              *)
             (#
-            do getQual -> qual[];
+            do (if traceGetV_qual then
+                   '*** Pattern:getV_qual:' -> puttext; sig.doPT -> puttext;
+                   ':isVirtual:'-> puttext; isVirtual-> putBoolean; newline
+               if);               
                (if isVirtual then
                    (* V:< Q;
                     * W:< Q{ ... }
                     *)
-                   'Virtual: ' -> puttext; dopt -> putline;
                    (*P.print;*)
-                   OG.getV_qual -> qual[]
+                   (*OG.getV_qual -> qual[]*)
                 else
                    (* P(...) -> V: ? S: { .... } *)
+                   getQual -> qual[];
                if)
             #);
           pathToDcl::
-                 (* P: S{...}
-                  * V:< A{ ... }
-                  * V:< A;
-                  * V::< ...
-                  * V:: ...
-                  *)
+            (* P: S{...}
+             * V:< A{ ... }
+             * V:< A;
+             * V::< ...
+             * V:: ...
+             *)
             (# Px: ^OGpath; qual: ^ObjectGenerator; DI: ^DataItem
             do (if P[] = none then
                    '!!!! pathToDcl:P is none!' -> putline; doPT -> putline 
@@ -463,13 +489,14 @@ semchecker: checker
                    leave pathToDcl
                 else
                    (if isVirtual then
+                       (* V:< Q -- dont follow path to Q! *)
                        (if trc then
                            '--- Pattern:isVirtual' -> putline
                        if);
                        (*(OG[],0,0,P[]) -> OGpath -> P[];*)
-                       (if true then (* OBS !!! false: dont work *)
+                       (if true then (* OBS !!! false: is wrong *)
                            (P[]-> Px[]).getQual ;
-                          else
+                        else
                            P[] -> OG.pathToDcl -> P[]
                        if);
                        (*(P[]-> Px[]).getQual ;*)
@@ -681,6 +708,10 @@ semchecker: checker
             do (* Should only be called for singular OGs
                 * If part of pattern decl, argScope may be wrong
                 *)
+               (if traceGetV_qual then
+                   '*** ObjectGenerator:getV_qual:shouldNotHappen' -> putline;
+                   doPT -> putline
+               if);
                (none,origin[],origin[],true) -> check;
                (if IS.isEmpty then
                    (* super (Invocation) may be object or pattern *)
@@ -709,8 +740,8 @@ semchecker: checker
                    (if origin.father[] = none then
                        'OG:pathToDcl:origin.father is none'->putline;
                    if);
-                   (origin.father[],0,0,P[]) -> OGpath -> P[];
-                   this(ObjectGenerator)[] -> (P[]-> Px[]).qual[];
+                   (*(origin.father[],0,0,P[]) -> OGpath -> P[];*)
+                   this(ObjectGenerator)[] -> (P[]-> Px[]).qual[]
                if)
             #);
           getQual:
@@ -792,7 +823,9 @@ semchecker: checker
              * May be a super - which we dont know here
              *)
             (# E: ^Exp; 
-            do (*'*** Invocation:getV_qual: ' -> puttext; dopt -> putline;*)
+            do (if traceGetV_qual then
+                   '*** Invocation:getV_qual: ' -> puttext; dopt -> putline;
+               if);
                scanSons
                (# 
                do (* we should call ... -> current.getV_Qual -> qual[]
@@ -893,24 +926,63 @@ semchecker: checker
                if)
             #);
           getV_Qual::
-            (# Px: ^OGpath
+            (# Px: ^OGpath; DI: ^DataItem; MI: ^ModuleItem; ptn: ^Pattern
             do (if trc or traceGetV_qual then
                    '*** ObjectInvocation:getV_qual:' -> putline; 
-                   dopt -> putline;
-                   '--- EncOG: ' -> putline;
-                   encOG.doPT -> putline
+                   (if true then
+                       dopt -> putline;
+                       '--- EncOG: ' -> putline;
+                       encOG.doPT -> putline
+                   if)
                if);
-               (encOG[],on,pn,none) 
-                 -> OGpath 
-                 -> ATd.pathToDcl 
-                 -> Px[];
-               (*pathToDcl -> Px[];*)
-               (if trc or traceGetV_qual then
-                   '*** ObjectInvocation: found path:'->putline;
-                   Px.print;
-               if);
-               (*Px.getQual ; (* TRIED FIX HERE *)
-               Px.qual[] -> qual[];
+               (if true then
+                   (if (ATd.getV_qual -> qual[]) = none then
+                       (if trc then
+                           '--- PI:getV_qual:handle:virtual:' -> putline;
+                       if);
+                       (encOG[],on,pn,none) 
+                         -> OGpath 
+                         -> ATd.pathToDcl 
+                         -> Px[];
+                       (*pathToDcl -> Px[];*)
+                       (if trc or traceGetV_qual then
+                           '*** ObjectInvocation: found path:'->putline;
+                           Px.print;
+                       if);
+                       Px.getQual ; (* TRIED FIX HERE *)
+                       Px.qual[] -> qual[];
+                   if)
+                else
+                   (if true 
+                    // ATd.isPattern then
+                       '---pattern:'->putline;
+                       ATd[] -> ptn[];
+                       (if ptn.isVirtual then
+                           (encOG[],on,pn,none) 
+                             -> OGpath 
+                             -> ATd.pathToDcl 
+                             -> Px[];
+                           (*pathToDcl -> Px[];*)
+                           (if trc or traceGetV_qual then
+                               '*** ObjectInvocation: found path:'->putline;
+                               Px.print;
+                           if);
+                           Px.getQual ; (* TRIED FIX HERE *)
+                           Px.qual[] -> qual[];
+                        else
+                           ptn.getQual -> qual[]
+                       if);
+                    // ATd.isDataItem then 
+                       '---dataItem:'->putline; (* DI.OG may be virtual *)
+                       Atd[] -> DI[]; DI.OG[] -> qual[]
+                    // ATd## = ModuleItem## then
+                       '---moduleItem:'->putline;                   
+                       Atd[] -> MI[]; MI.MD.DI.OG[] -> qual[]
+                    else
+                       '???' -> putline
+               if)if);
+                   
+                   
                (if traceGetV_qual then
                    '*** ObjectInvocation:QUAL:OF: "'->puttext;
                    dopt -> puttext; '" IS: '->putline; qual.label -> putline;
