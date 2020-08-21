@@ -77,7 +77,7 @@ semchecker: checker
              * Y: = T{...}
              *)
             (#
-            do (if trc or traceGetV_qual then
+            do (if trx or traceGetV_qual then
                    '*** DataItems:pathToDcl:' -> puttext; sig.doPT -> putline;
                    P.print;
                if);               
@@ -415,19 +415,107 @@ semchecker: checker
                if)
             #);
           checkActualArgs::
-            (# A: [6] ^Decl; inx,top: @ integer;
-            do (if traceGetQual then
-                   '\nCheck: ' -> puttext; actualArgs.doPT -> putline;
-                   '  against: ' -> puttext; sig.doPT -> putline;
+            (* theOI is the the ObjewctInvocation calling this(Pattern) *)
+            (# A: [6] ^Decl; inx,top: @ integer; OI_OG: ^ObjectGenerator;
+               mkOG:
+                 (# OI: ^ObjectInvocation;
+                    OGx: ^ObjectGenerator; IV: ^Invocation; IT: ^Items;
+                    ITx: @text; err: ^Text
+                 enter OI[]
+                 do Invocation -> IV[]; OI[] -> IV.append;
+                    (for i: top repeat
+                         A[i].sig.dopt -> ITx.putline;
+                    for);
+                    ITx[] -> mkItems -> (err[],IT[]);
+                    Properties -> IT.props[];
+                    (IV[],IT[]) -> ObjectGenerator -> OGx[];
+                    encOG[] -> OGx.father[]; (* is this ok? *)
+                    encOG.IS[] -> OGx.setUpOrigin;
+                    (none,OGx.IS[],none,true) -> OGx.check
+                 exit OGx[]
+                 #);
+               
+               findQual:
+                 (# arg: ^DataItem; qual: ^ObjectGenerator
+                 enter arg[]
+                 do (if trx then
+                        '-- arg:findQual: "' -> puttext; arg.dopt -> puttext;
+                        '"' -> putline;
+                    if);
+                    (if (arg.OG.IS.isEmpty)
+                        and (arg.OG.super.ATd[] <> none)
+                        and arg.OG.super.ATd.isVirtual then
+                        (if trx then '--  is virtual' -> putline if)
+                     else
+                        arg.getQual -> qual[]
+                    if)
+                 exit qual[]
+                 #);
+               itm: ^ObjectGenerator;
+            do (if trx or traceGetQual then
+                   '**** Pattern:checkActualArgs:"' -> puttext; 
+                   actualArgs.doPT -> puttext;
+                   '"\n--  against: "' -> puttext; sig.doPT -> puttext; 
+                   '"formalArgs('->puttext;
                if);
-               scanArgs
+                              
+               OG.IS.scanItemArgs
                (#
                do (if (top + 1 -> top) > A.range then A.range -> A.extend if);
                   currentArg[] -> A[top][];
+                  (if trx then currentArg.dopt -> puttext; ' ' -> put if);
                #);
+               (*theOI[] -> mkOG -> OI_OG[];*)
+               
+               (if false then 
+                   (if trx then
+                       ')\n--  theOI: "'->puttext; 
+                       theOI.doPT->puttext;
+                       '" theOI.on:'->puttext; theOI.on -> putint;
+                       ' theOI.pn:' -> puttext; theOI.pn -> putint; newline;
+                       '--  encOG: "' -> puttext; encOG.dopt -> putline; 
+                       '"'->putline;
+                       '--  OG_OI: ' -> puttext; OI_OG.doPP -> putline;
+                   if);
+                   OI_OG.IS.scanSons
+                   (# i: @integer; T: ^text; 
+                      ATd: ^Decl; pn: @integer
+                   do (if trx then 
+                          'son:' -> puttext; current.doPT -> T[] -> puttext;
+                      if);
+                      (if (i + 1 -> i) > 1 then
+                          current[] -> itm[];
+                          (if trx then
+                              ' on: ' -> puttext; itm.super.on -> putint; 
+                              ' pn: ' -> puttext; 
+                              (itm.super.last).pn -> putint; 
+                              ' ATd: ' -> puttext; 
+                              itm.super.ATd.doPT -> putline;
+                              (*(T[],true) -> OI_OG.IS.localSearch 
+                               * -> (ATd[],pn);
+                               atD[] <> none -> putboolean; ' ' -> put; 
+                               pn -> putint; 
+                               '--  qual:' -> putline;
+                               (itm.getQual).doPT -> putline*)
+                          if);
+                       else
+                          (if trx then newline if)
+                      if)
+                   #)
+               if);
+               
                actualArgs.scanArgs
-               (# 
+               (# srcQual,dstQual: ^ObjectGenerator
                do inx + 1 -> inx; 
+                   (if trx then
+                      '--  actualArg:inx:' -> puttext; inx -> putint; 
+                      ':arg: ' -> puttext; current.dopt -> puttext;
+                      ' :formal: ' -> puttext; A[inx].dopt -> putline;
+                  if);
+                  (* enter arg may also be pattern 
+                   A[inx][] -> findQual -> dstQual[];
+                   *)
+                  
                   (if inx > top then
                       actualArgs[] -> SemanticError
                       (# 
@@ -448,10 +536,37 @@ semchecker: checker
                               '**  qual:before:none!' -> putline;
                           if);
                       if);
-                      (current[],current.getQual,A[inx].getQual,false) 
+                       'xxxL3' -> (current.dopt).equalNCS -> trx;
+                      (if true then
+                          current.getQual -> srcQual[];
+                          A[inx].getQual -> dstQual[]
+                       else
+                          current[]->current.getV_Qual -> srcQual[];
+                          (if trx then
+                              '--------------------------'->putline;
+                          if);
+                          (if true then
+                              OI_OG[] -> (itm.super.last).getV_qual 
+                                -> dstQual[];
+                           else
+                              (* OBS A may be pattern or data-item
+                               * ccheck actual qual *
+                              current[]->(A[inx].OG.super.last).getV_Qual 
+                                -> dstQual[];*)
+                          if);
+                      if);
+                      (if trx then
+                          '--- arg:src:' -> puttext; current.dopt -> putline;
+                          '--- srcQual:'->putline; srcQual.doPT -> putline;
+                          '--- arg:dst:' -> puttext; A[inx].dopt -> putline;
+                          '--- dstQual:'->putline; (dstQual.father).doPT 
+                            -> putline;
+                      if);
+                      (current[],srcQual[],dstQual[],false) 
                         -> A[inx].checkQual;
                   if);
                #); 
+               (if trx then newline if);
                (if (inx < top)  then
                    actualArgs[] -> SemanticError
                    (# 
@@ -932,11 +1047,16 @@ semchecker: checker
        #);
      ObjectInvocation::<
        (# semCheck::
-            (# receiver: ^Exp; ptn: ^Pattern
-            do (if false then
+            (# receiver: ^Exp; ptn: ^Pattern; org: ^Items; 
+               srcQual, dstQual,qual: ^ObjectGenerator
+            do 'xxxL1' -> (rec.doPT).equalNCS -> trx; 
+               trx or ('xxxL2' -> (rec.doPT).equalNCS) -> trx; 
+               trx or ('xxxL3' -> (rec.doPT).equalNCS) -> trx; 
+               (*false -> trx;*)
+               (if trx then
                    '**** ObjectInvocation:semCheck:rec:"' -> puttext;
                    rec.doPT -> puttext; 
-                   '" ptn/DI: "'->puttext; doPT -> puttext; '"' -> put;
+                   '" obj: "'->puttext; doPT -> puttext; '"\n' -> puttext;
                if);
                (if ATd.primNo // rAssign_prim // vAssign_prim then
                    (if false then ':assign' -> putline if);
@@ -945,7 +1065,9 @@ semchecker: checker
                        '**   this:true'->putline
                    if);
                    args.scanArgs
-                   (# i: @integer
+                   (# i: @integer;
+                      srcQual,dstQual,
+                      srcQual1,dstQual1: ^ObjectGenerator
                    do (if (i + 1 -> i) > 1 then
                           args[] -> semanticError
                           (#
@@ -953,15 +1075,46 @@ semchecker: checker
                              receiver.doPT -> puttext; '"' -> put; newline
                           #)
                       if);
-                     (* '**   arg:"' -> puttext; current.dopt -> puttext;
-                      '"' -> putline;*)
-                      receiver.getActualReceiver -> receiver[];
                       (* check that current can be assigned to receiver  *)
-                      (current[],current.getQual,receiver.getQual,true) 
-                        -> receiver.ATd.checkQual 
+                      (if true then
+                          current.getQual -> srcQual[];
+                          receiver.getQual -> dstQual[];
+                          (if trx then
+                              '--   getV_qual:src: "' -> puttext; 
+                              current.dopt -> puttext; 
+                              '" :label:'->puttext; current.label -> putline;
+                          if);
+                          (if false then
+                              (origin[]->org[]).theObjectGenerator
+                                -> current.getV_Qual 
+                                -> srcQual1[];
+                              '--   getV_qual:dst:' -> putline;
+                              org.theObjectGenerator->receiver.getV_Qual
+                          -> dstQual1[];
+                      if)if);
+
+                      (if trx and false then
+                          '--   src:"' -> puttext; current.dopt -> puttext;
+                          '"' -> putline;
+                          '--   srcQual: ' -> putline; srcQual.dopt -> putline;
+                          '--   srcQual1: ' -> putline; srcQual1.dopt -> putline;
+                          '--   dst:"' -> puttext; receiver.dopt -> puttext;
+                          '"' -> putline;
+                          '--   dstQual: ' -> putline; dstQual.dopt -> putline;
+                          '--   dstQual1: ' -> putline; dstQual1.dopt -> putline;
+                      if);                      
+                      receiver.getActualReceiver -> receiver[];
+
+                      (if true then
+                          (current[],srcQual[],dstQual[],true) 
+                            -> receiver.ATd.checkQual 
+                       else
+                          (current[],srcQual1,dstQual1[],true) 
+                            -> receiver.ATd.checkQual 
+                      if)
                    #);
                 else 
-                   (if false then ':notAssign' -> putline if);
+                   (if trx then ':notAssign' -> putline if);
                    (*' Atd: ' -> puttext; ATd.doPT -> putline;*)
                    (if ATd.primno
                     // inner_prim // this_prim
@@ -977,21 +1130,39 @@ semchecker: checker
                            (if not noArgsCheck then
                                (* check that args can be assigned to the 
                                 * formal arguments of the receiver rec *)
+                               (if trx then
+                                   '**  ObjectInvocation:beforeCheckActualArgs: "'
+                                     -> puttext;
+                                   dopt -> puttext;
+                                   '" on:'-> puttext; on -> putint;
+                                   ' pn:' -> puttext; pn -> putint; newline;
+                                   father.doPP -> putline;
+                               if);
                                (args[],encOG[],this(ObjectInvocation)[]) 
                                  -> ATd.checkActualArgs
-                       if)if)
-                   if)
-               if)
+               if)if)if)if);
+               (if false and (origin[] <> none) then
+                   encOG[] -> getV_qual -> qual[] -> encOG[];
+                   (if trx then
+                       '**  qualOf: '-> puttext; dopt -> putline;
+                       (if qual[] <> none then
+                           qual.dopt -> putline
+                        else
+                           'none' -> putline
+                       if)
+               if)if);
+               false -> trx               
             #);
           getV_Qual::
             (* The primary entry to computing virtual bindings as part
              * of a qualification
              * Called from checker::ObjectInvocation:check
+             * enter arg: encOG = enclosing ObjectInvocation
              *)
             (# Px: ^OGpath; DI: ^DataItem; MI: ^ModuleItem; ptn: ^Pattern
-            do (if trc or traceGetV_qual then
+            do (if trx or traceGetV_qual then
                    '*** ObjectInvocation:getV_qual:' -> putline; 
-                   (if true then
+                   (if trx then
                        dopt -> putline;
                        '--- EncOG: ' -> putline;
                        encOG.doPT -> putline
@@ -1002,14 +1173,14 @@ semchecker: checker
                     * qual[] = none: a virtual is involed: compute most
                     * specific bind as shown below
                     *)
-                   (if trc then
+                   (if trx then
                        '--- PI:getV_qual:handle:virtual:' -> putline;
                    if);
                    (encOG[],ATd[],this(ObjectInvocation)[],on,pn,none) 
                      -> OGpath 
                      -> ATd.pathToDcl 
                      -> Px[];
-                   (if trc or traceGetV_qual then
+                   (if trx or traceGetV_qual then
                        '*** ObjectInvocation: found path:'->putline;
                        Px.print;
                    if);
@@ -1038,7 +1209,8 @@ semchecker: checker
                    dopt -> putline;
                    origin.father.dopt -> putline
                if);
-               (origin.father[],none,none,on,pn,P[]) -> OGpath -> ATd.pathToDcl -> P[];
+               (origin.father[],ATd[],this(ObjectInvocation)[],on,pn,P[])
+                 -> OGpath -> ATd.pathToDcl -> P[];
             #); 
           getQual::
             (#
