@@ -334,7 +334,6 @@ semchecker: checker
                        #)if)if)
                     else
                        (*'**** Got object ref:' -> putline;*)
-                       (* getQual -> dstQual[];*)
                        (if true
                         // srcOG.isValueObj then
                            srcOG[] -> semanticError
@@ -345,7 +344,31 @@ semchecker: checker
                                   'the object reference: "' -> msg;
                                   doPT -> msg; '"' -> msg
                                #);
+                        // srcQual[] = dstQual[] then 
+                           (* OK: and may be merged with the case below.
+                            * Is splitted for test purposes, see below
+                            *)
                         // srcQual[] -> dstQual.inSuper then (* OK *)
+                           (if useNewQual then
+                               (* This is just for test purposes: 
+                                * for references this is ok, but for values, 
+                                * the right-side may be truncated, see above
+                                *)
+                               srcOG[] -> Warning
+                               (# 
+                               do 'The right-side: "' -> msg;
+                                  srcOG.doPT -> msg;
+                                  '" refers to a subpattern/obj ' -> msg;
+                                  'of the left-side: "' -> msg;
+                                  doPT -> msg;
+                                  '"' -> msg
+                               #);
+                               (if trx then
+                                   '**** Source:'->putline;
+                                   srcQual.dopt -> putline;
+                                   '**** Destination:'->putline;
+                                   dstQual.dopt -> putline;
+                           if)if)
                         // (srcQual[] <> none) 
                            and (dstQual[] -> srcQual.inSuper) then
                            srcOG[] -> QuaCheck
@@ -434,16 +457,16 @@ semchecker: checker
                     ITx: ^text; err: ^Text
                  enter OI[]
                  do (If true then
-                        (if false then
-                            '--  mkOG:' -> puttext; OI.label -> putline;
+                        (if true then
+                            '**** mkOG:' -> puttext; OI.label -> putline;
                         if);
                         '(' -> ITx[];
-                        OI.doPT -> ITx.append; ')\n' -> ITx.putline;
+                        OI.doPT -> ITx.append; ')\n' -> ITx.puttext;
                         (for i: top repeat
                              '   ' -> ITx.puttext;
                              A[i].sig.dopt -> ITx.putline;
                         for);
-                        (*ITx[] -> putline;*)
+                        ITx[] -> putline;
                         ITx[] -> parseObjectGeneratorText -> (err[],OGx[]);
                      else
                         Invocation -> IV[]; OI[] -> IV.append;
@@ -454,7 +477,7 @@ semchecker: checker
                         Properties -> IT.props[];
                         (IV[],IT[]) -> ObjectGenerator -> OGx[];
                     if);
-                    (if false then
+                    (if true then
                         '\n****  OGx: ' -> putline; OGx.doPT -> putline;
                         '--  encOG: ' -> putline; encOG.doPT -> putline;
                     if);
@@ -480,7 +503,7 @@ semchecker: checker
                     if)
                  exit qual[]
                  #);
-               itm: ^ObjectGenerator;
+               itm: [6] ^ObjectGenerator;
             do (if trx or traceGetQual then
                    '**** Pattern:checkActualArgs:"' -> puttext; 
                    actualArgs.doPT -> puttext;
@@ -490,7 +513,9 @@ semchecker: checker
                               
                OG.IS.scanItemArgs
                (#
-               do (if (top + 1 -> top) > A.range then A.range -> A.extend if);
+               do (if (top + 1 -> top) > A.range then 
+                      A.range -> A.extend; itm.range -> itm.extend
+                  if);
                   currentArg[] -> A[top][];
                   (if trx then currentArg.dopt -> puttext; ' ' -> put if);
                #);
@@ -511,20 +536,22 @@ semchecker: checker
                    do (if trx then 
                           'son:' -> puttext; current.doPT -> T[] -> puttext if);
                       (if (i + 1 -> i) > 1 then
-                          current[] -> itm[];
+                          (* foirts item is INCLUDE *)
+                          current[] -> itm[i - 1][];
                           (if trx then
-                              '--  got:itm: ' -> puttext;  itm.dopt -> putline;
-                              ' on: ' -> puttext; itm.super.on -> putint; 
+                              '--  got:itm: ' -> puttext;  
+                              itm[inx].dopt -> putline;
+                              ' on: ' -> puttext; itm[inx].super.on -> putint; 
                               ' pn: ' -> puttext; 
-                              (itm.super.last).pn -> putint; 
+                              (itm[inx].super.last).pn -> putint; 
                               ' ATd: ' -> puttext; 
-                              itm.super.ATd.doPT -> putline;
+                              itm[i - 1].super.ATd.doPT -> putline;
                               (T[],true) -> OI_OG.IS.localSearch 
                                 -> (ATd[],pn);
                               atD[] <> none -> putboolean; ' ' -> put; 
                               pn -> putint; 
                               '--  qual:' -> putline;
-                              (itm.getQual).doPT -> putline
+                              (itm[i - 1].getQual).doPT -> putline
                           if)
                        else
                           (if trx then newline if)
@@ -579,7 +606,7 @@ semchecker: checker
                               A[inx][] -> DI[];
                               true -> DI.nestPath
                           if);
-                          encOG[] -> (itm.super.last).getV_qual -> dstQual[];
+                          encOG[] -> (itm[inx].super.last).getV_qual -> dstQual[];
                           (* OBS A may be pattern or data-item
                            * check actual qual *)
                       if);
@@ -957,11 +984,16 @@ semchecker: checker
        (# semCheck::
             (#
             do (if trx then '**** Items:semCheck: ' -> putline if);
-               theObjectGenerator -> encOG[]
+               theObjectGenerator -> encOG[];
+               none -> rec[]
             #);
        #);
      Invocation::<
-       (#  getV_Qual::
+       (# semcheck::
+            (#
+            do none -> rec[]
+            #);
+          getV_Qual::
             (* R, R.x, R.S.x, ...
              * R.x
              * May be a super - which we dont know here
@@ -1012,22 +1044,35 @@ semchecker: checker
             do (last).getActualReceiver -> rec[]
             #)
        #);
+
      ObjectInvocation::<
        (# semCheck::
             (# receiver: ^Exp; ptn: ^Pattern; org: ^Items; 
                srcQual, dstQual,qual: ^ObjectGenerator
-            do 'xxxL1' -> (rec.doPT).equalNCS -> trx; 
-               trx or ('xxxL2' -> (rec.doPT).equalNCS) -> trx; 
-               trx or ('xxxL3' -> (rec.doPT).equalNCS) -> trx; 
-               trx or ('xxxL4' -> (rec.doPT).equalNCS) -> trx; 
-               false -> trx;
-               (if trx then
+            do (* rec = none if first OI in Invocation *)
+               (If rec[] <> none then
+                   'xxxL1' -> (rec.doPT).equalNCS -> trx; 
+                   trx or ('xxxL2' -> (rec.doPT).equalNCS) -> trx; 
+                   trx or ('xxxL3' -> (rec.doPT).equalNCS) -> trx; 
+                   trx or ('xxxL4' -> (rec.doPT).equalNCS) -> trx; 
+                   false -> trx;
+               if);
+               (if false then
                    '**** ObjectInvocation:semCheck:rec:"' -> puttext;
-                   rec.doPT -> puttext; 
+                   (if rec[] <> none then rec.doPT -> puttext 
+                    else 'none' -> putline 
+                   if);
                    '" obj: "'->puttext; doPT -> puttext; '"\n' -> puttext;
+                   '**   encOG: ' -> puttext; encOG.doPT -> putline
                if);
                (if ATd.primNo // rAssign_prim // vAssign_prim then
-                   (if false then ':assign' -> putline if);
+                   (* rec = receiver is defined *)
+                   (if false then 
+                       '**** assign: ' -> puttext; rec.dopt -> putline;
+                       '**   OI: ' -> putline; dopt -> putline;
+                       '**   encOG: ' -> putline;
+                       encOG.doPT -> putline
+                   if);
                    rec[] -> receiver[];                   
                    (if receiver.ATd.primNo = this_prim then
                        '**   this:true'->putline
@@ -1097,7 +1142,7 @@ semchecker: checker
                         else
                            (if not noArgsCheck then
                                (* check that args can be assigned to the 
-                                * formal arguments of the receiver rec *)
+                                * formal arguments of this ObjectInvocation *)
                                (if trx then
                                    '**  ObjectInvocation:beforeCheckActualArgs: "'
                                      -> puttext;
@@ -1108,17 +1153,18 @@ semchecker: checker
                                if);
                                (args[],encOG[],this(ObjectInvocation)[]) 
                                  -> ATd.checkActualArgs
-               if)if)if)if);
-               (if (origin[] <> none) then
-                   encOG[] -> getV_qual -> qual[] -> encOG[];
-                   (if trx then
-                       '**  qualOf: '-> puttext; dopt -> putline;
-                       (if qual[] <> none then
-                           qual.dopt -> putline
-                        else
-                           'none' -> putline
-                       if)
-               if)if);
+                       if)if);
+                       (if (origin[] <> none) then
+                           encOG[] -> getV_qual -> qual[] -> encOG[];
+                           (if trx then
+                               '**  qualOf: '-> puttext; dopt -> putline;
+                               (if qual[] <> none then
+                                   qual.dopt -> putline
+                                else
+                                   'none' -> putline
+                               if)
+                   if)if)if)
+               if);
                false -> trx               
             #);
           getV_Qual::
