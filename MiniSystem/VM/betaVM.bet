@@ -1224,13 +1224,13 @@ betaVM:
                     op1: 
                       (# arg: @integer
                       do thisCode.B[glsc] -> arg -> out.putint; ' ' -> out.put; 
-                         glsc+1 -> glsc
+                         glsc + 1 -> glsc
                       exit arg
                       #);
                     op1asChar: 
                       (# arg: @integer
                       do thisCode.B[glsc] -> arg -> out.put; ' ' -> out.put; 
-                         glsc+1 -> glsc
+                         glsc + 1 -> glsc
                       exit arg 
                       #);
                     op2: 
@@ -1238,6 +1238,19 @@ betaVM:
                       do thisCode.B[glsc] * 256 + thisCode.B[glsc+1] -> arg -> out.putint; ' ' -> out.put; 
                          glsc + 2 -> glsc
                       exit arg
+                      #);
+                    op8:
+                      (# X: @real; L1,L2: @integer
+                      do (for i: 8 repeat
+                              (*thisCode.B[glsc + i - 1] -> puthex; newline;*)
+                              thisCode.B[glsc + i - 1] %putByteAt (@@X + i - 1)
+                         for);
+                         (for i: 4 repeat
+                              thisCode.B[glsc + i - 1] %putByteAt (@@L1 + i -1);
+                              thisCode.B[glsc + 4 + i - 1] %putByteAt (@@L2 + i - 1)
+                         for);
+                         glsc + 8 -> glsc;
+                      exit(X,L1,L2)
                       #);
                     StacksToOut:
                       (#
@@ -1361,6 +1374,21 @@ betaVM:
                         off -> X.get -> top1 -> thisStack.vpush;
                         (X[],off,top1) -> VtoOut;
                         (thisObj[],X[],true,thisStack[],off,false,0,thisCode.descInx,glsc,thisStack.vTopElm) -> vPushEvent
+                     // codes.fpushg then
+                        'fpushg' -> exe;
+                        thisStack.rpop -> X[];
+                        (if X[] = none then
+                            3 -> fatalError; leave loop
+                        if);
+                        op1 -> off;
+                        (if thisStack.valOff > 0 then 
+                            ' +$ ' -> out.puttext;
+                            thisStack.valOff -> out.putint; ' ' -> out.put;
+                        if);
+                        off -> X.get -> top1 -> thisStack.vpush;
+                        off + 1-> X.get -> top2 -> thisStack.vpush;
+                        (X[],off,top1) -> VtoOut;
+                        (thisObj[],X[],true,thisStack[],off,false,0,thisCode.descInx,glsc,thisStack.vTopElm) -> vPushEvent                        
                      // codes.ovpushg then
                         'ovpushg'-> exe; op1 -> off; 
                         thisStack.vpop -> value;
@@ -1536,6 +1564,22 @@ betaVM:
                         (X[],off,value) -> VtoOut;
                         (thisObj[],thisStack[],true,X[],off,false,0,thisCode.descInx,glsc,value) 
                           -> vStoreEvent
+                     // codes.fstoreg  then
+                        'fstoreg' -> exe;
+                        thisStack.rpop -> X[];
+                        (if X[] = none then 3 -> fatalError; leave loop if);
+                        thisStack.vpop -> top2;
+                        thisStack.vpop -> top1;
+                        op1 -> off;
+                        (if thisStack.valOff > 0 then 
+                            '+$ ' -> out.puttext;
+                            thisStack.valOff -> out.putint; ' ' -> out.put
+                        if);
+                        (off,top1) -> X.put;
+                        (off + 1,top2) -> X.put;
+                        (X[],off,value) -> VtoOut;
+                        (thisObj[],thisStack[],true,X[],off,false,0,thisCode.descInx,glsc,value) 
+                          -> vStoreEvent                        
                      // codes.ovstoreg then
                         'ovstoreg'-> exe; op1 -> off; 
                         thisStack.vpop -> value;
@@ -2367,25 +2411,48 @@ betaVM:
                             0 -> thisStack.vpush
                         if)
                      // codes.fplus then
-                        (# float1, float2: @real
+                        (# float1, float2: @real; L11, L12, L21,L22: @integer
                         do
                            'fplus'-> exe; 
-                           thisStack.vpop -> top1; 
-                           thisStack.vpop -> top2; 
-                           top1 %bOr 0 -> float1;
-                           top2 %bOr 0 -> float2;
+                           thisStack.vpop -> L22; 
+                           thisStack.vpop -> L21; 
+                           thisStack.vpop -> L12; 
+                           thisStack.vpop -> L11; 
+
+                           L11 %putLongAT (@@float1);
+                           L12 %putLongAt (@@float1 + 4);
+                           L21 %putLongAT (@@float2);
+                           L22 %putLongAt (@@float2 + 4);
+                           
+                           (*top1 %bOr 0 -> float1;
+                           top2 %bOr 0 -> float2;*)
                            float2 -> out.putreal; ' ' -> out.put; 
                            float1 -> out.putreal;
                            '*** fplus: ' -> puttext; 
+                           (*L11 -> puthex; ' ' -> put;
+                           L12 -> puthex; ' ' -> put;
+                           L21 -> puthex; ' ' -> put;
+                           L22 -> puthex; ' ' -> put;*)
                            float1 -> putreal; ' ' -> put;
                            float2 -> putReal; ' ' -> put;
                            float1 + float2 -> float1;
                            float1 -> putreal; ' ' -> put;
-                           float1 %bOr 0 -> top1;
-                           top1 -> putint;
+                           %getLongAt(@@float1) -> top1;
+                           %getLongAt(@@float1 + 4) -> top2;
                            newline;
                            top1 -> thisStack.vpush;
+                           top2 -> thisStack.vpush;
                            ('fplus',thisStack[],thisStack.vTopElm,thisCode.descInx,glsc) -> binOpEvent                        
+                        #)
+                     // codes.pushFloatConst then
+                        (# float1: @real; L1,L2: @integer
+                        do 'pushFloatConst' -> exe; op8 -> (float1,L1,L2);
+                           float1 -> out.putreal; out.newline;
+                           (*'pushFloatConst ' -> puttext;
+                           float1 -> putReal; ' '  -> put;
+                           L1 -> puthex; ' ' -> put; L2 -> puthex; newline;*)
+                           L1 -> thisStack.vpush;
+                           L2 -> thisStack.vpush                           
                         #)
                      // codes.saveBETAworld then
                         'saveBETAworld' -> exe; 
