@@ -1989,7 +1989,7 @@ bool traceThreads = true;
     threadId = thisBlock->threadId;
   }
 
-  int opCode,off,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
+  int opCode,off,inx,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
   int dinx,isRindexed,rangee,i;
   double float1, float2, float3;
   bool running = true, doTrace = false; 
@@ -3540,22 +3540,45 @@ bool traceThreads = true;
 	float2 = fPop(thisStack);
 	float1 = fPop(thisStack);
 	float3 = float1 / float2;
-	printf("fdiv: %f %f %f\n",float1,float2, float3);
+	//printf("fdiv: %f %f %f\n",float1,float2, float3);
 	fPush(thisStack,float3);
 	break;
       case feq:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	if (float1 == float2) vPush(thisStack,1); else vPush(thisStack,0);
+	//printf("feq: %f %f %b\n",float1,float2,float1 == float2);
 	break;
       case flt:
-
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	if (float1 < float2) vPush(thisStack,1); else vPush(thisStack,0);
+	//printf("flt: %f %f %b\n",float1,float2,float1 < float2);
 	break;
-      case fle: 
+      case fle:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	if (float1 <= float2) vPush(thisStack,1); else vPush(thisStack,0);
+	//printf("fle: %f %f %b\n",float1,float2,float1 <= float2);
 	break;
       case fgt:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	if (float1 > float2) vPush(thisStack,1); else vPush(thisStack,0);
+	//printf("fgt: %f %f %b\n",float1,float2,float1 > float2);	
 	 break;
-      case fge: 
-	 break;
-      case fne:  
-	 break; 
+      case fge:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	if (float1 >= float2) vPush(thisStack,1); else vPush(thisStack,0);
+	//printf("fge: %f %f %b\n",float1,float2,float1 >= float2);	
+	break;
+      case fne:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	if (float1 != float2) vPush(thisStack,1); else vPush(thisStack,0);
+	//printf("fne: %f %f %b\n",float1,float2,float1 != float2);	
+	break; 
       case pushFloatConst: 
 	arg1 = op8a(bc,&glsc);
 	arg2 = op8b(bc,&glsc);
@@ -3575,7 +3598,6 @@ bool traceThreads = true;
 	break; 
       case fpushg:
 	off = op1(bc,&glsc);
-
 	X = rPop(thisStack);
 	if (X == NULL) {
 	  printf("\n***pushg == NULL %i %i \n",off,(int)X);
@@ -3600,9 +3622,26 @@ bool traceThreads = true;
 	vPush(thisStack,arg1);
 	break;
       case fovpushg:
-	 break;
+	off = op1(bc,&glsc);
+	inx = vPop(thisStack);
+	X = rPop(thisStack);
+	arg1 = getV(X,off + inx - 1);
+	vPush(thisStack,arg1);
+	arg2 = getV(X,off + 1 + inx - 1);
+	vPush(thisStack,arg2);
+	//printf("**** fovpushg\n");
+	stop;
+	break;
       case fovstoreg:
-	 break;
+	off = op1(bc,&glsc);
+	arg2 = vPop(thisStack);
+	arg1 = vPop(thisStack);
+	X = rPop(thisStack);
+	inx = vPop(thisStack);
+	//printf("**** fovstoreg %i\n",off);
+	X->vfields[off + inx - 1] = arg1;
+	X->vfields[off + 1 + inx - 1] = arg2;
+	break;
       case allocIndexed:	
 	arg1 = op2(bc,&glsc);
 	arg2 = op1(bc,&glsc);
