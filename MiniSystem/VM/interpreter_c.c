@@ -3580,11 +3580,11 @@ bool traceThreads = true;
 	//printf("fne: %f %f %b\n",float1,float2,float1 != float2);	
 	break; 
       case pushFloatConst: 
-	arg1 = op8a(bc,&glsc);
-	arg2 = op8b(bc,&glsc);
+	arg1 = op4(bc,&glsc);
+	arg2 = op4(bc,&glsc);
 	//printf("pushFloatConst: %x %x\n",arg1,arg2); 
 	vPush(thisStack,arg1);
-	vPush(thisStack,arg2);	 
+	vPush(thisStack,arg2);
 	break; 
       case fstoreg:
 	off = op1(bc,&glsc); 

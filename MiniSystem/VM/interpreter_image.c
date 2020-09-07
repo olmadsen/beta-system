@@ -362,7 +362,23 @@ int op2(ObjDesc bc, int *glsc){
   *glsc = *glsc + 2;
   return V;
 };
+int op4 (ObjDesc bc, int*glsc) {
+  // used by pushFlotConst to get the two ints (4 bytes) from
+  // the 8 bytes in the byte code representing the flot const
+  int X; byte *P; int i;
+  P = (byte *)&X;
+  for (i = 0; i < 4; i++) {
+    //   P = (byte *) (&X + i);
+    *P =  bc[*glsc + i];
+    P = P + 1;
+  }
+  *glsc = *glsc + 4;
+  return X;  
+}
 double op8(ObjDesc bc, int*glsc) {
+  // gets the double representing the double from the 
+  // 8 bytes in the byte code representing the flot const
+  // not used!
   double X; byte *P; int i; 
   P = (byte *)&X;
   for (i = 0; i < 8; i++) {
@@ -373,28 +389,7 @@ double op8(ObjDesc bc, int*glsc) {
   *glsc = *glsc + 8;
   return X;
 }
-int op8a (ObjDesc bc, int*glsc) {
-  int X; byte *P; int i;
-  P = (byte *)&X;
-  for (i = 0; i < 4; i++) {
-    //   P = (byte *) (&X + i);
-    *P =  bc[*glsc + i];
-    P = P + 1;
-  }
-  *glsc = *glsc + 4;
-  return X;  
-}
-int op8b (ObjDesc bc, int*glsc) {
-  int X; byte *P; int i;
-  P = (byte *)&X;
-  for (i = 0; i < 4; i++) {
-    //   P = (byte *) (&X + i);
-    *P =  bc[*glsc + i];
-    P = P + 1;
-  }
-  *glsc = *glsc + 4;
-  return X;  
-}
+
 int descNo(ObjDesc desc){
   return desc_getInt4(desc,descNo_index);
 }
