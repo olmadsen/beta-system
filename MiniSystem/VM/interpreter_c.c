@@ -3595,7 +3595,7 @@ bool traceThreads = true;
 	//printf("fstoreg: %i %x %x\n",off,arg1,arg2);
 	X->vfields[off + X->valOff] = arg1;
 	X->vfields[off + 1 + X->valOff] = arg2;
-	break; 
+	break;
       case fpushg:
 	off = op1(bc,&glsc);
 	X = rPop(thisStack);

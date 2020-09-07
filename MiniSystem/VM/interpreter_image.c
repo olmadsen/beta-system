@@ -368,7 +368,6 @@ int op4 (ObjDesc bc, int*glsc) {
   int X; byte *P; int i;
   P = (byte *)&X;
   for (i = 0; i < 4; i++) {
-    //   P = (byte *) (&X + i);
     *P =  bc[*glsc + i];
     P = P + 1;
   }
@@ -382,7 +381,6 @@ double op8(ObjDesc bc, int*glsc) {
   double X; byte *P; int i; 
   P = (byte *)&X;
   for (i = 0; i < 8; i++) {
-    //   P = (byte *) (&X + i);
     *P =  bc[*glsc + i];
     P = P + 1;
   }
