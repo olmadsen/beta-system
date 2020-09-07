@@ -235,7 +235,24 @@ enum {
   restoreThis = 105,
   pushValue = 106,
   tstOriginNone = 107,
-  saveStringOrigin = 108
+  saveStringOrigin = 108,
+  fplus =  109,
+  fminus =  110,
+  fmult =  112,
+  fdiv =  121,   
+  feq = 122,
+  flt = 123,
+  fle = 124,
+  fgt = 125,
+  fge = 126,
+  fne = 127,
+  pushFloatConst = 113,
+  fstoreg = 114,
+  fpushg = 115,
+  i2f = 116,
+  f2i = 117,
+  fovpushg = 118,
+  fovstoreg = 119  
 };
 
 
@@ -345,7 +362,39 @@ int op2(ObjDesc bc, int *glsc){
   *glsc = *glsc + 2;
   return V;
 };
-
+double op8(ObjDesc bc, int*glsc) {
+  double X; byte *P; int i; 
+  P = (byte *)&X;
+  for (i = 0; i < 8; i++) {
+    //   P = (byte *) (&X + i);
+    *P =  bc[*glsc + i];
+    P = P + 1;
+  }
+  *glsc = *glsc + 8;
+  return X;
+}
+int op8a (ObjDesc bc, int*glsc) {
+  int X; byte *P; int i;
+  P = (byte *)&X;
+  for (i = 0; i < 4; i++) {
+    //   P = (byte *) (&X + i);
+    *P =  bc[*glsc + i];
+    P = P + 1;
+  }
+  *glsc = *glsc + 4;
+  return X;  
+}
+int op8b (ObjDesc bc, int*glsc) {
+  int X; byte *P; int i;
+  P = (byte *)&X;
+  for (i = 0; i < 4; i++) {
+    //   P = (byte *) (&X + i);
+    *P =  bc[*glsc + i];
+    P = P + 1;
+  }
+  *glsc = *glsc + 4;
+  return X;  
+}
 int descNo(ObjDesc desc){
   return desc_getInt4(desc,descNo_index);
 }

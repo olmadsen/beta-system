@@ -1064,6 +1064,30 @@ void vPush(Btemplate *thisStack,int V){
   thisStack->vstack[thisStack->vtop] = V;
 }
 
+union u_double{
+  double V;
+  int A[2];
+};
+
+void fPush(Btemplate *thisStack, double X){
+  int i;
+  union u_double V;
+  V.V = X;
+  //printf("\n**** fPush: %f %f %x %x \n",X,V.V,V.A[0],V.A[1]);
+  if ((thisStack->vtop = thisStack->vtop + 2) > 16 ) {
+#ifdef __arm__
+#else
+    printf("\n\nvstack %s [",nameOf(thisStack)); // <<<<<<< OBS FIX
+    for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
+    printf("]\n");
+#endif 
+    runTimeErrorX("vstack overflow",thisStack,-1);
+  }
+
+  thisStack->vstack[thisStack->vtop - 1] = V.A[0];
+  thisStack->vstack[thisStack->vtop] = V.A[1];
+}
+
 bool getIsObj(Btemplate *obj) {return obj->isObj; };
 
 void XdumpRstack(char *S,Btemplate *stack){
@@ -1087,6 +1111,14 @@ int vPop(Btemplate *thisStack){
   if ((thisStack->vtop = thisStack->vtop - 1) < -1) 
     runTimeErrorX("vstack underflow",thisStack,-1);
   return thisStack->vstack[thisStack->vtop + 1];
+}
+
+double fPop(Btemplate* thisStack){
+  union u_double val;
+  val.A[1] = vPop(thisStack);
+  val.A[0] = vPop(thisStack);
+  //printf("\n**** fPop: %f %x %x\n",val.V,val.A[0],val.A[1]);
+  return val.V;
 }
 
 Btemplate *rPop(Btemplate *stack){
@@ -1957,8 +1989,9 @@ bool traceThreads = true;
     threadId = thisBlock->threadId;
   }
 
-  int opCode,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
+  int opCode,off,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
   int dinx,isRindexed,rangee,i;
+  double float1, float2, float3;
   bool running = true, doTrace = false; 
   Btemplate *X, *Y;
 
@@ -3482,6 +3515,94 @@ bool traceThreads = true;
 #endif
 	vPush(thisStack,arg1);
 	break;
+      case fplus:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	float3 = float1 + float2;
+	//printf("fplus: %f %f %f\n",float1,float2, float3);
+	fPush(thisStack,float3);
+	break;
+      case fminus:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	float3 = float1 - float2;
+	//printf("fminus: %f %f %f\n",float1,float2, float3);
+	fPush(thisStack,float3);	
+	break;
+      case fmult:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	float3 = float1 * float2;
+	//printf("fmult: %f %f %f\n",float1,float2, float3);
+	fPush(thisStack,float3);
+	break;
+      case fdiv:
+	float2 = fPop(thisStack);
+	float1 = fPop(thisStack);
+	float3 = float1 / float2;
+	printf("fdiv: %f %f %f\n",float1,float2, float3);
+	fPush(thisStack,float3);
+	break;
+      case feq:
+	break;
+      case flt:
+
+	break;
+      case fle: 
+	break;
+      case fgt:
+	 break;
+      case fge: 
+	 break;
+      case fne:  
+	 break; 
+      case pushFloatConst: 
+	arg1 = op8a(bc,&glsc);
+	arg2 = op8b(bc,&glsc);
+	//printf("pushFloatConst: %x %x\n",arg1,arg2); 
+	vPush(thisStack,arg1);
+	vPush(thisStack,arg2);	 
+	break; 
+      case fstoreg:
+	off = op1(bc,&glsc); 
+	X = rPop(thisStack);
+	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	arg2 = vPop(thisStack);
+	arg1 = vPop(thisStack);
+	//printf("fstoreg: %i %x %x\n",off,arg1,arg2);
+	X->vfields[off + X->valOff] = arg1;
+	X->vfields[off + 1 + X->valOff] = arg2;
+	break; 
+      case fpushg:
+	off = op1(bc,&glsc);
+
+	X = rPop(thisStack);
+	if (X == NULL) {
+	  printf("\n***pushg == NULL %i %i \n",off,(int)X);
+	  runTimeErrorX("Reference is NONE",thisObj,glsc);
+	}
+	arg1 = X->vfields[off + X->valOff];
+	arg2 = X->vfields[off + 1 + X->valOff];
+	//printf("fpushg %i %x %x\n",off,arg1,arg2);
+	vPush(thisStack,arg1);
+	vPush(thisStack,arg2);
+	break;
+      case i2f:
+	//printf("i2f\n");
+	arg1 = vPop(thisStack);
+	float1 = arg1;
+	fPush(thisStack,float1);
+	break;
+      case f2i:
+	//printf("f2i\n");
+	float1 = fPop(thisStack);
+	arg1 = float1;
+	vPush(thisStack,arg1);
+	break;
+      case fovpushg:
+	 break;
+      case fovstoreg:
+	 break;
       case allocIndexed:	
 	arg1 = op2(bc,&glsc);
 	arg2 = op1(bc,&glsc);
