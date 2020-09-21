@@ -16,9 +16,11 @@ generator: variants
                  #);
                M: ^Module;
             do (if traceModules then
-                   'MarkForCodeGen:module: ' -> puttext; DI.sig.dopt -> putline;
+                   'MarkForCodeGen:module: ' -> puttext; sig.dopt -> putline;
                if);
-               DI.markForCodeGen;
+               
+               (*DI.markForCodeGen;*)
+               OG.markForCodeGen;
                (if (encModule -> M[]) <> none then
                    M.markForCodeGen
                if)
@@ -31,10 +33,109 @@ generator: variants
                     if)
                  exit M[]
                  #);
-               M: ^Module; var: ^Variant
-            do (DI.sig.id[],newDesc.noOfDescs) -> cd.newComponent;
+               M: ^Module; var: ^Variant;
+               T: @text; OGqual: ^ObjectGenerator
+            do (if false then
+                   '\n!!!! Module:qgen: we did come here: ' -> puttext; 
+                   sig.dopt -> putline;
+               if);
+               (if origin[] = none then '!!!!' -> putline;
+                   (sig.id[],QnewDesc.noOfDescs) -> cd.newComponent;
+               if);
+               OG.getQual -> OGqual[];
+               cd.com(#
+                     do 'Module:isConst:' -> TT; isConst -> BB;
+                        ':isBasicValue:'->TT; OG.isBasicValue->BB;
+                        ':primNo:'->TT; OG.primNo -> II;
+                     #);
+               cd.com(#
+                     do 'OGqual:'-> TT; 
+                        (if OGqual.sig[] <> none then OGqual.sig.doPT -> TT 
+                         else 'none'->TT if);
+                        ':OGqual.isBasicValue:' -> TT; OGqual.isBasicValue -> BB;
+                        ':OGqual.isValueObj:' -> TT; OGqual.isValueObj -> BB;
+                     #);
+               (if isVirtualObject then
+                   (*  '\***DataItem:qGen:virtual object: ' -> puttext;
+                    dopt ->putline;*)
+               if);
+               (if true 
+                // OG.isBasicPattern and not OG.isConstLiteral then
+                   (* No OG.qGen for X: var/val integer
+                    * Cf the discussion of #foo versus foo  *)
+                // OG.isBasicValue then
+                   (* C1,C2,V1,V2                
+                    * X: val integer(7)
+                    * X: var 7
+                    * X: val a + b
+                    *)
+                   (if OG.isValueObj then 
+                       (* OG is a ValueObject returning a Basic value like integer
+                        *    mkIntB: ... out V: var integer ...
+                        * We shall thus not allocate a value obj, 
+                        * but a plain integer
+                        * the invocation of mkIntB shall be boxed
+                        *)
+                       (*'DataItem:ValueObj:'->putline; dopt -> putline; *)
+                       (* If OG is valueObj then
+                        * newOff = 0 does not work
+                        *)
+                       (true,0,0) -> OG.Qgen 
+                    else (* when is newOff needed here? *)
+                       (true,0,this(Module).NewOff) -> OG.Qgen;
+                   if);
+                   cd.com(#
+                         do 'dataItem:store:basicValue:' -> TT;
+                            'off:' -> TT; off -> II;
+                            ' NewOff:' -> TT; NewOff -> II
+                         #);
+                   cd.pushThis;                       
+                   (sig.id[],this(MOdule).NewOff) -> cd.storeg
+                // (OG.primNo = String_prim) and isConst then
+                   (* Like S: obj "hello"
+                    * Old comment:
+                    * Could be  V: obj elm where elm:< Object 
+                    * but is this true ?
+                    *)
+                   (true,0,this(Module).NewOff) -> OG.Qgen;
+                   cd.pushThis;
+                   (sig.id[],this(Module).NewOff) -> cd.rstoreg
+                // isConst or not OG.IS.isEmpty (*or isValue*) then
+                   (* C3,C4,V4 *)
+                   (* All objects/patterns being embedded must be handled by
+                    * Alloc and gen since we must know the size *)
+                   (* X: = Foo or 
+                    * Singular T: = P{...} 
+                    * C3,C4,V4 *)
+                   cd.bcPos -> beginBCP;
+                   (if isInArg then (* also outArg? *)
+                       cd.com(#do 'inArg:' -> TT; doPT -> TT #);
+                    else
+                       (false,0,this(Module).NewOff) -> OG.Qgen;
+                   if);
+                   cd.bcPos -> endBCP;
+                   (* else V3 - just a qualifcation; 
+                    * see also the discussion of #foo versus foo *)
+                   (* Could be S: ?elm where elm:< Object -- no code gen *)
+               if)
             #);       
-          findNextImp:: (# do bcp -> DI.OG.IS.findNextImp -> impx[] #);
+          getAdr:: (* new *)
+            (#
+            do true -> loadRec;
+               0 -> Address -> A[];
+               newOff -> A.off
+            #);
+          invoke:: (* new *)
+            (#
+            do   cd.com(#do '>Object:'->TT #);
+                   (if adr[] <> none then 
+                       adr.load
+                    else
+                       cd.com(# do '>adr=none'->TT #);
+                       (sig.id[],NewOff) -> cd.rpushg
+                   if)
+            #);
+          findNextImp:: (# do bcp -> OG.IS.findNextImp -> impx[] #);
        #);
      ModuleItem::
        (# markForCodeGen:: 
@@ -42,7 +143,7 @@ generator: variants
             do (if tracemodules then
                    'MarkForCodeGen:moduleItem: isIncluded: ' -> puttext;
                    MD.isIncluded -> putBoolean; ' ' -> put;
-                   MD.DI.sig.dopt -> putline;
+                   MD.sig.dopt -> putline;
                if);
                (if MD.isIncluded then MD.markForCodeGen if)#);
           Qgen::
@@ -55,7 +156,7 @@ generator: variants
                    (if MD.inMainPath then
                        MD[] -> mainPathModule[]
                     else
-                       (useReturnValue,superAdj,staticOff) -> MD.DI.Qgen;
+                       (useReturnValue,superAdj,staticOff) -> MD.Qgen;
                    if)
                 else
                    (if traceModules then
@@ -64,10 +165,10 @@ generator: variants
             #);
           getAdr::
             (#
-            do A[] -> MD.DI.getAdr -> (loadRec,A[])
+            do A[] -> MD.getAdr -> (loadRec,A[])
             #);
           pushThis:: (# do cd.pushThis #);
-          invoke:: (# do 'ModuleItem:invoke:'-> cd.comment; MD.DI.invoke #);
+          invoke:: (# do 'ModuleItem:invoke:'-> cd.comment; MD.invoke #);
           store:: (# do '\nModuleItem:store'->putline #);
           popReturn:: (# do '\nModuleItem:popReturn'->putline #);
           findNextImp:: (# do bcp -> md.findNextImp -> impx[] #);          
@@ -96,18 +197,22 @@ generator: variants
             #);
           Qgen:: 
             (# T: @text; OGqual: ^ObjectGenerator
-            do OG.getQual -> OGqual[];
+            do OG.getQual -> OGqual[]; (* is none for PersonLib !? *)
                cd.com(#
-                     do 'isConst:' -> TT; isConst -> BB;
+                     do 'DI:isConst:' -> TT; isConst -> BB;
                         ':isBasicValue:'->TT; OG.isBasicValue->BB;
                         ':primNo:'->TT; OG.primNo -> II;
                      #);
                cd.com(#
                      do 'OGqual:'-> TT; 
-                        (if OGqual.sig[] <> none then OGqual.sig.doPT -> TT 
-                         else 'none'->TT if);
-                        ':OGqual.isBasicValue:' -> TT; OGqual.isBasicValue -> BB;
-                        ':OGqual.isValueObj:' -> TT; OGqual.isValueObj -> BB;
+                        (if OGqual[] <> none then
+                            (if OGqual.sig[] <> none then OGqual.sig.doPT -> TT 
+                             else 'none'->TT if);
+                            ':OGqual.isBasicValue:' -> TT; OGqual.isBasicValue -> BB;
+                            ':OGqual.isValueObj:' -> TT; OGqual.isValueObj -> BB;
+                         else
+                            'none' -> TT
+                        if)
                      #);
                (if isVirtualObject then
                    (*  '\***DataItem:qGen:virtual object: ' -> puttext;
@@ -745,12 +850,12 @@ generator: variants
                           // Module## then
                              current[] -> M[]; 
                             (* 'Module: '->puttext; moduleName -> puttext; ' ' -> put;*)
-                             M.DI.newOff -> add
+                             M.newOff -> add
                           // ModuleItem## then
                              current[] -> MI[];
-                             (if MI.MD.DI.off > 0 then
+                             (if MI.MD.off > 0 then
                                  (*'MI:'->puttext; MI.MD. moduleName->puttext;' ' -> put;*)
-                                 MI.MD.DI.newOff -> add
+                                 MI.MD.newOff -> add
                      if)if)if)
                   #);
                   (*newline*)
@@ -1191,7 +1296,7 @@ generator: variants
                         * mainPathModule.DI.OG.IS.newDescNo -> putint;  
                         * ' ' -> put;
                         * mainPathModule.DI.sig.dopt -> putline; *)
-                       (false,0,0) -> mainPathModule.DI.Qgen
+                       (false,0,0) -> mainPathModule.Qgen
                    if);
                    (if innerInx > 0 then innerInx -> cd.innerA if);
                    (if (superDesc[] <> none) and not superDesc.isPrimitive then
@@ -2073,7 +2178,7 @@ generator: variants
                      -> OI.ptnId.viaIncl.goInclude -> (org[],orgIsVal)
                if);
                ATd[] -> MI[];
-               (MI.MD.DI.sig.id[],MI.MD.DI.newOff) -> cd.rpushg
+               (MI.MD.sig.id[],MI.MD.newOff) -> cd.rpushg
             exit(org[],orgIsVal)
             #);
        #);
@@ -2471,13 +2576,13 @@ generator: variants
             enter md[]
             do (if md[] <> none then
                    (if false then
-                       '\nModule: ' -> puttext; md.DI.sig.doPT -> puttext;
+                       '\nModule: ' -> puttext; md.sig.doPT -> puttext;
                        ' descNo: ' -> puttext; (md.desc).newDescNo -> putint; 
                        ' imports: ' -> putline;
                    if);
                    true -> md.mark;
                    (if md.origin[] <> none then
-                       md.DI.NewOff -> addOff;
+                       md.NewOff -> addOff;
                        (* else top module BETAworld *)
                    if);    
                    md.origin[] -> org[];
@@ -2517,7 +2622,7 @@ generator: variants
                cd.pushThis;
                (if false then
                    'TopModule: ' -> puttext;
-                   markIncludes.topModule.DI.sig.doPT -> putLine;
+                   markIncludes.topModule.sig.doPT -> putLine;
                    'Main: ' -> puttext; main.doPt -> putline
                if);
                ('BETAworld',(markIncludes.topModule.desc).newDescno,0,true) 
