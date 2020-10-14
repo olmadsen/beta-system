@@ -288,7 +288,7 @@ generator: variants
                        if)
                    if)
                 else
-                   cd.com(#do '>Object:'->TT #);
+                   cd.com(#do '>Object:unique:'->TT; OG.IS.isUnique -> BB; #);
                    (if adr[] <> none then 
                        adr.load
                     else
@@ -1447,12 +1447,16 @@ generator: variants
                         (#do 'loadArgs:NonVirt:'->TT; actArgs[argInx].dopt->TQ;
                            ' isValue: ' -> TT;  actArgs[argInx].isValueObj->BB
                         #);
+                        
                         (* The call of Qgen should perhaps have the receiver
                          * as an argument!? Currenly we handle stuff af Qgen
                          * that depends on the receiver
                          *)
                         0 -> staticOff;
                         (true,superAdj,staticOff) -> actArgs[argInx].Qgen;
+                        
+                        cd.com(#do 'ptn:loadArgs:after:Qgen:' -> TT; 
+                                 this(Pattern).primNo = vAssign_prim -> BB #);
                         
                         (* The code below needs a clean-up with repect to
                          * formal/actual arg being basicValue, valueObj 
@@ -1473,6 +1477,7 @@ generator: variants
                             if)
                          else
                             (if (this(Pattern).primNo = vAssign_prim) then
+                                cd.com(#do 'vAssign:fArg:' -> TT; formalArg.doPT -> TQ #);
                                 (if actArgs[argInx].isValueObj 
                                     and actArgs[argInx].super.ATd.isPattern
                                     then
@@ -1531,9 +1536,10 @@ generator: variants
                top,argInx: @integer;
                enclosingOG: ^ObjectGenerator;
                var: ^Variant;
-            do cd.com(#do 'isValueAssign: ' -> TT; 
-                        E.ATd.primNo = vAssign_prim->BB #);
-               
+            do cd.com(#do 'isValueAssign: ' -> TT; E.ATd.primNo = vAssign_prim->BB #);
+               (* OBS! In R1 := R2, := is vAssign_prim
+                * We should use R1 :- R2 to gte rAssign_prim
+                *)
                (if OG.primNo 
                    (* Some of these are handled in invoke below
                     * May be moved to here*)
@@ -1640,8 +1646,17 @@ generator: variants
                                if)
                            if)
                         else
-
-                           ('',off) -> cd.rpushg
+                           (if isUnique then
+                               cd.com(#do 'address:load:isUnique' -> TT #);
+                               cd.rdouble;
+                               ('',off) -> cd.rpushg;
+                               cd.rswap;
+                               cd.pushNone;
+                               cd.rswap;
+                               ('',off) -> cd.rstoreg
+                           else
+                               ('',off) -> cd.rpushg
+                           if)
                if)if)if)
             #);
           loadAdr::
@@ -1722,6 +1737,8 @@ generator: variants
                '"off:'-> T.puttext; off -> T.putint;
                ' size:'-> T.puttext; size -> T.putint;
                ' superAdj:'->T.puttext; superAdj->T.putint;
+               ' isUnique:'->T.puttext; 
+               (if isUnique then 'True'->T.putText else 'False'->T.puttext if);
                ' isValue:' -> T.puttext; 
                (if isValue then 'True'-> T.puttext else 'False'->T.puttext if);
                ' originIsValue:' -> T.puttext; 
@@ -1822,7 +1839,8 @@ generator: variants
                         -> computeAdr -> (rec[],E[],A[]);
                   if);
                   (if (E.ATd.primNo = vAssign_prim) and (A[] <> none) then 
-                      A.off -> off if);
+                      A.off -> off 
+                  if);
                   cd.com(#do 'OI:after:computeAdr:superAdj:'->TT; 
                            superAdj-> II; 
                            (if A[] <>  none then A.print -> TT if)#);
@@ -1847,8 +1865,7 @@ generator: variants
             (# A,recA: ^Address; E,rec,pRec: ^Exp; j: @integer; 
                loadRec,orgIsVal: @boolean
             enter A[]
-            do 
-               scanSons
+            do scanSons
                (#
                do rec[] -> pRec[];
                   E[] -> rec[];
@@ -1861,8 +1878,6 @@ generator: variants
                   (if isFirst then
                       E[] -> rec[];
                       E.pushThis;
-                      (* E.loadOrigin - we must do this also for values *)
-
                       (A.superAdj,none) -> E.loadOrigin -> (rec[],E[],orgIsVal);
                       (* we should ignore rec and E - defined above 
                        * And A.superAdj should be eliminated *)
@@ -1898,9 +1913,12 @@ generator: variants
                           if);
                           (* really getOffSet of E.ATd *)
                        else
-                          cd.com(#do 'E:isAssign:'-> TT; E.dopt -> TT#); 
+                          cd.com(#do 'E:isAssign: '-> TT; E.dopt -> TQ #); 
                       if);                      
                   if);
+                  (if isLast then
+                      cd.com(#do 'computeAdr:isLast ' -> TT; E.dopt -> TT #)
+                  if)
                #);
             exit(rec[],E[],A[])
             #);          
@@ -2107,7 +2125,20 @@ generator: variants
                 // moduleItem## then
                    '>moduleItem' -> cd.comment
                if);
-               cd.com(#do '>adr:'->TT; (if adr[] <> none then adr.print->TT if)#);
+               (if (adr[] <> none) and (E.ATd[] <> none)  then
+                   (if E.ATD.OG[] <> none then
+                       E.ATd.OG.IS.isUnique -> adr.isUnique;          
+                       cd.com(#do 'E.ATd: ' -> TT; E.ATd.sig.doPT -> TQ;
+                                'unique: ' -> TT; E.ATd.OG.IS.isUnique -> BB; #);
+                    else
+                       (* Probably if E.ATd is a ModuleItem, then OG is not define *)
+                       (if not (E.ATd## = ModuleItem##) then
+                           E[] -> warning
+                           (# do 'E.ATd.OG is none: "' -> msg; E.dopt -> msg; 
+                              '" E.ATd: "' -> msg; E.ATd.doPT -> msg; '"' -> msg #)
+                   if)if);
+                   cd.com(#do'adr:'->TT; (if adr[] <> none then adr.print->TT if)#);
+               if);
                (rec[],E[],useReturnValue,staticOff,CC[],adr[]) -> ATd.invoke
             #);
           loadArgs:: 
