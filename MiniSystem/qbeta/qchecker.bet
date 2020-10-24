@@ -117,7 +117,10 @@ checker: Parser
                do (if true
                    // current.isNewProp then
                       current[] -> prop[];
-                      '**** Got property: ' -> puttext; current.dopt -> putline;
+                      (if false then
+                          '**** Got property: ' -> puttext; 
+                          current.dopt -> putline;
+                      if);
                       (if true 
                        // '%domain' -> prop.propId.T.equalNCS then
                           acc_domain -> acc_current;
@@ -133,8 +136,13 @@ checker: Parser
                       if)
                    // current.isDecl then
                       current[] -> dcl[];
-                      acc_current -> dcl.accessLevel
-                  if);
+                      (if dcl## = ModuleItem## then
+                          (* preliminary until we have fixed an explicit
+                           * syntax for moduleItmes *)
+                          acc_public -> dcl.accessLevel
+                       else
+                          acc_current -> dcl.accessLevel
+                  if)if);
                #)
             #);
           checkGlobals:
@@ -1989,9 +1997,66 @@ checker: Parser
             #)
        #);
      found:
-       (# ptnId: ^Name; on,pn: @integer; ATd: ^Decl; MDcall,MDdcl: ^Module
+       (# inSameOrigin: booleanValue
+            (# dclOrigin,aplOrigin: ^Items
+            enter dclOrigin[]
+            do ptnId.father.father.origin[] -> aplOrigin[];
+               (if false then
+                   '**** dclOrigin: ' -> putline; dclOrigin.dopt -> putline;
+               if);
+               Loop:
+                 (#
+                 do (if false then
+                        '**** aplOrigin: ' -> putline; aplOrigin.dopt -> putline;
+                    if);
+                    (if dclOrigin[] = aplOrigin[] then
+                        true -> value
+                     else
+                        (if (aplOrigin.origin[] -> aplOrigin[]) <> none then
+                       restart Loop
+                 if)if)#)
+            #);
+          checkAccesability:
+            (# 
+            do (if ATd.accesslevel <> acc_public then
+                   (if MDcall[] = MDdcl[] then (* in same domain *)
+                       (if ATd.accesslevel = acc_private then
+                           (if not (ATd.origin[] -> inSameOrigin) then
+                                ptnId[] -> warning
+                               (#
+                               do 'Attribute is not accessible: ' -> msg;
+                                  ptnID.dopt -> qmsg;
+                                  '\n     Must be in same enclosing ' -> msg;
+                                  'object descriptor as the declaration' -> msg
+                               #)
+                           if)
+                       if)
+                    else (* in different domains *)
+                       (if ATd.accesslevel 
+                        // acc_private // acc_domain then
+                           ptnId[] -> warning
+                           (#
+                           do 'Attribute is not accessible: ' -> msg;
+                              ptnID.dopt -> qmsg;
+                              '\n     CallerDomain: ' -> msg;
+                              MDcall.sig.dopt -> qmsg;
+                              ' DeclDomain: ' -> msg;
+                              MDdcl.sig.dopt -> qmsg;
+                           #);
+                        // acc_publicInSub then
+                           '\n**** Must be in subpattern: ' -> puttext;
+                           ptnID.dopt -> putline     
+                       if)
+                   if)
+               if)
+            #);
+          ptnId: ^Name; on,pn: @integer; ATd: ^Decl; MDcall,MDdcl: ^Module;
+          trx,trx2: @boolean; T: ^text
        enter(ptnId[],on,pn,ATd[])
-       do ptnId.enclosingDomain -> MDcall[];
+       do (if (ptnId.T.length >= 3) then
+              'mod' -> ((1,3) -> ptnId.T.sub).equalNCS -> trx2;
+          if);
+          ptnId.enclosingDomain -> MDcall[];
           ATd.enclosingDomain -> MDdcl[];
           (if MDcall[] <> MDdcl[] then
               (if false then
@@ -2002,7 +2067,7 @@ checker: Parser
               if)
           if);
 
-          (if traceSearch then
+          (if trx or traceSearch then
               '***** Found: ' -> puttext; ptnId.T[] -> puttext; 
               ' on: ' -> puttext; on -> putint;
               ' pn: ' -> puttext; pn -> putint;
@@ -2015,12 +2080,12 @@ checker: Parser
                    // acc_private then ' private ' -> puttext;
                   if);
               if);
+              newline; MDcall.sig.dopt -> puttext;
+              ' dcl: ' -> puttext; MDdcl.sig.dopt -> puttext;
               newline;
-              ptnId.enclosingDomain -> MDcall[];
-              ' dcl: ' -> puttext;
-              ATd.enclosingDomain -> MDdcl[];
-              newline;
-          if)
+          if);
+          (if trx2 then checkAccesability if);
+          false -> trx
        #);
      argBuf:  @
        (# init: (# do none -> head[] -> last[] #);
