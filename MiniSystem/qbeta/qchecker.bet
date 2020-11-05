@@ -724,8 +724,9 @@ checker: Parser
     Arguments::<
        (# setUpOrigin:: 
             (# 
-            do scanSons
-               (# OG: ^ObjectGenerator
+            do 
+               scanSons
+               (# OG: ^ObjectGenerator; OS: ^ObjectSpecification
                do (if current## = ObjectGenerator## then
                       (* Foo: 
                        *    ...
@@ -738,11 +739,16 @@ checker: Parser
                        *    %with% exp
                        *       ... may be empty
                        *)
-                      current[] -> OG[];
+                      current[] -> OG[]; 
                       (* OG = Object{ S1; S2} *)
                       (if OG.isObjectDesc then
-                          OG.father.father.father.father -> OG[];
-                          OG.IS[] -> current.setUpOrigin
+                          OG.father.father.father.father -> OS[];
+                          (if OS##
+                           // objectCall## then
+                              OS.origin[] -> current.setUpOrigin
+                           // ObjectGenerator## then
+                              OS.IS[] -> current.setUpOrigin
+                          if);
                        else (* exp above comes here *)
                           origin[] -> current.setUpOrigin
                       if)
@@ -1049,7 +1055,7 @@ checker: Parser
             #);
           handleArgs::
             (# args: [6]^ObjectGenerator; top: @integer;
-               enclosingOG: ^ObjectGenerator
+               enclosingOG: ^ObjectSpecification (*ObjectGenerator*)
             do (if false then
                    '**** HandleArgs: ' -> putline; dopt-> putline; 
                    '**   E: ' -> puttext; E.doPT -> putline;
@@ -1058,7 +1064,6 @@ checker: Parser
                if);
                
                (if E.args[] = none then leave handleArgs if);
-
                E.args.scanArgs
                (#
                do (if (top+1 -> top) > args.range then 
@@ -1068,7 +1073,6 @@ checker: Parser
                   (*'ActualArg: ' -> puttext; current.dopt -> putline*)
                #);
                (if top = 0 then leave handleArgs if);
-
                scanArgs
                (# i: @ integer; Ex: ^Exp; 
                   OI: ^ObjectInvocation; descNo: @integer
@@ -1093,7 +1097,7 @@ checker: Parser
                                 newDesc -> args[i].vDescNo;
                                 true -> args[i].nonVirtualBinding;
                                 true -> args[i].isVirtualArg;
-                               (* '*** non-singular argument binding: ' -> puttext; 
+                                (* '*** non-singular argument binding: ' -> puttext; 
                                 args[i].vDescNo -> putint; ' ' -> put;
                                 args[i].doPT -> putline;*)
                             if);
@@ -1183,7 +1187,60 @@ checker: Parser
                if)
             #);
        #);
-     
+     ObjectCall::<
+       (# setUpOrigin::
+            (#
+            do (if false then
+                   '**** ObjectCall:setUpOrigin:\n' -> puttext; dopP -> putline
+               if);
+               origin[] -> super.setUpOrigin;                    
+            #); 
+          check::
+            (# OG: ^ObjectGenerator
+            do (if false then
+                   '**** ObjectCall:check: ' -> puttext; dopt -> putline
+               if);
+               (none,basicScope[],basicScope[](*sig[]*),true) -> super.check;
+               L:
+                 super.ATd.OG.IS.scanAllDecls
+                 (#
+                 do (if currentDcl.isVirtual then
+                        (if false then
+                            '**** ObjectCall:after:check: ' -> putline; 
+                            dopt -> putline;
+                            '**   dcl:' -> putline;
+                            super.Atd.dopt -> putline;
+                        if);
+                        this(ObjectCall)[] 
+                          -> convertObjectCallToGenerator
+                          -> OG[];
+                        OG.clear;
+                        origin[] -> OG.setUpOrigin;
+                        (none,basicScope[],basicScope[],true) -> OG.check;
+                        leave L
+                 if)#)
+            #);
+          alloc::
+            (# E: ^Exp
+            do (if false then
+                   '**** ObjectCall:alloc: ' -> puttext; dopt -> putline
+               if);
+               enclIT[] -> super.alloc;
+               (*addBinding.copySuper;*)
+               (if ((super.last -> E[]) <> none) and (E.ATd[] <> none) then 
+                   E[] -> E.ATd.handleArgs 
+               if);
+               (*(if isObjectDesc then
+                   enclIT[] -> IS.alloc 
+               if);
+               (if traceGeneric2 then
+                   addBinding.display
+                if);*)
+               (* do we need those below? *)
+               addBinding.checkForVirtualObject;
+               addBinding.checkSuperVariant
+            #);
+       #);
      ObjectGenerator::<
        (# setUpOrigin::
             (#
@@ -1438,7 +1495,7 @@ checker: Parser
                  #);
             #);
           addBB::
-            (# VD: ^Pattern; E: ^ObjectGenerator;
+            (# 
                vDecl: [2] ^Pattern; (* not defined? *)
                bindingType: [2] @integer; (* 0: inner; 1: ref; 2: value *)
                bindings: [2] ^ObjectGenerator;
@@ -1524,7 +1581,7 @@ checker: Parser
                     OI[] -> objectInvs[oTop][];
                     true -> hasVirtualObject
                  #);
-               checkSuperVariant:
+               checkSuperVariant::
                  (# ptn: ^Pattern; OG: ^ObjectGenerator
                  do (if (superPtn -> ptn[]) <> none then
                         ptn.OG[] -> OG[];
@@ -1558,7 +1615,7 @@ checker: Parser
                         #)
                     if)
                  #);
-               checkForVirtualObject:
+               checkForVirtualObject::
                  (#
                  do L:
                       (for i: vTop repeat
@@ -1617,9 +1674,12 @@ checker: Parser
                               do current[] -> isVirtualObjectInvocation
                               #)
                            #);                         
+                         OS: ^ObjectSpecification;
                          OG: ^ObjectGenerator; OI: ^Invocation
-                      enter OG[]
-                      do (if not OG.isObjectDesc then
+                      enter OS[]
+                      do (if (OS## = ObjectGenerator##)then
+                             OS[] -> OG[];
+                             (if not OG.isObjectDesc then
                              (*(if (OG.super[] -> OI[]) <> none then*)
                                  (*'\n*** isVirtualObjectInvocation: ' 
                                   -> puttext;*)
@@ -1631,17 +1691,17 @@ checker: Parser
                                  #);
                                  (*newline*)
                              (*if);*)
-                         if);
+                         if)if)
                       #);
                  do IS.scanSons
                     (# I: ^Item
-                    do current[] -> I[];
+                    do current[] -> I[]; 
                        (if true 
                         // I.isDecl then
                            I[] -> isVirtualObject 
                         // I.isObjectGenerator then
                            I[] -> isVirtualObjectInvocation
-                    if)#)
+                    if)#);
                  #);
                valueOrObject::
                  (#
@@ -1691,7 +1751,7 @@ checker: Parser
                              if)
                     for)if)
                  #)      
-            enter(VD[],E[])
+
             do (if handleGeneric then
                    (if VD.off > vTop then
                        VD.off - bindings.range + 2-> bindings.extend;
