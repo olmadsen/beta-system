@@ -213,7 +213,8 @@ generator: variants
                            newOff -> A.off
                        if);
                        OG.isBasicValue 
-                       or OG.isValueObj or (OG.primNo = value_prim)
+                       or OG.isValueObj 
+                       or (OG.primNo = value_prim)
                          -> A.isValue
                    if);
                    cd.com(#do OG.dopt -> TT #);
@@ -223,7 +224,11 @@ generator: variants
                                 ptn.OG.IS.newBasicProp.UNIT[] -> UN[];
                                 (if UN[] <> none then
                                     UN.dopt -> TT;
-                                    true -> A.isFloat
+                                    (if false then
+                                        true -> A.isFloat 
+                                     else
+                                        true -> A.isUnitVal
+                                    if)
                          if)if)#);
                    (if OG.primNo = float_prim then
                        (if true then 
@@ -265,16 +270,7 @@ generator: variants
                                         E.dopt -> TQ;
                                      #);
                                true -> adr.isAdr;
-                               adr.load;      
-                               (*
-                               (if (origin[] -> OG.IS.originIsValue) then
-                                   cd.com(#do 'pushValue:OrgIsVal:'->TT; dopt -> TQ;
-                                            ',size:'->TT; objSize -> II #);
-                                   1 -> orgIsVal;
-                                else
-                                   cd.com(#do 'pushValue:'-> TT; dopt -> TQ;
-                                            ',size:'->TT; objSize -> II #)
-                               if);*)
+                               adr.load; 
                            if)
                         else
                            cd.com(#do
@@ -476,11 +472,11 @@ generator: variants
                  (#
                  do OGid -> TQ;
                     (if IS.isEmpty then 
-                        'IS.isempty: ' -> TT 
+                        'IS.isempty!' -> TT 
                      else
-                        'singular:' -> TT
+                        'singular!' -> TT
                     if);
-                    'staticOff: '-> TT; staticOff -> II;
+                    ' staticOff: '-> TT; staticOff -> II;
                     ' descNo: ' -> TT; IS.newDescno->II;
                     ' top:'->TT; Qvariants.top -> II
                  #);
@@ -497,6 +493,7 @@ generator: variants
                  #);
                name: ^text; head: @boolean; Px: ^OGpath;
                on,pn: @integer;
+               E: ^Exp; OI: ^ObjectInvocation;
                var: ^Variant;
                trace: (# exit false #);
             do (if not genIsDone then
@@ -505,20 +502,16 @@ generator: variants
                    if);
                    (* Check if code has been generated for this variant *)
                    true -> genIsDone;
-                   cd.com
-                   (# ptn: ^Pattern; OI: ^ObjectInvocation; E: ^Exp
-                   do 'ObjectGenerator:gen:' -> TT;
-                      'IS.newDescNo:' -> TT; IS.newDescNo -> II;
-                      'OG.top:'->TT; Qvariants.top->II;
-                      super.last -> E[];                            
-                      (if (E[] <> none) and (E## = objectInvocation##) then 
-                          (if ((E[] ->  OI[]).ATD## = pattern##) then
-                              (E[] ->  OI[]).ATD[] -> ptn[];
-                              'super:'->TT; ptn.sig.dopt -> TQ;
+                   super.last -> E[];                            
+                   (if (E[] <> none) and (E## = objectInvocation##) then 
+                       (if ((E[] ->  OI[]).ATD## = pattern##) then
+                           cd.com
+                           (# ptn: ^Pattern; 
+                           do (E[] ->  OI[]).ATD[] -> ptn[];
+                              'OG:gen:super:'->TT; ptn.sig.dopt -> TQ;
                               'superDescNo:' -> TT; ptn.OG.IS.newDescNo -> II;
                               'super.OG.top:' -> TT; ptn.OG.Qvariants.top -> II;
-                      if)if)
-                   #);
+                   #)if)if);
                    (* we have non-singular: foo or singular: foo{...} *)
                    (*computeVariant -> var[]; *)
                    
@@ -1471,28 +1464,39 @@ generator: variants
                       #);
                  #);
                handleNonVirtualArg:
-                 (# formalArg: ^DataItem; (* Never at pattern og virtual here!? *)
+                 (# formalArg: ^DataItem; (* Never a pattern or virtual here!? *)
                     argInx: @integer; DI: ^DataItem
                  enter(formalArg[],argInx)
                  do (if argInx > top then
-                       (* 'argInx > top: ' -> puttext; 
-                        argInx -> putint; ' ' -> put; top -> putint; ' ' -> put;
-                        formalArg.doPt -> putline;
-                        *)
-                        (* Probably Super as in
-                         *    foo{ ... }
+                        (* Probably Super as in foo{ ... }
                          * where foo has arguments - to be fixed! *)
                      else
-                        cd.com
-                        (#do 'loadArgs:NonVirt:'->TT; actArgs[argInx].dopt->TQ;
-                           ' isValue: ' -> TT;  actArgs[argInx].isValueObj->BB
-                        #);
+                        (* E is the exp with arguments actArgs
+                         * this(Pattern) = E.ATd
+                         * formalArg is arg no argInx of this(Pattern)
+                         *)
+                        cd.com(#do 'loadArgs:NonVirt:'->TT; E.doPT -> TQ;
+                                 'ActArg: ' -> TT;actArgs[argInx].dopt->TQ;
+                                 'isValue: ' -> TT;  actArgs[argInx].isValueObj->BB;
+                                 ' primNo: ' -> TT; primNo -> II
+                              #);
                         
                         (* The call of Qgen should perhaps have the receiver
                          * as an argument!? Currenly we handle stuff af Qgen
                          * that depends on the receiver
                          *)
                         0 -> staticOff;
+                        (* we may mark actArgs[argInx] as isUnitVal or float
+                         * depending on this pattern
+                         *)
+                        (if primNo  // 112 (* * *) then
+                           
+                         else
+                            (if top = 1 then
+                                 cd.com(#do 'formalArg is valueObj: ' -> TT;
+                                          E.doPT -> TQ; 
+                                       #)
+                        if)if);
                         (true,superAdj,staticOff) -> actArgs[argInx].Qgen;
                         
                         cd.com(#do 'ptn:loadArgs:after:Qgen:' -> TT; 
@@ -1577,13 +1581,13 @@ generator: variants
                         if)
                     if)
                  #);
-               actArgs: [6]^ObjectSpecification; (* actual arguments *)
+               actArgs: [6] ^ObjectSpecification; (* actual arguments *)
                top,argInx: @integer;
                enclosingOG: ^ObjectGenerator;
                var: ^Variant;
             do cd.com(#do 'isValueAssign: ' -> TT; E.ATd.primNo = vAssign_prim->BB #);
                (* OBS! In R1 := R2, := is vAssign_prim
-                * We should use R1 :- R2 to gte rAssign_prim
+                * We should use R1 :- R2 to get rAssign_prim
                 *)
                (if OG.primNo 
                    (* Some of these are handled in invoke below
@@ -1668,7 +1672,7 @@ generator: variants
      Address: superAdr
        (* E = first exp in "R.S.Q", ie. E = "R" *)
        (# done: @boolean;
-          load::
+          load:: (* actually push value *)
             (#
             do (if isAdr then
                    loadAdr
@@ -1713,7 +1717,7 @@ generator: variants
                        (#do 'loadAdr:isValue:'-> TT; 
                           'originIsValue:'->TT; originIsValue -> BB#);
                        cd.com(# do 'isFloat: ' -> TT; isFloat -> BB #);
-                       (if isFloat then
+                       (if isUnitVal (*isFloat*) then
                            ('',off) -> cd.fpushg
                         else
                            (if originIsValue then
@@ -1732,6 +1736,12 @@ generator: variants
                    true -> done;
                    cd.com(#do 'store:'->TT; this(address).print->TT #);
                    (if off > 0 then
+                       cd.com
+                       (#
+                       do 'isValue:' -> TT; isValue -> BB; 
+                          ' isAdr:' -> TT; isAdr -> BB;
+                          ' descNo: ' -> TT; descNo -> II   
+                       #);
                        (if isValue then
                            (if isAdr then
                                (if descNo > 0 then
@@ -1760,7 +1770,7 @@ generator: variants
                                    if)
                                 else
                                    cd.com(#do 'isFloat: ' -> TT; isFloat -> BB #);
-                                   (if isFloat then
+                                   (if isUnitVal or isFloat then
                                        ('address:storeg',off) -> cd.fstoreg
                                     else
                                        ('address:storeg',off) -> cd.storeg
@@ -1874,7 +1884,9 @@ generator: variants
                         false -> value
                     if)
                  #);
-            do (*'Invocation:Qgen:' -> puttext; dopt -> putline;*)
+            do (if false then
+                   'Invocation:Qgen:' -> puttext; dopt -> putline;
+               if);
                (* for P1.X := P2.Y,
                 * we need no origin for P1 (and X!?)
                 * we need adress of P1 to be added address of X to get embedded
@@ -1883,7 +1895,7 @@ generator: variants
                 * How about: R.S.T.Q ? Q noGlobals, or globals?
                 *)
                cd.bcPos -> beginBCP;
-               (# A: ^Address; off: @integer
+               (# A: ^Address; off,argNo: @integer
                do (if needOrigin then
                       superAdj
                         -> Address
@@ -1901,10 +1913,45 @@ generator: variants
                            E.ATd.primNo = vAssign_prim -> BB; 
                         #);
 
-                  (superAdj,off,CC[]) -> E.loadArgs;
+
+                  
                   cd.com(#do 'OI:after:loadArgs:E:'->TT; E.dopt -> TQ #);
+                  (if E.ATd.primNo
+                   // vAssign_prim // rAssign_prim then
+                   else
+                      (if E.args[] <> none then
+                          E.args.scanSons(# do argNo + 1 -> argNo #);
+                      if);
+                      (if E.ATd.primNo = 112 then
+                          (if false then
+                              '*** Invoke float *:  ' -> puttext; 
+                              E.ATd.isFloat -> putboolean; ' ' -> put;
+                              
+                              argNo -> putint; ' ' -> put;
+                              E.dopt -> putline;
+                          if);
+                       else
+                          (if argNo = 1 then
+                              (if false then 
+                                  '*** Invoke:Float:other: ' -> puttext;
+                                  E.dopt -> putline; 
+                              if);
+                              cd.com(#do 'Invoke:float:other: ' -> TT; E.dopt -> TQ #);
+                              (if A[] <> none then false -> A.isUnitVal if) 
+                          if)
+                      if)
+
+                  if);
+                  (* case bar(L1) where L1 is a unit - we should not push L2.magnitude
+                   * but push L1 as a valueObj
+                   * For E = bar(L1), the load of L1 happens in E.loadArgs 
+                   *)
+                  (superAdj,off,CC[]) -> E.loadArgs;
+                  cd.com(#do 'invoke:float:after:loadArgsOf:' -> TT; E.dopt -> TQ;
+                           (if A[] <> none then A.print -> TT if) #);
                   (rec[],E[],useReturnValue,staticOff,CC[],A[]) 
                     -> E.invoke;
+                  cd.com(#do 'invoke:float:after:E.invoke:' -> TT; E.dopt -> TQ #)
                #);
                cd.bcPos -> endBCP
             #);
@@ -1916,7 +1963,7 @@ generator: variants
             (# A,recA: ^Address; E,rec,pRec: ^Exp; j: @integer; 
                loadRec,orgIsVal: @boolean; ptn: ^Pattern
             enter A[]
-            do (*'**** computeAdr: ' -> puttext; dopt -> putline;*)
+            do cd.com(#do 'computeAdr: ' -> TT; dopt -> TQ #);
                scanSons
                (#
                do rec[] -> pRec[];
@@ -1927,8 +1974,6 @@ generator: variants
                      (if rec[]<> none then rec.dopt-> TQ else 'none'->TQ if);
                      ' E:'->TT; E.dopt -> TQ;  A.print -> TT; 
                   #);
-                  (*'**   E: ' -> puttext; 
-                   E.dopt -> putline; A.print -> putline;*)
                   (if isFirst then
                       E[] -> rec[];
                       E.pushThis;
@@ -1943,7 +1988,8 @@ generator: variants
                           (* should probably be for each receiver in
                            * R.S.foo(exp).Q, i.e. R, S and foo
                            *)
-                      if);                      
+                      if);
+                      cd.com(#do 'computeAdr:isFirst:' -> TT; A.print -> TT #)
                    else
                       (* mutex.cmpAndSwap 
                        * rec = mutex, cmpAndSwap = E
@@ -1952,13 +1998,15 @@ generator: variants
                           and (E.ATd.primNo <> vAssign_prim) then
                           cd.com(#do 'E:notAssign:'->TT; E.dopt->TT #);
                           A[] -> recA[] -> E.getAdr -> (loadRec,A[]);
+                          (* really getOffSet of E.ATd *)
                           (if E.ATd.isPattern then
                               E.ATd[] -> ptn[];
+                              cd.com(#do 'ptn.IsUnitOne:'->TT; ptn.OG.isUnitOne -> BB;
+                                       ' isFloat:' -> TT; ptn.OG.isFloat -> BB #);
                               (if ptn.OG.isUnitOne or ptn.OG.isFloat then
-                                 (* '**   isUnitOne: ' -> puttext; E.dopt -> putline*)
                                else
-                                 (* '**   is NOT UnitOne: ' -> puttext; E.dopt -> putline;*)
-                                  false -> A.isFloat
+                                  (if true then 
+                                      false -> A.isUnitVal else false -> A.isFloat if)
                           if)if);
                           (if loadRec then
                               (* In R.foo, rec = R, E = foo
@@ -1973,13 +2021,14 @@ generator: variants
                               
                               (pRec[],E[],true,0,none,recA[]) -> rec.invoke;
                           if);
-                          (* really getOffSet of E.ATd *)
                        else
-                          cd.com(#do 'E:isAssign: '-> TT; E.dopt -> TQ #); 
-                      if);                      
+                          cd.com(#do 'computeAdr:isAssign:rec: '-> TT; rec.dopt -> TQ;
+                                   ' E:' -> TT; E.dopt -> TQ #); 
+                          cd.com(#do A.print -> TT #)
+                      if)                 
                   if);
                   (if isLast then
-                      cd.com(#do 'computeAdr:isLast ' -> TT; E.dopt -> TT #)
+                      cd.com(#do 'computeAdr:isLast:E: ' -> TT; E.dopt -> TQ #)
                   if)
                #);
             exit(rec[],E[],A[])
