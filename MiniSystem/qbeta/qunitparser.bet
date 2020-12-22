@@ -2,6 +2,12 @@ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qchecker';
 INCLUDE 'qvirtual'
 ---lib:attributes---
+getNumber:
+  (# T: ^text; N:@integer
+  enter T[]
+  do T.setPos; T.getInt -> N
+  exit N
+  #);
 UnitTree:
   (# token: @integer;op: ^text;
      left,right: ^UnitTree;
@@ -16,17 +22,56 @@ UnitTree:
           (if left[] <> none then left.elimDiv if);
           (if right[] <> none then right.elimDiv if);
        #);
-     print:
+     reduceExp:
        (#
+          R: ^UnitTree; newLeft: ^UnitTree; N1,N2: @integer
+       do
+          (if token = mult then
+              (if (right.token = exp) and (right.left.token = idf) then
+                  '**   tryElim: ' -> puttext; right.left.op[] -> puttext; ' ' -> put;
+                  right.right.op[] -> getNumber -> N1; N1 -> putint; newline;
+                  right.left.op[] -> left.elimExp -> (newLeft[],N2);
+                  (if newLeft[] <> none then
+                      '**   new exp: ' -> puttext; N1 + N2 -> putint; newline;
+                      &text[] -> right.right.op[];
+                      N1 + N2 ->  right.right.op.putint;
+                      newLeft[] -> left[]
+                  if)
+               else
+                  left.reduceExp
+              if)
+          if)
+       #);                  
+     elimExp:
+       (# id: ^text; newLeft,nx: ^UnitTree; N1,N2: @integer
+       enter id[]
+       do (if token = mult then
+              (if (right.token = exp) and (right.left.token = idf) then
+                  (if id[] -> right.left.op.equalNCS then
+                      '**   match: ' -> puttext;
+                      right.right.op[] -> getNumber -> N1;
+                      N2 -> putint; newline;
+                      '0' -> right.right.op[];
+                      left[] -> newLeft[]
+                  if);
+                  id[] -> left.elimExp -> (nx[],N2); (**** <<<<<< *)
+                  N1 + N2 -> N1
+          if)if)
+       exit(newLeft[],N1)
+       #);                  
+     print:
+       (# withB: @boolean; T: @text
+       enter withB
        do (if left[] <> none then 
-              '(' -> put;
-              left.print 
+              (if withB then '(' -> T.put if);
+              withB -> left.print -> T.append
           if);
-          op[] -> puttext;
+          op[] -> T.puttext;
           (if right[] <> none then 
-              right.print;
-              ')' -> put;
+              withB -> right.print -> T.append;
+              (if withB then ')' -> T.put if);
           if);
+       exit T[]
        #)
   enter(token,op[],left[],right[])
   exit this(UnitTree)[]
@@ -38,13 +83,15 @@ canonicalize:
          '\n**** canonicalize: ' -> puttext; U[] -> putline;
          U[] -> parseUnit -> top[];
          '**   print: ' -> puttext;
-         top.print;
-         newline;
+         top.print -> putline;
          '**   after elimDiv:' ->  puttext;
          top.elimDiv;
-         top.print;
-         newline
+         true -> top.print -> putline;
+         top.reduceExp;
+         '**   after reduceExp: ' -> puttext;
+         top.print -> U[] -> putline;
      if)
+  exit U[]
   #);
 eos: (# exit 0 #);
 idf: (#exit 1 #);
@@ -150,7 +197,7 @@ parseUnit:
                 restart L
              else 
                 (if token <> eos then
-                    '**** syntax error' -> putline
+                    '**** syntax error: Eos expected' -> putline
             if)if)
        exit left[]
        #);
@@ -174,13 +221,22 @@ parseUnit:
            // idf // number then
               (token,T[],none,none) -> UnitTree -> left[];
               lex -> (token,T[]);
+           // minus then
+              lex -> (token,T[]);
+              (if token = number then
+                  '-' -> T.prepend;
+                  (token,T[],none,none) -> UnitTree -> left[];
+                  lex -> (token,T[]);                  
+               else
+                  '*** syntax error: number expected' -> putline
+              if)
            // leftBracket then
               lex -> (token,T[]);
               expression -> left[];
               (if token = rightBracket then
                   lex -> (token,T[]);
                else
-                  '**** syntax error' -> putline
+                  '**** syntax error: right bracket expected' -> putline
               if)
            else
               '**** syntax error' -> putline;
