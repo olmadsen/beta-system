@@ -3247,6 +3247,7 @@ bool traceThreads = true;
 	break;
       case sendv: 
 	arg1 = op1(bc,&glsc);
+	arg2 = op1(bc,&glsc);
 	thisBlock->origin = rPop(thisStack);
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
