@@ -560,7 +560,7 @@ semchecker: UnitHandler
                  #);
                fArgs: [6] ^Decl; inx,top: @ integer; 
                OI_OG: ^ObjectGenerator;
-               OI_isKeyWord: @boolean;
+               OI_noMkOg: @boolean;
                mkOG:
                  (# OI: ^ObjectInvocation;
                     OGx: ^ObjectGenerator; IV: ^Invocation; IT: ^Items;
@@ -572,6 +572,15 @@ semchecker: UnitHandler
                         '**   OG:\n' -> puttext; OG.doPT -> putline;
                         (*'**   encOG: ' -> puttext; encOG.doPT -> putline;*)
                     if);
+                    (* The code below needs to be cleaned up.
+                     * For invocations like map(#FFF) or map({...}), only the latter
+                     * is an ObjectGenerator, but we alos need to check for matching
+                     * signatures for the former.
+                     * IN addition, in any case for viryal args, we need to check
+                     * if the actual binding is a sub of the virtual decl.
+                     * AN we must find out if OI_noMkOG should always be true
+                     * for virtual arguments!? Probabæy yes!
+                     *)
                     L:
                       actualArgs.scanArgs
                       (# OGy: ^ObjectGenerator; i: @integer; ptn: ^Pattern
@@ -589,13 +598,9 @@ semchecker: UnitHandler
                                          current.doPt -> putline; OI.doPT -> putline;
                                      if);
                                      fArgs[i][] -> ptn[];
-                                     true -> OI_isKeyword;
-                                     (* We must check that fArgs is a signature 
-                                      * and that
-                                      * OGy has the same signature
-                                      *)
+                                     true -> OI_noMkOG;
                                      (if ptn.theSig.isSig 
-                                         and (OGy[] -> mkSig -> ptn.thesig.equal) then
+                                         and (OGy[] -> mkSig-> ptn.thesig.equal) then
                                          '**** Singular sub has same sig as super: '
                                            -> puttext;
                                          ptn.doPt -> putline;
@@ -604,11 +609,26 @@ semchecker: UnitHandler
                                          none -> OGy.super.ATd[]; 
                                          none -> OGy.IS.superDesc[];
                                          leave L
-                         if)if)if)if)
+                                      else
+                                         (if OGy.getQual -> (ptn.OG.getQual).inSuper
+                                             then
+                                             (* ok *)
+                                          else
+                                             OI[] -> SemanticError
+                                             (#
+                                             do 'The binding: "' -> msg; 
+                                                OGy.doPT -> msg;
+                                                '" of the virtual pattern: "' -> msg;
+                                                ptn.doPT -> msg;
+                                                '"\n     must be a subpattern of the virtual pattern'
+                                                  -> msg
+                                         #)if);
+                             if)if)if)
+                         if)
                       #); (*newline;*)
-                    (if OI_isKeyword then leave mkOG if);
+                    (if OI_noMkOG then leave mkOG if);
                     (if ('ObjectInvocation_KeyWord' -> (OI.label).equal) then
-                        true -> OI_isKeyword;
+                        true -> OI_noMkOG;
                         leave mkOG
                      else
                         '(' -> ITx[];
@@ -654,7 +674,7 @@ semchecker: UnitHandler
                #);
                (if top > 0 then
                    theOI[] -> mkOG -> OI_OG[]; 
-                   (if not OI_isKeyword then 
+                   (if not OI_noMkOG then 
                        trace1;
                        OI_OG.IS.scanSons
                        (# ATd: ^Decl; pn: @integer
@@ -685,7 +705,7 @@ semchecker: UnitHandler
                          sig.doPT -> msg; '"' -> msg
                       #)
                    else
-                      (if OI_isKeyword then
+                      (if OI_noMkOG then
                           current.getQual -> srcQual[];
                           fArgs[inx].getQual -> dstQual[];
                        else
