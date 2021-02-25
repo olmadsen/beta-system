@@ -1,13 +1,13 @@
 ORIGIN 'qabstractSyntaxTree'
 ---astlib:attributes---
-(* the patterns here are called from semchecker via 
- * semchecker::ObjectInvocationgetV_qual, which is called from
+(* The patterns here are called from semchecker via 
+ * semchecker::ObjectInvocation::getV_qual, which is called from
  * checker::ObjectInvocation:check to get the qualification of a given OI
  *)
-traceGetV_qual: (# exit true #);
+traceGetV_qual: (# exit false #);
 OGsequence:
   (* Represents a pattern sequence as described in the OOPSLA article:
-   *   Semantic Analysis of Virtual Classes and Nested Classes
+   *    Semantic Analysis of Virtual Classes and Nested Classes
    * Here we actually have a sequence of ObjectGenerators
    * OG1, OG2, ... OGn
    * where OG2 is super of OG1, OG3 of OG2, ... and OGn of OGn-1
@@ -53,10 +53,11 @@ OGsequence:
           (if true then
               (if DOG.super.isImplSuper then
                   DOG.super.ATd[] -> D[]
-               else
+               else 
                   E.ATd[] -> D[];
-              if);
-              (if D## <> Pattern## then
+              if); 
+              (if D[] = none then '!!!! pathToSuper:D is none' -> putline if);
+              (if D## <> Pattern## then 'Eaa'->putline;
                   '!!!! pathToSuper:super.ATd is not Pattern or is empty: '
                     -> putline;
                   DOG.doPT -> putline;
@@ -194,9 +195,9 @@ OGsequence:
               '**** PRE: ****'->putline; print
           if);
           pathToSuper -> (OGs[],onx,pnx,isRemote);
-          (if false and trx then '**   pathToSuper:D:' -> putline if);
           (if isRemote then
-               (if traceGetV_qual then '*** PRE:isRemote: ' -> putline if);
+              (* Note! isRemote ==> isImplSuper=false  *)
+              (if traceGetV_qual then '**   PRE:isRemote: ' -> putline if);
               this(OGsequence)[] -> S[];
               DOG.super.scanSons
               (# E: ^Exp; D: ^SuperDataItem
@@ -204,7 +205,7 @@ OGsequence:
                  (if traceGetV_qual then
                      '**   PRE:scanSons:current:"' -> puttext; 
                      E.dopt -> puttext; '" E.ATd.label: ' -> puttext;
-                     E.ATd.label -> putline;
+                     E.ATd.label -> puttext; newline;
                  if);
                  L:
                    (if isLast then
@@ -222,7 +223,7 @@ OGsequence:
                         // pattern## then
                            (* ptn in x.P.r where P is pattern
                             * compiler error:
-                            *  P resturns object - whic is not handled, 
+                            *  P returns object - which is not handled, 
                             *  see mustBeObject in qchecker
                             * semantic error: catched by checker
                             *) 
@@ -242,14 +243,23 @@ OGsequence:
                            (D.OG.super.desc).father[] -> OGx[]
                    if)if);
                  OGx[] -> OGsequence -> Sx[];
-                 true -> Sx.isNest;
+                 (if true or (not isLast) then 
+                     true -> Sx.isNest;
+                     (if traceGetV_qual then
+                         '**   Remote:PRE:isNest=true:E:' -> puttext; E.doPT -> putline;
+                     if)
+                  else
+                     (if traceGetV_qual then
+                         '**   Remote:PRE:isNest=false:E:' -> puttext; E.doPT -> putline;
+                     if)
+                 if);
                  S[] -> Sx.pred[];                 
                  Sx[] -> S[];
                  (if traceGetV_qual then
-                     '***Remote-PRE:isNest=true:' -> putline;
+                     '**   Remote:PRE:isNest=true:' -> putline;
                      S.print
                  if)
-              #);              
+              #)
            else
               OGs[] -> OGsequence -> S[]; 
               this(OGsequence)[] -> S.pred[]
@@ -281,12 +291,12 @@ OGsequence:
        (# L: @integer
        enter L 
        do (if L = 0 then
-              '*** OGsequence[:'->puttext;
+              '**** OGsequence:'->puttext;
            else
-              '**  OGS:sub[:' -> puttext;
+              '***  OGseq:sub:' -> puttext;
           if);
           'isRemote:' -> puttext; isRemote -> putBoolean;
-          ':isNest:' -> puttext; isNest -> putBoolean; newline;
+          ':isNest:' -> puttext; isNest -> putBoolean; ' ********'->putline;
           (if DOG[] <> none then
               DOG.dopt -> putline;
            else
@@ -296,9 +306,10 @@ OGsequence:
               L + 1 -> pred.print
           if);
           (if L = 0 then
-              ']*** OGsequence\n' -> putline
+              (if pred[] = none then '**** ' -> puttext if);
+              ':END:OGsequence ****\n' -> putline
            else
-              ']** OGs:sub' -> putline
+              '**** END:SUB:' -> puttext
           if)
        #)
   enter DOG[]
@@ -352,7 +363,7 @@ OGPath: SuperPath
        do (if trx or traceGetV_qual then
               '\n**** OGpath:computeOGseq: on=' -> puttext; on -> putint;
               ' pn=' -> puttext; pn -> putint; 
-              ' pred=none = ' -> puttext; pred[] = none -> putboolean;
+              ' (pred=none)=' -> puttext; pred[] = none -> putboolean;
               ' isNest= ' -> puttext; isNest -> putBoolean;
               newline; 
               '**   OG:' -> putline; OG.dopt -> putline;
@@ -361,10 +372,19 @@ OGPath: SuperPath
           (if isNest then on - 1 -> onx else on -> onx if);
           (if pred[] <> none then
               (if trx or traceGetV_qual then 
-                  '**   computeOGsequence:go:pred: ' -> putline;
+                  '**   computeOGsequence:go:pred:on=' -> puttext; on -> putint; newline
               if);
               pred.computeOGseq -> S[]; 
+              (if trx then
+                  '**   computeOGs:after pred.computeOG:onx='->puttext; 
+                  onx -> putint; ':pn=' -> puttext; pn -> putint; newline;
+                  S.print
+              if);
               (for i: onx repeat S.ENC -> S[] for); 
+              (if trx then 
+                  '**   computeQGs:after:ENC:pn=' -> puttext; pn -> putint; newline;
+                  S.print 
+              if);
               (for i: pn repeat S.PRE -> S[] for);
               (if trx or traceGetV_qual then
                   '**   computeOGseq:got:OGseq:plain(head<>none):'->putline;
