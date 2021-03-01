@@ -5,6 +5,7 @@ ORIGIN 'qabstractSyntaxTree'
  * checker::ObjectInvocation:check to get the qualification of a given OI
  *)
 traceGetV_qual: (# exit false #);
+isNew: (#exit false #);
 OGsequence:
   (* Represents a pattern sequence as described in the OOPSLA article:
    *    Semantic Analysis of Virtual Classes and Nested Classes
@@ -14,7 +15,7 @@ OGsequence:
    * OG1 is enclosing the application qualified by the virtual
    * where we want to find the most specific binding
    *)
-  (# DOG: ^ObjectGenerator;
+  (# DOG: ^ObjectSpecification;
      pred: ^OGsequence;
      isRemote: @boolean;
      isNest: @Boolean;
@@ -22,7 +23,7 @@ OGsequence:
        (# OGsuper: ^ObjectGenerator; on,pn: @integer; E: ^Exp; 
           D: ^Decl; ptn: ^Pattern;
           i: @integer;
-          isRemote: @boolean
+          isR: @boolean
        do (if trx then '*** pathToSuper:DOG:' -> putline;  DOG.doPT -> putline if);
           (if not DOG.isChecked then
               (* this happens*) (*'!!! DOG is not checked' -> putline*)
@@ -42,13 +43,13 @@ OGsequence:
                  newline
              if)
           #);
-          i > 1 -> isRemote;      (* try noOfSons - implicitPre? *)  
+          i > 1 -> isR;      (* try noOfSons - implicitPre? *)  
           (if trx then
               '**  pathToSuper:E:"' -> puttext; E.dopt -> puttext; 
               '" E.on=' -> puttext; E.on -> putint;
               ' E.pn=' -> puttext; E.pn -> putint;
               ' DOG.super.pn='->puttext; DOG.super.pn -> putint;
-              ' isRemote=' -> puttext; isRemote -> putboolean; newline;
+              ' isR=' -> puttext; isR -> putboolean; newline;
           if);
           (if DOG.super.isImplSuper then
               DOG.super.ATd[] -> D[];
@@ -78,7 +79,7 @@ OGsequence:
               ptn.doPT -> putline;
               print
           if);
-       exit(OGsuper[],on,pn,isRemote)
+       exit(OGsuper[],on,pn,isR)
        #);
      ENC:
        (* ENC[D] = [D.origin]
@@ -86,14 +87,18 @@ OGsequence:
         *    where Path(Dn) = (i,j)
         *)
        (# S: ^OGsequence; 
-          OGsuper: ^ObjectGenerator; onx,pnx: @integer; isRemote: @boolean
+          OGsuper: ^ObjectGenerator; onx,pnx: @integer; isR: @boolean
        do (if trx or traceGetV_qual then
               '**** ENC: ****'->putline;
               print
           if);
-          (if isNest then
-              (if trx then '**   isNest:true ' -> putline if);
+          (if true 
+           // isNest then
+              (if trx or traceGetV_qual then '**   isNest:true ' -> putline if);
               pred[] -> S[]
+           // isRemote and isNew then
+              (if traceGetV_qual then '**** ENC:isRemote'->putline if);
+              Remote -> S[]
            else
               (if pred[] = none then (* head *)
                   (if trx then
@@ -108,11 +113,14 @@ OGsequence:
                       S.print
                   if);
                else
-                  pred.pathToSuper -> (OGsuper[],onx,pnx,isRemote);
+                  pred.pathToSuper -> (OGsuper[],onx,pnx,isR);
+                  (if isR and (onx > 0) then
+                      '!!!! OBS ENC:isRemopt and onx > 0: ' -> putline;
+                  if);
                   (if trx then
                       '**   ENC:after:pathToSuper:onx:' -> puttext;
                       onx -> putint; ':pnx:' -> puttext; pnx -> putint; 
-                      ':isRemote:' -> puttext; isRemote -> putBoolean;
+                      ':isRemote:' -> puttext; isR -> putBoolean;
                       '\n**   OGsuper:' -> putline; 
                       (if OGsuper[] <> none then 
                           OGsuper.dopt -> putline else 'none'->puttext if);
@@ -123,11 +131,11 @@ OGsequence:
                   (if trx then 
                       '**   pred.ENC:onx: ' -> puttext; onx -> putint;
                       ' pnx: ' -> puttext; pnx -> putint;
-                      ' isRemote: ' -> puttext; isRemote -> putboolean; newline;
+                      ' isRemote: ' -> puttext; isR -> putboolean; newline;
                       S.print;
                   if);
                   (* S = ENC([D1,D2,...,Dn-1]) *)
-                  (if false and isRemote then              
+                  (if isR then              
                       (* OBS! We should implement remote as in OOPSLA paper!
                        * But check if the handling in PRE is ok!
                        * Both ENC and PRE calls pred.pathToSuper, so do we
@@ -136,7 +144,10 @@ OGsequence:
                       (* Dn-1: R.P{...}, where R.P = Dn 
                        * onx = 0, pnx >= 0                  
                        *)
-                   else
+                      '**** remote'->putline;
+                      remote;
+                  if);
+                  (if true then
                       (for i: onx repeat S.ENC -> S[] for);
                       (for i: pnx  repeat S.PRE -> S[] for);
                       (if trx or traceGetV_qual then
@@ -147,15 +158,118 @@ OGsequence:
           if)if)
        exit S[]
        #);
+     Remote:
+       (* this(OGs) = [D1,D2,...,Dn,R] or
+        *           = [D1,D2,...,Dn,R.Q]
+        * remote([D1,D2,...,Dn],R)
+        *    = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa)Rd)
+        *    where path(Ra) = (Rd,0,j)
+        *    Rd: ref Sa
+        *  remote([D1,D2,...,Dn],R.Q)
+        *    = nest(app(super[j] o remote([D1,D2,...,Dn,R),Ta,Td)))
+        *    where path(Qa) = (Qd,0,j)
+        *    Qd: ref Ta
+        *)
+       (# TTT: (# exit false #);
+          OGs,OGx: ^ObjectGenerator; onx,pnx: @integer; isRemote: @boolean;
+          ptn: ^Pattern; MI: ^ModuleItem;
+          S,Sx: ^OGsequence
+       do (if TTT then
+              '**** NEW:Remote:\n' -> puttext;
+              print
+          if);
+          (*'***** Remote:beforePathToSuper:'->putline;
+           pathToSuper -> (OGs[],onx,pnx,isRemote);*)
+          
+          pred[] -> Sx[];
+          pred.DOG.super.scanSons
+          (# E: ^Exp; D: ^SuperDataItem
+          do current[] -> E[]; 
+             (if traceGetV_qual then
+                 '**   remote:scanSons:current:"' -> puttext; 
+                 E.dopt -> puttext; '" E.ATd.label: ' -> puttext;
+                 E.ATd.label -> puttext; newline;
+             if);
+
+             L:
+               (if isLast then
+                   (if traceGetV_qual then '**   remote:isLast:'->putline if);
+                   (for i: E.on repeat Sx.ENC -> Sx[] for);
+                   (for i: E.pn repeat Sx.PRE -> Sx[] for);
+                   E.ATd[] -> ptn[];
+                   PTN.OG[] -> OGx[] -> OGsequence -> S[];
+                   (*true -> S.isNest;*)
+                   Sx[] -> S.pred[];
+                else
+                   (* remote([D1,D2,...,Dn],R)
+                    *    = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa),Rd)
+                    *    where path(Ra) = (Rd,i,j)
+                    *    Rd: ref Sa
+                    *)
+                   (* DOG = R.Q where Q is not remote  and R = R1.R2.Rn, n >= 1 *)
+                   (if trx or traceGetV_qual then
+                       '**   remote:first:E.on: '->puttext; E.on ->putint;
+                       ' E.pn: ' -> puttext; E.pn -> putint;
+                       ' E.ATd.label: "' -> puttext; E.ATd.label -> puttext;
+                       '" E.ATd: "' -> puttext; E.ATd.dopt -> puttext; '"'->putline;
+                   if);
+                   (for i: E.on repeat Sx.ENC -> Sx[] for);
+                   (for i: E.pn repeat Sx.PRE -> Sx[] for);
+                   E.ATd[] -> Sx.append -> (Sx[],OGx[]);
+                   OGx[] -> OGsequence -> Sx[];
+                   true -> Sx.isNest;
+               if);
+          #);
+          (if trx or traceGetV_qual then
+              '**** remote:END'->putline; S.print
+          if)
+       exit S[]
+       #);
+     append:
+       (# D: ^Decl; S: ^OGsequence; OGx: ^ObjectGenerator
+       enter D[]
+       do (if D.isDataItem 
+           // true then
+              (if trx or traceGetV_qual then
+                  '**   append: got DataItem: ' -> puttext; D.dopt -> putline;
+              if);
+              this(OGsequence)[] -> S[];
+              (if D.OG.IS.isEmpty then
+                  D.OG.super.scansons
+                  (# i: @integer; E: ^Exp
+                  do (if (i + 1 -> i) > 1 then
+                         '!!!!  append:dataItem:remote not implemented:'->putline;
+                         D.dopt -> putline;
+                     if);
+                     current -> E[];
+                     (if trx then
+                         '**   append:scan:E: "'->puttext; E.doPT -> puttext;
+                         '" on=' -> puttext; E.on -> putint;
+                         ' E.pn='->puttext; E.pn -> putint; ' E.ATd.OG: "'->puttext;
+                         E.ATd.OG.dopt -> putline
+                     if);
+                     (for i: E.on repeat S.ENC -> S[] for);
+                     (for i: E.pn repeat S.PRE -> S[] for);
+                     E.ATd.OG[] -> OGx[]
+                  #)
+               else
+                  D.OG[] -> OGx[]
+              if)
+           else
+              '!!!! append: not dataitem - FIX' -> putline
+          if);
+       exit(S[],OGx[])
+       #);
+     
      PRE:
        (# S,Sx: ^OGsequence; 
-          OGs,OGx: ^ObjectGenerator; onx,pnx: @integer; isRemote: @boolean;
+          OGs,OGx: ^ObjectGenerator; onx,pnx: @integer; isR: @boolean;
           ptn: ^Pattern; MI: ^ModuleItem
        do (if trx or traceGetV_qual then
               '**** PRE: ****'->putline; print
           if);
-          pathToSuper -> (OGs[],onx,pnx,isRemote);
-          (if isRemote then
+          pathToSuper -> (OGs[],onx,pnx,isR);
+          (if isR then
               (* Note! isRemote ==> isImplSuper=false  *)
               (if traceGetV_qual then '**   PRE:isRemote: ' -> putline if);
               this(OGsequence)[] -> S[];
@@ -202,24 +316,36 @@ OGsequence:
                            (if traceGetV_qual then '**   PRE:OG:noItems:'->putline if);
                            (D.OG.super.desc).father[] -> OGx[]
                    if)if);
-                 OGx[] -> OGsequence -> Sx[];
-                 (if true or (not isLast) then 
-                     true -> Sx.isNest;
-                     (if traceGetV_qual then
-                         '**   Remote:PRE:isNest=true:E:' -> puttext; E.doPT -> putline;
-                     if)
+                 
+                 (if isNew then
+                     (if true or isLast then 
+                         (if traceGetV_qual then '**** NEW:PRE'->putline; if);
+                         OGx[] -> OGsequence -> Sx[];
+                         true -> Sx.isRemote; 
+                         S[] -> Sx.pred[];    (* S = this(OGsequence) *)
+                         (*Sx.print*)
+                     if);
                   else
+                     OGx[] -> OGsequence -> Sx[];
+                     (if true or (not isLast) then 
+                         true -> Sx.isNest;
+                         (if traceGetV_qual then
+                             '**   Remote:PRE:isNest=true:E:' -> puttext; E.doPT -> putline;
+                         if)
+                      else
+                         (if traceGetV_qual then
+                             '**   Remote:PRE:isNest=false:E:' -> puttext; E.doPT -> putline;
+                         if)
+                     if);
+                     S[] -> Sx.pred[];                 
+                     Sx[] -> S[];
                      (if traceGetV_qual then
-                         '**   Remote:PRE:isNest=false:E:' -> puttext; E.doPT -> putline;
+                         '**   Remote:PRE:isNest=true:' -> putline;
+                         S.print
                      if)
                  if);
-                 S[] -> Sx.pred[];                 
-                 Sx[] -> S[];
-                 (if traceGetV_qual then
-                     '**   Remote:PRE:isNest=true:' -> putline;
-                     S.print
-                 if)
-              #)
+              #);
+              Sx[] -> S[];
            else
               OGs[] -> OGsequence -> S[]; 
               this(OGsequence)[] -> S.pred[]
@@ -230,9 +356,9 @@ OGsequence:
           if)
        exit S[]
        #);
-       
+     
      FB: 
-       (# qual: ^ObjectGenerator
+       (# qual: ^ObjectSpecification
        do (if isNest then
               DOG[] -> qual[]
            else
@@ -258,9 +384,9 @@ OGsequence:
           'isRemote:' -> puttext; isRemote -> putBoolean;
           ':isNest:' -> puttext; isNest -> putBoolean; ' ********'->putline;
           (if DOG[] <> none then
-              DOG.dopt -> putline;
+              DOG.dopt -> putline
            else
-              'none'->putline
+              'DOG=NONE' -> putline
           if);
           (if pred[] <> none then
               L + 1 -> pred.print
@@ -294,13 +420,13 @@ OGPath: SuperPath
        (# S: ^OGsequence; 
        do traceGetV_qual -> trx;
           (if (trx) or traceGetV_qual then
-              '\n**** OGpath:findQual:of:vDcl: "'-> puttext; 
+              '\n**** OGpath:findQual:of:vDcl: \n"'-> puttext; 
               vDcl.doPT -> puttext; '"\n' -> putline;
               print
           if);
           computeOGseq -> S[];
           (if trx or traceGetV_qual then
-              '\n*** before findBinding:' -> putline;
+              '\n*** before:findBinding:' -> putline;
               S.print;
           if);
           (*false -> trx;*)
@@ -385,7 +511,7 @@ OGPath: SuperPath
        (# OGx: ^ObjectGenerator; qual: ^ObjectGenerator
        enter OGx[]
        do (if (trx) or traceGetV_qual then
-              '***  findBindingOf:vDcl: ' -> puttext; vDcl.doPT -> puttext;
+              '***  findBindingOf:vDcl:\n' -> puttext; vDcl.doPT -> puttext;
               ' in: ' -> putline;
               OGx.doPT -> putline;
           if);
