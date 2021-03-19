@@ -22,7 +22,7 @@ typedef void *FILE;
 #else
 #include <stdio.h> 
 #endif 
-
+#include <math.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
@@ -3056,6 +3056,16 @@ bool traceThreads = true;
             break;
           case 140: // dumpObj
 
+	    break;
+	  case 141: // log
+	    float1 = fPop(thisStack);
+	    float2 = log(float1);
+	    fPush(thisStack,float2);
+	    break;
+	  case 142: // printf
+	    float1 = fPop(thisStack);
+	    printf("%f",float1);
+	    vPush(thisStack,0);
 	    break;
 	  default:
 	    RTE2("\n\n*** prim: missing case %i\n",arg1);
