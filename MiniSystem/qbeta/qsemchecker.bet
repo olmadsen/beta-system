@@ -239,7 +239,7 @@ semchecker: UnitHandler
                            if)
                  #)if)#);
                srcU,dstU,Ux: ^text; sameDim: @boolean; srcCF,dstCF: @real
-            do (if (true->trx) or traceGetQual then
+            do (if (trx) or traceGetQual then
                    '\n**** DataItem:checkQual:' -> puttext; 
                    (if isConst then ':C:' -> puttext if);
                    (if isAssign then 'assign:' -> puttext if); newline;
@@ -440,6 +440,14 @@ semchecker: UnitHandler
                                   '"\n     cannot be assigned to:\t"' 
                                     -> puttext;
                                   doPT -> puttext; '"' -> put; newline;
+                                  (if trx then
+                                      '**** dstQual: ' -> putline;
+                                      dstQual.dopt -> putline;
+                                      '**** srcQual: ' -> putline;
+                                      srcQual.doPT -> putline;
+                                      srcQual.father.doPT -> putline;
+                                      srcQual.father.father.doPT -> putline
+                                  if)
                        #)if)if)
                     else
                        (if true
@@ -1470,7 +1478,7 @@ semchecker: UnitHandler
             #);
           pathToDclX::
             (# E: ^Exp; n,onx: @integer; INV: ^Invocation; S: ^SuperOGsequence;
-               OI,OIx: ^ObjectInvocation; trx: @boolean
+               OI,OIx: ^ObjectInvocation; 
             do 
                (if trx or trace_PathToDcl then
                    '*** Invocation:pathToDclX: ' -> puttext; dopt -> putline;
@@ -1500,7 +1508,8 @@ semchecker: UnitHandler
                             #)
                         if);
                         (if trx then
-                            '**** First:E.on='->puttext; E.on ->putint; newline
+                            '**** First:E.on='->puttext; E.on ->putint; 
+                            ' E:'->puttext; E.doPT -> putline
                         if);
                         (if E.isObjectInvocation then
                             E[] -> OI[];
@@ -1783,11 +1792,7 @@ semchecker: UnitHandler
                     * specific bind as shown below
                     *)
                    (if trx or trace_pathToDcl then
-                       '\n**   ObjectInvocation:getV_qual:handle:virtual:' -> putline;
-                       '**   label: ' -> puttext; 
-                       label -> putline;
-                       '**   father.label: ' -> puttext; 
-                       father.label -> putline;
+                       '\n**   OI:getV_qual:handle:virtual:' -> putline;
                        (if 'Invocation' -> (father.label).equal then
                            father[] -> INV[];
                            INV.scanSons(#do current.dopt -> puttext; ' ' -> put #);
@@ -1807,7 +1812,7 @@ semchecker: UnitHandler
                           (if current[] = this(ObjectInvocation)[] then
                               (if trx then
                                   'Bingo! i='->puttext; rN -> putint; 
-                                  ' ' -> puttext; dopt -> puttext;
+                                  ' ' -> puttext; dopt -> putline
                               if);
                               (if (rN > 1) then
                                   true -> usePDX;
@@ -1817,14 +1822,12 @@ semchecker: UnitHandler
                           current[] -> prev[]
                        #)
                    if);
-                   (if true and usePDx and (rN > 1) then
+                   (if false and usePDx and (rN > 1) then
                        (if trx then
                            '**** usePDX: ' -> putline;
                            INV.dopt -> putline;
                            dopt -> putline;
                        if);
-                       (*'(@this forAll).current := XXX' 
-                         -> (INV.doPT).equal -> trx;*)
                        (* 'R_test.display' -> (INV.doPT).equal -> trx;*)
                        (*'Rxx.Pxx.bingo' -> (INV.doPT).equal -> trx;
                        trx -> putboolean; newline;*)
@@ -1851,10 +1854,38 @@ semchecker: UnitHandler
                     else
                        'none'->putline
                if)if);
-               false -> trx
+            #);
+          viaInclude:
+            (# on,onx,nest: @integer; OIx: ^ObjectInvocation;
+            do (if ptnId.viaIncl[] <> none then
+                   (if trx then
+                       '**** OI:viaIncl:'->puttext; 
+                       ptnId.viaIncl.dopt -> puttext;
+                   if);
+                   ptnId.viaIncl.scanSons
+                   (# i: @integer
+                   do (if (i + 1 -> i) > 1 then
+                          '!!!! ObjectInvocation:viaInclude: ' -> puttext;
+                          'remote not handled! ' -> putline;
+                          ptnID.viaIncl.dopt -> putline
+                      if);
+                      current[] -> OIx[];
+                      ' current.ptnId.on=' ->puttext; 
+                      OIx.ptnId.on-> putint; newline
+                   #);
+                   OIx.viaInclude -> (onx,nest);
+                   '**   OI:viaIncl:remote: ' -> puttext; onx -> putint;
+                   newline;
+                   OIx.ptnId.on + 1 + onx -> on;
+                   nest + 1 -> nest;
+                   '**   OI:viaIncl:res='->puttext; on -> putint; 
+                   ' nest=' -> puttext; nest -> putint;
+                   newline
+               if)
+            exit(on,nest)
             #);
           pathToDcl::
-            (#
+            (# onx,nest: @integer; OIx: ^ObjectInvocation
             do (* we should append the path to ATd *)
                (if trx or trace_PathToDcl then
                    '*** ObjectInvocation:pathToDcl:' -> putline; dopt-> putline;
@@ -1864,12 +1895,34 @@ semchecker: UnitHandler
                    dopt -> putline;
                    origin.father.dopt -> putline
                if);
-               (if false then
-                   P[] -> ATd.pathToDcl -> P[]
-                else                   
-                   (origin.father[],ATd[],this(ObjectInvocation)[],on,pn,P[])
-                     -> OGpath -> ATd.pathToDcl -> P[];
-               if)
+               (if true then
+                   (* X via %include C
+                    *   via %include B
+                    *   via %include A
+                    * means: A.B.C.X
+                    * path = [A,nest(B),nest(C),nest(X)]
+                    *)
+                   viaInclude -> (onx,nest);
+                else
+                   (if ptnId.viaIncl[] <> none then
+                       (if trx then
+                           '**   OI:viaIncl=true'->puttext;
+                           ' incl:'->puttext; 
+                           ptnId.viaIncl.dopt -> puttext;
+                           ptnId.viaIncl.scanSons
+                           (#
+                           do current[] -> OIx[];
+                              current.dopt ->puttext;
+                              ' current.ptnId.on=' ->puttext; 
+                              OIx.ptnId.on-> putint;
+                              ':'->put
+                           #);
+                           ptnId.viaIncl.on + 1 -> onx;
+                           ' onx='->puttext; onx -> putint; newline;
+                       if)
+               if)if);
+               (origin.father[],ATd[],this(ObjectInvocation)[],on+onx,pn,P[])
+                 -> OGpath -> ATd.pathToDcl -> P[];
             #); 
           getQual::
             (#
