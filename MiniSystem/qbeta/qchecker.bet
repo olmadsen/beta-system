@@ -1905,16 +1905,22 @@ checker: Parser
        (# setupOrigin:: 
             (# do scanSons(# do origin[] -> current.setUpOrigin #)#);
           check::
-            (# 
+            (# OGS: ^OGsequence
             do (if traceCheck then
                    '*** Invocation:check: ' -> puttext; doPT -> putline 
                if);              
                scanSons
                (# i: @integer
                do i + 1 -> i; 
-                  (rec[],basicScope[],argScope[],isFirst) 
-                    -> current.check 
-                    -> basicScope[];
+                  (if true then
+                      (rec[],basicScope[],argScope[],isFirst,OGS[]) 
+                        -> current.checkOI
+                        -> (basicScope[],OGS[])
+                   else
+                      (rec[],basicScope[],argScope[],isFirst) 
+                        -> current.check 
+                        -> basicScope[];
+                  if);
                   current[] -> rec[];
                   (if isLast then
                       (* can be Exp with args or just a pattern name (#foo) *)
@@ -1933,7 +1939,81 @@ checker: Parser
             do origin[] -> ptnId.setUpOrigin; 
                origin[] -> args.setUpOrigin
             #);
-
+          checkOI::
+            (# done: @boolean;
+            do (rec[],basicScope[],argScope[],isFirst) 
+                 -> check 
+                 -> basicScope[];
+               (if ATd.primNo 
+                // this_prim then
+                   (* ad hoc - must be fixed *)
+                   (# A: ^Item
+                   do args.scanArgs(# do current[] -> A[] #);
+                      (none,argScope[],argScope[],true) -> A.check;
+                      A.desc -> basicScope[];
+                   #);
+                   leave checkOI  
+                // indexedGet_prim then
+                   father.scanSons
+                   (# pred: ^node; OI: ^ObjectInvocation; DI: ^DataItem; 
+                      E: ^Exp; OG: ^ObjectSpecification; ptn: ^Pattern; 
+                   do (if current[] = this(ObjectInvocation)[] then
+                          (if pred[] <> none then 
+                              pred[] -> OI[];
+                              OI.ATd[] -> DI[];
+                              DI.OG.super.last -> E[];
+                              (if E.args[] <> none then
+                                  E.args.scanArgs(#do current[] -> OG[] #);
+                                  (if OG[] <> none then 
+                                      OG.super.last-> OI[];
+                                      (OI.ATd[] -> ptn[]).OG.IS[] -> basicScope[];
+                                      true -> done
+                      if)if)if)if);
+                      (args[],argScope[]) -> argBuf.add;
+                      current[] -> pred[];
+                   #);
+                   (if done then leave checkOI if)
+               if);
+               (args[],argScope[]) -> argBuf.add;               
+               (* ok if static/dynamicObject - what does this mean?
+                * If pattern, scope is the desc of the return value
+                * ATd.desc <> none is before we used getQual 
+                * - can be eliminated
+                *)
+               (if ATd[] = thisCoreDecl[] then 
+                   (* perhaps move to getQual!?*)
+                   coreDecl.desc -> basicScope[]
+                else
+                   (if traceGetV_qual then                          
+                       '**** Found: "' -> puttext; ptnID.T[] -> puttext;
+                       '" thisOI: ' -> puttext; dopt -> putline; 
+                       '**   thisOI.father: ' -> puttext; 
+                       father.dopt -> putline; 
+                       '**   in:basicScope:'->putline;
+                       basicScope.doPT -> putline; 
+                       '**   with:encOG:' -> putline;
+                       basicScope.encOG.doPT -> putline;
+                       '**   alt:encOG: ' -> putline;
+                       (this(ObjectInvocation).origin
+                       .enclosingObjectGenerator).dopt -> putline;
+                       '**   encOG=altEncOG:' -> puttext;
+                       basicScope.encOG[] = (this(ObjectInvocation).origin
+                       .enclosingObjectGenerator) -> putBoolean;
+                       '\n=====' -> putline;
+                   if);
+                   (* Calling this(ObjectInvocation).getV_qual *)
+                   (basicScope.encOG[] -> getV_qual).IS[] -> basicScope[];
+                   (if trx then 
+                       '**** new basicScope:from:' -> puttext;
+                       ptnID.T[] -> putline;
+                       basicScope.dopt -> puthead;
+                       '---- encl OG:' -> putline;
+                       basicScope.father.dopt -> puthead;
+                       '**** alternative:encOG: ' -> putline;
+                       (this(ObjectInvocation).origin
+                       .enclosingObjectGenerator).dopt -> puthead
+               if)if)
+            #);
           check::
             (# elm:: Items;
                checkIfOneBasic:
@@ -1953,8 +2033,7 @@ checker: Parser
                             (if true or (*(dcl[]<>none) and*) dcl.isDataItem then 
                                 dcl.OG.IS[] -> scp[]; 
                                 ptnId.T[] -> scp.localSearch -> (ATd[],pn);
-                        if)if)
-                    if)
+                    if)if)if)
                  #);
                org: ^Items; OGq: ^ObjectGenerator; done: @boolean;
                ptn: ^Pattern; MD: ^Module
@@ -1963,7 +2042,6 @@ checker: Parser
                    ptnID.T[] -> putline;
                    ('scope',basicScope[]) -> putPT
                if);
-
                (if basicScope[] <> none then (* ad hoc *)
                    (ptnId[],isFirst) -> basicScope.search -> (ATd[],on,pn);
                    (if ATd[] <> none then 
@@ -1994,86 +2072,6 @@ checker: Parser
                            errorDecl[] -> ATd[]
                    if)if);
                    this(Exp)[] -> ATd.checkVirtualArgs;
-                   
-                   (if ATd.primNo 
-                    // this_prim then
-                       (* ad hoc - must be fixed *)
-                       (# A: ^Item
-                       do args.scanArgs(# do current[] -> A[] #);
-                          (none,argScope[],argScope[],true) -> A.check;
-                          A.desc -> basicScope[];
-                       #);
-                       leave check  
-                    // indexedGet_prim then
-                       father.scanSons
-                       (# pred: ^node; OI: ^ObjectInvocation; DI: ^DataItem; E: ^Exp; 
-                          OG: ^ObjectSpecification; ptn: ^Pattern; 
-                       do (if current[] = this(ObjectInvocation)[] then
-                              (if pred[] <> none then 
-                                  (* 'Got indexGet:pred: ' -> puttext;
-                                   pred.dopt -> puttext;
-                                   ' this: ' -> puttext; dopt -> puttext; 
-                                   *)
-                                  pred[] -> OI[];
-                                  (*' decl: ' -> puttext;*)
-                                  OI.ATd[] -> DI[];
-                                  DI.OG.super.last -> E[];
-                                  (if E.args[] <> none then
-                                      E.args.scanArgs(#do current[] -> OG[] #);
-                                      (if OG[] <> none then 
-                                          OG.super.last-> OI[];
-                                          (* (OG.super.last-> OI[]).dopt -> putline; *)
-                                          (OI.ATd[] -> ptn[]).OG.IS[] -> basicScope[];
-                                          (*basicScope.dopt -> putline;*)
-                                          true -> done
-                              if)if)if)
-                          if);
-                          (args[],argScope[]) -> argBuf.add;
-                          current[] -> pred[];
-                       #);
-                       (if done then leave check if)
-                   if);
-                   (args[],argScope[]) -> argBuf.add;
-                   
-                   (* ok if static/dynamicObject - what does this mean?
-                    * If pattern, scope is the desc of the return value
-                    * ATd.desc <> none is before we used getQual 
-                    * - can be eliminated
-                    *)
-                   (if ATd[] = thisCoreDecl[] then 
-                       (* perhaps move to getQual!?*)
-                       coreDecl.desc -> basicScope[]
-                    else
-                       (if traceGetV_qual then                          
-                           '**** Found: "' -> puttext; ptnID.T[] -> puttext;
-                           '" thisOI: ' -> puttext; dopt -> putline; 
-                           '**   thisOI.father: ' -> puttext; 
-                           father.dopt -> putline; 
-                           '**   in:basicScope:'->putline;
-                           basicScope.doPT -> putline; 
-                           '**   with:encOG:' -> putline;
-                           basicScope.encOG.doPT -> putline;
-                           '**   alt:encOG: ' -> putline;
-                           (this(ObjectInvocation).origin
-                           .enclosingObjectGenerator).dopt -> putline;
-                           '**   encOG=altEncOG:' -> puttext;
-                            basicScope.encOG[] = (this(ObjectInvocation).origin
-                           .enclosingObjectGenerator) -> putBoolean;
-                           '\n=====' -> putline;
-                       if);
-                       (* Calling this(ObjectInvocation).getV_qual *)
-                       (basicScope.encOG[] -> getV_qual).IS[] -> basicScope[];
-                       (if trx then 
-                           '**** new basicScope:from:' -> puttext;
-                           ptnID.T[] -> putline;
-                           basicScope.dopt -> puthead;
-                           '---- encl OG:' -> putline;
-                           basicScope.father.dopt -> puthead;
-                           '**** alternative:encOG: ' -> putline;
-                           (this(ObjectInvocation).origin
-                           .enclosingObjectGenerator).dopt -> puthead
-                       if)
-                   if)
                 else
                    'ObjectInvocation:check: scope is none: '->puttext; 
                    dopt -> putline
@@ -2137,6 +2135,15 @@ checker: Parser
        #);
      BracketedExp::<
        (# setUpOrigin:: (# do origin[] -> IV.setUpOrigin #);
+          checkOI::
+            (# 
+            do (if false then
+                   '**** BracketedExP: ' -> puttext; doPT -> putline;
+               if);
+               (rec[],basicScope[],argScope[],isFirst) -> IV.check -> basicScope[];
+               IV.ATd[] -> ATd[];
+               IV.on -> on
+            #); 
           check:: 
             (# 
             do (if false then
@@ -2149,16 +2156,29 @@ checker: Parser
           alloc:: (# do enclIT[] -> IV.alloc #)
        #);
      const::<
-       (# check:: (# do integerDecl[] -> ATd[]; ATd.desc -> basicScope[] #)
+       (# checkOI:: (# do integerDecl[] -> ATd[]; ATd.desc -> basicScope[] #);
+          check:: (# do integerDecl[] -> ATd[]; ATd.desc -> basicScope[] #)
        #);
      floatConst::<
-       (# check:: (# do floatDecl[] -> ATd[]; ATd.desc -> basicScope[] #)
+       (# checkOI:: (# do floatDecl[] -> ATd[]; ATd.desc -> basicScope[] #);
+          check:: (# do floatDecl[] -> ATd[]; ATd.desc -> basicScope[] #)
        #);          
      charObj::<
-       (# check:: (# do charDecl[] -> ATd[]; ATd.desc -> basicScope[] #)
+       (# checkOI:: (# do charDecl[] -> ATd[]; ATd.desc -> basicScope[] #);
+          check:: (# do charDecl[] -> ATd[]; ATd.desc -> basicScope[] #)
        #);
      stringObj::<
        (# setUpOrigin::(# do scanSons(# do origin[] -> current.setUpOrigin #)#);
+          checkOI::
+            (#
+            do  scanSons
+               (# B: ^Scope
+               do 
+                  (rec[],basicScope[],argScope[],true) 
+                    -> current.check -> B[];
+               #);
+               stringDecl[] -> ATd[]; ATd.desc -> basicScope[];
+            #);
           check:: 
             (# 
             do scanSons
