@@ -116,11 +116,13 @@ semchecker: UnitHandler
        (# getVqualX::
             (#
             do (if trx then
-                   '**** DataItem:getVqualX: ' -> puttext; sig.dopt -> putline
+                   '**** DataItem:getVqualX: ' -> puttext; sig.dopt -> putline;
+                   OGS.print
                if);
                (encOG[],false,OGS[]) -> OG.getVqualX -> (OGS[],qual[]);
             #);
-          getV_qual::
+          getV_qual
+::
             (#
             do (if trx or traceGetV_qual then
                    '*** DataItem:getV_qual: ' -> puttext;
@@ -904,13 +906,19 @@ semchecker: UnitHandler
                       #)
                    else
                       (if not useMkOg then
+                          'Xxx' -> (fArgs[inx].sig.dopt).equalNCS ->trxA;
                           (if trxA then
                               '**** new argHandler:' -> putline; dopt->puthead;
                               '**** fArg: ' -> puttext; fArgs[inx].dopt -> puthead;
                               '**** aArg: ' -> puttext; current.dopt -> puthead;
                               '**   label: ' -> puttext; current.label -> puthead;
-                              (if theOI.savedOGS[] <> none then
-                                  theOI.savedOGS.print
+                              fArgs[inx].sig.dop -> putline;
+                              (if trxA then
+                                  (if (theOI.savedOGS[]->OGS[]) <> none then
+                                      theOI.savedOGS.print
+                                   else
+                                      '**   savedOGS is none'->putline
+                                  if)
                               if);
                           if);
                           (* fArgs[inx] = R: ref T
@@ -919,7 +927,13 @@ semchecker: UnitHandler
                            * current    = exp = ObjectInvocation, const, ...
                            *)
                           (if useGetVqualX then
-                              (OG[],true,theOI.savedOGS[]) 
+                              (* Given foo: { in R: ref V; W:< T }, and
+                               *    X: ...; foo(S,#TT)
+                               * we must get qual as if
+                               *    X: ...; foo(S,#TT).X; foo(S,#TT).W
+                               *so some form of nest must be used
+                               *)
+                              (OG[],true,OGS[]) 
                                 -> fArgs[inx].getVQualX 
                                 -> (OGS[],dstQual[]);
                            else
@@ -998,15 +1012,13 @@ semchecker: UnitHandler
                                         -> dstQual[];
                                   if);
                                   (* OBS fArgs may be pattern or data-item *)
-                              if);
-                          if);
+                          if)if);
                           (if trx then
                               '*** arg:src:' -> puttext; current.dopt -> putline;
                               '*** srcQual:'->putline; srcQual.doPT -> putline;
                               '*** arg:dst:' -> puttext; fArgs[inx].dopt -> putline;
                               '*** dstQual:'->putline; dstQual.doPT 
                                 -> putline;
-                              false-> trx
                       if)if);
                       (current[],srcQual[],dstQual[],false) -> fArgs[inx].checkQual;
                   if);
@@ -1023,7 +1035,7 @@ semchecker: UnitHandler
             #);
           getVqualX::
             (#
-            do (if trx or traceGetV_qual then
+            do (if trx or ('Xxx'->(sig.dopt).equalNCS->trx) or traceGetV_qual then
                    '**** Pattern:getVqualX: ' -> puttext; sig.doPT -> puttext;
                    ' :isVirtual:'-> puttext; isVirtual-> putBoolean; newline
                if);
@@ -1038,7 +1050,7 @@ semchecker: UnitHandler
                    if)
                 else
                    OG[] -> qual[]
-               if)
+               if);
             #);
           getV_Qual::
             (* P: S ... 
@@ -2054,11 +2066,11 @@ semchecker: UnitHandler
                                (if useGetVqualX then
                                    (* we probabluy need to pass OGS via semCheck!?
                                     *)
-                                   (if savedOGS[] <> none then
+                                   (if trx and ((savedOGS[]->OGS[]) <> none) then
                                        '**** OI:getVQualX:savedOGS:'->putline;
                                        savedOGS.print
                                    if);
-                                   (encOG[],false,savedOGS[]) -> getVqualX -> (OGS[],qual[]);
+                                   (encOG[],false,OGS[]) -> getVqualX -> (OGS[],qual[]);
                                 else
                                    (encOG[],none,none) -> getVqual -> (P[],OGS[],qual[]);
                                if);
@@ -2071,53 +2083,148 @@ semchecker: UnitHandler
                                newline
                if)if)if)if);
             #);
+          viaIncludeX:
+            (* X via %include C via %include B via %include A
+             * means: A.B.C.X, path = [A,nest(B),nest(C),nest(X)]
+             *)
+            (# OI,OIx: ^ObjectInvocation; on,pn,onx: @integer; OGS,OGSx: ^OGsequence;
+               MI: ^ModuleItem; encOG,OGx: ^ObjectGenerator
+            enter(encOG[],OI[],on,pn,OGS[])
+            do (if true then
+                   '**** OI:viaIncludeX: ' -> puttext; OI.dopt -> puthead;
+                   '**   encOG: '->putline;
+                   encOG.doPT -> puthead;
+                   (if OGS[] <> none then OGS.print if)
+               if);
+               (if ptnId.viaIncl[] = none then
+                   (* In X via %include C; via %include B; via %include A
+                    * we have reached A,
+                    * Falla back to B and C
+                    *)
+                   (if trx then
+                       '**** viaIncludeX:top:on='->puttext; on -> putint;
+                       newline;
+                       (if OGS[] <> none then OGS.print if)
+                   if);
+                   (*(origin.father[],ATd[],this(OBjectInvocation)[],on,pn,P[])
+                    -> OGpath (*-> ATd.pathToDcl* ) -> P[];*)                   
+                   (*P.print;*)
+                   (if OGS[] = none then
+                       encOG[] -> OGsequence -> OGSx[];
+                       OGS[] -> OGSx.pred[];
+                       OGSx[] -> OGS[];
+                   if);
+                   (for on repeat OGS.ENC -> OGS[] for);
+                   (for pn repeat OGS.PRE -> OGS[] for);
+                   (if trx then
+                       '**** viaIncludeX:GOT:'->putline;
+                       OGS.print
+                   if);
+                   OGS.DOG[] -> encOG[] (* ???*)
+                else
+                   (if trx then
+                       '**** viaInclude:A: ' -> puttext; 
+                       ptnId.viaIncl.father.dopt -> putline
+                   if);
+                   ptnId.viaIncl.scanSons
+                   (# i: @integer
+                   do (if (i + 1 -> i) > 1 then
+                          '!!!! ObjectInvocation:viaInclude: ' -> puttext;
+                          'remote not handled! ' -> putline;
+                          ptnID.viaIncl.dopt -> putline
+                      if);
+                      current[] -> OIx[];
+                   #);
+                   OIx.ptnId.on + 1 -> onx;
+                   (if trx then
+                       '**** viaIncludeX: '->puttext; OIx.dopt->puttext;
+                       ' current.ptnId.on=' ->puttext; onx -> putint; 
+                       newline;
+                   if);
+                   (* In X via %include C via %include B via %include A
+                    * go via %include B and/or %include A
+                    *)
+                   (encOG[],OI[],on + onx,pn,OGS[]) 
+                     -> OIx.viaIncludeX 
+                     -> (encOG[],OGS[]);
+                   (if trx then
+                       '*** add OIx:'->puttext; OIx.dopt -> putline;
+                   if);
+                   (*P[] -> OIx.ATd.pathToDcl -> P[];*)
+                   (if OIx.ATd.isModuleItem then
+                       (OIx.ATd[] -> MI[]).MD.OG[] -> OGx[];
+                    else
+                       OIx.ATd.OG[] -> OGx[]
+                   if);
+                   (*(OGx[],ATd[],this(ObjectInvocation)[],0,0,P[])
+                     -> OGpath (*-> ATd.pathToDcl* ) -> P[];
+                   true -> P.isNest;*)
+                   (*P.print*)
+                   ATd.origin.father[] -> OGsequence -> OGSx[];
+                   OGS[] -> OGSx.pred[];
+                   true -> OGSx.isNest;
+                   OGSx[] -> OGS[];
+                   (for pn repeat OGS.PRE -> OGS[] for);
+               if)
+            exit(encOG[],OGS[])
+            #);
           getVqualX::
             (# OGSx,OGSy: ^OGsequence; OGx: ^ObjectGenerator; DI: ^Decl
             do (if trx then
-                   '\n**** ObjectInvocation:getVqualX:on=' -> puttext; 
-                   on -> putint; ' pn='->puttext; pn -> putint; ' ' -> put;
-                   isNest -> putboolean;  ' ' -> put;
-                   dopt -> puthead;
+                   '\n**** ObjectInvocation:getVqualX: '->puttext; dopt -> puttext;
+                   '  on=' -> puttext; on -> putint; 
+                   ' pn='->puttext; pn -> putint; ' ' -> put;
+                   isNest -> putboolean;  newline;
                    (if OGS[] <> none then OGS.print if)
                if);
-               (if (OGS[] -> OGSx[]) = none then
-                   encOG[] -> OGx[];
-                   (for on repeat 
-                        OGx.origin.father[] -> OGx[]
-                   for);
-                   OGx[] -> OGsequence -> OGSx[];
-                   (for pn repeat OGSx.PRE -> OGSx[] for);
-                   (if trx then
-                       '\n**** getVqualX:A:' -> putline;
-                       OGSx.print;
-                   if);
-                   (encOG[],false,OGSx[]) -> ATd.getVqualX -> (OGSx[],qual[]);
-                   (if trx then
-                       '\n**** getVqualX:C:' -> putline;
-                       OGSx.print
-                   if)
-                else
-                   (if isNest then
-                       encOG[] -> OGsequence -> OGSy[];
-                       true -> OGSy.isNest;
-                       OGSx[] -> OGSy.pred[];
-                       OGSy[] -> OGSx[]
-                   if);
-                   (if trx then
-                       '\n**** getVqualX:B1:encOG:' -> putline; encOG.dopt->puthead;
-                       OGSx.print;
-                   if);
-                   (for on repeat OGSx.ENC -> OGSx[] for);
-                   (for pn repeat OGSx.PRE -> OGSx[] for);
-                   (if trx then
-                       '\n**** getVqualX:B2:' -> putline;
-                       OGSx.print;
-                   if);
-                   (encOG[],false,OGSx[]) -> ATd.getVqualX -> (OGSx[],qual[]);
-               if);
+               (if ptnID.viaIncl[] <> none then
+                   (* Given X, via &include C, path(X) to C is (on,pn), *)
+                   (encOG[],this(ObjectInvocation)[],on,pn,OGS[]) 
+                     -> viaIncludeX 
+                     -> (encOG[],OGS[]);
+                   (encOG[],true,OGS[]) -> ATd.getVqualX -> (OGSx[],qual[]);
+               else
+                   (if (OGS[] -> OGSx[]) = none then
+                       encOG[] -> OGx[];
+                       (for on repeat 
+                            OGx.origin.father[] -> OGx[]
+                       for);
+                       OGx[] -> OGsequence -> OGSx[];
+                       (for pn repeat OGSx.PRE -> OGSx[] for);
+                       (if trx then
+                           '\n**** OI:getVqualX:initial:' -> puttext; dopt->puthead;
+                           OGSx.print;
+                       if);
+                       (encOG[],false,OGSx[]) -> ATd.getVqualX -> (OGSx[],qual[]);
+                       (if trx then
+                           '\n**** getVqualX:initial:afterATd:' -> puttext; 
+                           dopt->puthead;
+                           OGSx.print
+                       if)
+                    else
+                       (if isNest then
+                           encOG[] -> OGsequence -> OGSy[];
+                           true -> OGSy.isNest;
+                           OGSx[] -> OGSy.pred[];
+                           OGSy[] -> OGSx[]
+                       if);
+                       (if trx then
+                           '\n**** getVqualX:B1:encOG:' -> putline; encOG.dopt->puthead;
+                           OGSx.print;
+                       if);
+                       (for on repeat OGSx.ENC -> OGSx[] for); (* ON = 0 ?
+                                                                * Or only if isNest*)
+                       (for pn repeat OGSx.PRE -> OGSx[] for);
+                       (if trx then
+                           '\n**** getVqualX:B2:' -> putline;
+                           OGSx.print;
+                           (*'---'->putline; ATd.dopt ->puthead*)
+                       if);
+                       (encOG[],false,OGSx[]) -> ATd.getVqualX -> (OGSx[],qual[]);
+               if)if);
                (if (qual.getReturnDecl -> DI[]) <> none then
                    (if trx then
-                       '**** OI:return: ' -> puttext; DI.dopt -> putline;
+                       '**** OI:return: ' -> puttext; DI.dopt -> puthead
                    if);
                    qual[] -> OGsequence -> OGSy[];
                    OGSx[] -> OGSy.pred[]; true -> OGSy.isNest;
@@ -2129,7 +2236,7 @@ semchecker: UnitHandler
                        OGSx.print
                    if)
                if);
-               OGSx[] -> OGS[] -> savedOGS[]
+               OGSx[] -> OGS[](* -> savedOGS[]*)
             #);
           getVqual::
             (# Px: ^OGpath; DI: ^DataItem; hasRtn: @Boolean; OGSx: ^OGsequence
