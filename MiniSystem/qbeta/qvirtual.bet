@@ -92,8 +92,8 @@ OGsequence: SuperOGsequence
         *    where Path(Dn) = (i,j)
         *)
        (# S: ^OGsequence; 
-          OGsuper: ^ObjectGenerator; onx,pnx: @integer; isR: @boolean
-       do (if false and (trx) or traceGetV_qual then ('**** ENC: ****',0) -> print if);
+          OGsuper,OGx: ^ObjectGenerator; onx,pnx: @integer; isR: @boolean
+       do (if (trx) or traceGetV_qual then ('**** ENC: ****',0) -> print if);
           (if true 
            // isNest then
               (if pred[] = none then
@@ -102,8 +102,14 @@ OGsequence: SuperOGsequence
               (* ENC([D1,D2,...,Dn-1,nest(Dn)]) = [D1,D2,...,Dn-1] *)
               pred[] -> S[];
            // isRemote then
-              (* ENC([D1,D2,...,Dn-1,R.Q]) = remote([D1,D2,...,Dn-1],R) *)
-              Remote -> S[]
+              (* ENC([D1,D2,...,Dn-1,R.Q]) = remote(ENC[D1,D2,...,Dn-1],R) *)
+              (if true then
+                  pred.DOG[] -> OGx[]; (* pred <> none always! *)
+                  pred.ENC -> S[]; 
+                  (OGx[],S[]) -> RemoteX -> S[]
+               else
+                  Remote -> S[]
+              if)
            // pred[] = none then (* head *)
               (* ENC([D]) = [D.origin] *)
               (if DOG.origin[] = none then 
@@ -123,9 +129,59 @@ OGsequence: SuperOGsequence
               (for i: onx repeat S.ENC -> S[] for);
               (for i: pnx repeat S.PRE -> S[] for);
           if);
-          (if false and trx or traceGetV_qual then ('**   ENC:result:',0) -> S.print if)
+          (if trx or traceGetV_qual then ('**   ENC:result:',0) -> S.print if)
        exit S[]
        #);
+     RemoteX:
+       (* this(OGs) = [D1,D2,...,Dn,R] or
+        *           = [D1,D2,...,Dn,R.Q]
+        * remote([D1,D2,...,Dn],R)
+        *    = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa)Rd)
+        *    where path(Ra) = (Rd,0,j)
+        *    Rd: ref Sa
+        *  remote([D1,D2,...,Dn],R.Q)
+        *    = nest(app(super[j] o remote([D1,D2,...,Dn,R),Ta,Td)))
+        *    where path(Qa) = (Qd,0,j)
+        *    Qd: ref Ta
+        *)
+       (# DOGx,OGx: ^ObjectGenerator; S,Sx: ^OGsequence
+       enter(DOGx[],S[])
+       do (if trx or traceGetV_qual then 
+              ('**** RemoteX:',0) -> S.print;
+              '**   DOGx: '->putline; DOGx.dopt -> puthead; 
+          if);
+          DOGx.super.scanSons
+          (# E: ^Exp; D: ^SuperDataItem
+          do current[] -> E[]; 
+             (if trx or traceGetV_qual then
+                 '**   remote:scanSons:E:"' -> puttext; 
+                 E.dopt -> puttext; '" E.ATd.label:' -> puttext;
+                 E.ATd.label -> puttext;
+                 ' E.on: '->puttext; E.on ->putint;
+                 ' E.pn: ' -> puttext; E.pn -> putint;
+                 ' E.ATd:' -> putline; E.ATd.dopt -> putline;
+             if);
+             (if not isLast then
+                 (* remote([D1,D2,...,Dn],R)
+                  *    = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa),Rd)
+                  *    where path(Ra) = (Rd,i,j)
+                  *    Rd: ref Sa
+                  *)
+                 (* DOG = R.Q where Q is not remote  and R = R1.R2.Rn, n >= 1 *)
+                 (if traceGetV_qual then '**   remote:first:'-> putline if);
+                 (for i: E.on repeat S.ENC -> S[] for);
+                 (for i: E.pn repeat S.PRE -> S[] for);
+
+                 E.ATd[] -> S.append -> (S[],OGx[]);
+                 S[] -> Sx[];                 
+                 OGx[] -> OGsequence -> S[];
+                 true -> S.isNest;
+                 Sx[] -> S.pred[]
+             if);
+          #);
+          (if trx or traceGetV_qual then ('**** remote:END',0) -> S.print if)
+       exit S[]
+       #);     
      Remote:
        (* this(OGs) = [D1,D2,...,Dn,R] or
         *           = [D1,D2,...,Dn,R.Q]
@@ -215,7 +271,11 @@ OGsequence: SuperOGsequence
                  if);
                  (for i: E.on repeat S.ENC -> S[] for);
                  (for i: E.pn repeat S.PRE -> S[] for);
-                 ATd.OG.origin.father[] -> OGx[]
+                 (if true then
+                     ATd.OG[] -> OGx[]
+                  else
+                     ATd.OG.origin.father[] -> OGx[]
+                 if)
               #)
            else
               D.OG[] -> OGx[]
@@ -235,7 +295,7 @@ OGsequence: SuperOGsequence
      PRE:
        (# S: ^OGsequence; 
           OGs,qual: ^ObjectGenerator; onx,pnx: @integer; isR: @boolean;
-       do (if false and trx or traceGetV_qual then ('**** PRE: ****',0) -> print if);
+       do (if trx or traceGetV_qual then ('**** PRE: ****',0) -> print if);
           (if false and useGetVqualX then
               (dog.origin.father[],false,this(OGsequence)[])
                 -> DOG.super.getVqualX -> (S[],qual[])
@@ -245,7 +305,7 @@ OGsequence: SuperOGsequence
               this(OGsequence)[] -> S.pred[];
               isR -> S.isRemote;
           if);
-          (if false and trx or traceGetV_qual then ('**   end:PRE',0) -> S.print if)
+          (if trx or traceGetV_qual then ('**   end:PRE',0) -> S.print if)
        exit S[]
        #);
      
@@ -457,7 +517,7 @@ OGPath: SuperPath
           (for i: on repeat S.ENC -> S[] for);
           (for i: pn repeat S.PRE -> S[] for); 
           (*isNest -> S.isNest;*)
-          (if false and first and (vDcl[] <> none) then
+          (if first and (vDcl[] <> none) then
               S.FB -> findBinding -> qual[];
               (if trx then
                   '**** appendSeq:found:' -> putline; qual.doPT -> putline;
