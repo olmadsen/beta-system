@@ -3,6 +3,7 @@ INCLUDE 'qvariants';
 INCLUDE '../VM/objectcode'; 
 BODY 'qgeneratorBody';
 ---lib:attributes---
+traceArgOG: (# exit false #);
 generator: variants
   (# traceModules: (# exit false #);
      Module::
@@ -404,11 +405,23 @@ generator: variants
        #);
      ObjectGenerator::
        (# isArgOfE: ^Exp;
-          markForCodeGen::
+          markForCodeGen:: 
             (# ptn: ^Pattern
             do (if not marked and ((primNo,sig[],IS[]) -> markPrimElse) then
                    (if (Ex[] -> isArgOfE[]) <> none then
-                       (if false then
+                       (* enter Ex[] 
+                        * Called from Invocation E1.E2.E3(f1,f2,f3)
+                        * if one of f1,f2 and f3 is a (singular) OG and
+                        * the formal arg is not a virtual.
+                        * Then Ex[] = E3[]
+                        * We should probably also handle possible arguments of
+                        * E1 and E2.
+                        * E3.origin is not this(OG) which omplies that on does
+                        * not count this(OG), but it must.
+                        * We this have to add an extra goorigin for attributes
+                        * in Ex!
+                        *)
+                       (if traceArgOG then
                            '**** OG is an argument:\n' -> puttext; 
                            dopt -> puthead;
                            father.father.father.dopt -> puthead
@@ -1136,21 +1149,28 @@ generator: variants
                                    OGx.IS.newOriginOff -> putint; newline 
                                 #);
                               addOG:
-                                (# OGx: ^ObjectGenerator; off: @integer
+                                (# OGx: ^ObjectSpecification; off: @integer
                                 do (if OG.isArgofE[] <> none then
-                                       (if false then
+                                       (if traceArgOG then
                                            '**** OG inArgument: ' -> putline;
                                            OG.dopt -> puthead;
+                                           '**   OG.isArgOfE:\n' -> puttext;
+                                           OG.isArgOfE.dopt -> putline;
+                                           '**   OG.isArgOfE.father.father.label: ' ->puttext;
+                                           OG.isArgOfE.father.father.label
+                                           -> putline;
+                                           OG.isArgOfE.father.father.dopt 
+                                             -> putline;
                                            '**   in:'->putline;
                                        if);
                                        OG.isArgOfE.father.father[] -> OGx[];
                                        OGx.IS.newOriginOff -> off;
-                                       (if false then
+                                       (if traceArgOG then
                                            OGx.dopt -> puthead;
                                            '**   originOff:'->puttext; 
                                            off->putint; newline;
                                        if);
-                                       (if true then
+                                       (if true and (off > 0) then
                                            ('ArgOGs',off) -> cd.rpushg;
                                        if)
                                    if)
@@ -1987,44 +2007,56 @@ generator: variants
                   if)if)
                #);
                (* We only scan args of last exp? we may have r.foo(e1).bar(e2)
-                * Should be fixed
+                * Should be fixed!
                 *)
+               (if traceArgOG then
+                   '**** E.ATd: ' -> putline; E.ATd.dopt -> puthead;
+               if);
                E.ATd.OG.IS.scanItemArgs
                (# 
                do top + 1 -> top;
-                  currentArg.isVirtual -> fArgIsVirtual[top]                      
+                  currentArg.isVirtual -> fArgIsVirtual[top];
+                  (if traceArgOG then
+                      '*** argNo:' -> puttext; top -> putint; ' ' ->put;
+                      fArgIsVirtual[top] -> putboolean; newline;
+                      currentArg.dopt -> puthead
+                  if)
                #);
                (if (E[] <> none) and (E.args[] <> none) then
                    E.args.scanArgs
                    (# n: @integer; OGx: ^ObjectGenerator
                    do n + 1 -> n;
                       cd.com(#do 'arg:' -> TT; ' '-> TT; current.dopt -> TT#);
-                      (if current.isObjectGenerator then 
-                          (if not (current[] -> OGx[]).IS.isEmpty 
-                              or OGx.hasVirtualArgs
-                              then
-                              (if (*true or *) not fArgIsVirtual[n] then
-                                  (if false then
-                                      '**** marking arg:\n'->puttext; 
-                                      current.dopt -> puthead;
-                                      '**   of:'->putline;
-                                      E.dopt -> puthead;
-                                      '**   E.father.father.father:\n'
-                                        ->puttext; 
-                                      E.father.father.doPT -> puthead;
+                      (if (E.ATd.primNo <> vassign_prim) 
+                          and current.isObjectGenerator then 
+                              (if not (current[] -> OGx[]).IS.isEmpty 
+                                  or OGx.hasVirtualArgs
+                                  then
+                                  (if (*true or *) not fArgIsVirtual[n] then
+                                      (if traceArgOG then
+                                          '**** marking arg:label:'->puttext; 
+                                          current.label -> putline;
+                                          current.dopt -> puthead;
+                                          '**   of:E:label:'->putline;
+                                          E.label -> putline;
+                                          E.dopt -> puthead;
+                                          '**   E.father.father.father:\n'
+                                            ->puttext; 
+                                          E.father.father.doPT -> puthead;
+                                      if);
+                                      E[] -> current.markForCodeGen
+                                   else
+                                      current.markForCodeGen
                                   if);
-                                  E[] -> current.markForCodeGen
                                else
                                   current.markForCodeGen
-                              if);
+                              if)
                            else
                               current.markForCodeGen
                           if)
-                       else
-                          current.markForCodeGen
-                      if)
-               #)if)
-            #);          
+                       #)
+               if)
+            #);       
           Qgen:: 
             (# gdb:: 
                  (# 
