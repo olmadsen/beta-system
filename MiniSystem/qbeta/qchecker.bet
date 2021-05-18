@@ -1,7 +1,8 @@
 ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qparser';
 INCLUDE 'qprimitives';
-INCLUDE 'qvirtual'
+INCLUDE 'qvirtual';
+INCLUDE 'qunitparser'
 ---lib:attributes---
 (* origin is always in instance of Items or none - for the outermost Module 
  * basicScope = origin for Items
@@ -2521,6 +2522,62 @@ checker: Parser
           anOD[] -> OD[noOfDescs][];
        exit noOfDescs
        #); 
+     BaseVector:
+       (# theBase: [8] @integer;  (* [8] is Dimension, just technical*)
+          add:
+            (# BV: ^BaseVector
+            enter BV[]
+            do (for i: 7 repeat 
+                    theBase[i] + BV.theBase[i] -> theBase[i]
+               for)
+            #);
+          minus:
+            (# BV: ^BaseVector
+            enter BV[]
+            do (for i: 7 repeat 
+                    theBase[i] - BV.theBase[i] -> theBase[i]
+               for)
+            #);
+          mult:
+            (# C: @integer
+            enter C
+            do (for i: 7 repeat 
+                    theBase[i] * C -> theBase[i]
+               for)
+            #);
+          equal: BooleanValue
+            (# BV: ^BaseVector
+            enter BV[]
+            do true -> value;
+               (for i: 7 repeat 
+                    (theBase[i] = BV.theBase[i]) and value -> value
+               for)
+            #);
+          print:
+            (#
+            do (for i: 7 repeat
+                    (if i 
+                     // TimeInx then 'Time  : ' -> puttext
+                     // LengthInx then 'Length: ' -> puttext
+                     // MassInx then 'Mass  : ' -> puttext
+                     // ElectInx then 'Elect : ' -> puttext
+                     // TempInx then 'Temp  : ' -> puttext
+                     // SubstanceInx then 'Subst : ' -> puttext
+                     // LuminousInx then 'Lumin : ' -> puttext
+                     else
+                        'Inx = ' -> puttext;  i -> putint; ':' -> put
+                    if);
+                    theBase[i] -> putint; newline
+               for)
+            #)
+       #);     
+     TimeInx: (# exit 1 #);
+     LengthInx: (# exit 2 #);
+     MassInx: (# exit 3 #);
+     ElectInx: (#exit 4 #);
+     TempInx: (#exit 5 #);
+     SubstanceInx: (#exit 6 #);
+     LuminousInx: (#exit 7 #);
      unitTable: @
        (# unitElm:
             (# dim: ^Decl; 
@@ -2530,10 +2587,11 @@ checker: Parser
                US: [5] ^Text; UStop: @integer;
                convFactor: @real;
                prop: ^NewProperty;
+               baseInx: @integer; (* if  base unit, index into baseVector *)
                decodeProp:
-                 (# n: @integer; 
+                 (# n: @integer; dimN: ^text
                  do prop.args.scanSons
-                    (# INV: ^Invocation;
+                    (# INV: ^Invocation; 
                     do current[] -> INV[];
                        INV.scanSons
                        (# C: ^lexem
@@ -2553,15 +2611,39 @@ checker: Parser
                         UStop -> putint; ' ' -> put; n -> putint;
                     if);
                     UStop = 1 -> isBaseDim;
-                    (if false and isBaseDim then ' baseDim ' -> puttext if);
-                    convFactor = 0 -> isBaseUnit
+                    (if false and isBaseDim then ' base dimension '->puttext if);
+                    convFactor = 0 -> isBaseUnit;
+                    dim.sig.dopt -> dimN[];
+                    (if isBaseDim then
+                        (if true 
+                         // 'Dimension' -> dimN.equalNCS then
+                            8 -> baseInx
+                         // 'Time' -> dimN.equalNCS then
+                            1 -> baseInx
+                         // 'length' -> dimN.equalNCS then
+                            2 -> baseInx
+                         // 'Mass' -> dimN.equalNCS then
+                            3 -> baseInx
+                         // 'ElectricCurrent' -> dimN.equalNCS then
+                            4 -> baseInx                         
+                         // 'ThermpdynamoicTemperature' -> dimN.equalNCS then
+                            5 -> baseInx                         
+                         // 'AmountOfSubstance' -> dimN.equalNCS then
+                            6 -> baseInx
+                         // 'LuminousImtenmsity' -> dimN.equalNCS then
+                            7 -> baseInx
+                         else
+                            '!!!! OBS! no matching base unit: ' -> puttext;
+                            dimN[] -> puthead
+                    if)if)
                  #);
+
                print:
                  (#
                  do (if isBaseDim then
-                        'BaseDim: "' -> puttext
+                        'Base Dimension: "' -> puttext
                      else
-                        'DerivedDim: "' -> puttext; 
+                        'Derived Dimension: "' -> puttext; 
                     if);
                     dim.sig.dopt -> puttext;
                     (if convFactor = 0 then
@@ -2583,6 +2665,7 @@ checker: Parser
                     if);
                     newline;
                  #);
+              
             enter(dim[],unit[],prop[])
             exit this(unitElm)[]
             #);
@@ -2732,6 +2815,52 @@ checker: Parser
           N: ^ObjectGenerator; DI: ^Decl;
           L: ^unitElm
        #);
+     mkBaseVector:
+       (# T: ^UnitTree; BVl,BVr: ^baseVector
+       enter T[]
+       do (if T.token
+           // mult then
+              T.left[] -> mkBaseVector -> BVl[];
+              T.right[] -> mkBaseVector -> BVr[];
+              BVr[] -> BVl.add
+           // divv then
+              T.left[] -> mkBaseVector -> BVl[];
+              T.right[] -> mkBaseVector -> BVr[];
+              BVr[] -> BVl.minus
+           // expT then
+              T.left[] -> mkBaseVector -> BVl[];
+              T.right.op[] -> readNumber -> BVl.mult
+           // idf then
+              (*'MBK:idf: '->puttext; T.op[] -> putline; *)
+              T.op[] -> unitTable.find
+              (# theDim: ^text
+              do current.dim.sig.dopt -> theDim[];
+                 (if current.isBaseDim then
+                     &BaseVector[] -> BVl[];
+                     1 -> BVl.theBase[current.baseInx]
+                  else
+                     (if false then
+                         '**** Derived dimension: ' -> puttext; 
+                         theDim[] -> putline;
+                     if);
+                     current.US[2][] 
+                       -> parseUnit 
+                       -> mkBaseVector -> BVl[]
+                 if)
+              #);
+              (if BVl[] = none then 
+                  '!!!! Unit not found: ' -> puttext; T.op[] -> putline;
+                  &BaseVector[] -> BVl[];
+              if)
+           // number then
+              'MBK:number: '->puttext;
+              T.op[] -> putline;
+              &BaseVector[] -> BVl[]
+           else
+              '*** token not handled:  '->puttext; T.token ->putint; newline
+          if)          
+       exit BVl[]
+       #); 
      notification: 
        (# msg: @
             (# T: ^text;
