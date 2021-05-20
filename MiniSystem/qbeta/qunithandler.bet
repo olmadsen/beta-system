@@ -36,7 +36,16 @@ UnitHandler: checker
             #);
        #);
      ObjectCall::<
-       (# isUnitValueObj::
+       (# getExpUnit:: 
+            (# 
+            do '**** OC:getExpUnit: ' -> puttext; dopt -> putline;
+               super.getExpUnit -> U[];
+               (if true then
+                   '**** ObjectCall:GEU: '->puttext; dopt -> puttext;
+                   ' unit: ' -> puttext; U[] -> putline
+               if)
+            #);
+          isUnitValueObj::
             (# ptn: ^Pattern
             do (if traceUnit then
                    '**** ObjectCall:isUnitValueObj: ' -> puttext; doPT -> puthead
@@ -82,7 +91,50 @@ UnitHandler: checker
             #);
        #);
      ObjectGenerator::<
-       (# isUnitValueObj::
+       (# getExpUnit:: 
+            (#
+            do  '**** OG:getExpUnit: ' -> puttext; dopt -> putline;
+               (* We may have an OG where super is a dataItem as in
+                *    distToAlpha / rocketSpeed  where rocketSpeed 
+                * is an OG with super rocketSpeed: var Velocity.Mass
+                * We should fix the parser here!
+                *)
+               (if IS.isEmpty (*and super.ATd.isPattern*) then
+                   super.getExpUnit -> U[]
+               if);
+               (if true then
+                   '**** OG:GEU: '->puttext; dopt -> puttext;
+                   ' unit: ' -> puttext; U[] -> putline
+               if)
+            #);
+          getUnitX::
+            (# ptn: ^Pattern
+            do (if false or traceUnit then
+                   '**** ObjectGenerator:getUnitX: ' -> puttext; 
+                   doPT -> puthead
+               if);
+               (* see comment above *)
+               (if IS.isEmpty and super.ATd.isPattern then
+                   (super.ATd[] -> ptn[]).OG.getUnitX -> U[]
+               else
+                   (if IS.newBasicProp.unit[] <> none then
+                       IS.newBasicProp.unit.args.scanSons
+                       (#
+                       do current.scanSons
+                          (# S: ^StringObj
+                          do (if current.isStringLiteral then
+                                 (current[] -> S[]).T[] -> U[];
+                             if)
+                          #)
+                       #)
+                    else
+                       (if primNo                            
+                        // float_prim then '#Float' -> U[]
+                        // integer_prim then '#Integer' -> U[]
+                       if)
+               if)if)
+               #);
+          isUnitValueObj::
             (# ptn: ^Pattern
             do (if traceUnit then
                    '**** ObjectGenerator:isUnitValueObj: ' -> puttext; 
@@ -183,7 +235,50 @@ UnitHandler: checker
         * rec.getOp -> op
         * msg.getUnit -> U
         *)
-       (# getUnit::
+       (# defUnit::
+            (# emitUnits:
+                 (# i: @integer; E: ^Exp; U: ^text
+                 enter(i,E[],U[])
+                 do (U[] <> none) or hasUnits -> hasUnits;
+                    '**   INV::i='->T.puttext; i -> T.putint;
+                    ' ' ->T.put; E.dopt -> T.puttext;
+                    ' unit:'->T.puttext; U[] -> T.putline;
+                 #);
+               T: @text; hasUnits: @boolean; U: ^text
+            do (if true then
+                   '**** INV:defUnit: '-> puttext; dopt -> putline;
+                   '' -> getExpUnit -> U[];
+                   (if U[] <> none then
+                       '**** INV:defUnit:unit: '->puttext; dopt -> puttext;
+                       ' unit: ' -> puttext; U[] -> putline
+                   if)
+                else
+                   '**** INV:units:OF:'->T.puttext; dopt -> T.putline;
+                   (if ('t := distToAlpha / rocketSpeed' -> (doPT).equalNCS) then
+                       doPP ->putline
+                   if);
+                   scanSons
+                   (# i: @integer; E: ^Exp
+                   do i + 1 -> i;
+                      (i,(current[]->E[]),E.getExpUnit) -> emitUnits
+                   #);
+                   (if hasUnits then T[] -> putline if);
+               if);
+               true -> done
+            #);
+          getExpUnit::
+            (#
+            do '**** INV:getExpUnit: ' -> puttext; dopt -> putline;
+               (if recU[] = none then '' -> recU[] if);
+               recU[] -> U[];
+               scanSons
+               (#
+               do U[] -> current.getExpUnit -> U[]
+               #);
+               '**** INV:GEU: ' -> puttext; dopt -> puttext;
+               ' unit: ' -> puttext; U[] -> putline
+            #);
+          getUnit::
             (#
             do (if traceUnit then 
                    '**** Invocation:getUnit: ' -> puttext; dopt -> putline
@@ -371,10 +466,114 @@ UnitHandler: checker
              #);
        #);
      ObjectInvocation::<
-       (# getUnit::
+       (# getExpUnit:: 
+            (* pattern:
+             *    foo, bar(exp), @put e :at ix
+             *    := exp
+             *    + exp, - exp, * exp, / exp, ^exp
+             * dataItem: X, rocketSpeed
+             *)
+            (# addBinArg: 
+                 (#
+                 do L:
+                      (if args[] <> none then
+                          args.scanArgs
+                          (#
+                          do current.getExpUnit -> recU.puttext;
+                             leave L
+                          #);
+                      if)
+                 #)
+            do '**** OI:getExpUnit: ' -> puttext; dopt -> putline;
+               (if ATd[] <> none then
+                   (if true
+                    // ATd.isDataItem then
+                       '**   ATd.isDataitem: ' -> puttext; expUnit[] ->putline;
+                       (if expUnit[] <> none then
+                           expUnit.copy -> U[];
+                       if)
+                    // ATd.isPattern then
+                       '**   ATd.isPattern: ' -> puttext;
+                       ATd.primNo -> putint; newline;
+                       (if recU[] = none then '' -> recU[] if);
+                       (if ATd.primNo
+                        // 109 (* + *)
+                        // 110 (* - *) then
+                           args.scanArgs(#do current.getExpUnit -> U[] #);
+                           (* recU and U must be equal *)
+                        // 112 then
+                           (* recU/U may be a numeric constant or dataItem *)
+                           
+                           '*'->recU.put; addBinArg; recU[] -> U[]
+                           (* // '^' -- not a primitive *)
+                        // 121 then
+                           '/' -> recU.put; addBinArg; recU[] -> U[]
+                        // vassign_prim //rassign_prim then
+                           (# dstBV,srcBV: ^BaseVector; T: ^UnitTree
+                           do
+                              args.scanArgs(#do current.getExpUnit -> U[] #);
+                              '**   assign: '->puttext; recU[] -> puttext;
+                              ' ' -> put; U[] -> putline;
+                              (if true 
+                               // '#Float' -> recU.equal then
+                                  (if true
+                                   // '#Float' -> U.equal then
+                                   // '#Integer' -> U.equal then
+                                  if)
+                                  (* incompete if no match above (or below) *)
+                               // '#Integer' -> recU.equal then
+                                  (if true
+                                   // '#Float' -> U.equal then
+                                   // '#Integer' -> U.equal then
+                                  if)
+                               else
+                                  recU[] 
+                                    -> parseUnit -> mkBaseVector -> dstBV[];
+                                  U[] -> parseUnit -> T[] 
+                                    -> mkBaseVector -> srcBV[];
+                                  (if srcBV[] -> dstBV.equal then
+                                      '**** equal:'->puttext; recU[] -> puttext;
+                                      ' ' -> put; U[] -> putline;
+                                      (*true -> T.print -> putline;*)
+                                   else
+                                      '**** not equal:'->puttext; 
+                                      U[] -> puttext;
+                                      ' ' -> put; recU[] -> putline;
+                                      dstBV.print;
+                                      true -> T.print->putline;
+                                      srcBV.print;
+                              if)if)
+                           #)
+                        else
+                           (*'###'->U[]; addBinArg;*)
+                           expUnit[] -> U[];
+                           args.scanArgs(#do '' -> current.getExpUnit #);
+                           (if U[] = none then 'Q' -> U[] if)
+                           
+                       if)
+                   if);
+               if);  
+               (if false then
+                   expUnit[] -> U[];
+                   L:
+                     (if args[] <> none then
+                     args.scanArgs
+                         (# T: ^Text
+                         do current.getExpUnit -> T[];
+                            '**   arg: ' -> puttext; current.dopt -> puttext;
+                            ' unit: ' -> puttext; T[] -> putline;
+                            (if T[] <> none then
+                                (if U[] = none then '#U' -> U[] if);
+                                '[' -> U.put; T[] -> U.puttext; ']'->U.put;
+                                leave L
+               if)#)if);if);
+               '**** OI:GEU: ' -> puttext; dopt -> puttext;
+               ' unit: ' -> puttext; U[] -> putline
+            #);
+          getUnit::
             (# argU,Ux: ^text;  i: @integer; arg: ^ObjectSpecification
             do (if traceUnit then 
-                   '**** ObjectInvocation:getUnit: ' -> puttext; dopt -> putline;
+                   '**** ObjectInvocation:getUnit: ' -> puttext; dopt->putline;
                if);
                ATd.getUnit -> U[];
                (if type## <> Binary## then
@@ -522,7 +721,11 @@ UnitHandler: checker
             #)
        #);
      BracketedExp::<
-       (# getUnit:: (# do IV.getUnit -> U[] #);
+       (# getExpUnit::
+            (#
+            do recU[] -> IV.getExpUnit -> U[]
+            #);
+          getUnit:: (# do IV.getUnit -> U[] #);
           computeUnit::
             (#
             do (if traceUnit then
@@ -540,10 +743,22 @@ UnitHandler: checker
             #)
        #);
      Const::< 
-       (# getUnit:: 
+       (# getExpUnit::
+            (#
+            do (if (unit[] <> none) and (unit.T[] <> none) then
+                   (if false then
+                       '**** Const:semcheck: ' -> puttext; dopt->putline
+                   if);
+                   unit.T[] -> U[] 
+                else
+                   '' -> U[]
+               if)
+            #);
+          getUnitX:: (# do '#Integer' -> U[] #);
             (* Lexem::getUnit returns unit.T[] if not non, else inner
              * so if a unit is definedm we dont come here
              *)
+          getUnit::          
             (# 
             do '#Integer' -> U[]
             #);
@@ -570,7 +785,26 @@ UnitHandler: checker
             #);
        #);
      FloatConst::<
-       (# getUnit:: (* se comments at Const:getUnit *)
+       (# getExpUnit::
+            (# 
+            do (if (unit[] <> none) and (unit.T[] <> none) then
+                   (if true then
+                       '**** FloatConst:semcheck: ' -> puttext; dopt->putline
+                   if);
+                   unit.T[] -> U[] 
+                else
+                   '#Float' -> U[]
+              if)
+            #);
+          getUnitX::
+            (# ptn: ^Pattern
+            do (if false or traceUnit then
+                   '**** ObjectGenerator:getUnitX: ' -> puttext; 
+                   doPT -> puthead
+               if);
+               '#Float' -> U[] 
+            #);
+          getUnit:: (* se comments at Const:getUnit *)
             (# 
             do '#Float' -> U[] 
             #);
