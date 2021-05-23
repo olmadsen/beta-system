@@ -37,7 +37,7 @@
    BCstart: size of BC
    : bytecodes ...
 */
-bool isXbeta;
+bool isXbeta; 
 bool newAlloc = false;
 int newAllocOff = 0;
 

@@ -258,11 +258,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case innerExit:
 	fprintf(trace,"innerExit %i",op1(bc,&glsc));
 	break;
-      case sendv: 
-	fprintf(trace,"sendv %i",op1(bc,&glsc));
+      case sendv:
+	arg1 = op1(bc,&glsc);
+	arg2 = op1(bc,&glsc);
+	fprintf(trace,"sendv %i %i",arg1,arg2);
 	break;
       case sendx: 
-	fprintf(trace,"send %i",op1(bc,&glsc));
+	fprintf(trace,"send %i",op1(bc,&glsc)); 
 	break;
       case newVrep:
 	fprintf(trace,"newVrep");
@@ -276,7 +278,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case exeAlloc:
 	fprintf(trace,"exeAlloc %i",op2(bc,&glsc));
 	break;
-      case rtnc:
+      case rtnc:   
 	fprintf(trace,"rtnC");
 	break;
       case rtnV:

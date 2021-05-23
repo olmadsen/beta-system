@@ -1994,7 +1994,7 @@ bool traceThreads = true;
   double float1, float2, float3;
   bool running = true, doTrace = false; 
   Btemplate *X, *Y;
-
+  Btemplate *refArgs[10]; int refArgsTop = 0; // see sendv below
   int cnt = 0;
 
   thisObj = thisBlock->thisObj;
@@ -3243,12 +3243,12 @@ bool traceThreads = true;
 #endif
 	arg2 = vdtTable(trace,thisObj,arg1);
 	if (arg2 > 0) {
-	  cSaveReturn(thisObj,currentDescNo,glsc);
+	  cSaveReturn(thisObj,currentDescNo,glsc); 
 	  bc = codeFromDescNo(arg2);
 	  currentDescNo = arg2;
 	  glsc = getExitE(getDesc(arg2));
 #ifdef TRACE
-	  fprintf(trace,"TO %i %i",currentDescNo,glsc);
+	  fprintf(trace,"TO %i %i",currentDescNo,glsc); 
 #endif
 	};
 #ifdef TRACE
@@ -3258,19 +3258,38 @@ bool traceThreads = true;
       case sendv: 
 	arg1 = op1(bc,&glsc);
 	arg2 = op1(bc,&glsc);
-	thisBlock->origin = rPop(thisStack);
-	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
 	fprintf(trace,"sendv %i",arg1);
+#endif	
+	refArgsTop = 0;
+	if (arg2 > 0) {
+	  for (i = 1; i <= arg2; i++) {   
+	    refArgsTop = refArgsTop + 1;
+	    refArgs[refArgsTop] = rPop(thisStack);
+#ifdef TRACE	    
+	    fprintf(trace,"\top ref:A:  %x\n",refArgs[refArgsTop]);
 #endif
-	arg2 = vdtTable(trace,thisBlock->origin,arg1); // descNo
+	  }
+	} 
+	thisBlock->origin = rPop(thisStack);
+	// looks wrong with X below?
+	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+
+	arg3 = vdtTable(trace,thisBlock->origin,arg1); // descNo
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
-	allocQObj(thisBlock,thisBlock->origin,arg2,false,0,0);
+	allocQObj(thisBlock,thisBlock->origin,arg3,false,0,0);
 	restoreContext();
-
+	if (arg2 > 0) {
+	  for (i = 1; i <= arg2; i++) {
+	    rPush(thisStack,refArgs[refArgsTop - i  + 1]);
+#ifdef TRACE
+	    fprintf(trace,"\top ref:B:  %x\n",refArgs[i]);
+#endif
+	  }
+	}
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
