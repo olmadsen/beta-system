@@ -478,7 +478,7 @@ generator: variants
                     * But && isPrimitive and thus isObjectDesc = false
                     * We thus try a revised version - see qchecker
                     *)
-                   (if isObjectDesc <> isObjectDescX then
+                   (if false and (isObjectDesc <> isObjectDescX) then
                        '**** isObjectDescX: ' -> puttext; 
                        isObjectDescX -> putboolean; 
                        ' isObjectDesc: ' -> puttext; 
@@ -487,7 +487,7 @@ generator: variants
                        'superDesc: '-> putline;
                        IS.superDesc.father.father.dopt -> putline;
                    if);
-                   (if isObjectDescX then
+                   (if isObjectDesc then
                        cd.com(#do 'OG:markIS:'->TT; doPT -> TQ #);
                        IS.markForCodeGen;                          
                        (this(ObjectGenerator)[],NONE,computeVariant)
@@ -1269,6 +1269,7 @@ generator: variants
                                   (* do we need staticOff beloe? *)
                                   (- newOriginOff,0,CC[]) -> E.loadArgs; 
                               if);
+                              E.handleVargs
                            #);
                        if);
                        superDesc.newDescNo -> cd.toSuper;
@@ -1687,7 +1688,19 @@ generator: variants
                              '!!   OGx: '->puttext; OGx.label -> putline;
                              OGX.dopt -> puthead;
                          if);
-                         (formalArg.off,descno,(OGx.desc).newDescNo) -> cd.vdtTableAt;
+                         
+                         (*should be delayed to  generation of Stub - but how?
+                          * and howdo we know if this is a singular function ptn?
+                          * perhpas we juts need the descMo of stub?
+                          * cd.vdtTable places it at the right descInc
+                          *)
+                         
+                         (* for OD=(OGx.desc).newDescNo, 
+                          * virtual/inner=formalArg.off,
+                          * is bound to: descno = (actualArg).descNo
+                          *)
+                         (formalArg.off,descno,(OGx.desc).newDescNo)
+                           -> cd.vdtTableAt;
                          
                          (if father.father## = ObjectCall## then
                              '**** father.father is objectCall: ' -> puttext;
@@ -1861,7 +1874,9 @@ generator: variants
                            * And then perhaps special for virtuals primitive
                            * and ptName? Virt is of course ptn *)
                           (if currentArg.isVirtual then
-                              (currentArg[],actArgs[argInx][]) -> handleVirtualArg
+                              (*
+                               (currentArg[],actArgs[argInx][]) -> handleVirtualArg
+                               *)
                            else
                               (currentArg[],actArgs[argInx][]) -> handleNonVirtualArg
                           if)
@@ -2464,7 +2479,7 @@ generator: variants
           getAdr::
             (# gdb:: 
                  (#do ':superAdj:'->TT; adr.superAdj->II; ':on:'->TT; on->II#);
-               Ax: ^Address
+               Ax: ^Address; OG: ^ObjectGenerator
             do (*superAdj -> A.superAdj;*)
                adr[] -> Ax[];
                (if (on > 0) or (Ax.E[] = none) then
@@ -2533,12 +2548,97 @@ generator: variants
                (#do 'OI:load:'->TT; dopt->TT; ':unit: '->TT; unit.T[]->TT#);
                (rec[],A[]) -> ATd.load
             #);
+          handleVargs::
+            (# actArgs: [6] ^ObjectSpecification; (* actual arguments *)
+               top,argInx: @integer; ptn: ^pattern; 
+               enclosingOG: ^ObjectGenerator; OGx: ^ObjectSpecification;
+               formalArg: ^Pattern; actualArg: ^ObjectSpecification; 
+               descNo: @integer; name: ^Text
+            do (if (ATd[]->ptn[]).OG.primNo
+                // inner_prim // this_prim // ifThen_prim
+                // restart_prim // leave_prim then
+                   leave handleVargs
+               if);
+               args.scanArgs
+               (#
+               do (if (top+1 -> top) > actArgs.range then 
+                      actArgs.range -> actArgs.extend 
+                  if);
+                  current[] -> actArgs[top][];
+               #);
+               (ATd[]->ptn[]).scanArgs
+               (#
+               do argInx + 1 -> argInx; 
+                  (if (argInx <= top) and currentArg.isVirtual then
+                      currentArg[] -> formalArg[];
+                      actArgs[argInx][] -> actualArg[]; 
+                      cd.com(#do currentArg.dopt -> TQ;nl;
+                               actualArg.dopt -> TQ #);
+                      (if argInx <= top then
+                          (* can we do currentArg.LoadArg?
+                           * And then perhaps special for virtuals primitive
+                           * and ptName? Virt is of course ptn *)
+                          (if currentArg.isVirtual then
+                              currentArg[] -> formalArg[];
+                              actArgs[argInx][] -> actualArg[];
+                               (if true
+                                // (1 -> ptnId.T.inxGet) = '#' then
+                                   father.father[] -> OGx[]; 
+                                   (OGx.desc).newDescNo -> descNo;
+                                   (if OGx.super.ATd[]<> none then
+                                         OGx.super.ATd.OG.IS.newDescNo -> descNo 
+                                   if);
+                                   (formalArg.Off,actualArg.vDescNo,descNo) 
+                                     -> cd.vdtTableAt;
+                                   (if OGx## = ObjectCall## then
+                                       '**** father.father is objectCall: ' 
+                                         -> puttext;
+                                      dopt -> putline
+                                    else
+                                       (formalArg.Off, actualArg[])
+                                         -> (OGx[]-> enclosingOG[]).XaddB;
+                                 if);
+                                // (desc).primNo = indexed_prim then 
+                                   (* We ignore bindings of elm in Indexed *)
+                                else
+                                   formalArg.sig.id.copy -> name[];
+                                   '#SB#' -> name.append;
+                                   (actualArg.desc).newDescno 
+                                     -> descNo 
+                                     -> name.putint;
+                                   father.father[] -> OGx[]; 
+                                   (*OGx.dopt -> putline;*)
+                                   cd.com(#
+                                         do 'vdt:Q: '->TT;  dopt -> TQ; nl;
+                                            'formalArg: '-> TT; 
+                                            formalArg.dopt -> TQ; nl:
+                                            'actualArg: '-> TT; 
+                                            actualArg.dopt -> TQ; nl;
+                                            formalArg.off -> II;
+                                            ' (actualArg.desc).newDescno: ' -> TT; 
+                                            descno ->II;
+                                            ' (OGx.desc).newDescNo: ' -> TT;
+                                            (OGx.desc).newDescNo ->II; 
+                                            ' stubDescNo: ' -> TT; stubDescNo -> II
+                                         #);
+                                   (if stubDescNo > 0 then
+                                       (formalArg.off,descno,stubDescNo)
+                                         -> cd.vdtTableAt;
+                                    else 
+                                       (formalArg.off,descno,(OGx.desc).newDescNo)
+                                         -> cd.vdtTableAt;
+                                   if);
+                               if)
+                          if)
+                   if)if)#)
+                 #);               
           invoke::
             (# gdb::
                  (#do ' rec:'->TT; 
                     (if rec[]=none then 'none'->TQ else rec.dopt -> TQ if)
                  #);
-               ptn: ^pattern
+              
+               ptn: ^pattern; stubDescNo: @integer
             do (* rec is a dataItem and there will thus be exactly 
                 * one variant for its OG *)
                (if atd## 
@@ -2547,17 +2647,17 @@ generator: variants
                    cd.com(#do '>top:'->TT; ptn.OG.Qvariants.top -> II;
                             'descNo:'->TT; ptn.OG.IS.newdescno -> II #);
                 // module## then
-                   '>module' -> cd.comment
+                   'module' -> cd.comment
                 // moduleItem## then
-                   '>moduleItem' -> cd.comment
+                   'moduleItem' -> cd.comment
                if);
                (if (adr[] <> none) and (E.ATd[] <> none)  then
                    (if E.ATD.OG[] <> none then
                        E.ATd.OG.IS.isUnique -> adr.isUnique;          
                        cd.com(#do 'E.ATd: ' -> TT; E.ATd.sig.doPT -> TQ;
-                                'unique: ' -> TT; E.ATd.OG.IS.isUnique -> BB; #);
+                                'unique: ' -> TT; E.ATd.OG.IS.isUnique -> BB #);
                     else
-                       (* Probably if E.ATd is a ModuleItem, then OG is not define *)
+                       (* Probably E.ATd is a ModuleItem, then OG is not define *)
                        (if not (E.ATd## = ModuleItem##) then
                            E[] -> warning
                            (# do 'E.ATd.OG is none: "' -> msg; E.dopt -> msg; 
@@ -2565,9 +2665,18 @@ generator: variants
                    if)if);
                    cd.com(#do'adr:'->TT; (if adr[] <> none then adr.print->TT if)#);
                if);
-
-               (rec[],E[],useReturnValue,staticOff,CC[],adr[]) -> ATd.invoke;
-                cd.com
+               
+               (if hasVirtualArgs then
+                   '**** genStubv:'->putline; dopt -> puthead;
+                   (ATd[],'',QnewDesc->stubDescNo,ATd.OG.IS.newDescNo,0,0) 
+                     -> ObjStubStack.add;
+                   (if ATd.isPattern then stubDescNo -> handleVargs if);
+                   ('stub',stubDescNo,0,false) ->  cd.invoke
+               else
+                   (rec[],E[],useReturnValue,staticOff,CC[],adr[]) 
+                     -> ATd.invoke;
+               if);
+               cd.com
                (#do 'OI:invoke:'->TT; dopt->TT; ':unit: '->TT; unit.T[]->TT;
                   ' convFactor: ' -> TT; convFactor -> FF #);
                (if convFactor <> 0 then
@@ -2579,7 +2688,8 @@ generator: variants
             (# gdb:: (# do 'staticOff:' -> TT; staticOff -> II #);
             do (this(Exp)[],superAdj,staticOff,CC[]) -> ATd.loadArgs
             #);
-       #);       
+       #);    
+
      BracketedExp::
        (* a := b + (c * d)
         *     execute c * d
@@ -2792,6 +2902,44 @@ generator: variants
                (if not useReturnValue then cd.rPop if)
             #);
        #);
+     genStub:
+       (# atD: ^Pattern; N: ^Text; 
+          descNo,stubDescNo,superDescNo,originOff,originDescNo: @integer
+       enter(atD[],N[],descNo,superDescNo,originOff,originDescNo)
+       do 
+          ('Stub',descNo,false,ATd.OG.IS.newDescNo,1,originDescNo) 
+            -> cd.class;
+          cd.com(#do Atd.dopt -> TQ #);
+          ATd.OG.iS.newDescNo -> cd.vdtTableCopy;
+          superDescNo -> cd.toSuper;
+          cd.rtnInner;
+          (16,false,0) -> cd.endClass
+       exit stubDescNo
+       #);     
+     ObjStubStack: @
+       (# add:
+            (# gen:
+                 (#
+                 do (atD[],N[],stubDescNo,superDescNo,originOff,originDescNo)
+                    -> genStub
+                 #);
+               atD: ^Pattern; N: ^Text; 
+               stubDescNo,superDescNo,originOff,originDescNo: @integer
+            enter(atD[],N[],stubDescNo,superDescNo,originOff,originDescNo)
+            do (if (top + 1 -> top) > OIS.range then
+                   OIS.range -> OIS.extend
+               if);
+               this(add)[] -> OIS[top][];
+            exit stubDescNo
+            #);
+          gen:
+            (#
+            do (for  i: top repeat
+                    OIS[i].gen
+               for)
+            #);
+          OIS: [12] ^add; top: @integer
+       #);
      ObjTmpStack: @
        (# item: 
             (# OG: ^ObjectGenerator; 
@@ -2994,6 +3142,7 @@ generator: variants
               restart L 
           if)
        #);
+     objStubStack.gen;
      genStubs;
      
      (if stringDecl[] <> none then
