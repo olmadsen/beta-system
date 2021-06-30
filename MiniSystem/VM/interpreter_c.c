@@ -1,4 +1,4 @@
-//#define _GNU_SOURCE
+//#define _GNU_SOURCE 
 //#define __ARDIUNO__  // just my attempt;-)
 //#define usewinsock2
 //#define usekbhit
@@ -1296,6 +1296,7 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
   //setbuf(stdout, NULL);
+  //setvbuf(stdout,NULL,_IONBF,0);
   trace_t = trace; // hack
 #ifdef linux
 #elif defined  __CYGWIN__
@@ -2817,6 +2818,7 @@ bool traceThreads = true;
 	    putch(arg2);
 #else
 	    printf("%c",(char)arg2);
+	    //printf("\n");
 	    //fflush(stdout);
 #endif
 	    break;

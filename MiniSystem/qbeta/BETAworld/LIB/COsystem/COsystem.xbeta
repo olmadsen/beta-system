@@ -1,35 +1,70 @@
 COsystem: obj
    System: LIB.BasicSystem.basicSystem
       semaphore:
-        %globals SQS      
+        %globals P_status,SQS      
         init:
            cnt := 1
            M.id :=  "Semaphore"              
         wait:
-           m: var integer
+            theActive: ref BasicProcess
+            M.get
+            cnt := cnt - 1
+            @if cnt < 0 :then 
+               disable
+               SQS.addWaiting
+               enable
+               Q.insert(thisCore.main.active)
+               theActive := thisCore.main.active
+               M.free
+               thisCore.main.active.status := P_status.WAITING
+               theActive.suspend 
+            :else 
+               M.free
         signal:
-           m: var integer      
+            P: ref BasicProcess
+            M.get
+            cnt := cnt + 1
+            @if cnt <= 0 :then 
+               P := Q.removeNext
+               P.status := P_status.ACTIVE
+               disable
+               SQS.insert(P)
+               SQS.dcrWaiting
+               enable
+               M.free 
+            :else 
+               M.free     
         cnt: var integer
         M: obj Lock
-        Q: obj ProcessQueue	
+        Q: obj ProcessQueue
       Process: BasicProcess
-         %globals #Process, SQS
+         %globals #Process, SQS,P_status
          %interface start, entry
          start::
-            m.init
-            mutex.init
             -- insert into SQS
-            SQS.insert(@this Process)
+            P: ref Process
+            P := @this Process
+            SQS.insert(P)
             @inner start
          entry:
             %arguments #Process,immutable, unique
             mutex.wait
             @inner entry
-            mutex.signal
+            M.signal
          accept:
             mutex.signal
             M.wait
+         doAccept:
+            @if doStop.not :then
+                accept 
+                @inner doAccept
+                @restart doAccept
+         stop:< entry
+            doStop := true
+            @inner stop
          mutex: obj Semaphore
-         m: obj Semaphore
+         M: obj Semaphore
+         doStop: var Boolean	
          @inner Process
+      "COsystem\n".print
       @inner System
