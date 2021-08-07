@@ -2255,6 +2255,10 @@ generator: variants
                 *)
                cd.bcPos -> beginBCP;
                cd.com(#do 'Invocation:qgen:label: '->TT; label -> TT #);
+               (* The code below is ugly - we should not test for 
+                * BracketedExp, but just call a virtual method
+                * Same for isConstant check
+                *)
                scanSons
                (# BE: ^BracketedExp
                do cd.com(#do current.label -> TT; current.dopt -> TT  #);
@@ -2267,6 +2271,14 @@ generator: variants
                       if)
                   if)
                #);
+               (if not done then
+                   isConstant
+                   (# isConst::
+                        (#
+                        do V -> cd.pushConst;
+                           true -> done
+                        #)
+               #)if);
                (if not done then
                (# A: ^Address; off,argNo: @integer
                do (if needOrigin then
@@ -2298,16 +2310,48 @@ generator: variants
                cd.bcPos -> endBCP
             #);
           isConstant: BooleanValue
-            (#
-            do scanSons
-               (# E: ^Exp; DI: ^DataItem
-               do current[] -> E[];
-                  (if E.ATd.isDataItem then
-                      E.ATD[] -> DI[];
-                      (if DI.isConst then 
-                      if)
-                  if)
-               #)
+            (* Not good enough for 
+             * V: obj 12; W: obj 87; X: obj V + W;
+             * we dont push 12 for V, but 87 for W
+             *)
+            (# isConst:< (# V: @integer enter V do inner #);
+               T: @text 
+            do cd.com(#do 'isConstant: '->TT; label -> TT; ' '-> TT;
+                        dopt -> TT #);
+               L:
+                 scanSons
+                 (# E: ^Exp; DI: ^SuperDataItem
+                 do current[] -> E[]; 
+                    cd.com(#do label -> TT; ' ' -> TT; current.dopt -> TT #);
+                    (if E.ATd.isDataItem or E.ATd.isModuleItem then
+                        E.ATD[] -> DI[];
+                        (if DI.isConst then
+                            (if isLast then
+                                (if DI.OG.isBasicValue then
+                                    (if (DI.OG.super.last->E[]).isConstLiteral then
+                                        DI.OG.super.dopt -> T.puttext;
+                                        cd.com
+                                        (#
+                                        do 'const literal: ' -> TT;
+                                           T[] -> TT;
+                                           ' ' -> TT;
+                                           (DI.OG.super.last).label -> TT
+                                        #);
+                                        T.setPos; T.getInt -> isConst
+                                    if)
+                                 else
+                                    leave L
+                                if)
+                            if)
+                         else
+                            cd.com(#do 'not const: ' -> TT; E.dopt -> TT; 
+                                     DI.dopt->TT #);
+                            leave L
+                        if)
+                     else
+                        leave L
+                    if)
+                 #)
             #);
           computeAdr:
             (* R.S.foo(exp).Q
@@ -2803,8 +2847,11 @@ generator: variants
        (# markForCodeGen:: (#do IV.markForCodeGen #);
           Qgen:: 
             (# 
-            do (* we dont come here *)
-               '**** BracketedExp:qgen:'->puttext; dopt -> putline;
+            do (* we dont come here 
+                * but we do for indexed literal like (e1,e2,e3) *)
+               (if false then
+                   '**** BracketedExp:qgen:'->puttext; dopt -> putline;
+               if);
                (if noOfSons = 1 then
                    (useReturnValue,superAdj,staticOff) -> IV.Qgen ;
                 else
@@ -2884,7 +2931,7 @@ generator: variants
                    112 -> cd.op
                if)
             #);
-          load:: (# do (if true then invoke else T.setpos; T.getReal -> cd.pushFloatConst if)#);
+          load:: (#do invoke #);
           bracketedListLength:: 
             (# 
             do 1 -> value;
