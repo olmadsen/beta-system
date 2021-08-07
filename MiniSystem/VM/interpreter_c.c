@@ -1591,7 +1591,7 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
   ctx->thisObj->vfields[dinx] = rangee; 
 };
 
-void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
   fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
 #endif    
@@ -1622,8 +1622,20 @@ void QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int din
   rPush(ctx->thisStack,ctx->callee);
   //printf("QallocIndexedX: %x",(int)origin);
   //printf(" %s\n",nameOf(origin));
+  return ctx->callee;
 };
 
+void mkIndexed(bool isRef,Block *ctx) {
+  int length,size,descInx,i;
+  Btemplate *X;
+  length = vPop(ctx->thisStack);
+  size = 1;
+  descInx = 7; // just a hack
+  X = QallocIndexed(ctx,0,descInx,1,1,length,0);
+  for (i = 1; i <= length; i++) {
+    X->vfields[1 +  length - i + 1 + newAllocOff] = vPop(ctx->thisStack);
+  }
+}
 void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
 #ifdef TRACE
   fprintf(ctx->trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
@@ -2505,6 +2517,16 @@ bool traceThreads = true;
         invokeObj(thisBlock,arg1,arg2,0,0);
 	restoreContext();
 	//fprintf(trace,"thisObj: %s thisStack: %s\n",nameOf(thisObj),nameOf(thisStack));
+	break;
+      case mkVindexed:
+	saveContext();
+	mkIndexed(false,thisBlock);
+	restoreContext(true,thisBlock);
+	break;
+      case mkRindexed:
+	saveContext();
+	mkIndexed(true,thisBlock);
+	restoreContext();
 	break;
       case invokeVal:
 	arg1 = op2(bc,&glsc);

@@ -252,7 +252,9 @@ enum {
   i2f = 116,
   f2i = 117,
   fovpushg = 118,
-  fovstoreg = 119  
+  fovstoreg = 119,
+  mkVindexed = 128,
+  mkRindexed = 129
 };
 
 
