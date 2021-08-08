@@ -1,4 +1,4 @@
-lexer: obj 
+lexer: obj
    init:< 
       in FN: ref String
       in SF: ref FileSys.File
@@ -18,52 +18,123 @@ lexer: obj
             --"nextCh: {C(ch)}\n".print
             
    readName: 
+      in cx: var char
       isConst: var Boolean
-      sym: obj indexed(20,#char)
+      sym: obj indexed(20,#char)      
+      prevCh: var char      
       i: var integer
+      --"readName C = {C(cx)} ch = {C(ch)}\n".print
       isConst := ascii.isDigit(ch)
+      @if cx > 0 :then {i := i + 1; sym.@put cx :at i}
       L: 
-         @if ascii.isLetter(ch) || ascii.isDigit(ch) :then 
+         @if (ascii.isLetter(ch) || ascii.isDigit(ch) 
+              || (ch = '_') || (ch = '%') || (ch = '@')) :then 
             i := i + 1
             sym.@put ch :at i
+            prevCh := ch
             nextCh.get
             @restart L
       L
       tokenStr := sym.asString
-      @if isConst :then
-         token := symbols.const
-      :else
-         token := symbols.idf
+      switch(true)
+            case(isConst && (ch = '.'))
+               --"got float const:\n".print
+               i :=i + 1
+               sym.@put ch :at i  
+               nextCh.get
+               LL:
+                  @if ascii.isDigit(ch) :then
+                     i := i + 1		  
+                     sym.@put ch :at i
+                     prevCh := ch
+                     nextCh.get
+                     @restart LL
+               LL
+               tokenStr := sym.asString
+               token := symbols.floatConst
+            case(prevCh = '%')
+               --"got fatComma\n".print
+               token := symbols.fatComma
+            case(isConst)
+               --"got const\n".print
+               token := symbols.const
+            case(tokenStr = "var")
+               --"gotVar\n".print 
+               token:= lexer.symbols.varVal
+            case(tokenStr = "val")
+               --"gotVal\n".print 
+               token:= lexer.symbols.constVal
+            case(tokenStr = "ref")
+               --"gotRef\n".print 
+               token:= lexer.symbols.varRef
+            case(tokenStr = "obj")
+               --"gotObj\n".print 
+               token:= lexer.symbols.constRef
+            case(tokenStr = "in")
+               --"gotIn\n".print 
+               token:= lexer.symbols.inArg
+            case(tokenStr = "out")
+               --"gotOut\n".print 
+               token:= lexer.symbols.outArg
+            token := symbols.idf
       --"readName: {tokenStr}\n".print
-      
+   parenthLevel: var integer
    readNextToken: 
       --"readNextToken: {C(ch)}\n".print
       tokenStr := ""
       switch(ch)
          case('{')
             token := symbols.begin
+            parenthLevel := parenthLevel + 1
             nextCh.get
          case('}')
             token := symbols.end
+            parenthLevel := parenthLevel - 1
+            nextCh.get
+         case('(')
+            token := symbols.leftBrack
+            parenthLevel := parenthLevel + 1
+            nextCh.get
+         case(')')
+            token := symbols.rightBrack
+            parenthLevel := parenthLevel - 1
             nextCh.get
          case(':')
             nextCh.get
-            @if ch = '=' :then 
-               token := symbols.special
-               tokenStr := ":="
-               nextCh.get 
-            :else 
+            switch(true)
+               case(ch = '=')
+                  token := symbols.special
+                  tokenStr := ":="
+                  nextCh.get 
+               case(ascii.isLetter(ch))
+                  --"read fat comma: {C(ch)}\n".print
+                  readName(':')
+                  token := symbols.fatComma
                token := symbols.colon
-               nextCh.get
                tokenStr := ":"
+         case('=')
+            nextCh.get	 
+            token := symbols.special
+            tokenStr := "="	    
          case(';')
               token := symbols.semicolon
-              nextCh.get	      
+              nextCh.get
+         case('@')
+            nextCh.get
+            @if ascii.isLetter(ch) :then
+                readName('@')
+            --"KW: ".print
+            --tokenStr.print
+            --put(ch)
+            --newline	    
+            token := symbols.keyword	    
          case(255)
             token := symbols.eos
             tokenStr := "eos"
-         @if ascii.isLetter(ch) || ascii.isDigit(ch) :then 
-            readName
+         @if ascii.isLetter(ch) || ascii.isDigit(ch) :then
+            readName(0)
+         --:else
+            --"\nNo match for char: {C(ch)}\n".print	 
    indent: obj 
       skipBlanks: 
          out inOut: var integer
