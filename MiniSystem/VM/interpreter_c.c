@@ -1767,6 +1767,48 @@ void  ConvertIndexedAsString(Block *ctx) {
   //printf("origin: %x %s\n",(int)getR(ctx->callee,1),nameOf(getR(ctx->callee,1)));
 }
 
+FILE *files[4];
+int filesTop = 0;
+
+int fileOpen(Btemplate *FN){
+  char *N;
+  int L,i;
+  N = malloc(30);
+  L = getV(FN,2);
+  printf("fileOpen %i",L);
+  for (i = 1; i <=L; i++)
+    { printf(" %c ", getV(FN,2 + i));
+      N[i - 1] =  getV(FN,2 + i);
+    }
+  N[L] = 0;
+  files[filesTop] = fopen(N,"r");
+  if (files[filesTop] == NULL)  {
+      printf("fopen failure\n");
+      stop;
+    }
+  filesTop = filesTop + 1;
+  printf("fileOpen: filesTop: '%s' %i %x\n",N,filesTop,files[filesTop - 1]);
+  return filesTop - 1;
+}
+
+int fileGet(int id){
+  char c;
+  //printf("fileGet id = %i ",id);
+  c = fgetc(files[id]);
+  //printf(" c = %c  %i\n",c,c);
+  return c;
+}
+
+int fileEos(int id){
+  char c;
+  c = fgetc(files[id]);
+  if (c != 0) ungetc(c,files[id]);
+  //printf("fileEos: %c \n",c);
+  return c == -1;
+}
+
+void fileClose(int id){  fclose(files[id]);}
+
 void doCall(Block *ctx,bool withEnablingSuspend){
     int arg1 = (char) op1(ctx->bc,&ctx->glsc);
 #ifdef TRACE
@@ -3078,6 +3120,20 @@ bool traceThreads = true;
 	    ConvertIndexedAsString(thisBlock);
 	    restoreContext();
             break;
+	  case 130: // file_open
+	    printf("************************file_open:\n");
+	    vPush(thisStack,fileOpen(rPop(thisStack)));
+	    
+	    break;
+	  case 131: // file_get
+	    vPush(thisStack,fileGet(vPop(thisStack)));
+	    break;
+	  case 132: // file_eof
+	    vPush(thisStack,fileEos(vPop(thisStack)));
+	    break;
+	  case 133: // file_close
+	    fileClose(vPop(thisStack));
+	    break;
           case 140: // dumpObj
 
 	    break;
@@ -3410,9 +3466,9 @@ bool traceThreads = true;
 	arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
 #ifdef TRACE
-	fprintf(trace,"le %i <= %i\n",arg2,arg1);
+	fprintf(trace,"le %i <= %i\n",arg1,arg2);
 #endif
-	if (arg1 >= arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
+	if (arg1 >=  arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case gt:
 	arg1 = vPop(thisStack);
@@ -3506,7 +3562,7 @@ bool traceThreads = true;
 #ifdef TRACE
 	fprintf(trace,"Not mplemented xorr %i %i\n",arg1,arg2);
 #endif
-	if ((arg1 == 1) || (arg2 ==1)) {vPush(thisStack,1);} else vPush(thisStack,0);
+	if ((arg1 == 1) || (arg2 == 1)) {vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case nott:
 	arg1 = vPop(thisStack);
