@@ -6,6 +6,6 @@ test: obj {
    fisk: foo{v::< #record};
    x := 119;
    x := 3.14;
-   @if x = 17 :then
+   @if (x = 17) && (x <> 0) :then
        { put (x) }
    }
