@@ -1741,29 +1741,32 @@ void C2QBstring(Block *ctx,char *S){
 void  ConvertIndexedAsString(Block *ctx) {
   Btemplate *X = rPop(ctx->thisStack);; 
   int i, length  = X->vfields[1 + newAllocOff];
-  /*printf("\n*** ConvertIndexedAsString %i: ", length);
-  int i;
-  for (i=0; i< 10; i++) printf(" %i ",X->vfields[i]);
+  /*printf("\n*** ConvertIndexedAsString %i:\n", length);
+  for (i=0; i <= length + 2; i++) printf("i:%i=%i ",i,X->vfields[i]);
   printf("\n");
   printf("X: %x %s ",(int)X,nameOf(X));
   printf("X.origin: %x ",(int)getR(X,1));
-  printf("%s\n",nameOf(getR(X,1)));
-  */
+  printf("%s\n",nameOf(getR(X,1)));*/
+  
   ctx->origin = X;
   QallocIndexed(ctx,X,getTextDescNo(),1,1,length,0);
   //printf("X: %x %s\n",(int)X,nameOf(X));
-
-  while (X->vfields[length + 1] == 0 ) length = length - 1;
-
+  //printf("\nlength: %i %i%\n",length,X->vfields[length + 2]);
+  while (X->vfields[length + 2] == 0 ) {
+    length = length - 1;
+    // printf("L:%i ",length);
+  }    
+  //printf("\nlength: %i \n",length);
   //printf("aaaD %x %s\n", (int)ctx->world,nameOf(ctx->world));
   //printf("aaaD %x %s\n", (int)getR(ctx->world,3),nameOf(getR(ctx->world,3)));
   putR(ctx->callee,1,getR(ctx->world,3)); // origin - a bloody hack
   ctx->callee->vfields[1 + newAllocOff] = length; // done in QallocIndexed?
   //printf("callee: %x %s\n",(int)ctx->callee,nameOf(ctx->callee));
   //printf("origin: %x %s\n",(int)getR(ctx->callee,1),nameOf(getR(ctx->callee,1)));
-  for (i = 2; i <= length + 1; i++) 
+  for (i = 2; i <= length + 1; i++) {
+    //printf("C: %i\n",X->vfields[i + newAllocOff]);
     ctx->callee->vfields[i + newAllocOff] = X->vfields[i + newAllocOff];
-
+  }
   //printf("origin: %x %s\n",(int)getR(ctx->callee,1),nameOf(getR(ctx->callee,1)));
 }
 
@@ -1775,9 +1778,9 @@ int fileOpen(Btemplate *FN){
   int L,i;
   N = malloc(30);
   L = getV(FN,2);
-  printf("fileOpen %i",L);
+  //printf("fileOpen %i",L);
   for (i = 1; i <=L; i++)
-    { printf(" %c ", getV(FN,2 + i));
+    { //printf(" %c ", getV(FN,2 + i));
       N[i - 1] =  getV(FN,2 + i);
     }
   N[L] = 0;
@@ -1787,7 +1790,9 @@ int fileOpen(Btemplate *FN){
       stop;
     }
   filesTop = filesTop + 1;
+#ifdef TRACE
   printf("fileOpen: filesTop: '%s' %i %x\n",N,filesTop,files[filesTop - 1]);
+#endif
   return filesTop - 1;
 }
 
@@ -2051,6 +2056,7 @@ bool traceThreads = true;
   Btemplate *X, *Y;
   Btemplate *refArgs[10]; int refArgsTop = 0; // see sendv below
   int cnt = 0;
+  char ch;
 
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
@@ -2886,6 +2892,13 @@ bool traceThreads = true;
 	    //fflush(stdout);
 #endif
 	    break;
+          case 23: // getch from  stdin
+	    scanf("%c",&ch);
+#ifdef TRACE
+            printf("get: %c\n",ch);
+#endif
+	    vPush(thisStack,ch);
+	    break;
 	  case 10: // attach
 	    arg2 = vPop(thisStack);
 #ifdef TRACE
@@ -3121,9 +3134,10 @@ bool traceThreads = true;
 	    restoreContext();
             break;
 	  case 130: // file_open
-	    printf("************************file_open:\n");
-	    vPush(thisStack,fileOpen(rPop(thisStack)));
-	    
+#ifdef TRACE
+	    printf("file_open:\n");
+#endif
+	    vPush(thisStack,fileOpen(rPop(thisStack)));	    
 	    break;
 	  case 131: // file_get
 	    vPush(thisStack,fileGet(vPop(thisStack)));
@@ -3148,7 +3162,7 @@ bool traceThreads = true;
 	    vPush(thisStack,0);
 	    break;
 	  default:
-	    RTE2("\n\n*** prim: missing case %i\n",arg1);
+	    RTE2("\n\n*** prim: missing case: ",arg1);
 	    runTimeError("prim: missing case");
 	  }
 	break;
