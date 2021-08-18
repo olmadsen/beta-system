@@ -3893,6 +3893,7 @@ bool traceThreads = true;
 	  thisObj = rPop(thisObj);
 	  goto findActualSuper;
 	}
+	thisStack = thisObj;
 	bc = codeFromDescNo(currentDescNo);
 	glsc = xlabs(currentDescNo,arg2) - 1; 
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
