@@ -395,6 +395,10 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case pushValue:
 	fprintf(trace,"pushValue %i",op1(bc,&glsc));
 	break;
+      case mkVindexed:
+	fprintf(trace,"mkVindexed %i",op2(bc,&glsc));
+      case mkRindexed:
+	fprintf(trace,"mkRindexed %i",op2(bc,&glsc));		
     break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc - 1]);

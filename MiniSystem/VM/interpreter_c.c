@@ -102,7 +102,7 @@ void RTE2(char *msg, int errNo){
 #ifdef withGC
 #define heapMax 50000
 #else
-#define heapMax 30000000
+#define heapMax 2000000 //30000000
 #endif
 
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
@@ -331,7 +331,10 @@ Btemplate * mapRef(Btemplate * oldRef){
 
 void doGCmark(Block *ctx,Btemplate *root, int level){
   if (root == NULL) return; 
-  if (((int)getR(root,0) & 0x1)  == 1 ) return;
+  if (((int)getR(root,0) & 0x1)  == 1 ) {
+    //fprintf(ctx->trace,"mark:root:already marked: %s\n",nameOf(root));
+    return;
+  }
   putV(root,0,1);
 
 #if defined traceGC_1
@@ -363,11 +366,7 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
 #if defined traceGC_3    
     fprintf(ctx->trace,"Mark:GotIndexed: %x\n",RX);
     fprintf(ctx->trace,"Mark:GotIndexed: %x %s %x\n",(int)root,nameOf(root),RX);
-#endif
-    
     int j; for (j = 0; j < 40; j= j + 4) printf (" %x",getIheap(RX,j));
-
-#if defined traceGC_3
     fprintf(ctx->trace,"\n");
     fprintf(ctx->trace,"Mark:GotIndexed: %x %s %x %s \n",(int)root,nameOf(root),getR(root,1),nameOf(getR(root,1)));
 #endif
@@ -381,7 +380,10 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
   for (i = start; i < end; i = i + 2) {
     int refInx = desc_getInt2(desc,start + (i - start));
     Btemplate *R = (Btemplate *)getR(root,refInx);
-    if (R != NULL) doGCmark(ctx,R,level + 1);
+    if (R != NULL) {
+      //fprintf(ctx->trace,"AAA i:%i %s\n",i,nameOf(root));
+      doGCmark(ctx,R,level + 1);
+    }
   }
   if (root->rstack[0] != NULL) {
     printf("rstack != NULL: %x \n",(int)root->rstack[0]);
@@ -393,7 +395,6 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
 #if defined traceGC_3    
     fprintf(ctx->trace,"rStack:%s %x\n",nameOf(root->rstack[i + 1]),root->rstack[i + 1]);
 #endif
-    
     doGCmark(ctx,root->rstack[i + 1],level + 1);
 
 #if defined traceGC_3  
@@ -438,28 +439,66 @@ void printBlocks(Btemplate *root){
   ctx = contexts[0];
   fprintf(ctx->trace,"\n***  StartOfBlocks: %x\n",(int)root);
   while ((int) root < (int)lastFreeInHeap) {
-    fprintf(ctx->trace,"WWWW root: %x\n",(int)root);
-    fprintf(ctx->trace,"WWWW root: %x %s\n",(int)root,nameOf(root));
-    fprintf(ctx->trace,"size: %i\n",sizeOfDesc(root));
-    fprintf(ctx->trace,"V0: %i\n",getV(root,0));
+    /*
+      fprintf(ctx->trace,"WWWW root: %x lastFreeInheap: %x\n",(int)root,(int)lastFreeInHeap);
+      int i;
+      for (i = -4; i < 64; i = i + 1) {
+      fprintf(ctx->trace,"i:%3i, %x = %8x, %8i\n"
+      ,i
+      ,(int)root + i
+      ,*((int *)(int)root + i)
+	      ,getV(root,i));
+	      }
+	      fprintf(ctx->trace,"WWWW root: %x %s\n",(int)root,nameOf(root));
+	      fprintf(ctx->trace,"size: %i\n",sizeOfDesc(root));
+	      fprintf(ctx->trace,"V0: %i\n",getV(root,0));
+    */
+    int objZ = objSize(root->desc);
+    /*fprintf(ctx->trace,"objSize: %i  Btemplate:%i  %i\n"
+	    , objZ
+	    , sizeof(Btemplate)
+	    , sizeof(Btemplate) + (objZ + 1 + 0) * sizeof(int)
+	    );
+    */
     int size = sizeOfDesc(root);
     if (getV(root,0) == 1) { 
       if (inMarked == false) {
+	int i;
+	/*
+	fprintf(ctx->trace,"\nthis: %x %x %x \n",
+		getV(root,0),
+		getV(root,1),
+		getV(root,2));
+
+	for (i = 0; i < sizeOfDesc(root); i = i + 1) {
+	  fprintf(ctx->trace,"%x[i]:%i=%c %x, ",
+		  (int)root+sizeof(Btemplate) + i,
+		  i,getV(root,i),getV(root,i));
+	  if (i % 8 == 0) fprintf(ctx->trace,"\n");
+	}
+	
+	fprintf(ctx->trace,"\n next: %x %x %x %x %x\n",
+		getV((Btemplate *)(int)root + size,0),
+		getV((Btemplate *)(int)root + size,1),
+		getV((Btemplate *)(int)root + size,2),
+		getV((Btemplate *)(int)root + size,3),
+		getV((Btemplate *)(int)root + size,4)
+		);
 	fprintf(ctx->trace,"***   NewUsedBlock: %x sizeOfPred: %i\n"
-	       ,(int)root, (int)root - (int)lastBlock);
+	,(int)root, (int)root - (int)lastBlock);*/
 	lastBlock = root;
 	noOfUsedBlocks = noOfUsedBlocks + 1;
 	inMarked = true;
       }
     }else {
       if (inMarked) {
-	fprintf(ctx->trace,"***   NewFreeBlock: %x sizeOfPred: %i\n"
-	       ,(int)root, (int)root - (int)lastBlock);
+	/*fprintf(ctx->trace,"***   NewFreeBlock: %x sizeOfPred: %i\n"
+	  ,(int)root, (int)root - (int)lastBlock);*/
 	lastBlock = root;
 	inMarked = false;
       }
     }
-    fprintf(ctx->trace,"KUK\n");
+    fprintf(ctx->trace,"KUK: size: %i\n",size);
     root = (Btemplate *)((int)root + size);
     fprintf(ctx->trace,"KUK:B\n");
   }
@@ -636,34 +675,56 @@ void doGCupdateRefs(Block *ctx,Btemplate *root){
 
   while ((int)root < (int)&heap[heapTop]) {//newHeapTop) {
     ObjDesc desc = root->desc; 
-    //printf("Update: %x %s size:%i\n",(int)root,nameOf(root),sizeOfDesc(root));
+
+#if defined traceGC_3
+    fprintf(ctx->trace,"Update: %x %s size:%i\n",(int)root,nameOf(root),sizeOfDesc(root));
+#endif
+    
     Btemplate *R, *Rn;
 
     if (isIndexed(desc)) {
-      //printf("Update_isIndexed: %x %s",(int)root,nameOf(root));
+#if defined traceGC_3      
+      fprintf(ctx->trace,"Update_isIndexed: %x %s",(int)root,nameOf(root));
+#endif
+      
+      // Here we apparantly update origin which is in field: 1
       R = getR(root,1);
       Rn = mapRef(R);
-      //printf(" oldOrigin: %x newOrigin:%x %s\n",(int)R,(int)Rn,nameOf(Rn));
       if (Rn != R) putR(root,1,Rn);
+
+#if defined traceGC_3
+      fprintf(ctx->trace," oldOrigin: %x newOrigin:%x %s\n",(int)R,(int)Rn,nameOf(Rn));
+#endif
+
     }
     int start = desc_getInt4(desc,GCinfo_index);
     int end = desc_getInt4(desc,BC_index);
+    int i,v;
 
-    int i,v; 
-    //printf("\n\n** Root:name: %s start:%i end:%i first:%i :: "
-    //,nameOf(root),start,end, getR(root,1));
-    //printf("\n");
+#if defined traceGC_3
+    fprintf(ctx->trace,"\n\n** Root:name: %s start:%i end:%i first:%i :: \n"
+	    ,nameOf(root),start,end, getR(root,1));
+#endif
+    
     for (i = start; i < end; i = i + 2) {
       v = desc_getInt2(desc,start + (i - start));
-      if (isIndexed(desc) & (v == 1)) printf("OBS! isIndexed: origin twice!?\n");
+      if (isIndexed(desc) & (v == 1)) {
+	// if V == 1, we have a ref in field:1, which is origin and has
+	// already been updated above
+	//perhaps we should not update origin above?
+	//printf("OBS! isIndexed: origin twice!?\n");
+	//fprintf(ctx->trace,"OBS! isIndexed: origin twice!?\n");
+      }
+      
       R = getR(root,v);
       Rn = mapRef(R);
-      if (Rn != R) {
-	putR(root,v,Rn);
-      }
-      //printf("   Map:%i %x -> ",v,(int)R);
-      //printf("%x  \n",(int)Rn);
-      //printf("%s \n",nameOf(Rn));
+      if (Rn != R) putR(root,v,Rn);
+
+#if defined traceGC_3			
+      fprintf(ctx->trace,"   Map:%i oldOrg: %x ",v,(int)R);
+      fprintf(ctx->trace,"newOrg:%x ",(int)Rn);
+      fprintf(ctx->trace," name: %s \n",nameOf(Rn));
+#endif
     }
     for (i=0; i < root->rtop; i++) {
       R = root->rstack[i + 1];
@@ -770,6 +831,7 @@ void doGCcheckHeap(Btemplate *root){
   }
 }
 void doBGC(Block *ctx,Btemplate *root){
+  //fprintf(ctx->trace,"doBGC\n");
   noOfFreeBlocks = 0;
   noOfUsedBlocks = 1; // First block in heap is in use
   lastFreeStart = NULL;
@@ -1656,12 +1718,11 @@ Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, i
   return ctx->callee;
 };
 
-void mkIndexed(bool isRef,Block *ctx) {
-  int length,size,descInx,i;
+void mkIndexed(int descInx,bool isRef,Block *ctx) {
+  int length,size,i;
   Btemplate *X;
   length = vPop(ctx->thisStack);
   size = 1;
-  descInx = 7; // just a hack
   X = QallocIndexed(ctx,0,descInx,1,1,length,0);
   for (i = 1; i <= length; i++) {
     X->vfields[1 +  length - i + 1 + newAllocOff] = vPop(ctx->thisStack);
@@ -1780,13 +1841,15 @@ void  ConvertIndexedAsString(Block *ctx) {
   printf("%s\n",nameOf(getR(X,1)));*/
   
   ctx->origin = X;
-  QallocIndexed(ctx,X,getTextDescNo(),1,1,length,0);
+  
   //printf("X: %x %s\n",(int)X,nameOf(X));
   //printf("\nlength: %i %i%\n",length,X->vfields[length + 2]);
   while (X->vfields[length + 2] == 0 ) {
     length = length - 1;
     // printf("L:%i ",length);
-  }    
+  }
+  QallocIndexed(ctx,X,getTextDescNo(),1,1,length,0);
+  
   //printf("\nlength: %i \n",length);
   //printf("aaaD %x %s\n", (int)ctx->world,nameOf(ctx->world));
   //printf("aaaD %x %s\n", (int)getR(ctx->world,3),nameOf(getR(ctx->world,3)));
@@ -2601,13 +2664,18 @@ bool traceThreads = true;
 	//fprintf(trace,"thisObj: %s thisStack: %s\n",nameOf(thisObj),nameOf(thisStack));
 	break;
       case mkVindexed:
+	arg1 = op2(bc,&glsc);
+#ifdef TRACE
+	fprintf(trace,"mkVindexed %i ", arg1);
+#endif
 	saveContext();
-	mkIndexed(false,thisBlock);
+	mkIndexed(arg1,false,thisBlock);
 	restoreContext(true,thisBlock);
 	break;
       case mkRindexed:
+	arg1 = op2(bc,&glsc);
 	saveContext();
-	mkIndexed(true,thisBlock);
+	mkIndexed(arg1,true,thisBlock);
 	restoreContext();
 	break;
       case invokeVal:
