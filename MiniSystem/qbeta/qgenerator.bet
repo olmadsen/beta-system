@@ -2262,29 +2262,60 @@ generator: variants
                  #);
                rec,E: ^Exp; T: ^Text;
                needOrigin: booleanValue
-                 (# IT: ^Items
+                 (# IT: ^Items; Ex: ^Exp
                  do true -> value;
                     cd.com(#do 'needorigin:'-> TT; dopt -> TQ #);
                     scanSons
                     (#
                     do current[] -> E[]; 
+                       (if E.ATd.isPattern and not E.isConstLiteral and (Ex[] = none) then 
+                           E[] -> Ex[] if);
+                       (* if-stmt below is superflouos *)
                        (if not isLast then E[] -> rec[] 
                         else
-                           (if isFirst then E[] -> rec[]
+                           (if isFirst then E[] -> rec[] -> Ex[]
                        if)if)
                     #);
                     cd.com(#do 'needOrigin:E:'->TT; E.dopt -> TQ;
-                             ' E.ATd:'-> TT; E.atd.dopt -> TQ  #);
+                             ' E.ATd:'-> TT; E.atd.dopt -> TQ #);
+
                     (if not E.ATd.isPattern then (* DataItem *)
-                        cd.com(#do 'needOrigin:datItem:leave'->TT #);
+                        cd.com(#do 'needOrigin:dataItem:leave'->TT #);
                         leave needOrigin
                     if);
-                    E.ATd.desc -> IT[]; 
-                    (if IT.noGlobals and elimOrigin then
-                        cd.com(#do 'LoadOrign:no:loadOrigin: ' -> TT;
-                                 IT.encOG.doPT -> TQ #);
-                        false -> value
-                    if)
+                    (if false then
+                        E.ATd.desc -> IT[]; 
+                        (if IT.noGlobals and elimOrigin then
+                            cd.com(#do 'LoadOrign:no:loadOrigin: ' -> TT;
+                                     IT.encOG.doPT -> TQ #);
+                            false -> value
+                         else
+                            cd.com(#do 'doNeedOrigin:'->TT; E.dopt -> TQ #)
+                        if);
+                    if);
+                    (if Ex[] = none then
+                        'needOrigin: Ex is none: ' -> puttext; dopt -> putline
+                     else
+                        Ex[] -> E[];
+                        Ex.ATd.desc -> IT[]; 
+                        (if IT.noGlobals and elimOrigin then
+                            cd.com(#do 'Ex!LoadOrign:no:loadOrigin: ' -> TT;
+                                     IT.encOG.doPT -> TQ #);
+                            (if value and false then
+                                '!!! needOrigin:conflict:A: ' -> puttext; dopt -> puttext;
+                                ' E: ' -> puttext; E.dopt -> puttext;
+                                ' Ex: ' -> puttext; Ex.dopt -> putline
+                            if);
+                            false -> value;
+
+                         else
+                            (if not value then
+                                '!!! needOrigin:conflict:B: ' -> puttext; dopt -> puttext;
+                                ' E: ' -> puttext; E.dopt -> puttext;
+                                ' Ex: ' -> puttext; Ex.dopt -> putline
+                            if); 
+                            cd.com(#do 'doNeedOrigin:Ex:'->TT; Ex.dopt -> TQ #)
+                    if)if); 
                  #);
                done: @boolean
             do (if false then
@@ -2302,6 +2333,9 @@ generator: variants
                (* The code below is ugly - we should not test for 
                 * BracketedExp, but just call a virtual method
                 * Same for isConstant check
+                * Also needOrigin must be clean up
+                * Alltogether we should rewrite computeAdr to include
+                * handling of constants, patterns with no origin and bracketedExp
                 *)
                scanSons
                (# BE: ^BracketedExp
@@ -2316,13 +2350,8 @@ generator: variants
                   if)
                #);
                (if not done then
-                   isConstant
-                   (# isConst::
-                        (#
-                        do V -> cd.pushConst;
-                           true -> done
-                        #)
-               #)if);
+                   isConstant(# isConst:: (#do V -> cd.pushConst; true -> done #)#)
+               if);
                (if not done then
                (# A: ^Address; off,argNo: @integer
                do (if needOrigin then
@@ -2345,13 +2374,21 @@ generator: variants
                    * For X := exp and foo(exp), E.loadArgs load exp
                    * E.invoke generates assigmnet for := and invocation for foo
                    *)
-                  cd.com(#do'IV::loadArgs:superAdj:C:'->TT;
-                                 superAdj -> II #);
+                  cd.com(#do'IV::loadArgs:superAdj:C:'->TT; superAdj -> II #);
                   (superAdj,off,CC[]) -> E.loadArgs;
                   cd.com(#do 'invoke:after:loadArgsOf:' -> TT; E.dopt -> TQ;
                            (if A[] <> none then A.print -> TT if) #);
                   
                   (rec[],E[],useReturnValue,staticOff,CC[],A[]) -> E.invoke;
+                  scanSons
+                  (# found: @boolean; Ey: ^Exp;
+                  do (if found then
+                         cd.com(#do'invoke:tail: ' -> TT; current.dopt -> TQ #);
+                         (superAdj,off,CC[]) -> (current[]->Ey[]).loadArgs;
+                         (E[],current[],useReturnValue,staticOff,CC[],A[]) -> Ey.invoke;
+                     if);
+                     (if current[] = E[] then true -> found if);
+                  #);
                   cd.com(#do 'invoke:after:E.invoke:' -> TT; E.dopt -> TQ #)
                #)if);
                cd.bcPos -> endBCP
@@ -2363,13 +2400,11 @@ generator: variants
              *)
             (# isConst:< (# V: @integer enter V do inner #);
                T: @text 
-            do cd.com(#do 'isConstant: '->TT; label -> TT; ' '-> TT;
-                        dopt -> TT #);
+            do cd.com(#do 'isConstant: '->TT; label->TQ; ' '->TT; dopt->TQ #);
                L:
                  scanSons
                  (# E: ^Exp; DI: ^SuperDataItem
                  do current[] -> E[]; 
-                    cd.com(#do label -> TT; ' ' -> TT; current.dopt -> TT #);
                     (if E.ATd.isDataItem or E.ATd.isModuleItem then
                         E.ATD[] -> DI[];
                         (if DI.isConst then
