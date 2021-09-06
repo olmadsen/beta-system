@@ -44,6 +44,10 @@ int newAllocOff = 0;
 //for Arduino, typdef apparently must be in the beginning of the file!?
 typedef unsigned char * ObjDesc;
 
+#ifdef __arm__
+typedef unsigned char byte;
+#endif
+
 typedef struct Btemplate {
   ObjDesc desc;
   int id;
