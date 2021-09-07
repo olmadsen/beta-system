@@ -3,7 +3,7 @@
 //#define usewinsock2
 //#define usekbhit
 #ifdef linux
-#warning "linux is defined!"
+//#warning "linux is defined!"
 #elif defined  __CYGWIN__
    #ifdef usewinsock2
    #include <winsock2.h> // must be included first - for some reason?
@@ -12,7 +12,7 @@
    //#include <ws2tcpip.h>
 
 #elif defined __arm__
-#warning "__arm__ is defined!"
+//#warning "__arm__ is defined!"
    #include "arm/rpi-gpio.h"   
    #include "arm/armc-uart.c"
    #include "arm/led.c"
@@ -2050,7 +2050,10 @@ int fileOpen(Btemplate *FN){
       N[i - 1] =  getV(FN,2 + i);
     }
   N[L] = 0;
+#ifdef __arm__
+#else
   files[filesTop] = fopen(N,"r");
+#endif
   if (files[filesTop] == NULL)  {
 #ifdef __arm__
 #else
@@ -2068,20 +2071,31 @@ int fileOpen(Btemplate *FN){
 int fileGet(int id){
   char c;
   //printf("fileGet id = %i ",id);
+#ifdef __arm__
+#else
   c = fgetc(files[id]);
+#endif
   //printf(" c = %c  %i\n",c,c);
   return c;
 }
 
 int fileEos(int id){
   char c;
+#ifdef __arm__
+#else
   c = fgetc(files[id]);
   if (c != 0) ungetc(c,files[id]);
+#endif
   //printf("fileEos: %c \n",c);
   return c == -1;
 }
 
-void fileClose(int id){  fclose(files[id]);}
+void fileClose(int id){
+#ifdef __arm__
+#else
+  fclose(files[id]);
+#endif
+}
 
 void doCall(Block *ctx,bool withEnablingSuspend){
     int arg1 = (char) op1(ctx->bc,&ctx->glsc);
@@ -3181,7 +3195,10 @@ bool traceThreads = true;
 #endif
 	    break;
           case 23: // getch from  stdin
+#ifdef __arm__
+#else
 	    scanf("%c",&ch);
+#endif
 #ifdef TRACE
             printf("get: %c\n",ch);
 #endif
@@ -3444,7 +3461,10 @@ bool traceThreads = true;
 	    break;
 	  case 141: // log
 	    float1 = fPop(thisStack);
+#ifdef __arm__
+#else
 	    float2 = log(float1);
+#endif
 	    fPush(thisStack,float2);
 	    break;
 	  case 142: // printf
