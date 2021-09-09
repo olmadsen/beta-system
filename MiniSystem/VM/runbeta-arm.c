@@ -2,7 +2,8 @@
 //#include <stdbool.h>
 #include "interpreter_c.c"
 //#include "arm/blink.c"
-//#include "qbeta_image.c"
+#include "qbeta_image.c"
+//#include "ArmLed_bc.c"
 
 extern void start1();
 extern void Bfork(void * interpreter, void * B, int coreNo);
@@ -12,7 +13,7 @@ extern void init_mmu_s();
 extern int __bss_start;
 extern int __data_start;
 extern int ttb0_base;
-extern unsigned char BC[];
+//extern unsigned char BC[];
 
 void hello(char *S)
 { putstr("Here we are!\n");

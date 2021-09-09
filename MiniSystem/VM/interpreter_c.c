@@ -105,9 +105,9 @@ void RTE2(char *msg, int errNo){
 }  
 
 #ifdef withGC
-#define heapMax 50000
+#define heapMax 500000
 #else
-#define heapMax 2000000 //30000000
+#define heapMax 30000000
 #endif
 
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
@@ -975,6 +975,9 @@ void doGCcheckHeap(Btemplate *root){
 }
 void doBGC(Block *ctx,Btemplate *root){
   //fprintf(ctx->trace,"doBGC\n");
+#ifdef __arm__
+  putstr("**** doBGC:\n");
+#endif
   noOfFreeBlocks = 0;
   noOfUsedBlocks = 1; // First block in heap is in use
   lastFreeStart = NULL;
@@ -1262,6 +1265,14 @@ void dumpStackX(Btemplate *obj);
 
 void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
 #ifdef __arm__
+  putstr("\n\n*** Run-time error: ");
+  putstr(msg);
+  putstr(" obj: ");
+  putstr(nameOf(thisObj));
+  putint(descNo(thisObj->desc));
+  putch(',');
+  putint(glsc);
+  putstr("\n");
 #else
   printf("\n\n*** Run-time error: %s\n\nObject: %s(%i) at: %i\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
 #endif
@@ -1273,6 +1284,10 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
 void dumpVstack(FILE *trace,Btemplate *stack){
   int i;
 #ifdef __arm__
+  putstr("[");
+  for (i = 0; i < stack->vtop; i++)
+    putint(stack->vstack[i + 1]);
+  putstr("]\n");
 #else
   //fprintf(trace,"%s:vStack\[",nameOf(stack));
   fprintf(trace,"[");
@@ -1315,12 +1330,15 @@ void vPush(Btemplate *thisStack,int V){
   int i;
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) {
 #ifdef __arm__
+    putstr("vPush: ");
+    putstr(nameOf(thisStack));
+    dumpVstack(NULL,thisStack);
 #else
     printf("\n\nvstack %s [",nameOf(thisStack)); // <<<<<<< OBS FIX
     for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
     printf("]\n");
 #endif 
-    runTimeErrorX("vstack overflow",thisStack,-1);
+    runTimeErrorX("vstack overflow(vPush)",thisStack,-1);
   }
   thisStack->vstack[thisStack->vtop] = V;
 }
@@ -1588,8 +1606,12 @@ void run_interpreter(bool isXB){
   int mainDescNo;
   FILE *trace = trace_t;;
   Block *thisBlock;
+#ifdef __arm__
+  putstr("run_interpreter\n");
+#else
   //printf("in run interpreter\n");
-
+#endif
+  
 #ifdef __XTENSA__
 mutex1 = xSemaphoreCreateBinary();
  if (mutex1 == NULL) { printf("Error in allocating semaphore\n");}
@@ -1600,6 +1622,8 @@ mutex1 = xSemaphoreCreateBinary();
 #endif
 
   isXbeta = isXB;
+  newAlloc = true;
+  if (newAlloc) newAllocOff = 1;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)malloc(sizeof(Block));
@@ -1652,6 +1676,7 @@ mutex1 = xSemaphoreCreateBinary();
   eventProcessed = CreateSemaphore(NULL,0,1,NULL);
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 #elif defined __arm__
+  putstr("call interpreter\n");
   interpreter(thisBlock);
 #else
   printf("Calling interpreter\n");
@@ -1790,6 +1815,15 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 
   ctx->callee = allocTemplate(ctx,newId(ctx),descNo,false,vInxSize,rInxSize);
 
+#ifdef __arm__
+#ifdef armtrace
+	putstr("invoke: ");
+	putstr(nameOf(ctx->callee));
+	putstr(" from: ");
+	putstr(nameOf(ctx->thisObj));
+	putstr("\n");
+#endif
+#endif
 #ifdef TRACE
   fprintf(ctx->trace,"callee: %s %i\n",nameOf(ctx->callee),(int)ctx->callee);
 #endif
@@ -1804,6 +1838,7 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->thisObj = ctx->callee;
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
+
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
@@ -2238,7 +2273,8 @@ void  *interpreter(void *B){
   DWORD WINAPI interpreter(LPVOID B){;
 
 #elif defined __arm__
-  void  *interpreter(void *B){;
+void  *interpreter(void *B){;
+    putstr("interpreter:start\n");
 #else
     void  *interpreter(void *B){; // musy be fixed for ESF32
       //printf("In interpreter\n");
@@ -2374,9 +2410,15 @@ bool traceThreads = true;
       /*if (gcInProgress) {
 	printf("Interpreter:gcInProgress: threadNo: %i %s\n",threadId,nameOf(thisObj));
 	}*/
-      if (doTrace)
+      
 #ifdef __arm__
-#else	
+#ifdef armtrace
+      putstr("op: ");
+      putint(opCode);
+      putstr("\n");
+#endif
+#else
+      if (doTrace)
 	printf("*** %i %s: Op: %i, glsc: %i\n",threadId,nameOf(thisObj),opCode,glsc);
 #endif
       if (cnt == 0) {
@@ -2389,6 +2431,13 @@ bool traceThreads = true;
       case pushthis:
 #ifdef TRACE
 	fprintf(trace,"pushthis\n");
+#endif
+#ifdef __arm__
+#ifdef armtrace	
+	putstr("pushthis: ");
+	puthex((int)thisObj);
+	putch((int)10);
+#endif
 #endif
 	checkInHeap(thisObj);
 	rPush(thisStack,thisObj);
@@ -2488,6 +2537,13 @@ bool traceThreads = true;
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
 	Y = getR(X,arg1);
+#ifdef __arm__
+#ifdef armtrace
+	putstr("rpushg: ");
+	puthex((int)Y);
+	putch((char)10);
+#endif
+#endif
 	rPush(thisStack,Y);
 #ifdef TRACE
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
@@ -2566,7 +2622,24 @@ bool traceThreads = true;
 	fprintf(trace,"rstore %i ",arg1);
 #endif
 	X = rPop(thisStack);
+#ifdef __arm__
+#ifdef armtrace	
+	putstr("rstore: ");
+	puthex((int)X);
+	putstr(" at:thisObj: ");
+	puthex((int)thisObj);
+	putch('[');
+	putint(arg1);
+	putstr("]\n");
+#endif	
+#endif
 	putR(thisObj,arg1,X);
+#ifdef __arm__
+#ifdef armtrace
+	puthex((int)getR(thisObj,arg1));
+	putstr("\n");
+	#endif
+#endif
 #ifdef TRACE
 	fprintf(trace,"thisObj:%s[%i] = X:%s\n",nameOf(thisObj),arg1,nameOf(X));
 #endif
@@ -2855,6 +2928,9 @@ bool traceThreads = true;
 #ifdef TRACE
 	fprintf(trace,"invoke %i %i %i thisObj: %s",arg1,arg2,arg3,nameOf(thisObj));
 #endif
+#ifdef __arm__
+	//dumpVstack(trace,thisStack);
+#endif
 	saveContext();
         invokeObj(thisBlock,arg1,arg2,0,0);
 	restoreContext();
@@ -2928,9 +3004,15 @@ bool traceThreads = true;
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
+	  putstr("digitalWrite: ");
+	  puthex(arg2);
+	  putstr(",");
+	  puthex(arg3);
+	  putstr("\n");
+	  //dumpVstack(trace,thisStack);
 	  //arg3 = set_led();
 	  arg3 = digitalWrite(arg2,arg3);
-	  rPush(thisStack,Y); // just a dummy
+	  //rPush(thisStack,Y); // just a dummy - so why did we do it? 2021-09-09
 #endif
 #ifdef __ARDIUNO__
 	  if (arg3 == 0) 
@@ -2941,7 +3023,7 @@ bool traceThreads = true;
 	  gpio_set_level(BLINK_GPIO, arg3);
 #elif defined  __CYGWIN__
 	  printf("digitalWrite(%i,%i) not implemented for this platform\n",arg2,arg3);
-	  rPush(thisStack,Y); // just a dummy
+	  //rPush(thisStack,Y); // just a dummy
 #endif
 	    break;        
 	case 3:
@@ -3234,6 +3316,10 @@ bool traceThreads = true;
 #ifdef TRACE
 	    fprintf(trace,"fork ");
 #endif
+#ifdef __arm__
+	    putstr("forkA\n");
+#endif
+	    
 	    //Y = rPop(thisStack); dont pop to Y if GC
 	    Y = Y;
 	    
@@ -3491,6 +3577,9 @@ bool traceThreads = true;
 	arg2 = vPop(thisStack);
 #ifdef TRACE
 	fprintf(trace,"jmpFalse %i %i \n",arg1, arg2);
+#endif
+#ifdef __arm__
+	//dumpVstack(trace,thisStack);
 #endif
 	if (arg2 == 0) glsc = arg1 - 1;
 	break;
@@ -4235,6 +4324,13 @@ bool traceThreads = true;
 	fprintf(trace,"Op: %i ",bc[glsc]);
 #endif
 #ifdef __arm__
+#ifdef armtrace	
+	putstr("**** Illegal byte code: lsc: ");
+	puthex(glsc);
+	putstr(" op: ");
+	puthex(bc[glsc - 1]);
+	putstr("\n");
+#endif
 #else
 	printf("\n\n***Illegal byte code: glsc: %i, op: %i\n",glsc,bc[glsc - 1]);
 	printf("thisObj: %x %s \n",(int)thisObj,nameOf(thisObj));

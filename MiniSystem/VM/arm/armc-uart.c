@@ -63,6 +63,19 @@ void puthex(int V)
     }
   for (i = 0; i < 8; i++) {putch(d[i]);}
 }
+void putint(int V)
+{ int X;
+  char d[8];
+  int i; 
+  for (i = 0; i < 8; i++) d[i] = '0';
+  //putch('0');
+  //putch('x');
+  for (i = 0; i < 8; i++) {
+    d[7 - i] = '0' + V % 10;
+    V = V / 10;
+  }
+  for (i = 0; i < 8; i++) {putch(d[i]);}
+}
 #include <string.h>
 #include <stdlib.h>
 
