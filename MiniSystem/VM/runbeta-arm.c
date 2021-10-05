@@ -1,8 +1,8 @@
-// Interpreter main program for ARm on RaspberryPi
+// Interpreter main program for ARM on RaspberryPi
 //#include <stdbool.h>
 #include "interpreter_c.c"
 //#include "arm/blink.c"
-#include "qbeta_image.c"
+//#include "qbeta_image.c"
 //#include "ArmLed_bc.c"
 
 extern void start1();
@@ -10,10 +10,15 @@ extern void Bfork(void * interpreter, void * B, int coreNo);
 extern int cmpAndSwap(int adr, int old, int new); 
 extern void init_mmu();
 extern void init_mmu_s();
+extern int _start;
+extern int _end;
 extern int __bss_start;
 extern int __data_start;
+extern int _edata;
+extern int __bss_end__;
 extern int ttb0_base;
-//extern unsigned char BC[];
+extern int ttb0_base_x;
+extern unsigned char BC[];
 
 void hello(char *S)
 { putstr("Here we are!\n");
@@ -31,7 +36,7 @@ void bingo(char *S)
 void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
 { int loop,cnt;
   unsigned int* counters;
-//blink();
+  //blink();
   /*pinMode(4,1);
   while(1){
     counters = malloc( 1024 * sizeof( unsigned int ) );
@@ -60,6 +65,10 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   //puthex(Q);
   putstr("\nTTL: \nttb0_base: ");
   puthex((int)&ttb0_base);
+  putstr(" length: ");
+  putint(4096);
+  putstr(" ttb0_base_x: ");
+  puthex((int)&ttb0_base_x);
   putch('\n');
   A = (unsigned int*) &ttb0_base;
   for (i = 0; i < 4096; i++) {
@@ -72,39 +81,45 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
     if (i == 4) putstr("...\n");
   }
   putstr("qbeta is here\n");
-  putstr("__bss_start: ");
-  puthex((int)&__bss_start); 
-  putch('\n');
-  putstr("__data_start: ");
+  putstr("\n_start      : ");
+  puthex((int)&_start);
+  
+  putstr("\n__data_start: ");
   puthex((int)&__data_start);
+
+  putstr("\n_edata      : ");  
+  puthex((int)&_edata);
+  
+  putstr("\n__bss_start : ");
+  puthex((int)&__bss_start);
+
+  putstr("\n__bss_end__ : ");
+  puthex((int)&__bss_end__);
+  
+  putstr("\n_end        : ");
+  puthex((int)&_end);
+ 
   putch('\n');
-  /*
-  P = (unsigned int*)0x10200000;
-  puthex((int)&P[0]);
-  puthex(P[0]);
-  P = (unsigned int*)0x102000fc;
-  puthex((int)&P[0]);
-  puthex(P[0]);
-  P = (unsigned int*)0x10200408; //0x40201008;
-  puthex((int)&P[0]);
-  puthex(P[0]);
-  */
+  
   X = 0x1234;
-  putstr("&X,X, X[0]: ");
+  putstr("&X,X, X[0]  :");
   puthex((int)&X);
   putch(',');
   puthex(X);
   putch(',');
-   puthex((&X)[0]);
+  puthex((&X)[0]);
   putch('\n');
-  /*
+  
   //V = __ldrex(&X);  // generates LDREX
+
+  /* V =__sync_val_compare_and_swap(&X,0,1);
+  if (V) {putstr("OBS! Got lock 1st!\n");}
+  else
+    {putstr("OBS! Did not get lock 1st!\n");}
+  */
+  
   putstr("Try cmpAndSwap\n");
   X = 0;
-  //V =__sync_val_compare_and_swap(&X,0,1);
-  
-  if (V) {putstr("OBS! Got lock 1st!\n");} else {putstr("OBS! Did not get lock 1st!\n");}
-
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 1st!\n");} else {putstr("Did not get lock 1st!\n");}
   V = cmpAndSwap((int)&X,0,1);
@@ -113,7 +128,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
   putstr("Hmm!?\n");
-  */
+  
   //beta_fork(l);
   //start1();
   /*

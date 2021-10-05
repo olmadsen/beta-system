@@ -55,6 +55,11 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
     init_uart();
     init_mmu();
 
+    putstr("\n_cstartUp:bss    : ");
+    puthex((int)bss);
+    putstr("\n_cstartUp:bss_end: ");
+    puthex((int)bss_end);
+    putstr("\n");
     /* We should never return from main ... */
     kernel_main( r0, r1, r2 );
 

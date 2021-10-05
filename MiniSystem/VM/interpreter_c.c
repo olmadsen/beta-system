@@ -13,9 +13,9 @@
 
 #elif defined __arm__
 //#warning "__arm__ is defined!"
-   #include "arm/rpi-gpio.h"   
-   #include "arm/armc-uart.c"
-   #include "arm/led.c"
+   #include "qb-arm/rpi-gpio.h"   
+   #include "qb-arm/armc-uart.c"
+   #include "qb-arm/led.c"
 #endif
 
 #ifdef __arm__
