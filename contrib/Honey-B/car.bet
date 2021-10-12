@@ -1,0 +1,216 @@
+(************************************************************)
+(** Car-patternet indeholder informationer om aktuelle bil **)
+(** eller spiller. Kaldes fra control.                     **)
+(************************************************************)
+
+ORIGIN '~beta/guienv/guienv';
+
+INCLUDE '~beta/guienv/graphics';
+INCLUDE '~beta/basiclib/math';
+INCLUDE 'util';
+INCLUDE 'viewport';
+INCLUDE 'collision';
+
+--- guienvLib: attributes ---
+
+Car:
+(#
+	checkpoint:@boolean; (* Har bilen været gennem checkpointet *)
+	updateText:@boolean; (* Er der behov for at updatere teksten *)
+	inGoal:@boolean; (* Er bilen i mål *)
+	theViewport:^Viewport; (* En reference til bilens viewport *)
+	theCollision:^Collision; (* En reference til collision-mappen *)
+	totalPosition:@integer; (* Hvilken person er bilen endt på *)
+	angle:@real; (* Hvilken vinkel har bilen *)
+	speed:@real; (* Hvilken hastighed har bilen *)
+	terrain:@color; (* Hvilket terrain er bilen på i øjeblikket *)
+	laps:@integer; (* Hvilken omgang er bilen på*)
+	tick:@integer; (* Når bilen kører langsomt ignoreres et par af tickene *)
+	carNr:@integer; (* Hvilken spillernummer er dette carobjekt *)
+	carType:@integer; (* Hvilken type er bilen *)
+	time:@integer; (* Hvor mange tik har bilen brugt på at komme rundt *)							
+	carPos,oldCarPos:@newPosition; (* Hvad er bilens nuværende og tidligere position *)
+	
+	(* Maxspeed udregnes udfra biltypen *)
+	maxSpeed:@
+	(#
+		speed:@integer;
+	do
+		(if carType=0 then 20->speed; if);
+		(if carType=1 then 18->speed; if);
+		(if carType=2 then 19->speed; if);
+		exit speed
+	#);
+	
+	(* Hastigheden i sand udregnes udfra biltypen *)	
+	sandSpeed:@
+	(#
+		speed:@integer;
+	do
+		(if carType=0 then 10->speed; if);
+		(if carType=1 then 15->speed; if);
+		(if carType=2 then 12->speed; if);
+		exit speed
+	#);
+	
+	(* Drejningsvinklen udregnes udfra biltypen *)	
+	relAngle:@
+	(#
+		ang:@real;
+	do
+		(if carType=0 then 9->ang; if);		
+		(if carType=1 then 11.25->ang; if);
+		(if carType=2 then 10->ang; if);
+		exit ang
+	#);
+	
+	(* Bilens acceleration udregnes udfra biltypen *)
+	acceleration:@
+	(#
+		acc:@real;
+	do
+		(if carType=0 then 0.6->acc; if);		
+		(if carType=1 then 1.1->acc; if);		
+		(if carType=2 then 0.8->acc; if);
+		exit acc
+	#);
+
+	(* Bilens retning *)
+	carDir:@
+	(#
+		x, y :@real
+		enter (x,y)
+	do
+		exit (x,y)
+	#);
+	
+	(* Initialisere bilen *)	
+	init:
+	(#
+		viewRect:@newRect;
+		width, height:@integer;
+		enter (carNr,carType,carPos,theCollision[],viewRect,width,height)
+	do
+		true -> checkpoint;
+		0 -> laps;
+		&Viewport[] -> theViewport[];
+		(viewRect, (width,height)) -> theViewport.init;
+		carPos->oldCarPos;
+		(0,1)->carDir;
+		90->angle;
+		true->updateText;		
+	#);
+		
+	(* Flytter bilen i den aktuelle retning så længe der ikke er kollision *)
+	moveCar:
+	(#
+		tempPos,calcPos:@newPosition;
+	do
+			
+		time+1->time;
+		(if ((maxspeed)-speed>=tick) then
+			carPos->oldCarPos;
+			(carPos.x+(carDir.x*speed),carPos.y+carDir.y*speed)->tempPos;
+			(carPos.x+carDir.x*(CAR_SIZE_WIDTH/2)+(CAR_SIZE_WIDTH/2),carPos.y+carDir.y*(CAR_SIZE_HEIGHT/2)+(CAR_SIZE_HEIGHT/2))->calcPos;					
+			(carNr,calcPos)->theCollision.isCollision->terrain;
+			(if ((terrain,OBSTACLE)->checkColor) then 
+				2->speed; 
+			else
+				tempPos->carPos;
+			if);
+			(if ((terrain,SAND)->checkColor) and (speed > sandSpeed) then
+				sandSpeed-> speed;
+			if);
+			 (if ((terrain,CHECKPOINT1)->checkColor) and (checkpoint) then
+				laps +1 -> laps;
+				false -> checkpoint;
+				true -> updateText;
+			if);
+			(if ((terrain,CHECKPOINT2)->checkColor) then
+				true -> checkpoint;
+				true -> updateText;
+			if);
+			(carPos.x+20,carPos.y+20) -> theViewport.checkIfUpdate;
+
+			0->tick;
+		else
+			tick+1->tick;
+		if);	
+	#);
+
+	(* Udregner hvilkt billede af bilen som vises. Kaldes fra DrawControl *)
+	getPixInt:
+	(#
+		frameInt,temp:@integer;
+		ang:@real;
+	do
+		(angle +90+11.25) ->ang;
+		(if ang>= 360 then 
+			ang - 360 -> ang;
+		if);		
+		ang div 22.5 -> temp; 
+		temp+1 ->frameInt;
+		exit frameInt	
+	#);
+
+	(* Kaldes fra Control og ændre bilens retning enten med eller mod uret *)
+	changeDirection:
+	(#
+		ang:@real;
+		right:@boolean;
+		enter right			
+	do
+		(if ((terrain,OIL)->checkColor) then
+			(if right
+			// true then false -> right;
+			// false then true -> right;
+			if);
+		if);
+		(if not ((terrain,WATER) ->checkColor) then
+			(if right 
+			// true then angle+relAngle -> angle;
+			// false then angle-relAngle -> angle;
+			if);
+			(if angle>360 then angle-360->angle if); 
+			(if angle<0 then angle+360->angle if);
+	
+			angle/180*pi->ang;
+				
+			((ang->cos),(ang->sin))->carDir;
+		if);	
+	#);
+
+	(* Kaldes fra Control og ændre bilens hastighed *)
+	changeSpeed:
+	(#
+
+		up:@boolean;
+		enter up
+	do
+
+		(if up 
+			// true then 
+				(if ((terrain,SAND)->checkColor) then 
+					(if (speed+acceleration)<=sandSpeed then (speed + acceleration) -> speed; if);
+				else
+					(if (speed+acceleration)<=maxSpeed then (speed + acceleration) -> speed; if);
+				if);
+				
+			// false then
+				(if ((terrain,OIL)->checkColor) then
+						(for i:5 repeat
+							true->changeDirection;						
+						for);		
+				else	
+					(if ((terrain,WATER)->checkColor) then
+							true->changeDirection;
+					else
+						(if (speed-acceleration)>=0 then (speed - acceleration) -> speed; 
+						if);
+					if);
+				if);
+		if);
+	#);
+#);
+
+

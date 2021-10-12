@@ -1,0 +1,579 @@
+(*************************************************************)
+(** Control er hoved-patternet i dette program og står for  **)
+(** brugerens interaktion med programmet. Brugerens         **)
+(** sendes af control-delen videre ud i resten af programmet**)
+(** Programmet viser så et skærmbillede gennem de to under- **)
+(** pattern draw og display. Draw viser et billede af kortet**)
+(** og display viser status i toppen af skærmen. For at     **)
+(** håntere de op til fire forskellige views der kan være   **)
+(** ligger der et mellemligende lag mellem control-delen og **)
+(** draw kaldet drawController, som sørger for at alle views**)
+(** bilver rigtig opdateret. Control er også exe-filen og   **)
+(** startes af brugeren.                                    **)
+(*************************************************************)
+
+ORIGIN '~beta/guienv/guienv';
+
+INCLUDE 'dsound';
+INCLUDE 'start';
+
+INCLUDE '~beta/guienv/graphics';
+INCLUDE '~beta/basiclib/math';
+INCLUDE 'util';
+INCLUDE 'map';
+INCLUDE 'finish';
+INCLUDE 'car';
+INCLUDE 'viewport';
+INCLUDE 'collision';
+INCLUDE 'intro';
+INCLUDE '~beta/win32lib/winuserconsts';
+INCLUDE '~beta/guienv/private/winnt/guienv_ntiprivate';
+INCLUDE '~beta/win32lib/windowmanagement';
+INCLUDE '~beta/win32lib/bitmapsupport.bet';
+INCLUDE 'drawMap';
+
+--- program: descriptor ---
+guienv
+(# 
+	theStartWindow:^StartWindow;	
+	theIntroWindow:^IntroWindow;
+	theWindow: @window
+    (# 
+		(************************ DISPLAY ****************************)
+		(*************************************************************)
+		(** Display udskriver spillernes navne og igangværende laps **)
+		(** i en canvas øverst på skærmen. Kaldes fra DrawController**)    	
+		(*************************************************************)
+		Display:Canvas
+		(#
+			nrPlayers:@integer;
+			ts:@textstyle;
+			init:
+			(#
+				enter nrPlayers
+			do
+				12->ts.size;
+				'times'->ts.name;
+			#);
+			open::
+			(#
+			do
+				(0,0)->position;
+				(WINDOW_WIDTH,DISPLAY_SIZE)->size;				
+			#);
+			
+			displayText:
+			(#
+				nr,laps,startPos:@integer;
+				writeText:@text;
+				checkPoint:@boolean;
+				enter (nr,laps,checkPoint)
+			do
+				Graphics
+				(#
+				do
+					ts[]->style;
+					(WINDOW_WIDTH div nrPlayers) * (nrPlayers-nr) -> startPos;
+					writeText.reset;					 
+					theStartWindow.information.playerName[nr][]-> writeText.putText;
+					' er på : ' -> writeText.puttext;
+					laps -> writeText.putint;
+					'. ' -> writeText.puttext;
+					(if checkPoint then ' C'->writeText.putText; if);
+					(startPos, 20) -> moveTo;
+					writeText[] -> DrawText;
+				#);
+			#);			
+		#);
+
+
+
+		(************************ DRAW *******************************)
+		(*************************************************************)
+		(** Draw er et andet vigtigt pattern i programmet og styrer **)
+		(** grafikrutinerne som opdaterer de forskellige spillers   **)
+		(** view. Kaldes af drawController                          **)    	
+		(*************************************************************)
+    	
+		Draw:Canvas
+		(#
+			theMap :@ DrawMap; (* En reference til drawMap*)			
+			buffer :@pixmap; (* Bufferen hvor alt tegnes før det kommer på skærmen *)
+			pixcar:^pixmap; (* En reference til det billede af den bil som tegnes i øjeblikket *)
+			canvasRect:@newRect; (* Dimensionerne på canvas'en *)
+			
+			(* Initialisere drawMap og opretter bufferen. *)
+			init:
+			(#
+				pMap:^Map;				
+				enter (canvasRect,pMap[])
+			do		
+				(canvasRect.w,canvasRect.h)->buffer.init;	
+				pMap[]->theMap.setMap;
+			#);
+			
+			(* Åbner den aktuelle canvas *)
+			open::
+			(# 
+			do
+				(canvasRect.x,canvasRect.y)->position;
+				(canvasRect.w,canvasRect.h)->size;	
+				(buffer[],(0,0,canvasRect.w,canvasRect.h),(0,0))->theMap.getPart;		
+			#); 
+			
+			(* Kommer der en onRefresh tegnes kortet udfra bufferen *)
+			eventhandler::
+			(#
+				onRefresh::
+				(#
+				do
+					Graphics
+					(#
+					do
+						(buffer[],(0,0),(0,0),canvasRect.w,canvasRect.h)->drawRaster;		
+					#);
+
+				#);
+			#);
+			
+			(* Tegner hele bufferen hvis kortet skal opdateres - forhindre flakken *)
+			(* ved flere en en player *)
+			drawBuffer:
+			(#
+				theViewport:^Viewport;
+				enter theViewport[]
+			do
+				Graphics
+				(#
+				do
+					(if theViewport.update then 
+						(buffer[],(0,0),(0,0),theViewport.viewRect.w ,theViewport.viewRect.h)->drawRaster;
+					if);
+				#);
+				
+			#);
+			
+			(* Tegner teksten goal, når spilleren er kommet i mål *)
+			drawGoal:
+			(#
+				ts:@textStyle;
+			do
+				Graphics
+				(#
+				do
+					24->ts.size;
+					'times'->ts.name;
+					(256*256,0,0)->pen.foreGroundColor;
+					(256*256,0,0)->pen.backGroundColor;					
+					ts[]->style;					
+					(100,100)->moveTo;
+					'GOAL'->drawText;
+				#);
+			#);
+			
+			(* Tegner de forskellige biler i canvasen samt deres baggrunde *)
+			(* Forskellige tiltag er blevet lavet for at forhindre flakken *)
+			(* bl.a. dobbelt buffering og udregning af den mindste firkant *)
+			(* som har behov for opdatering. Algoritmerne er forholdsvis   *)
+			(* komplicerede. Er mainCar true er bilen som tegnes hovedbilen*)
+			(* er den false drejer det sig om en af de andre spillers biler*)
+			(* som er kommet ind i viewporten. *)
+			drawCar:
+			(#				
+				(* Hjælpepattern - udregner den mindste af de to værdier og *)
+				(* deres nummeriske forskel *)
+				minAndDiff: 
+				(#
+					x,y,min,diff:@integer;
+					enter (x,y)
+				do
+					(if (x<y) then 
+						x->min; y-x->diff;
+					else
+						y->min; x-y->diff;
+					if);
+					exit (min,diff)
+				#);		
+								
+				minRect:@newRect; (* Det mindste rektangel som skal updateres *)
+				theViewport:^Viewport; (* Viewporten som indeholder informationer om området der skal tegnes *)
+				carPos,oldCarPos:@newPosition;  (* Bilens nuværende og gamle position *)
+				mainCar:@boolean; (* Er bilen hovedbil *)				
+				relPos, relOldPos:@newPosition; (* Den relative position indenfor viewporten*)
+				enter (pixcar[],carPos,oldCarPos,theViewport[],mainCar)
+			do
+				(carPos.x-theViewport.viewRect.x, carPos.y-theViewport.viewRect.y)->relPos;
+				(* Er bilen ikke hovedbil og udenfor viewporten skal den ikke tegnes *)
+				(if (not(mainCar) and ((relPos.x<0-CAR_SIZE_WIDTH-20) or (relPos.y<0-CAR_SIZE_HEIGHT-20) or (relPos.x>theViewport.viewRect.w+20) or
+						(relPos.y>theViewport.viewRect.h+20) ) ) then ;
+				else	
+					Graphics
+					(#
+					do
+						(* Skal baggrundskortet scrolles og hele viewporten gentegnes *)
+						(if ((theViewport.update) and (mainCar))then 
+							(buffer[],theViewport.viewRect,(0,0))->theMap.getPart;
+							(pixcar[],(0,0),relPos,CAR_SIZE_WIDTH ,CAR_SIZE_HEIGHT)->buffer.drawPixmap;
+						else
+						(* Gentegner kun den del af viewporten som er nødvendigt *)
+							(oldCarPos.x-theViewport.viewRect.x, oldCarPos.y-theViewport.viewRect.y)->relOldPos;
+							(relPos.x, relOldPos.x) -> minAndDiff -> (minRect.x,minRect.w);
+							(relPos.y, relOldPos.y) -> minAndDiff -> (minRect.y,minRect.h);							
+							(buffer[],(oldCarPos.x,oldCarPos.y,CAR_SIZE_WIDTH,CAR_SIZE_HEIGHT),relOldPos)->theMap.getPart;
+							(pixcar[],(0,0),relPos,CAR_SIZE_WIDTH ,CAR_SIZE_HEIGHT)->buffer.drawPixmap;							
+							(buffer[],(minRect.x,minRect.y),(minRect.x,minRect.y),CAR_SIZE_WIDTH+minRect.w ,CAR_SIZE_HEIGHT+minRect.h)->drawRaster;
+						if);		
+					#);
+				if);
+			#);	
+		#);    	
+
+		(************************ DRAWCONTROLLER *********************)
+		(** Er ansvarlig for at tegne de forskellige draw-canvas'er **)
+		(** Anvendes direkte fra control.                           **)
+		(*************************************************************)
+		DrawController:@
+		(#
+			nrPlayers:@integer; (* Antallet af spillere *)
+			theDisplay:^Display; (* En reference til display-objekt *)
+			theDraw:[MAX_NR_PLAYERS]^Draw; (* En repetion af referencer til draw-objekter*)
+			carPixRep:[CAR_FRAMES*3]@pixmap; (* En repetion af billeder af de 3 biler *)
+			theMap:^Map; (* En reference til det aktuelle kort *)
+			
+			(* Initialisere en ny spiller med aktuelle parametere *)
+			init_player:
+			(#		
+				nr:@integer;
+				theRect:@newRect;
+				startPos:@newPosition;
+				enter (nr,theRect)
+			do
+				theMap.startPos->startPos;
+				(if (nr mod 2)=1 then
+					theMap.startPos.x+CAR_SIZE_WIDTH+10->startPos.x;
+				if);
+				(if (nr >2) then
+					theMap.startPos.y-CAR_SIZE_HEIGHT-10->startPos.y;
+				if);			
+				((theRect.x,theRect.y,theRect.w,theRect.h),theMap[])->theDraw[nr].init;	
+				(nr,theStartWindow.information.carType[nr],startPos,theCollision[],(0,0,theRect.w,theRect.h), theMap.tilesWidth*TILE_WIDTH,theMap.tilesHeight*TILE_HEIGHT) -> theCar[nr].init;						
+			#);
+			
+			(* Initialisere et nyt drawObjekt*)
+			init:
+			(#
+				pWidth,pHeight:@integer;
+				filename:^text;
+				enter (theMap[],nrPlayers)
+			do
+				&display[] ->theDisplay[];
+				nrPlayers->theDisplay.init;
+				(* Initialisere draw-canvas'erne*)
+				(for i:nrPlayers repeat
+					&Draw[] -> theDraw[i][];
+				for);
+				(* Initialisere 1. bil*)
+				(for i:CAR_FRAMES repeat
+					'carsp' -> fileName[];
+					i -> fileName.putint;
+					fileName[] -> carPixRep[i].Read;
+					(0,0,0)->carPixRep[i].transparentColor;			
+				for);
+				(* Initialisere 2. bil*)			
+				(for i:CAR_FRAMES repeat
+					'carcv' -> fileName[];
+					i -> fileName.putint;
+					fileName[] -> carPixRep[i +CAR_FRAMES].Read;
+					(0,0,0)->carPixRep[i+CAR_FRAMES].transparentColor;			
+				for);
+				(* Initialisere 3. bil*)	
+				(for i:CAR_FRAMES repeat
+					'car' -> fileName[];
+					i -> fileName.putint;
+					fileName[] -> carPixRep[i +2*CAR_FRAMES].Read;
+					(0,0,0)->carPixRep[i+2*CAR_FRAMES].transparentColor;			
+				for);
+				(* Deler skærmen ved 1 spiller *)
+				(if nrPlayers=1 then
+					WINDOW_WIDTH->pWidth;
+					WINDOW_HEIGHT-DISPLAY_SIZE->pHeight;
+					(1,(0,DISPLAY_SIZE,pWidth,pHeight))->init_player;
+				if);
+				(* Deler skærmen ved 2 spillere *)
+				(if nrPlayers=2 then
+					(WINDOW_WIDTH-10)/2->pWidth;
+					WINDOW_HEIGHT-DISPLAY_SIZE->pHeight;
+					(1,(WINDOW_WIDTH/2,DISPLAY_SIZE,pWidth,pHeight))->init_player;			
+					(2,(0,DISPLAY_SIZE,pWidth,pHeight))->init_player;				
+				if);
+				(* Deler skærmen ved 3 spillere *)
+				(if nrPlayers=3 then
+					(WINDOW_WIDTH-10)/2->pWidth;
+					(WINDOW_HEIGHT-10)/2-DISPLAY_SIZE->pHeight;				
+					(1,(WINDOW_WIDTH/2,DISPLAY_SIZE,pWidth,pHeight))->init_player;			
+					(2,(0,DISPLAY_SIZE,pWidth,pHeight))->init_player;							
+					WINDOW_WIDTH->pWidth;
+					(3,(0,pHeight+10+DISPLAY_SIZE,pWidth,pHeight))->init_player;				
+				if);
+				(* Deler skærmen ved 4 spiller *)				
+				(if nrPlayers=4 then
+					(WINDOW_WIDTH-10)/2->pWidth;
+					(WINDOW_HEIGHT-10)/2-DISPLAY_SIZE->pHeight;					
+					(1,(WINDOW_WIDTH/2,DISPLAY_SIZE,pWidth,pHeight))->init_player;			
+					(2,(0,DISPLAY_SIZE,pWidth,pHeight))->init_player;							
+					(3,(WINDOW_WIDTH/2,pHeight+DISPLAY_SIZE+10,pWidth,pHeight))->init_player;			
+					(4,(0,pHeight+DISPLAY_SIZE+10,pWidth,pHeight))->init_player;							
+											
+				if);					
+				(* Åbner display og de aktuelle draw-canvas'er*)									
+				theDisplay.open;
+				(for i:nrPlayers repeat
+					theDraw[i].open;	
+				for);				
+			#);
+		
+			(* Sletter og lukker de åbner canvas'er*)
+			clear:
+			(#
+			do
+				(for i:nrPlayers repeat
+					theDraw[i].close;
+				for);
+				theDisplay.close;				
+			#);
+			
+			(* Tegner bilerne i alle canvasser *)
+			drawAll:
+			(#
+			do
+				L:
+				(* Er der blevet kørt en omgang opdateres teksten i toppen *)
+				(for i:nrPlayers repeat
+					(if theCar[i].updateText then
+						true->theDisplay.update;
+						(for j:nrPlayers repeat		
+							(j,theCar[j].laps,theCar[j].checkPoint)->theDisplay.displayText;
+							false->theCar[j].updateText;
+						for);
+						leave L;
+					if);
+				for);
+				(* Tegner hovedbilen i sin respektive viewport *)
+				(for i:nrPlayers repeat
+					(carPixRep[theCar[i].carType*CAR_FRAMES+theCar[i].getPixInt][],theCar[i].carPos,theCar[i].oldCarPos,theCar[i].theViewport[],true)->theDraw[i].drawCar;			
+				for);
+				(* Tegner alle de andre biler i de forskellige viewports *)
+				(for i:nrPlayers repeat
+					(for j:nrPlayers repeat					
+						(if not(i=j) then
+							(carPixRep[theCar[i].carType*CAR_FRAMES+theCar[i].getPixInt][],theCar[i].carPos,theCar[i].oldCarPos,theCar[j].theViewport[],false)->theDraw[j].drawCar;		
+						if);
+					for);
+				for);
+				(* Tegner bufferen - sikre mod flakken *)
+				(for i:nrPlayers repeat
+						theCar[i].theViewport[]->theDraw[i].drawBuffer;		
+				for);
+			#);
+			
+			(* Tegner goal-teksten når en bil er kommet i mål *)
+			drawGoal:
+			(#
+				nr:@integer;
+				enter nr
+			do
+				theDraw[nr].drawGoal;
+			#);						
+		#);
+		
+    	
+
+    	
+(***************** CONTROL *******************)    	
+
+
+
+    	theCar:[MAX_NR_PLAYERS]^Car; (* En repetion som indeholder informationer om bilerne *)
+    	theMap:^Map; (* En reference til det aktuelle kort *)
+		theCollision:^Collision; (* En reference til kollision-mappen *)
+		nrPlayers:@integer; (* Antallet af spillere *)
+		totalPosition:@integer; (* Den placering som bliver givet til næste spiller i mål *)
+		ds:@directsound; (* Et direktsound-objekt*)
+        buf1:@ds.buffer; (* Baggrundsmusikbufferen *)
+        buf2:@ds.buffer; (* Bremselydsbufferen *)
+
+		type::windowTypes.palette;    			
+		
+		(* Åbner hovedvinduet første gang *)
+    	open::
+	  	(# 
+	  	do 
+	  		'Honey-B - loading...'->title;
+             newLine;
+			'Indlaeser baggrundsmusik - tager et oejeblik...'->putText;		  		
+             ds.init;             
+             'music.wav'->buf1.loadWavfile;
+             80->buf1.setVolume;
+             'brakes.wav'->buf2.loadWavfile;   		  		
+	  		(10,10)->position;
+	     	(WINDOW_WIDTH,WINDOW_HEIGHT)->size;
+	   	#);
+	
+		(* Starter et nyt spil *)
+		newGame:
+		(#
+		do
+
+			'Honey-B - loading...'->title;			
+            true->buf1.play;			
+			theStartWindow.information.nrPlayers -> nrPlayers; 
+			1->totalPosition;
+			&Map[] -> theMap[];
+			&Collision[] -> theCollision[];
+			(for i:nrPlayers repeat			
+				&Car[] -> theCar[i][];
+			for);		
+			theStartWindow.information.mapFileName[] -> theMap.init;
+			(theMap[],nrPlayers) -> theCollision.init;
+			(theMap[],nrPlayers) ->DrawController.init;
+			theStartWindow.information.speed->aTimer.start;
+			'Honey-B'->title;
+		#);
+		
+		(* Lukker programmet når der trykkes på krydset *)
+		eventHandler::
+         (# 
+         	onAboutToClose:: (# do terminate #);
+   		#); (* eventHandler *)
+   		
+   		(* Opdaterer de forskellige car-objekter når der kommer et timertik*)
+   		aTimer:@Timer
+   		(#
+   			action::
+   			(#
+   			do
+            	(for i:nrPlayers repeat
+            		(if not(theCar[i].inGoal) then
+   						(if theCar[i].laps=theStartWindow.information.laps+1 then
+	   						(i,theCar[i].carPos)->theCollision.setCarPos;   							
+   							true->theCar[i].inGoal;
+   							totalPosition->theCar[i].totalPosition;
+   							totalPosition+1->totalPosition;
+   						if);
+   						theCar[i].moveCar; 
+   						(i,theCar[i].carPos)->theCollision.setCarPos;
+   					else
+						i->drawController.drawGoal; 
+	   				if);
+   				for);
+   				   		
+   				buf2.stop;		 	
+				0->buf2.CurrentPosition;   							
+   				(if VK_LEFT->isVKeyDown then false -> theCar[1].changeDirection;  if);
+            	(if VK_RIGHT->isVKeyDown then true -> theCar[1].changeDirection; if);	
+   				(if VK_UP->isVKeyDown then true -> theCar[1].changeSpeed;  if);
+            	(if VK_DOWN->isVKeyDown then false -> theCar[1].changeSpeed; 						
+            			false->buf2.play;
+            	if);
+            	
+            	(if nrPlayers>=2 then
+	   				(if VK_A->isVKeyDown then false -> theCar[2].changeDirection;  if);
+	            	(if VK_D->isVKeyDown then true -> theCar[2].changeDirection; if);	
+	   				(if VK_W->isVKeyDown then true -> theCar[2].changeSpeed;  if);
+	            	(if VK_S->isVKeyDown then false -> theCar[2].changeSpeed; 
+	            	     false->buf2.play;
+	            	if);            	
+            	if);
+            	(if nrPlayers>=3 then
+	   				(if VK_NUMPAD4->isVKeyDown then false -> theCar[3].changeDirection;  if);
+	            	(if VK_NUMPAD6->isVKeyDown then true -> theCar[3].changeDirection; if);	
+	   				(if VK_NUMPAD8->isVKeyDown then true -> theCar[3].changeSpeed;  if);
+	            	(if VK_NUMPAD5->isVKeyDown then false -> theCar[3].changeSpeed; 
+	            		false->buf2.play;
+	            	if);                	
+          	
+            	if);           
+            	(if nrPlayers>=4 then
+	   				(if VK_J->isVKeyDown then false -> theCar[4].changeDirection;  if);
+	            	(if VK_L->isVKeyDown then true -> theCar[4].changeDirection; if);	
+	   				(if VK_I->isVKeyDown then true -> theCar[4].changeSpeed;  if);
+	            	(if VK_K->isVKeyDown then false -> theCar[4].changeSpeed; 
+	            		false->buf2.play;
+	            	if);          	
+            	if);            	 	
+				DrawController.drawAll;        		            	
+				(if totalPosition=nrPlayers+1 then
+					stop;			
+					buf1.stop;	
+					DrawController.clear;
+					endCurrentGame;
+				if);
+   			#);
+   		#);   		
+ 	#); (* theWindow *)
+ 	
+ 	(* Slutter aktuelle spillerunde og udskriver slutscoren *)
+ 	endCurrentGame:
+ 	(#
+ 		theFinishWindow:@Finish;
+ 		temp:^text;
+ 	do
+ 		theWindow.hide;
+ 		theFinishWindow.open;
+ 		(if theWindow.nrPlayers>=1 then
+ 			theStartWindow.information.playername[1][]->theFinishWindow.player1.label; 			
+ 			&Text[]->temp[];
+ 			theWindow.theCar[1].totalPosition->temp.putInt;
+ 			temp[]->theFinishWindow.position1.label;
+ 			&Text[]->temp[];
+ 			theWindow.theCar[1].time->temp.putInt;
+  			temp[]->theFinishWindow.time1.label;			
+ 		if);
+ 		(if theWindow.nrPlayers>=2 then
+ 			theStartWindow.information.playername[2][]->theFinishWindow.player2.label; 			
+ 			&Text[]->temp[];
+ 			theWindow.theCar[2].totalPosition->temp.putInt;
+ 			temp[]->theFinishWindow.position2.label;
+ 			&Text[]->temp[];
+  			theWindow.theCar[2].time->temp.putInt;
+  			temp[]->theFinishWindow.time2.label;			
+ 		if);
+ 		(if theWindow.nrPlayers>=3 then
+ 			theStartWindow.information.playername[3][]->theFinishWindow.player3.label; 			
+ 			&Text[]->temp[];
+ 			theWindow.theCar[3].totalPosition->temp.putInt;
+ 			temp[]->theFinishWindow.position3.label;
+ 			&Text[]->temp[];
+  			theWindow.theCar[3].time->temp.putInt;
+  			temp[]->theFinishWindow.time3.label;			
+ 		if);
+ 		(if theWindow.nrPlayers>=4 then
+ 			theStartWindow.information.playername[4][]->theFinishWindow.player4.label; 			
+ 			&Text[]->temp[];
+ 			theWindow.theCar[4].totalPosition->temp.putInt;
+ 			temp[]->theFinishWindow.position4.label;
+ 			&Text[]->temp[];
+  			theWindow.theCar[4].time->temp.putInt;
+  			temp[]->theFinishWindow.time4.label;			
+ 		if);
+		theFinishWindow.showModal;
+		theStartWindow.showModal;
+		'...'->putText;	
+		theWindow.show;
+		theWindow.newGame;		
+ 	#);
+ 	
+ 	
+do
+	(* Starter hele programmet *) 
+	&introWindow[]->theIntroWindow[];
+	theIntroWindow.open;
+	theIntroWindow.movieViewer.play;
+	theIntroWindow.showModal;
+     	
+	&StartWindow[]->theStartWindow[];
+	theStartWindow.open;
+	'...'->putText;	
+	theWindow.open;
+	theWindow.newGame;
+#)
