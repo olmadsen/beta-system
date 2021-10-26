@@ -11,7 +11,7 @@ extern void puthex(int V);
 extern void raw_putc(char c);
 extern void init_uart();
 extern void init_mmu();
-extern void init_mmu_x();
+//extern void init_mmu_x();
 extern void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags );
 
 
@@ -54,6 +54,7 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
         *bss++ = 0;
 
     init_uart();
+    putstr("After init_uart\n");
     init_mmu();
     putstr("\nAfter init_uart and init_mmu\n");    
     putstr("\n_cstartUp:bss    : ");
