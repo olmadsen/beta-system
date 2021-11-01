@@ -104,7 +104,14 @@ do (*aconst_null -> mstate.jcf.emit;*)
    mstate.bvm.com(#do 'loadNone'->TT #)
    
 ---byteCode_ldValImpl:doPart---
-do (if A.isOrigin then
+do 
+ mch.bvmCom(#do 'bytecode_ldValImpl: ' -> TT; A.fieldName[]->TT; 
+     ' on:'->TT; A.ONlevel -> II; #);
+   (if 'this' -> A.fieldName.equal then
+       mstate.bvm.pushThis
+   if);
+
+(if A.isOrigin then
        (# receiverType: ^text;
        do
           (* Regarding ONlevel, see regAdr_out
@@ -293,7 +300,9 @@ do (* (if isDouble then
 --bytecode_declareField:doPart---
    (* to replace emitCk  *)
 do (# F: ^text
-   do 'F' -> F[]; off -> F.putInt; (* is F used? *)
+   do mch.bvmCom(#do 'desclareField: ' -> TT; fieldName[] -> TT;
+          ' off: ' -> TT; off -> II #);
+      'F' -> F[]; off -> F.putInt; (* is F used? *)
       (F[],fieldName[],fieldSig[],fieldKind)
         -> mstate.fields.new;
    #)
@@ -403,12 +412,10 @@ do
       T[]->splitClassSignature->(n[], d[], s, m[]);
       mstate.bvm.com
       (# Sx: @text
-      do 'byteCode_gJsr:doPart:'-> TT; T[] -> TQ; 
-         ';name:'->TT; n[] -> TQ; ' NDX: ' -> TT; GorM -> Sx.put; Sx[]-> TT;
-         ',sig:' -> TT;
-         d[] -> TQ; ',isStatic:' -> TT;
-         s -> BB; ',method:' -> TT;
-         m[] -> TQ
+      do 'byteCode_gJsr:doBody:'-> TT; T[] -> TQ; 
+         'name:'->TT; n[] -> TQ; ' NDX:' -> TT; GorM -> Sx.put; Sx[]-> TT;
+         ',sig:' -> TT; d[] -> TQ; ',isStatic:' -> TT; s -> BB; 
+         'method:' -> TT; m[] -> TQ
       #);
       (* name,descNo,staticOff,isObj *)
       T.setPos;
@@ -538,11 +545,17 @@ do (if isGpart then
    if)
    
 ---byteCode_return:doPart---
-do mstate.bvm.pushThis; (* is this always correct?
-                         * Probably ciorrect for the main class
+do (if RToff
+    // 1 (* enter *) // 2 (* do *)then
+       mstate.bvm.pushThis;
+       ('origin',1) -> mstate.bvm.rpushg;
+    else
+        mstate.bvm.pushThis; (* is this always correct?
+                         * Probably correct for the main class
                          * But for constructor and NDX classes, 
                          * shall perhaps return the ref to the 'real' object
                          *)
+   if);
    'D' -> mstate.bvm.rtn
    (* (if RToff
     *     // 0 // 10 then 
@@ -564,7 +577,7 @@ do mstate.bvm.pushThis; (* is this always correct?
 
 ---bytecode_endMethod:doPart---
 do (*mstate.jcf.labs.check_all_relocated;*)
-   (1,false,1) -> mstate.bvm.endClass;
+   (100,false,1) -> mstate.bvm.endClass;
    
 ---byteCode_callPrim:doPart--
 do (T[],'Unknown') -> mstate.emitPrim
@@ -614,6 +627,13 @@ do (* when using package as in
       ' descNo: ' -> TT; descNo -> II #);
    descNo -> mch.dnMap.Cno -> descNo;
    (className[],descNo,false,1,1,0(*originDescNo*)) -> mstate.bvm.class;
+   (if true 
+    (*// 'new' -> className.equal *)then
+        mstate.bvm.com(#do 'classDef:new:' -> TT #);
+        ('origin', 1) -> mstate.bvm.rstoreg
+    else
+       mstate.bvm.com(#do 'classDef:other:not store of origin!?' -> TT #);
+   if);
    (# lastDot: @integer; 
       realClassName,fn: ^text
    do className.scanAll
@@ -692,7 +712,7 @@ do (*  mstate.jcf.EmitToFile;
     *    if);
     *)
    mstate.bvm.com(#do 'endClass: ' -> TT; mstate.thisclassName[] -> TT #);;
-   (1,false,1) -> mstate.bvm.endClass;
+   (100,false,1) -> mstate.bvm.endClass;
    
 
 --byteCode_endCodeSeg:doPart---
@@ -711,19 +731,27 @@ do (* Type,An aux.-method in the form of one of:
                                 *)
 (# isStatic: @boolean;
    getMethodName:
-      (# begin,end: @integer
+      (# begin,end: @integer; skip: @boolean
       do 
          L:
          signature.scanAll
          (# pos: @integer
          do pos + 1 -> pos;
-            (if ch = '\'' then 
-                (if begin = 0 then
-                    pos + 1 -> begin
-                else
-                    pos - 1 -> end;
-                    leave L
-            if)if)
+            (if ch = ']' then
+                false -> skip
+             else
+                (if skip then
+                 else
+                     (if ch = '[' then
+         	         true -> skip;
+                       else
+                          (if ch = '\'' then 
+                              (if begin = 0 then
+                                  pos + 1 -> begin
+                               else  
+                                  pos - 1 -> end;
+                                  leave L
+            if)if)if)if)if)
          #);
          (begin,end) -> signature.sub -> methodName[]
       #);
@@ -750,11 +778,23 @@ do mstate.bvm.com
            * the descNo for inner is +1 for desNo of do-method *)
           (methodName[],descNo + 1 ,false,1,1,0) -> mstate.bvm.class;
           'D' -> mstate.bvm.rtn;
-          (1,false,1) -> mstate.bvm.endClass;
+          (100,false,1) -> mstate.bvm.endClass;
    if);
    getMethodName;
    (* we need descNo, topDescNo, originOff, originDescNo *)
    (methodName[],descNo,false,1,1,0) -> mstate.bvm.class;
+   (if descNo <> 6 then
+      ('origin',1) ->mstate.bvm.rstore;
+      (* we generate a ptnMethod which wheen called may have arguments on 
+       * thisStack. We must pass these arguments to the enter method or
+       * store them in the object after new hass been called
+       *)
+      (if noOfEnterArgs > 0 then
+          mch.bvmCom(#do 'hasEnterArgs: ' -> TT; noOfEnterArgs ->  II #);
+else
+      mstate.bvm.mvStack
+      if);
+   if)
 #);
    (* 0 -> mstate.numTempLocals;
     *    (# aux: @integer; {* 0 or 1 *}

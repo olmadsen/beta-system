@@ -104,6 +104,7 @@ genSpecialClass:
      301->trace(# do spath[] -> putline; #);
      (*(spath[],asmlink.byteCodeKind,true,false) -> AsmLink.TX.insert;*)
 
+mch.bvmCom(#do 'genSpecialClass:before:constructorDef:' -> TT #);
      ((none,'-') -> constructorSignature).asText -> mch.constructorDef;
 
      pushThis;
@@ -270,7 +271,7 @@ mch.bvmCom(#do 'genDoMethod:C:before:methodDef ' -> TT;
      if);     
      
      (spec[],thisSuperChain) -> newBCstrucObject;
-mch.bvmCom(#do 'before:endMethod:C' -> TT #);
+mch.bvmCom(#do 'genVirtSTrucMethod:before:endMethod:C' -> TT #);
      
      (false,11) -> mch.return;
      
@@ -384,7 +385,8 @@ checkVirtualSignature:
                            #);
                    leave L
                if);
-mch.bvmcom(#do 'genDoMethod:D:before:methodDef: ' -> TT; name[] -> TT; #);
+mch.bvmcom(#do 'checkVirtualSignature:D:before:methodDef: ' -> TT; 
+      name[] -> TT; #);
                (name[],superSig.asText,sig.noOfEnterArgs,1,mch.dnMap.new) 
                  -> mch.methodDef;
                pushThis;
@@ -449,7 +451,7 @@ mch.bvmcom(#do 'genDoMethod:D:before:methodDef: ' -> TT; name[] -> TT; #);
                       (A[],mch.dataTop[]) -> mch.ldVal;
                    #);
                if);
-mch.bvmcom(#do 'before:endMethod:D' -> TT #);
+mch.bvmcom(#do 'checkVirtualSignature:before:endMethod:D' -> TT #);
                (false,superSig.exitId) -> mch.return;
                mch.endMethod
            if)
@@ -838,7 +840,7 @@ do 'genDoMethod:genPtnMethod:before:methodDef: '->TT; patternName[]->TT ;
 
    sig.thisMethodDesc.descId -> (F[],dn);
 
-mch.bvmcom(#do' sig.thisMethodDesc:descNo: ' -> TT; dn -> II; #);
+mch.bvmcom(#do 'sig.thisMethodDesc:descNo: ' -> TT; dn -> II; #);
 
    dn -> mch.dnMap.pMno -> dn;
    (patternName[],sig.asText,sig.noOfEnterArgs,1,dn) -> mch.methodDef;
@@ -1007,6 +1009,7 @@ mch.bvmcom(#do' sig.thisMethodDesc:descNo: ' -> TT; dn -> II; #);
                * for the Do-method. 
                * This confuses Visual Studio. 
                *)
+mch.bvmCom(#do 'genPtnMethod:before:enter:callNDX: ' -> TT; sig.asText -> TT #);
               (theDesc[],common.enterMethod,sig[],false,true) -> callNDX;
           if);
           (if hasDocode then
@@ -1019,7 +1022,7 @@ mch.bvmcom(#do' sig.thisMethodDesc:descNo: ' -> TT; dn -> II; #);
               0 -> exitID (* should perhaps be handled in Signature *)
       if)if);
       (if not inline then
-     mch.bvmcom(#do 'before:endMethod:D' -> TT #);
+     mch.bvmcom(#do 'genPtnMethod:before:endMethod:D' -> TT #);
           (false,exitId) -> mch.return;
           mch.endMethod
       if)
@@ -1359,6 +1362,7 @@ do (# spec,desc,AD: @ASTindex; descKind: @integer; sig: ^text;
                        * handle to generate origin code
                        *)
                       'p'-> fTag; (* part object *)
+mch.bvmCom(#do 'genfield:partObj: ' -> TT; #);
                       desc[] -> declareRef
                    else
                       (if not common.switch[188] then
@@ -1428,7 +1432,11 @@ do genSuperDo:
      (# callInit:
           (# superOrgName: ^text; superOriginDesc: ^ASTindex
           enter superOrgName[]
-          do PushThis;
+          do 
+(if common.isBvm then
+   mch.bvmCom(#do 'genSuperDo:no default super:'->TT  #);
+else
+             PushThis;
              (if not ('-'->superOrgName.equal) then
                  INNER callInit;
                  (* we need to compute origin from arg1 *)
@@ -1441,7 +1449,9 @@ do genSuperDo:
                  ((superOriginDesc[],superOrgName[])->ClassSignature).asText 
                    -> superOrgName[];
              if);
+
              (common.initSuper,superOrgName[])->mch.callPrimNo; 
+if);
           #);
         storeOrigin:
           (# OD: @ASTindex
@@ -1482,13 +1492,21 @@ do genSuperDo:
                  thisDesc[] -> sematt.descOrigin -> originDesc[]; 
                  '-' -> callInit;
               else 
+     (if common.isBvm then
+       mch.bvmCom(#do 'genDefaultSuper:no:defualtSuper for bvm ' -> TT #)
+      else
                  (common.initSuper,'-')->mch.callPrimNo;
+      if);
              if);
              313->trace(#
                        do 'genDefaultSuper:'->xT; xN;
                           thisDesc[] -> xA; xN;
                        #);
-             (if hasOrigin then storeOrigin if)
+             (if hasOrigin then 
+mch.bvmCom(#do 'before:storeOrigin:B:' -> TT #);
+(if not common.isBvm then
+   storeOrigin 
+if)if)
           #) ;
         IsSpecialVirtual: (* see the same pattern in genlib.bet 
                            * we should unify the two patterns
@@ -1582,8 +1600,13 @@ do genSuperDo:
                  -> sig.addConstructorDesc;
            if);
            313 -> trace(#do 'consSig: '->xT; sig.asText -> xT #);
+mch.bvmCom(#do 'genSuper:before:constructorDef:' -> TT; sig.asText -> TT  #);
+(if 'class [\'Object\']\'Object\'' -> (sig.asText).equal then
+     mch.bvmCom(#do 'objectSig:no:constructorDef!' -> TT #);
+else
            sig.asText -> mch.constructorDef;
            thisDesc[] -> markPos; (* mark declaration of constructor *)
+if);	   
            true -> ReturnSaved;
         #);
         (if hasPref and (subLevel > 0) then 
@@ -1601,6 +1624,7 @@ do genSuperDo:
                 true -> genDefaultSuper;
                 leave genSuperDo 
             if);
+mch.bvmCom(#do 'before:storeOrigin:A:' -> TT #);
             (if true then storeOrigin if);
             Gen.ThisRegAdr -> preBase[];
             12 -> preBase.addOff -> preBase[];
@@ -2477,7 +2501,7 @@ F: ^ text; dn: @integer
           8 -> off;
           (if true then
               sig.thisMethodDesc.descId -> (F[],dn);
-mch.bvmcom(#do 'genDoMethod:I:before:methodDef: ' -> TT; common.enterMethod -> TT #);
+mch.bvmcom(#do 'genEnterMethod:I:before:methodDef: ' -> TT; common.enterMethod -> TT #);
       dn -> mch.dnMap.Nno -> dn;
               (common.enterMethod,sig.asText,sig.noOfEnterArgs,2,dn) 
                 -> mch.methodDef
@@ -2501,8 +2525,8 @@ mch.bvmcom(#do 'genDoMethod:I:before:methodDef: ' -> TT; common.enterMethod -> T
                    restart L
                if)         
           #);
-mch.bvmcom(#do 'before:endMethod:I' ->  TT#);
-          (false,0) -> mch.return;
+mch.bvmcom(#do 'genEnterMethod:before:endMethod:I' ->  TT#);
+          (false,1) -> mch.return;
           mch.endMethod
       if)
    #)
@@ -2611,7 +2635,7 @@ do
                  V.loadVal2;
               #)
           if);
-mch.bvmcom(#do 'before:endMethod:J' -> TT; #);
+mch.bvmcom(#do 'genDoMethod:before:endMethod:J' -> TT; #);
           (false,exitId) -> mch.return;
           mch.endMethod;
           (if xisDoPartForm then
@@ -2740,7 +2764,7 @@ do genExit:
             (if not exitMethodNeeded then LEAVE genExit if);
 (# F: ^ Text; dn: @integer
 do sig.thisMethodDesc.descId -> (F[],dn);
-mch.bvmcom(#do'genDoMethod:B:before:methodDef: ' -> TT; methodName[] -> TT #);
+mch.bvmcom(#do'genExitMethod:B:before:methodDef: ' -> TT; methodName[] -> TT #);
 
    dn -> mch.dnMap.Xno -> dn;
             (methodName[],sig.asText,sig.noOfEnterArgs,2,dn) -> mch.methodDef;
@@ -2975,7 +2999,7 @@ do (# sig: @Signature;
                     #);
 (# F: ^ text; dn: @integer
 do sig.thisMethodDesc.descId -> (F[],dn);
-'****  genDoMethod:C:before:methodDef; ' -> puttext; methodName[] -> puttext;
+'****  genMethod:C:before:methodDef; ' -> puttext; methodName[] -> puttext;
           (innerName[],sig.asText,sig.noOfEnterArgs,methodType,dn) 
             -> mch.methodDef;
 #);
@@ -2996,7 +3020,7 @@ do sig.thisMethodDesc.descId -> (F[],dn);
               if);
               (false,exitId) -> mch.return;
           if);
-'**** before:endMethod:K' -> putline;
+'**** genMethod:before:endMethod:K' -> putline;
           mch.endMethod
       if)
    #)
