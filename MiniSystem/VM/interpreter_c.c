@@ -4,6 +4,8 @@
 //#define usekbhit
 #ifdef linux
 //#warning "linux is defined!"
+#include <unistd.h> // to get sleep function for linux
+
 #elif defined  __CYGWIN__
    #ifdef usewinsock2
    #include <winsock2.h> // must be included first - for some reason?
@@ -87,6 +89,8 @@ int threadNo = 0;
 #elif defined  __CYGWIN__
   HANDLE  hThreadArray[MAX_THREADS];
 #endif
+
+typedef unsigned char byte;
 
 void runTimeError(char *msg){
 #ifdef __arm__
@@ -3279,7 +3283,7 @@ bool traceThreads = true;
           case 23: // getch from  stdin
 #ifdef __arm__
 #else
-	    scanf("%c",&ch);
+	    arg3 = scanf("%c",&ch);
 #endif
 #ifdef TRACE
             printf("get: %c\n",ch);
