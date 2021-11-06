@@ -74,9 +74,9 @@ class bvmMini$cons 6 1 0
  -- genPtnMethod:koks:
  -- callNDX: gJsr, method: Do descNo: 1
  -- void class ['bvmMini']'bvmMini'::'Do'()
- -- byteCode_textOperand_out: "3 Do" 
- -- byteCode_gJsr:doBody:"3 Do" name:""  NDX:D,sig:"3 Do" ,isStatic:falseme ..."" 
- invoke Do 3 0 1
+ -- byteCode_textOperand_out: "3 bvmMini$Do" 
+ -- byteCode_gJsr:doBody:"3 bvmMini$Do" name:""  NDX:D,sig:"3 bvmMini$Do" , ...falsem ..."" 
+ invoke bvmMini$Do 3 0 1
  -- genPtnMethod:before:endMethod:D descNo/dn: 6
  -- end-of-mainmethod:
  stop
@@ -249,10 +249,30 @@ class bvmMini$Do 3 1 0
  -- KOKS:A:after:inner:
  -- bytecodevalbody:mkByteCodecall: betaenv descNo: 12
  -- class: void class ['bvmMini']'bvmMini'::'fooBar'()
- -- class: fooBar
- -- byteCode_textOperand_out: "83 fooBar" 
- -- byteCode_gJsr:doBody:"83 fooBar" name:""  NDX:M,sig:"83 fooBar" ,isStat ...falsem ..."" 
- invoke fooBar 83 0 1
+ -- class: bvmMini$fooBar
+ -- byteCode_textOperand_out: "83 bvmMini$fooBar" 
+ -- byteCode_gJsr:doBody:"83 bvmMini$fooBar" name:""  NDX:M,sig:"83 bvmMini ..." , ...falsem ..."" 
+ invoke bvmMini$fooBar 83 0 1
+ -- dobody:before:gen:imp:
+ -- EvalBody:before:sematt.evCase: X label: 61 55
+ -- sytnthlibbody:genAdr: X
+ -- sytnthlibbody:genAdr:nameApl: X
+ -- before:doGoOrigin:
+ -- doGorigin:ad.on: 0
+ -- goOrigin:on: 1
+ -- bytecode_ldValImpl: this_ on:0
+ -- Address:loadOrigin:ON:0 class ['bvmMini']'bvmMini'
+ pushThis 
+ rpushg 1 origin
+ -- goOrigin:before:forLoop:on: 1
+ -- end:goOrigin: 
+ -- bytecode_loadRef: 
+ -- mstate_loadRef: off: 24
+ rpushg 24 X
+ -- synthlibbody_body:callEntry:before:gjsr:A: void class ['bvmMini']'Fisk' ...
+ -- byteCode_textOperand_out: "87Fisk$Do" 
+ -- byteCode_gJsr:doBody:"87Fisk$Do" name:""  NDX:M,sig:"87Fisk$Do" ,isStat ...falsem ..."" 
+ invoke Fisk$Do 87 0 1
  -- dobody:before:gen:imp:
  -- EvalBody:before:sematt.evCase: 55 -> X.add -> w label: 55 55
  -- evbody:assignValToEval:before:sematt.evcase: EV.label61 EV.evalKind:2
@@ -307,10 +327,10 @@ class bvmMini$Do 3 1 0
  -- KOKS:A:after:inner:
  -- bytecodevalbody:mkByteCodecall: betaenv descNo: 14
  -- class: int32 class ['bvmMini']'Fisk'::'add'(int32)
- -- class: add
- -- byteCode_textOperand_out: "97 add" 
- -- byteCode_gJsr:doBody:"97 add" name:""  NDX:M,sig:"97 add" ,isStatic:falsem ..."" 
- invoke add 97 0 1
+ -- class: Fisk$add
+ -- byteCode_textOperand_out: "97 Fisk$add" 
+ -- byteCode_gJsr:doBody:"97 Fisk$add" name:""  NDX:M,sig:"97 Fisk$add" ,is ...falsem ..."" 
+ invoke Fisk$add 97 0 1
  -- bytecodeval_enterArgs_eval:D: 
  -- bytecodeval_enterArgs_eval:E: 
  -- bytecodeval_enterArgs_eval:F: 
@@ -379,7 +399,7 @@ class bvmMini$Do 3 1 0
  pushThis 
  rpushg 1 origin
  rtn(D)
- end OSDV:1 objSize:100 isIndexed:0  vTop:0 vTopMax:2 rTop:9 rTopMax:9
+ end OSDV:1 objSize:100 isIndexed:0  vTop:0 vTopMax:2 rTop:10 rTopMax:10
  -- genDoMethod:genPtnMethod:before:methodDef: putText descNo: 3
  -- sig.thisMethodDesc:descNo: 3
  -- MethodDef: "putText$cons"  noOfEnterArgs:1  type:1 =vclass descNo: 20 
@@ -415,14 +435,14 @@ class putText$cons 20 1 0
  -- genPtnMethod:before:enter:callNDX: void 'putText'(char[])
  -- callNDX: gJsr, method: Enter descNo: 3
  -- void class ['bvmMini']'putText'::'Enter'(char[])
- -- byteCode_textOperand_out: "16 Enter" 
- -- byteCode_gJsr:doBody:"16 Enter" name:""  NDX:N,sig:"16 Enter" ,isStatic ...falsem ..."" 
- invoke Enter 16 0 1
+ -- byteCode_textOperand_out: "16 putText$Enter" 
+ -- byteCode_gJsr:doBody:"16 putText$Enter" name:""  NDX:N,sig:"16 putText$ ..." , ...falsem ..."" 
+ invoke putText$Enter 16 0 1
  -- callNDX: gJsr, method: Do descNo: 3
  -- void class ['bvmMini']'putText'::'Do'()
- -- byteCode_textOperand_out: "17 Do" 
- -- byteCode_gJsr:doBody:"17 Do" name:""  NDX:D,sig:"17 Do" ,isStatic:falsem ..."" 
- invoke Do 17 0 1
+ -- byteCode_textOperand_out: "17 putText$Do" 
+ -- byteCode_gJsr:doBody:"17 putText$Do" name:""  NDX:D,sig:"17 putText$Do" , ...falsem ..."" 
+ invoke putText$Do 17 0 1
  -- genPtnMethod:before:endMethod:D descNo/dn: 20
  rtnEventQ 0
  setThisStack 
@@ -490,14 +510,14 @@ class text$cons 27 1 0
  -- genPtnMethod:before:enter:callNDX: char[] 'text'(char[])
  -- callNDX: gJsr, method: Enter descNo: 4
  -- void class ['bvmMini']'text'::'Enter'(char[])
- -- byteCode_textOperand_out: "23 Enter" 
- -- byteCode_gJsr:doBody:"23 Enter" name:""  NDX:N,sig:"23 Enter" ,isStatic ...falsem ..."" 
- invoke Enter 23 0 1
+ -- byteCode_textOperand_out: "23 text$Enter" 
+ -- byteCode_gJsr:doBody:"23 text$Enter" name:""  NDX:N,sig:"23 text$Enter" , ...falsem ..."" 
+ invoke text$Enter 23 0 1
  -- callNDX: gJsr, method: Exit descNo: 4
  -- char[] class ['bvmMini']'text'::'Exit'()
- -- byteCode_textOperand_out: "26 Exit" 
- -- byteCode_gJsr:doBody:"26 Exit" name:""  NDX:X,sig:"26 Exit" ,isStatic:falsem ..."" 
- invoke Exit 26 0 1
+ -- byteCode_textOperand_out: "26 text$Exit" 
+ -- byteCode_gJsr:doBody:"26 text$Exit" name:""  NDX:X,sig:"26 text$Exit" , ...falsem ..."" 
+ invoke text$Exit 26 0 1
  -- genPtnMethod:before:endMethod:D descNo/dn: 27
  rtnEventQ 0
  setThisStack 
@@ -561,9 +581,9 @@ class fooBar$cons 83 1 0
  -- genPtnMethod:koks:
  -- callNDX: gJsr, method: Do descNo: 12
  -- void class ['bvmMini']'fooBar'::'Do'()
- -- byteCode_textOperand_out: "80 Do" 
- -- byteCode_gJsr:doBody:"80 Do" name:""  NDX:D,sig:"80 Do" ,isStatic:falsem ..."" 
- invoke Do 80 0 1
+ -- byteCode_textOperand_out: "80 fooBar$Do" 
+ -- byteCode_gJsr:doBody:"80 fooBar$Do" name:""  NDX:D,sig:"80 fooBar$Do" , ...falsem ..."" 
+ invoke fooBar$Do 80 0 1
  -- genPtnMethod:before:endMethod:D descNo/dn: 83
  rtnEventQ 0
  setThisStack 
@@ -630,14 +650,14 @@ class Fisk$cons 90 1 0
  -- genPtnMethod:before:enter:callNDX: void 'Fisk'(int32)
  -- callNDX: gJsr, method: Enter descNo: 13
  -- void class ['bvmMini']'Fisk'::'Enter'(int32)
- -- byteCode_textOperand_out: "86 Enter" 
- -- byteCode_gJsr:doBody:"86 Enter" name:""  NDX:N,sig:"86 Enter" ,isStatic ...falsem ..."" 
- invoke Enter 86 0 1
+ -- byteCode_textOperand_out: "86 Fisk$Enter" 
+ -- byteCode_gJsr:doBody:"86 Fisk$Enter" name:""  NDX:N,sig:"86 Fisk$Enter" , ...falsem ..."" 
+ invoke Fisk$Enter 86 0 1
  -- callNDX: gJsr, method: Do descNo: 13
  -- void class ['bvmMini']'Fisk'::'Do'()
- -- byteCode_textOperand_out: "87 Do" 
- -- byteCode_gJsr:doBody:"87 Do" name:""  NDX:D,sig:"87 Do" ,isStatic:falsem ..."" 
- invoke Do 87 0 1
+ -- byteCode_textOperand_out: "87 Fisk$Do" 
+ -- byteCode_gJsr:doBody:"87 Fisk$Do" name:""  NDX:D,sig:"87 Fisk$Do" ,isSt ...falsem ..."" 
+ invoke Fisk$Do 87 0 1
  -- genPtnMethod:before:endMethod:D descNo/dn: 90
  rtnEventQ 0
  setThisStack 
@@ -1183,19 +1203,19 @@ class add$cons 97 1 0
  -- genPtnMethod:before:enter:callNDX: int32 'add'(int32)
  -- callNDX: gJsr, method: Enter descNo: 14
  -- void class ['bvmMini']'Fisk$add'::'Enter'(int32)
- -- byteCode_textOperand_out: "93 Enter" 
- -- byteCode_gJsr:doBody:"93 Enter" name:""  NDX:N,sig:"93 Enter" ,isStatic ...falsem ..."" 
- invoke Enter 93 0 1
+ -- byteCode_textOperand_out: "93 Fisk$add$Enter" 
+ -- byteCode_gJsr:doBody:"93 Fisk$add$Enter" name:""  NDX:N,sig:"93 Fisk$ad ..." , ...falsem ..."" 
+ invoke Fisk$add$Enter 93 0 1
  -- callNDX: gJsr, method: Do descNo: 14
  -- void class ['bvmMini']'Fisk$add'::'Do'()
- -- byteCode_textOperand_out: "94 Do" 
- -- byteCode_gJsr:doBody:"94 Do" name:""  NDX:D,sig:"94 Do" ,isStatic:falsem ..."" 
- invoke Do 94 0 1
+ -- byteCode_textOperand_out: "94 Fisk$add$Do" 
+ -- byteCode_gJsr:doBody:"94 Fisk$add$Do" name:""  NDX:D,sig:"94 Fisk$add$D ..." , ...falsem ..."" 
+ invoke Fisk$add$Do 94 0 1
  -- callNDX: gJsr, method: Exit descNo: 14
  -- int32 class ['bvmMini']'Fisk$add'::'Exit'()
- -- byteCode_textOperand_out: "96 Exit" 
- -- byteCode_gJsr:doBody:"96 Exit" name:""  NDX:X,sig:"96 Exit" ,isStatic:falsem ..."" 
- invoke Exit 96 0 1
+ -- byteCode_textOperand_out: "96 Fisk$add$Exit" 
+ -- byteCode_gJsr:doBody:"96 Fisk$add$Exit" name:""  NDX:X,sig:"96 Fisk$add ..." , ...falsem ..."" 
+ invoke Fisk$add$Exit 96 0 1
  -- genPtnMethod:before:endMethod:D descNo/dn: 97
  rtnEventQ 0
  setThisStack 
@@ -1511,9 +1531,9 @@ class BetaObject$cons 76 1 0
  -- genPtnMethod:koks:
  -- callNDX: gJsr, method: Do descNo: 11
  -- void class ['bvmMini']'BetaObject'::'Do'()
- -- byteCode_textOperand_out: "73 Do" 
- -- byteCode_gJsr:doBody:"73 Do" name:""  NDX:D,sig:"73 Do" ,isStatic:falsem ..."" 
- invoke Do 73 0 1
+ -- byteCode_textOperand_out: "73 BetaObject$Do" 
+ -- byteCode_gJsr:doBody:"73 BetaObject$Do" name:""  NDX:D,sig:"73 BetaObje ..." , ...falsem ..."" 
+ invoke BetaObject$Do 73 0 1
  -- genPtnMethod:before:endMethod:D descNo/dn: 76
  rtnEventQ 0
  setThisStack 
@@ -1598,23 +1618,27 @@ allocE:
 41:	invoke 83 0 1
 47:	pushthis 
 48:	rpushg 1
-50:	pushthis 
-51:	rpushg 1
-53:	rpushg 24
-55:	pushc 55
-57:	invoke 97 0 1
-63:	storeg 44
-65:	pushc 69
-67:	%prim put 2
-69:	pushthis 
-70:	rpushg 1
-72:	pushg 44
-74:	%prim put 2
-76:	rtnEventQ 0
-78:	setThisStack
-79:	pushthis 
-80:	rpushg 1
-82:	rtn D
+50:	rpushg 24
+52:	invoke 87 0 1
+58:	pushthis 
+59:	rpushg 1
+61:	pushthis 
+62:	rpushg 1
+64:	rpushg 24
+66:	pushc 55
+68:	invoke 97 0 1
+74:	storeg 44
+76:	pushc 69
+78:	%prim put 2
+80:	pushthis 
+81:	rpushg 1
+83:	pushg 44
+85:	%prim put 2
+87:	rtnEventQ 0
+89:	setThisStack
+90:	pushthis 
+91:	rpushg 1
+93:	rtn D
 
 
 Class bvmMini$inner_1 descInx: 4 originOff: 1 visibility: 1
