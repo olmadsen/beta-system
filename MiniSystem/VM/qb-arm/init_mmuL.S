@@ -96,7 +96,7 @@ loop:
 	// constant pool
 .align 2
 	.ltorg
-
+	.space	4000
 	// Put a 64-bit value with little endianness. 
 	.macro PUT_64B high, low 
 	.word \low 
@@ -116,7 +116,8 @@ loop:
 	// Create an entry for a 2MB block. 
 	.macro BLOCK_2MB PA, ATTR_HI, ATTR_LO 
 	PUT_64B \ATTR_HI, ((\PA) & 0xFFE00000) | \ATTR_LO | 0x1 
-	.endm 
+	.endm
+	
 	.align 12
 	.globl ttb0_base
 	.globl ttb0_base_x

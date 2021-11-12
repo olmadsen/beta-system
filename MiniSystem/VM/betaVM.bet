@@ -835,6 +835,13 @@ betaVM:
                (thisCode.descInx,glsc) -> thisObj.saveReturn;
                
                descs.OD[descNo].bc[] -> thisCode[];
+               (if thisObj[] <> thisStack[] then
+                   '\n*** invoke: thisObj[] <> thisStack[]:'-> out.putline;
+                   '    thisObj: ' -> out.puttext;
+                   thisObj.myId -> out.puttext; 
+                   '\n    thisStack: ' -> out.puttext; 
+                   thisStack.myId -> out.putline;
+               if);
                thisObj[] -> Y[] -> callee.rPush; (* return *)
                thisStack[] -> callee.rPush;
                (*origin[] -> callee.rpush;  (* origin *)
@@ -950,60 +957,82 @@ betaVM:
                (2 -> X.rget,X.fields[1],true) -> alloc
             #);
           doBreak:
-            (# on,lab,actualDescInx,descInx,xlsc,V: @integer; 
+            (# on,lab,actualDescInx,descInx,xlsc,V,sAdj: @integer; 
                X,Y: ^objDesc.template;
-               trace: (# exit false #)
+               newPopRtn: (# exit true #);
+               trace: (# exit true #)
             enter(on,lab,actualDescInx)
             do (if trace then
-                   '------BREAK:on: ' -> puttext; on -> putint;
-                   ' lab: '->puttext; lab -> putint; 
-                   ' actualDescInx: ' -> puttext; actualDescInx -> putint;
-                   newline;
-                   ('Break:thisObj',true,screen[]) -> thisObj.dump;
-                   ('Break:thisStack',true,screen[]) -> thisStack.dump;
+                   '\nBREAK:to:descId: ' -> out.puttext; 
+                   actualDescInx -> out.putint;
+                   ' on: ' -> out.puttext; on -> out.putint;
+                   ' lab: '->out.puttext; lab -> out.putint; 
+                   out.newline;
+                   ('Break:thisObj',true,out[]) -> thisObj.dump;
+                   ('Break:thisStack',true,out[]) -> thisStack.dump;
                if);
                thisObj[] -> X[];
                (for i: on repeat
                     X.myOrigin -> X[]
                for);
-               (if trace then ('Break:to',true,screen[]) -> X.dump if);
+               (if trace then ('Break:to',true,out[]) -> X.dump if);
                (* We need to test for none if the stack does not contain X
                 * Same  for traversing super
                 *)
                popCallStack:
                  (if thisObj[] <> X[] then 
                      thisObj[] -> Y[];
-                     thisObj.rpop -> thisStack[];
-                     thisObj.rpop -> thisObj[];
+                     (if newPopRtn then
+                         thisObj.return -> (thisStack[],thisObj[])
+                      else
+                         thisObj.rpop -> thisStack[];
+                         thisObj.rpop -> thisObj[];
+                     if);
                      (if trace then 
-                         ('Break:pop',true,screen[]) -> thisObj.dump;
-                         ('Break:pop:stack',true,screen[]) -> thisStack.dump;
+                         ('Break:pop',true,out[]) -> thisObj.dump;
+                         ('Break:pop:stack',true,out[]) -> thisStack.dump;
                      if);
                      (thisObj[],Y[],Y.myOrigin,0,0) -> rtnEvent;
                      restart popCallStack
                  if);
                (if trace then
-                   ('Break:TO:',true,screen[]) -> thisObj.dump;
-                   ('Break:TO:stack:',true,screen[]) -> thisStack.dump
+                   ('Break:TO:',true,out[]) -> thisObj.dump;
+                   ('Break:TO:stack:',true,out[]) -> thisStack.dump
                if);
                thisObj[] -> thisStack[];
+
                thisObj.restoreReturn -> (descInx,xlsc);
                (if trace then
-                   '\nbreakTo:descInx: ' -> puttext; descInx -> putint;
-                   ' xlsc: ' -> puttext; xlsc -> putint;
+                   '\nbreakTo:descInx: '->out.puttext; descInx->out.putint;
+                   ' xlsc: ' -> out.puttext; xlsc->out.putint; out.newline
                if);
                (if isXbeta then
-                   findActualSuper:
-                     (if descInx <> actualDescInx then
-                         (* break is to a ptn level in the super chain *)
-                         thisObj.restoreReturn -> (descInx,glsc);
-                         thisObj.rpop -> thisObj[];
-                         restart findActualSuper
+                   (if descInx <> actualDescInx then 
+                       findActualSuper:
+                         (if descInx <> actualDescInx then 
+                             (* break to a ptn level in  super chain *)
+                             thisObj.restoreReturn -> (descInx,glsc);
+                             thisObj.rpop -> thisObj[];
+                             (if trace then 
+                                 'BreakInSuper:descInx: ' -> out.puttext;
+                                 descInx -> out.putint; 
+                                 ' glsc: ' -> out.puttext; 
+                                 glsc->out.putint; out.newline;
+                                 ('Break:inSuper:thisObj',true,out[]) 
+                                   -> thisObj.dump;
+                             if);
+                             sAdj + 1 -> sAdj;
+                             restart findActualSuper
+                         if)
                if)if);
+               (if false and newPopRtn then 2 (*+ sAdj*) -> thisObj.rtop if);
                descs.OD[descInx].bc[] -> thisCode[];
                descs.OD[descInx].labs[lab] -> glsc;
+
                (if trace then
-                   ' glsc: ' -> puttext; glsc -> putint; newline;
+                   'ContinueAt:descNo: ' -> out.puttext; 
+                   descInx -> out.putint;
+                   ' glsc: ' -> out.puttext; glsc->out.putint; out.newline
                if)
             #);
           files: @
@@ -1994,9 +2023,13 @@ betaVM:
                             suspendEnabled - 1 -> suspendEnabled
                         if);
                         stacksToOut;
-                        thisObj[] -> X[];                         
-                        thisObj.rpop -> thisStack[]; 
-                        thisObj.rpop -> thisObj[]; 
+                        thisObj[] -> X[];
+                        (if false then
+                            thisObj.return -> (thisStack[],thisObj[])
+                         else
+                            thisObj.rpop -> thisStack[]; 
+                            thisObj.rpop -> thisObj[]; 
+                        if);
                         ' to: ' -> out.puttext; 
                         thisObj.myId -> out.puttext; 
                         thisObj.restoreReturn -> (descInx,glsc); 
