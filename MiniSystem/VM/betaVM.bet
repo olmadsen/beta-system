@@ -957,25 +957,29 @@ betaVM:
                (2 -> X.rget,X.fields[1],true) -> alloc
             #);
           doBreak:
-            (# on,lab,actualDescInx,descInx,xlsc,V,sAdj: @integer; 
+            (# on,lab,actualDescInx
+               ,nOfS  (* no of superpatterns of obj being returned to *)
+               ,pn: @integer; (* no of super patterns for actualDescInx 
+                               * not used - and probably never to be used 
+                               *)
+               descInx,xlsc,V,sAdj: @integer; 
                X,Y: ^objDesc.template;
                newPopRtn: (# exit true #);
                trace: (# exit true #)
-            enter(on,lab,actualDescInx)
+            enter(on,lab,actualDescInx,pn)
             do (if trace then
-                   '\nBREAK:to:descId: ' -> out.puttext; 
-                   actualDescInx -> out.putint;
+                   '\nBREAK:to: ' -> out.puttext; 
+                   descs.OD[actualDescInx].myId -> out.puttext;
                    ' on: ' -> out.puttext; on -> out.putint;
+                   ' pn: ' -> out.puttext; pn -> out.putint;
                    ' lab: '->out.puttext; lab -> out.putint; 
-                   out.newline;
-                   ('Break:thisObj',true,out[]) -> thisObj.dump;
-                   ('Break:thisStack',true,out[]) -> thisStack.dump;
+                   ' from: ' -> out.putline;
+                   (out[],'   thisObj   = ') -> thisObj.dumpObjFull;
+                   (out[],'   thisStack = ') -> thisStack.dumpObjFull;
                if);
                thisObj[] -> X[];
-               (for i: on repeat
-                    X.myOrigin -> X[]
-               for);
-               (if trace then ('Break:to',true,out[]) -> X.dump if);
+               (for i: on repeat X.myOrigin -> X[] for);
+               (if trace then (out[],'   go:ON: ') -> X.dumpobj if);
                (* We need to test for none if the stack does not contain X
                 * Same  for traversing super
                 *)
@@ -989,49 +993,77 @@ betaVM:
                          thisObj.rpop -> thisObj[];
                      if);
                      (if trace then 
-                         ('Break:pop',true,out[]) -> thisObj.dump;
-                         ('Break:pop:stack',true,out[]) -> thisStack.dump;
+                         (out[],'pop:obj   = ') -> thisObj.dumpObj;
+                         (out[],'pop:stack = ') -> thisStack.dumpObj;
                      if);
                      (thisObj[],Y[],Y.myOrigin,0,0) -> rtnEvent;
                      restart popCallStack
                  if);
                (if trace then
-                   ('Break:TO:',true,out[]) -> thisObj.dump;
-                   ('Break:TO:stack:',true,out[]) -> thisStack.dump
+                   (out[],'Dest:obj: ') -> thisObj.dumpObj;
+                   (out[],'Dest:stack: ') -> thisStack.dumpObj;
                if);
                thisObj[] -> thisStack[];
 
                thisObj.restoreReturn -> (descInx,xlsc);
                (if trace then
-                   '\nbreakTo:descInx: '->out.puttext; descInx->out.putint;
-                   ' xlsc: ' -> out.puttext; xlsc->out.putint; out.newline
+                   'Dest:descInx: '->out.puttext; 
+                   descInx->out.putint;
+                   ' dest:super:actualDescInx: ' -> out.puttext;
+                   actualDescInx -> out.putint;
+                   ' xlsc(not to be used): ' -> out.puttext; 
+                   xlsc->out.putint; out.newline
                if);
-               (if isXbeta then
-                   (if descInx <> actualDescInx then 
-                       findActualSuper:
-                         (if descInx <> actualDescInx then 
-                             (* break to a ptn level in  super chain *)
-                             thisObj.restoreReturn -> (descInx,glsc);
-                             thisObj.rpop -> thisObj[];
-                             (if trace then 
-                                 'BreakInSuper:descInx: ' -> out.puttext;
-                                 descInx -> out.putint; 
-                                 ' glsc: ' -> out.puttext; 
-                                 glsc->out.putint; out.newline;
-                                 ('Break:inSuper:thisObj',true,out[]) 
-                                   -> thisObj.dump;
-                             if);
-                             sAdj + 1 -> sAdj;
-                             restart findActualSuper
-                         if)
+               (if false and (pn > 0) then 
+                   '**** break:Before:goSuper:pn=' -> out.puttext; 
+                   pn -> out.putint;
+                   ' rtop=' -> out.puttext; thisObj.rtop -> out.putint;
+                   (out[],'Break:before:goSuper: ') -> thisObj.dumpObj;
+               if);
+               (if isXbeta and (descInx <> actualDescInx) then 
+                   findActualSuper:
+                     (if descInx <> actualDescInx then 
+                         (* break to a ptn level in super chain *)
+                         thisObj.restoreReturn -> (descInx,glsc);
+                         thisObj.rpop -> thisObj[];
+                         (if trace then 
+                             'Find:Super:descInx: ' -> out.puttext;
+                             descInx -> out.putint; 
+                             ' glsc: ' -> out.puttext; 
+                             glsc->out.putint; out.newline;
+                             (out[],'   obj:') -> thisObj.dumpObj;
+                         if);
+                         sAdj + 1 -> sAdj;
+                         restart findActualSuper
                if)if);
-               (if false and newPopRtn then 2 (*+ sAdj*) -> thisObj.rtop if);
+               (if false and (pn > 0) then 
+                   '**** break:after:goSuper:pn=' -> out.puttext; 
+                   pn -> out.putint;
+                   ' rtop: ' -> out.puttext; thisObj.rtop -> out.putint;
+                   (out[],'Break:after:goSuper: ') -> thisObj.dumpObj;
+               if);         
+               descs.OD[descInx].noOfSuper -> nOfS;
+               (if trace then
+                   'noOfSuper: ' -> out.puttext;
+                   nOfS -> out.putint;
+                   ' rtop: ' -> out.puttext; thisObj.rtop -> out.putint;
+                   out.newline;
+               if);
+               (if newPopRtn and (descs.OD[descInx].noOfSuper = 0) then 
+                   2 -> thisObj.rtop 
+                else
+                   (if (nOfS > 0) then
+                       (if (thisObj.rtop) <> (nOfS + 2) then
+                           '\n!!!! WARNING: break to object with '
+                           'references on the rstack oether than '
+                           'return references' -> putline
+               if)if)if);
                descs.OD[descInx].bc[] -> thisCode[];
                descs.OD[descInx].labs[lab] -> glsc;
 
                (if trace then
-                   'ContinueAt:descNo: ' -> out.puttext; 
-                   descInx -> out.putint;
+                   'ContinueAt: ' -> out.puttext; 
+                   descs.OD[descInx].myId -> out.puttext;
                    ' glsc: ' -> out.puttext; glsc->out.putint; out.newline
                if)
             #);
@@ -1376,7 +1408,7 @@ betaVM:
                          if)
                       #);
                     descInx,size,isValueObj,isRindexed,dinx,rangee,inx,length,serverId
-                    ,handle,msgId,rtnVal, off, value,on,lab:
+                    ,handle,msgId,rtnVal, off, value,on,lab,pn:
                       @integer;
                     hasRtnVal: @boolean;
                     callee,X,Y,rtnRef: ^ObjDesc.template;
@@ -2119,7 +2151,7 @@ betaVM:
                              ' ' -> put; glsc -> putint; newline;*)
                             descs.OD[descInx].BC[] -> thisCode[];
                             thisCode.doE -> glsc
-                        if)                        
+                        if);
                        // codes.innera then
                         'innerA' -> exel;
                         op1 -> dinx; ' exe: ' -> out.puttext;
@@ -2368,7 +2400,8 @@ betaVM:
                         op1 -> on;
                         op2 -> lab;
                         op2 -> descInx;
-                        (on,lab,descInx) -> doBreak
+                        op1 -> pn;
+                        (on,lab,descInx,pn) -> doBreak
                      // codes.pushText then
                         'pushText' -> exe; 
                         op1 -> inx; 
