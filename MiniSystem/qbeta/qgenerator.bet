@@ -111,10 +111,13 @@ generator: variants
                cd.com(#
                      do 'OGqual:'-> TT; 
                         (if OGqual[] <> none then
-                            (if OGqual.sig[] <> none then OGqual.sig.doPT -> TT 
+                            (if OGqual.sig[] <> none then 
+                                OGqual.sig.doPT -> TT 
                              else 'none'->TT if);
-                            ':OGqual.isBasicValue:' -> TT; OGqual.isBasicValue -> BB;
-                            ':OGqual.isValueObj:' -> TT; OGqual.isValueObj -> BB;
+                            ':OGqual.isBasicValue:' -> TT; 
+                            OGqual.isBasicValue -> BB;
+                            ':OGqual.isValueObj:' -> TT; 
+                            OGqual.isValueObj -> BB;
                          else
                             'none' -> TT
                         if)
@@ -134,7 +137,8 @@ generator: variants
                     * X: val a + b
                     *)
                    (if OG.isValueObj then 
-                       (* OG is a ValueObject returning a Basic value like integer
+                       (* OG is a ValueObject returning a Basic value 
+                        * like integer
                         *    mkIntB: ... out V: var integer ...
                         * We shall thus not allocate a value obj, 
                         * but a plain integer
@@ -190,33 +194,37 @@ generator: variants
           pushThis:: (# do cd.pushThis #);
           loadArgs::
             (#
-            do cd.com(#do 'DataItem:loadArgs: ' -> TT; dopt -> TQ #);
+            do cd.com(#do 'DataItem:loadArgs: ' -> TT; dopt -> TQ;
+                     ' E: ' -> TT; E.doPT -> TQ  #);
                cd.com(#do E.args.dopt -> TT #);
                L:
                (if OG.IS.isEmpty then
-                   (E[],superAdj,staticOff,CC[]) -> OG.super.ATd.loadargs
+                   (E[],superAdj,staticOff,CC[]) -> OG.super.ATd.loadargs;
+                   E.args.scanArgs(#do true -> isResume #)
                 else
-                   (* primitive check fo args being non empty! *)
+                   (* primitive check for args being non empty! *)
                    E.args.scanArgs
-                   (#do '\n!!!! DataItem:loadArgs:IS not empty! ' -> putline#)
+                   (#do '\n!!!! DataItem:loadArgs:IS not empty! '->putline#)
                if)
             #);
           getAdr::
             (# gdb::
                  (#
-                 do ',newOff:'->TT; newOff -> II; ',isValue:'->TT; isValue-> BB;
+                 do ',newOff:'->TT; newOff -> II; 
+                    ',isValue:'->TT; isValue-> BB;
                     ',A.isValue:' -> TT; A.isValue -> BB
                  #);
                E: ^Exp; originIsValue: @boolean; ptn: ^Pattern; 
                UN,UNx: ^NewProperty;
                OGx: ^ObjectGenerator
-            do cd.com(#do ' A:'->TT; A.print -> TT; ' '  -> TT; dopt -> TT #);
-               cd.com(#do 'value_prim:' -> TT;  OG.primNo = value_prim -> BB #);
+            do cd.com(#do ' A:'->TT; A.print -> TT; ' '  -> TT; dopt->TT #);
+               cd.com(#do 'value_prim:'->TT;  OG.primNo = value_prim->BB #);
 
                (* OG.primNo = value_prim for handling _v: ?Value 
                 * in integer, char and boolean *)
                
-               (if OG.isBasicValue or isValue or (OG.primNo = value_prim) then
+               (if OG.isBasicValue or isValue 
+                   or (OG.primNo = value_prim) then
                    (if not A.isValue then
                        true ->  loadRec;
                        A.E[] -> E[]; A.originIsValue -> originIsValue;
@@ -277,19 +285,58 @@ generator: variants
           invoke::
             (* called when not receiver - i.e. value to be pushed *)
             (# gdb::(#do ' newOff:'-> TT; newOff -> II #);
-               orgIsVal: @integer
-            do (if OG.isBasicValue or OG.isValueObj then 
+               orgIsVal: @integer;
+               isResumeX: BooleanValue
+                 (#
+                 do (if E[] = none then 
+                        (*'!!!! isResume: ' -> puttext; dopt -> putline;*)
+                     else
+                        L: E.args.scanArgs(#do true -> value; leave L #)
+                    if)
+                 #);
+               vn,rn: @integer
+            do (if isResume then
+                   cd.com
+                   (#do 'dataItem:invoke:hasArgs:DI: ' -> TT; dopt ->TQ; nl;
+                      ' rec: '->TT;
+                      (if rec[] <> none then rec.dopt ->TQ;
+                          ' arg: ' -> TT; rec.args.dopt -> TQ if);
+                      ' E: ' -> TT; E.dopt -> TQ;
+                      ' lab: ' -> TT; E.label -> TQ;
+                   #);
+                   OG.IS.scanItemArgs -> (vn,rn);
+                   (if false then
+                       '**** isResume: ' -> puttext; dopt -> puttext;
+                       ' ' -> put; vn -> putint; ' ' -> put; rn -> putint; 
+                       '\n  rec: ' -> puttext; 
+                       (if rec[] <> none then rec.dopt -> puttext;if);
+                       ' E: ' -> puttext; E.dopt -> putline;
+                   if);
+                   (* Part of the adr of this(DI) is on the rstack  - thisObj
+                    * and possible arguments are alos on thje stack
+                    * we need to get the partial adr of this(DI) on the top
+                    * to be able to execute adr.loadAdr
+                    *)
+                   (if rn > 0 then rn -> cd.rswap; if);
+                   adr.loadAdr;
+                   ('ResumeDI','D') -> cd.call;
+                   cd.rpop;
+                   leave invoke
+               if);
+               (if OG.isBasicValue or OG.isValueObj then 
                    (if (E[] <> none) then
                        (if (E.ATd.primNo <> cmpAndSwap_prim) then
-                           (* May happen for V := 117 where := is assignment 
+                           (* May happen for V := 117 where := is assignment
                             * - no offset shall be pushed for V 
                             * since V is assigned afterwards
                             * For R ++ 117 offset for R should be pushed 
                             * since it is origin
                             *) 
                            (if true
-                            // OG.isBasicValue // OG.primNo = value_prim then 
-                               (* OG.primNo = value_prim for handling _v: ?Value 
+                            // OG.isBasicValue 
+                            // OG.primNo = value_prim then 
+                               (* OG.primNo = value_prim for handling 
+                                * _v: ?Value 
                                 * in integer, char and boolean *)
                                adr.load
                             // OG.isValueObj then 
@@ -297,25 +344,28 @@ generator: variants
                                         adr.isAdr -> BB; 
                                      #);
                                cd.com(#do 'Size:'->TT; objSize -> II;
-                                        ',rec:'->TT; rec.dopt -> TQ; ',E:' -> TT;
+                                        ',rec:'->TT; rec.dopt->TQ;',E:'->TT;
                                         E.dopt -> TQ; E.label -> TQ
                                      #);
                                cd.com(#do 'E.isCompositeValueObj: ' -> TT; 
                                         E.isCompositeValueObj -> BB #);
                                true -> adr.isAdr;
-                               E.isCompositeValueObj -> adr.isCompositeValueObj;
+                               E.isCompositeValueObj 
+                                 -> adr.isCompositeValueObj;
                                adr.load; 
                            if)
                         else
-                           cd.com(#do 'invoke:cmpAndSwap:'->TT; off->II; adr.print -> TT #);
-                           adr.loadAdr
+                           cd.com(#do 'invoke:cmpAndSwap:'->TT; off->II; 
+                                    adr.print -> TT #);
+                           adr.loadAdr;
                        if)
                     else
                        cd.com(#do '>:E=none' -> TT#);
                        (if adr[] <> none then 
                            adr.load
                         else
-                           (if (OG.primNo = float_Prim) or OG.isUnitValueObj then
+                           (if (OG.primNo = float_Prim) 
+                               or OG.isUnitValueObj then
                                (sig.id[],NewOff) -> cd.fpushg
                             else
                                (sig.id[],NewOff) -> cd.pushg
@@ -323,7 +373,7 @@ generator: variants
                        if)
                    if)
                 else
-                   cd.com(#do '>Object:unique:'->TT; OG.IS.isUnique -> BB; #);
+                   cd.com(#do '>Object:unique:'->TT; OG.IS.isUnique ->BB #);
                    (if adr[] <> none then 
                        adr.load
                     else
@@ -644,7 +694,8 @@ generator: variants
                        (* Invoke the singular object *)
                        cd.com(#do 'before objTmpStack:add: '->TT;
                                 IS.newDescNo -> II; ' ' -> TT; OGid -> TQ #);
-                       (OGid,IS.newDescNo,staticOff,true) -> cd.invoke; 
+                       (OGid,IS.newDescNo,staticOff,true)
+                         -> cd.invoke; 
                        L:
                          (if not useReturnValue then 
                              IS.scanAllItemDecls
@@ -932,7 +983,8 @@ generator: variants
                                  cd.com
                                  (#do 'OG.super.on/descNo:' -> TT; OG.super.on->II;
                                     OG.getDescNo->II; #);
-                                 (id[],OG.getDescNo,0,true) -> cd.invoke;
+                                 (id[],OG.getDescNo,0,true)
+                                   -> cd.invoke;
                                  'D' -> cd.rtn;
                                  (* The vdtTableAt here overrides the one in 
                                   * HandleVirtArgument (check it)
@@ -2372,7 +2424,7 @@ generator: variants
                    isConstant(# isConst:: (#do V -> cd.pushConst; true->done #)#)
                if);
                (if not done then
-               (# A: ^Address; off,argNo: @integer
+               (# A: ^Address; off,argNo: @integer; isResume: @boolean
                do (if needOrigin then
                       cd.com(#do 'IV:FISK:superAdj:' -> TT; superAdj -> II #);
                       superAdj
@@ -2397,17 +2449,24 @@ generator: variants
                    * E.invoke generates assigmnet for := and invocation for foo
                    *)
                   cd.com(#do'IV:before:loadArgs:superAdj='->TT; superAdj->II #);
-                  (superAdj,off,CC[]) -> E.loadArgs;
+                  (superAdj,off,CC[]) -> E.loadArgs -> isResume;
+                  (if isResume and false then
+                      '**** IV:isResume: ' -> puttext; dopt -> puttext;
+                      ' rec: ' -> puttext;
+                      (if rec[]<> none then rec.dopt -> puttext if);
+                      ' E: ' -> puttext; E.dopt -> putline;
+                  if);
                   cd.com(#do 'IV:after:loadArgsOf:' -> TT; E.dopt -> TQ;
                            (if A[] <> none then A.print -> TT if) #);
                   
-                  (rec[],E[],useReturnValue,staticOff,CC[],A[]) -> E.invoke;
+                  (rec[],E[],useReturnValue,staticOff,CC[],A[],isResume)
+                    -> E.invoke;
                   scanSons
                   (# found: @boolean; Ey: ^Exp;
                   do (if found then
                          cd.com(#do'invoke:tail: ' -> TT; current.dopt -> TQ #);
                          (superAdj,off,CC[]) -> (current[]->Ey[]).loadArgs;
-                         (E[],current[],useReturnValue,staticOff,CC[],A[]) 
+                         (E[],current[],useReturnValue,staticOff,CC[],A[],false) 
                            -> Ey.invoke;
                      if);
                      (if current[] = E[] then true -> found if);
@@ -2555,7 +2614,8 @@ generator: variants
                               
                               (* A is the address of E - not of rec!!!!!!! *)
                               
-                              (pRec[],E[],true,0,none,recA[]) -> rec.invoke;
+                              (pRec[],E[],true,0,none,recA[],false)
+                                -> rec.invoke;
                           if);
                        else
                           cd.com(#do 'computeAdr:isAssign:rec: '-> TT; rec.dopt -> TQ;
@@ -2606,7 +2666,7 @@ generator: variants
                           cd.com(#do'loadOrigin:loadArgs:superAdj:E:'->TT;
                                          superAdj -> II #);
                           (superAdj,staticOff,CC[]) -> E.loadArgs;
-                          (rec[],nE[],true,staticOff,CC[],none) -> E.invoke
+                          (rec[],nE[],true,staticOff,CC[],none,false) -> E.invoke
                        else
                           cd.com(#do 'loadOrigin:assign:'-> TT; #);
                           true -> hadAssign
@@ -2620,7 +2680,8 @@ generator: variants
                           cd.com(#do 'loadOrigin:last:NOTassign:rec:'->TT; rec.doPT -> TT;
                                    ':E:'->TT; E.doPT -> TT #);
                           (if not isFirst then
-                              (rec[],rec[],true,staticOff,CC[],none) -> rec.invoke
+                              (rec[],rec[],true,staticOff,CC[],none,false)
+                                -> rec.invoke
                   if)if)if)
                #);
                (* S.simple_bar.c1 := 'x'
@@ -2912,7 +2973,7 @@ generator: variants
                    (if ATd.isPattern then stubDescNo -> handleVargs if);
                    ('stub',stubDescNo,0,false) ->  cd.invoke
                else cd.com(#do 'HEST'->TT; doPT -> TQ  #);
-                   (rec[],E[],useReturnValue,staticOff,CC[],adr[]) 
+                   (rec[],E[],useReturnValue,staticOff,CC[],adr[],isResume) 
                      -> ATd.invoke;
                if);
                cd.com
@@ -2932,7 +2993,7 @@ generator: variants
                (if ATd.primNo = resume_prim then
                    cd.com(#do 'OI:loadArgs:resume: ' -> TT; dopt -> TT #)
                if);
-               (this(Exp)[],superAdj,staticOff,CC[]) -> ATd.loadArgs
+               (this(Exp)[],superAdj,staticOff,CC[]) -> ATd.loadArgs -> isResume
             #);
           bracketedListLength:: 
             (# 
@@ -2996,7 +3057,7 @@ generator: variants
                cd.com(#do'getAdr:loadArgs:superAdj:G:'->TT;
                               adr.superAdj -> II #);
                (adr.superAdj,0,none) -> E.loadArgs; (* do we need staticOff here? *)
-               (* (rec[],E[],true,0,0,none,adr[]) -> E.invoke;*)
+               (* (rec[],E[],true,0,0,none,adr[],false) -> E.invoke;*)
             #);
           pushThis:: 
             (* Skip, since loadOrigin below includes pushThis *)  
@@ -3171,7 +3232,8 @@ generator: variants
                            (start[n],end[n]) -> T.sub -> TT #);
                    current.dopt  ->  cd.comment;*)
                   (true,0,0) -> current.Qgen;
-                  (plusDecl.sig.id[],plusDecl.OG.getDescNo,0,true) -> cd.invoke;
+                  (plusDecl.sig.id[],plusDecl.OG.getDescNo,0,true)
+                    -> cd.invoke;
                   end[n] -> prev;
                   true  -> doAdd
                #);
