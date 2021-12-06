@@ -70,7 +70,7 @@ typedef void *FILE;
 
 #include "interpreter_image.c"
  
-#define MAX_THREADS 5
+#define MAX_THREADS 10
 int threadNo = 0;
 
 /* thisBlock->threadId is the id of a given tread
@@ -1536,14 +1536,32 @@ void dumpSwapped(FILE *trace,Btemplate *X, Btemplate *Y,Btemplate *Z){
 }
 #endif
 
-void rswap(Btemplate *obj, Btemplate **R, Btemplate **S){
+void rswap(Btemplate *callee, Btemplate **obj1, Btemplate **stack1,bool updateS){
+  //fprintf(trace,"***rswap %s %s %i\n",nameOf(*obj1),nameOf(*stack1),obj->rtop);
+  Btemplate *obj2 = callee->rstack[1];
+  Btemplate *stack2 = callee->rstack[2];
+  callee->rstack[1] = *obj1;
+  callee->rstack[2] = *stack1;
+  *obj1 = obj2;
+  //*stack1 = stack2;
+  if (updateS) *stack1 = stack2;
+  if (callee->rtop == 0) callee->rtop = 2; // first call - we push 2 values
+  if (*obj1 == 0) { 
+#ifdef __arm__
+#else
+    printf("*obj1 == 0\n"); 
+#endif
+    callee->rtop = 0;} // 
+}
+void rswapX(Btemplate *obj, Btemplate **R, Btemplate **S,bool updateS){
   //fprintf(trace,"***rswap %s %s %i\n",nameOf(*R),nameOf(*S),obj->rtop);
   Btemplate *Rx = obj->rstack[1];
   Btemplate *Sx = obj->rstack[2];
   obj->rstack[1] = *R;
   obj->rstack[2] = *S;
   *R = Rx;
-  *S = Sx;
+  //*S = Sx;
+  if (updateS) *S = Sx;
   if (obj->rtop == 0) obj->rtop = 2; // first call - we push 2 values
   if (*R == 0) { 
 #ifdef __arm__
@@ -2136,7 +2154,8 @@ void fileClose(int id){
 #endif
 }
 
-void doCall(Block *ctx,bool withEnablingSuspend){
+void doCall(Block *ctx,bool withEnablingSuspend,bool updateS){
+  // coroutines with arguments do not wrok: elim updateS
     int arg1 = (char) op1(ctx->bc,&ctx->glsc);
 #ifdef TRACE
     fprintf(ctx->trace,"call %c ",arg1);
@@ -2210,7 +2229,7 @@ void doCall(Block *ctx,bool withEnablingSuspend){
 	  fprintf(ctx->trace, "resumeD %s ",nameOf(ctx->callee));
 	  dumpSwapped(ctx->trace,ctx->callee,ctx->thisObj,ctx->thisStack);
 #endif
-	  rswap(ctx->callee,&ctx->thisObj,&ctx->thisStack);
+	  rswap(ctx->callee,&ctx->thisObj,&ctx->thisStack,updateS);
 #ifdef TRACE
 	  dumpSwapped(ctx->trace,ctx->callee,ctx->thisObj,ctx->thisStack);
 	  if (ctx->thisStack != ctx->thisObj) { // external suspend?
@@ -2257,7 +2276,7 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 #ifdef TRACE
   dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
 #endif
-  rswap(callee,&ctx->thisObj,&ctx->thisStack); // notice &
+  rswap(callee,&ctx->thisObj,&ctx->thisStack,true); // notice &
 #ifdef TRACE
   dumpSwapped(ctx->trace,callee,ctx->thisObj,ctx->thisStack);
 #endif
@@ -2800,6 +2819,7 @@ bool traceThreads = true;
 	vPush(thisStack,arg2);
 	break;
       case _rswap:
+	arg1 = op1(bc,&glsc); // arg1 > 1, not handled 
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
 #ifdef TRACE
@@ -2890,7 +2910,7 @@ bool traceThreads = true;
 	/*return*/
 
 	saveContext();
-	doCall(thisBlock,false);
+	doCall(thisBlock,false,true);
 	restoreContext();
 
 	break;
@@ -3274,6 +3294,8 @@ bool traceThreads = true;
 #else
 	    printf("%c",(char)arg2);
 	    fprintf(output,"%c",(char)arg2);
+	    fflush(output);
+	    fprintf(trace,"put: %c\n",(char)arg2);	    
 	    //printf("\n");
 	    //fflush(stdout); apparently using stdout gives a linker error!?
 	    //fpurge(stdout);
@@ -3300,7 +3322,7 @@ bool traceThreads = true;
 	    //glsc = glsc - 1;
 
 	    saveContext();
-	    doCall(thisBlock,true);
+	    doCall(thisBlock,true,true);
 	    restoreContext();
 
 	    break;
@@ -3318,7 +3340,7 @@ bool traceThreads = true;
 	    break;
 	  case 13: // fork
 #ifdef TRACE
-	    fprintf(trace,"fork ");
+	    fprintf(trace,"fork threadNo=%i ",threadNo);
 #endif
 #ifdef __arm__
 	    putstr("forkA\n");
@@ -3354,9 +3376,11 @@ bool traceThreads = true;
 	    rPush(X,Y);
 #ifdef TRACE
 	    fprintf(trace,"fork D");
+	    fflush(trace);
 #endif
 #ifdef TRACE
 	    fprintf(trace,"%s top:%s\n",nameOf(X),nameOf(Y));
+	    fflush(trace);
 #endif
 	    B->thisModule = X;
 	    B->thisObj = X;
@@ -3383,6 +3407,13 @@ bool traceThreads = true;
 	    B->traceFile = fileName;
 	    //threadNo = threadNo + 1;
 	    B->threadId = threadNo + 1;
+	    if ((threadNo + 1) > MAX_THREADS) {
+	      printf("\nFatal error: too many threads: %i\n",threadNo);
+	      fprintf(trace,"\nFatal error: too many threads: %i\n",threadNo);
+	      fflush(output);
+	      fflush(trace);
+	      stop;
+	    }
 	    threadStatus[B->threadId] = t_running;
 #ifdef linux
 	    pthread_attr_t attr;      // not used here - NULL may be

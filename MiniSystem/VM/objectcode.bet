@@ -4,7 +4,8 @@ INCLUDE 'Primitives';
 INCLUDE 'betaVM';
 ---lib:attributes---
 ObjectCode:
-  (# init:<
+  (# emitLLVM: (#exit false #);
+     init:<
        (#
        enter out[]
        do vdtPatch.init;
@@ -103,14 +104,16 @@ ObjectCode:
           init: (#do 0 -> rTop -> vTop -> rTopMax -> vTopMax #);
           vpush:
             (#
-            do (if (vTop + 1 -> vTop) > vTopMax then vTop -> vTopMax if)
+            do (if (vTop + 1 -> vTop) > vTopMax then vTop -> vTopMax if);
+               'vpush' -> dump
             #);
-          vpop: (# n: @integer enter n do vTop - n -> vTop #);
+          vpop: (# n: @integer enter n do vTop - n -> vTop; 'vpop' -> dump #);
           rpush:
             (#
-            do (if (rTop + 1 -> rTop) > rTopMax then rTop -> rTopMax if)
+            do (if (rTop + 1 -> rTop) > rTopMax then rTop -> rTopMax if);
+               'rpush' -> dump
             #);
-          rpop: (# n: @integer enter n do rTop - n -> rTop #);
+          rpop: (# n: @integer enter n do rTop - n -> rTop; 'rpop' -> dump #);
           print: 
             (# T: @text
             do ' vTop:' -> T.puttext; vTop -> T.putint;
@@ -118,6 +121,15 @@ ObjectCode:
                ' rTop:' -> T.puttext; rTop -> T.putint;
                ' rTopMax:' -> T.puttext; rTopMax -> T.putint;
             exit T[]
+            #);
+          dump:
+            (# T: ^text
+            enter T[]
+            do com(#do 'stack:' -> TT; T[] -> TT; ': vTop: ' -> TT; vTop -> II; 
+                     ' vTopMax: ' -> TT; vTopMax -> II;
+                     '  rTop: ' -> TT; rTop -> II; 
+                     ' rTopMax: ' -> TT; rTopMax -> II;
+                  #)
             #)
      #);
      class:
@@ -153,7 +165,16 @@ ObjectCode:
               descs.markProcE if);
           initGCinfo;
           labs.init;
-          stack.init
+          stack.init;
+          (* at entry to an object thisStack contains the arguments of the 
+           * object and the origin - here we make one rpush for the origin
+           * We need to pass noOfVargs amd noOfRargs and init stack with these
+           * See also rtn:
+           *)
+          stack.rpush;
+          (if emitLLVM then
+              '\nclass ' -> puttext; N[] -> putline
+          if)
        #);
      super: 
        (# N: ^text; superDescNo: @integer
@@ -198,7 +219,11 @@ ObjectCode:
        (# LMR: @char
        enter LMR 
        do ' rtn(' -> out.puttext; LMR->out.put; ')' -> out.put; out.newline;
-          codes.rtn -> emit ; LMR -> emit
+          codes.rtn -> emit ; LMR -> emit;
+          (* we need to pop the rturn values from the stack, but we dont
+           * know its type here - we thus currently assume that a ref is returned
+           *)
+          1 -> stack.rpop
        #);
      rtnV: (*rtnValue*)(#do ' rtnV\n' -> out.puttext;  codes.rtnV -> emit #);
      rtnC: (# do ' rtnC' -> out.putline; codes.rtnC -> emit #);
@@ -305,7 +330,7 @@ ObjectCode:
      tstOriginIsNone:
        (#
        do ' tstOriginIsNone ' -> out.putline;
-          codes.tstOriginNone -> emit
+          codes.tstOriginNone -> emit;
        #);
      invoke: 
         (# N: ^text; descNo,staticOff: @integer; asObj: @boolean; iO: @integer
@@ -317,7 +342,18 @@ ObjectCode:
            io -> out.putint;
            out.newline;
            codes.invoke -> emit; descNo -> emit2; staticOff -> emit2;
-           iO -> emit
+           iO -> emit;
+           (* the origin and possible arguments are on the stack
+            * As for now we dont know the no of arguments
+            * We thus make an rpop for the origin
+            * callee returns a value - here we dont know the type so we 
+            * assume that a ref to callee is returned
+            *)
+           1 -> stack.rpop;
+           stack.rpush;
+           (if emitLLVM then
+               'call\t' -> puttext; N[] -> putline
+           if)
         #);
      mkVindexed:
        (# descInx: @integer
@@ -536,7 +572,11 @@ ObjectCode:
        (# 
        do ' pushThis ' -> out.putline;
           codes.pushthis -> emit; 
-          stack.rPush
+          stack.rPush;
+          (if emitLLVM then
+              'R' -> puttext; stack.rtop -> putint;
+              ' = this' -> putline;
+          if)
        #);
      addOff:
        (# off: @integer
@@ -557,6 +597,13 @@ ObjectCode:
        enter(N[],off)
        do ' pushg ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
           codes.pushg -> emit; off -> emit;
+          stack.vpush;
+          (if emitLLVM then
+              'V' -> puttext; stack.vtop -> putint;
+              ' = load i32, i32* R' -> puttext; stack.rtop -> putint;
+              ', ' -> puttext; off -> putint; newline
+          if);
+          1 -> stack.rpop
        #);
      fpushg: 
        (# N: ^text; off: @integer
@@ -635,7 +682,11 @@ ObjectCode:
            else 
               'OBS! Constant >= 2^16 is not implemented' -> comment
           if);
-          stack.vPush
+          stack.vPush;
+          (if emitLLVM then
+              'V' -> puttext; stack.vtop -> putint; ' = load i32,  ' -> puttext; 
+              cst -> putint; newline
+          if)
        #);
      pushFloatConst:
        (# X: @Real
@@ -750,7 +801,13 @@ ObjectCode:
        enter(N[],off) 
        do ' storeg ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
           codes.storeg -> emit; off -> emit;
-          1 -> stack.vpop          
+          (if emitLLVM then
+              'store i32 V' -> puttext; stack.rtop -> putint;
+              ', i32* R' -> puttext; stack.vtop -> putint;
+              ', ' -> puttext; off -> putint; newline;
+          if);
+          1 -> stack.vpop;
+          1 -> stack.rpop
        #);
      fstoreg: 
        (# N: ^text; off: @integer
@@ -845,7 +902,12 @@ ObjectCode:
           stack.rPush; stack.rpush           
        #);
      swap: (# do ' swap' -> out.putline; codes.swap -> emit #); (* not in use*)
-     rswap: (# do ' rswap' -> out.putline; codes.rswap -> emit #);
+     rswap: 
+       (# rn: @integer
+       enter rn
+       do ' rswap ' -> out.puttext; rn -> out.putint; out.newline;
+          codes.rswap -> emit; rn -> emit
+       #);
      rPop: (# do ' rpop' -> out.putline; codes.rpop -> emit; 1 -> stack.rPop #);
      vPop: (# do ' vpop' -> out.putline; codes.vpop -> emit; 1 -> stack.vPop #);
      CallPrim:
@@ -871,9 +933,21 @@ ObjectCode:
        enter operator
        do ' ' -> out.put; 
           (if operator
-           // codes.plus then 'plus' -> out.putline
+           // codes.plus then 'plus' -> out.putline; 
+              (if emitLLVM then
+                  'V' -> puttext; stack.vtop - 1 -> putint;
+                  ' = add i32 V' -> puttext; stack.vtop - 1 -> putint;
+                  ', V' -> puttext; stack.vtop -> putint; newline
+              if);
+              1 -> stack.vpop
            // codes.minus then 'minus' -> out.putline
-           // codes.mult then 'mult' -> out.putline
+           // codes.mult then 'mult' -> out.putline; 
+              (if emitLLVM then
+                  'V' -> puttext; stack.vtop - 1 -> putint;                  
+                  ' = mult i32 V' -> puttext; stack.vtop - 1 -> putint;
+                  ' V' -> puttext; stack.vtop -> putint; newline
+              if);
+              1 -> stack.vpop;
            // codes.rdiv then 'div' -> out.putline
            // codes.idiv then 'idiv' -> out.putline
            // codes.modd then 'modd' -> out.putline
@@ -896,7 +970,6 @@ ObjectCode:
               operator -> out.putint; out.newline
           if);
           operator -> emit;
-          1 -> stack.vpop
        #);
      i2f: (# do ' i2f' -> out.putline; codes.i2f -> emit #);
      f2i: (# do ' f2i' -> out.putline; codes.f2i -> emit #);
@@ -955,7 +1028,10 @@ ObjectCode:
               (*'\n**** OSDvisibility: ' -> puttext; 
               OSDvisibility -> putint; newline*)
           if);
-          labs.saveInImage 
+          labs.saveInImage ;
+          (if emitLLVM then
+              'end ' -> putline
+          if)
        #);
      
      close:
