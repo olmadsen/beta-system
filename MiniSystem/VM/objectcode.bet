@@ -99,18 +99,74 @@ ObjectCode:
                                                        * and EventProcessor
                                                        *)
        #);
+     newReg: @
+       (# rn: @integer
+       do rn + 1 -> rn
+       exit rn
+       #);
+     newVreg:
+       (# rN: @integer; T: ^Text
+       enter rN
+       do 'V' -> T[]; rN -> T.putint
+       exit T[]
+       #);
+     vReg:
+       (# top: @integer; T: ^text
+       enter top
+       do 'V' -> T[]; 
+          (if top > 0 then
+              stack.VregNo[top] -> T.putint
+           else
+              117 -> T.putint
+          if)
+       exit T[]
+       #);
+     rReg:
+       (# top: @integer; T: ^text
+       enter top
+       do 
+          (if false and (stack.RregNo[top] = 0) then
+              'this' -> T[]
+           else
+              'R' -> T[];  
+              stack.RregNo[top] -> T.putint
+          if)
+       exit T[]
+       #);
      stack: @
        (# rTop,vTop,rTopMax,vTopMax: @integer;
-          init: (#do 0 -> rTop -> vTop -> rTopMax -> vTopMax #);
-          vpush:
+          VregNo: [10] @ integer;
+          RregNo: [10] @ integer;
+          init: 
             (#
+            do 0 -> rTop -> vTop -> rTopMax -> vTopMax;
+               0 -> newReg.rN;
+            #);
+          vpush:
+            (# rN: @integer
+            enter rN
             do (if (vTop + 1 -> vTop) > vTopMax then vTop -> vTopMax if);
+               (if vTop > 0  then
+                   (if vTop > vRegNo.range then vRegNo.range->vRegNo.extend if);
+                   rN -> VregNo[vTop];
+                else
+                   (if emitLLVM then
+                       '*** vpush:vtop: ' -> puttext; vTop -> putint; newline
+               if)if);
                'vpush' -> dump
             #);
           vpop: (# n: @integer enter n do vTop - n -> vTop; 'vpop' -> dump #);
           rpush:
-            (#
+            (# rN: @integer
+            enter rN
             do (if (rTop + 1 -> rTop) > rTopMax then rTop -> rTopMax if);
+               (if rTop > 0 then
+                   (if rTop > rRegNo.range then rRegNo.range->rRegNo.extend if);
+                   rN -> RregNo[rTop];
+                else
+                   (if emitLLVM then
+                       '*** rpush:vtop: ' -> puttext; rTop -> putint; newline
+               if)if);
                'rpush' -> dump
             #);
           rpop: (# n: @integer enter n do rTop - n -> rTop; 'rpop' -> dump #);
@@ -125,11 +181,21 @@ ObjectCode:
           dump:
             (# T: ^text
             enter T[]
-            do com(#do 'stack:' -> TT; T[] -> TT; ': vTop: ' -> TT; vTop -> II; 
+            do com(#do 'stack:' -> TT; T[] -> TT; ': vTop: ' -> TT; vTop -> II;
                      ' vTopMax: ' -> TT; vTopMax -> II;
                      '  rTop: ' -> TT; rTop -> II; 
-                     ' rTopMax: ' -> TT; rTopMax -> II;
+                     ' rTopMax: ' -> TT; rTopMax -> II; 
+                     ' V:'->TT; (if vTop > 0 then VregNo[vTop] -> II if);
+                     ' R:'->TT; (if rTop > 0 then RregNo[rTop] -> II if);
                   #)
+            #);
+          dumpVRN:
+            (#
+            do 'vregNo:vTop: ' -> puttext;  vTop -> putint; ' :: ' -> puttext;
+               (for i: vTop repeat
+                    VregNo[i] -> putint; ' ' -> put
+               for);
+               newline
             #)
      #);
      class:
@@ -572,11 +638,11 @@ ObjectCode:
        (# 
        do ' pushThis ' -> out.putline;
           codes.pushthis -> emit; 
-          stack.rPush;
-          (if emitLLVM then
+          0 -> stack.rPush;
+          (if emitLLVM and false then
               'R' -> puttext; stack.rtop -> putint;
               ' = this' -> putline;
-          if)
+          if);
        #);
      addOff:
        (# off: @integer
@@ -593,17 +659,19 @@ ObjectCode:
           stack.vPush
        #);
      pushg: 
-       (# N: ^text; off: @integer
+       (# N: ^text; off: @integer; rn: @integer
        enter(N[],off)
        do ' pushg ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
           codes.pushg -> emit; off -> emit;
-          stack.vpush;
+
           (if emitLLVM then
-              'V' -> puttext; stack.vtop -> putint;
-              ' = load i32, i32* R' -> puttext; stack.rtop -> putint;
+              newReg -> rN -> newVreg -> puttext;
+              ' = load i32, i32* ' -> puttext; 
+              stack.rtop -> rReg -> puttext;
               ', ' -> puttext; off -> putint; newline
           if);
-          1 -> stack.rpop
+          1 -> stack.rpop;
+          rN -> stack.vPush;
        #);
      fpushg: 
        (# N: ^text; off: @integer
@@ -669,7 +737,7 @@ ObjectCode:
           codes.xrpushg -> emit; off -> emit;
        #);
      pushConst: 
-       (# cst: @integer
+       (# cst: @integer; rn: @integer
        enter cst
        do ' pushc ' -> out.puttext; cst -> out.putint; out.newline;
           (if true 
@@ -682,11 +750,11 @@ ObjectCode:
            else 
               'OBS! Constant >= 2^16 is not implemented' -> comment
           if);
-          stack.vPush;
           (if emitLLVM then
-              'V' -> puttext; stack.vtop -> putint; ' = load i32,  ' -> puttext; 
-              cst -> putint; newline
-          if)
+              newReg -> rN -> newVreg -> puttext;
+              ' = load i32,  ' -> puttext; cst -> putint; newline
+          if);
+          rn -> stack.vPush
        #);
      pushFloatConst:
        (# X: @Real
@@ -802,8 +870,8 @@ ObjectCode:
        do ' storeg ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
           codes.storeg -> emit; off -> emit;
           (if emitLLVM then
-              'store i32 V' -> puttext; stack.rtop -> putint;
-              ', i32* R' -> puttext; stack.vtop -> putint;
+              'store i32 ' -> puttext; stack.vtop -> vReg -> puttext;
+              ', i32* ' -> puttext; stack.rtop -> rReg -> puttext;
               ', ' -> puttext; off -> putint; newline;
           if);
           1 -> stack.vpop;
@@ -929,25 +997,27 @@ ObjectCode:
           out.newline;
        #);
      op: 
-       (# operator: @integer
+       (# operator: @integer; rn: @integer
        enter operator
        do ' ' -> out.put; 
           (if operator
            // codes.plus then 'plus' -> out.putline; 
               (if emitLLVM then
-                  'V' -> puttext; stack.vtop - 1 -> putint;
-                  ' = add i32 V' -> puttext; stack.vtop - 1 -> putint;
-                  ', V' -> puttext; stack.vtop -> putint; newline
+                  newReg -> rN -> newVreg -> puttext;
+                  ' = add i32 ' -> puttext; stack.vtop - 1 -> vReg -> puttext;
+                  ', ' -> puttext; stack.vtop -> vReg -> putline
               if);
-              1 -> stack.vpop
+              2 -> stack.vpop;
+              rN -> stack.vPush;
            // codes.minus then 'minus' -> out.putline
            // codes.mult then 'mult' -> out.putline; 
               (if emitLLVM then
-                  'V' -> puttext; stack.vtop - 1 -> putint;                  
-                  ' = mult i32 V' -> puttext; stack.vtop - 1 -> putint;
-                  ' V' -> puttext; stack.vtop -> putint; newline
+                  newReg -> rN -> newVreg -> puttext;
+                  ' = mult i32 ' -> puttext; stack.vtop - 1 -> vReg -> puttext;
+                  ', ' -> puttext; stack.vtop -> vReg -> putline
               if);
-              1 -> stack.vpop;
+              2 -> stack.vpop;
+              rN -> stack.vPush
            // codes.rdiv then 'div' -> out.putline
            // codes.idiv then 'idiv' -> out.putline
            // codes.modd then 'modd' -> out.putline
