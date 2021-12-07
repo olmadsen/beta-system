@@ -535,7 +535,13 @@ AbstractSyntaxTree: Tree
              *  ObjectGenerator(Invocatioon(BracketedExp...) Items(...)
              * This method returns the length of the BE
              *)
-
+          copyAST:<
+            (# nAST: ^Node
+            do
+               '--copyAST: ' -> puttext; label -> putline;
+               inner
+            exit nAST[]
+            #);
           replaceEntity::<
             (#
             do inner
@@ -1060,6 +1066,15 @@ AbstractSyntaxTree: Tree
             #);
           label:: (# do 'Items' -> lab[] #); 
           PP:: (# do label -> lx.append (* what about props?*) #);
+          copyAST::
+            (#
+            do 'Items:' -> putline;
+               Items -> nAST[];
+               scanSons
+               (#
+               do current.copyAST -> nAST.append
+               #)
+            #);
           scanDecls:
             (# currentDcl: ^decl;
             do scanSons
@@ -1642,12 +1657,24 @@ AbstractSyntaxTree: Tree
           SigType: Node 
             (# id: ^text;
                PT::< (# inDecl: @boolean enter inDecl do inner #);
+               copyAST:<
+                 (# id: ^Text; args: ^Arguments; isKeyword: @boolean; 
+                    sig: ^Signature;
+                    nAST: ^Node
+                 enter(id[],args[],isKeyWord)
+                 do inner
+                 exit nAST[]
+                 #);
             enter id[] 
             do id[] -> name -> append 
             #);
           Unary:< SigType
             (# Label:: (# do 'UnaryPtn' -> lab[] #);
                PT:: (# do id[] -> lx.puttext #);
+               copyAST::
+                 (#
+                 do (id[],args[],isKeyWord) -> UnarySigGen -> nAST[]
+                 #);
             #);
           Binary:< SigType
             (# label :: (# do 'Binary' -> lab[] #);
@@ -1662,6 +1689,11 @@ AbstractSyntaxTree: Tree
           KeyWord:< SigType
             (# label :: (# do 'KeyWord' -> lab[] #);
                PT:: (#do (pos,break,inDecl) -> args.PT #);
+            #);
+          copyAST::<
+            (#
+            do 'signature:' -> puttext; dopt -> putline; 
+               (id.copy,args.copyAST,isKeyword) ->  type.copyAST -> nAST[]
             #);
           args: ^Arguments;
           id: ^text; (* should be a NAme *)
@@ -1689,7 +1721,7 @@ AbstractSyntaxTree: Tree
           inner;
        exit sig[]
        #);
-     UnarySigGen: Sig_Generator(# do id[] -> sig.Unary -> sig.type[] #);
+     UnarySigGen: Sig_Generator (# do id[] -> sig.Unary -> sig.type[] #);
      FunctionSigGen: Sig_Generator(# do id[] -> sig.Function -> sig.type[] #);
      KeyWordSigGen: Sig_Generator(# do id[] -> sig.KeyWord -> sig.type[] #);
      BinarySigGen: Sig_Generator(# do id[] -> sig.Binary -> sig.type[] #);     
@@ -1749,6 +1781,16 @@ AbstractSyntaxTree: Tree
           isBinary,isKeyWord,isFunction: @boolean;
           isArguments:: TrueValue;
           isNewKeyWord: @boolean; (* as in @if: ... with only >> args are used*)
+          copyAST::<
+            (# nArgs: ^Arguments
+            do 'arguments:'->puttext; dopt -> putline;
+               Arguments -> nArgs[];
+               scanSons(#do current.copyAST -> nArgs.append #);
+               isFunction -> nArgs.isFunction;
+               isNewKeyWord -> nArgs.isNewKeyWord;
+               isBinary -> nArgs.isBinary;
+               nArgs[] -> nAST[];
+            #);
           scanArgs:
             (# current: ^Elm; isLast: @boolean
             do (if isKeyWord then
@@ -1858,7 +1900,14 @@ AbstractSyntaxTree: Tree
           isUnique::
             (#
             do OG.IS.isUnique -> value
-            #);                    
+            #);  
+          copyAST::<
+            (# 
+            do 'DataItem:'->puttext; sig.dopt -> puttext; ' og: ' -> puttext;
+               OG.label -> putline;
+               (isConst,isValue,sig.copyAST,OG.copyAST) -> DataItem -> nAST[];
+
+            #);          
           replaceEntity::
             (# DIx: ^DataItem
             do ('DataItem:replaceItem', sig.dopt) -> LG.TTn;
@@ -1961,7 +2010,12 @@ AbstractSyntaxTree: Tree
           ptnKind: @integer;
           xkind:: (# do kinds.ptn -> K (* should differ if virtual *) #);
           kind:: (# do ' ' -> ch #);
-          (*kind:: (# do ': ' -> s[] #);*)
+                    (*kind:: (# do ': ' -> s[] #);*)
+          
+          copyAST::<
+            (#
+            do (sig.copyAST,OG.copyAST,ptnKind) -> GeneralPtnGen -> nAST[]
+            #);
           isPrimitivePtn: @boolean; (* probably any primitive *)
           vDcl: ^Pattern;
           primNo:: 
@@ -2828,6 +2882,13 @@ AbstractSyntaxTree: Tree
                    if)
                if);
             #);
+          copyAST::<
+            (# nSuper: ^Invocation; nIS: ^Items
+            do 'OG:' -> putline;
+               super.copyAST -> nSuper[]; IS.copyAST -> nIS[];
+               IS.isEmpty -> nIS.isEmpty;
+               (nSuper[],nIS[]) -> ObjectGenerator -> nAST[]
+            #);
           getReturnDecl:
             (# ptn: ^Pattern; DI: ^DataItem
             do L:
@@ -2843,7 +2904,8 @@ AbstractSyntaxTree: Tree
                  if)if)
             exit DI[]
             #);
-          bracketedListLength:: (# do 1 -> value; super.bracketedListLength -> value #);
+          bracketedListLength:: 
+            (# do 1 -> value; super.bracketedListLength -> value #);
        enter(super[] -> append,IS[] -> append)
        #);
      ObjectCall:< ObjectSpecification
@@ -2859,6 +2921,12 @@ AbstractSyntaxTree: Tree
                    ' ' -> put; dopt -> putline
                if)
             #);
+          copyAST::<
+            (# nSuper: ^Invocation; nIS: ^Items
+            do 'OC:' -> putline;
+               super.copyAST -> nSuper[]; IS.copyAST -> nIS[];
+               (nSuper[],nIS[]) -> ObjectCall -> nAST[]
+            #);          
        enter(super[] -> append, IS[] -> append)
        #);
      Invocation:< Apl
@@ -2906,6 +2974,12 @@ AbstractSyntaxTree: Tree
                       (if E.ATD[] <> none then E.ATd.primNo-> value if);
                   if)
                #);
+            #);
+          copyAST::<
+            (#
+            do 'Inv:' -> puttext; dopt -> putline;
+               Invocation -> nAST[];
+               scanSons(#do '.' -> put; current.copyAST -> nAST.append #);
             #);
           desc: 
             (# D: ^Items
@@ -3072,6 +3146,11 @@ AbstractSyntaxTree: Tree
           mustBeObject:< BooleanValue;
           expUnit: ^Text;   (* computed unit of an exp *)
           unit: ^StringObj; (* unit attached to a literal *)
+          copyAST::<
+            (#
+            do Exp -> nAST[];
+               inner
+            #);
           convFactor: @ real;
           desc: (# D: ^Items do ATd.desc -> D[] exit D[] #);
           pushThis:< 
@@ -3128,9 +3207,24 @@ AbstractSyntaxTree: Tree
           isObjectInvocation:: TrueValue;
           ptnId: ^Name;
           type: ^InvType;
+          copyAST::<
+            (#
+            do 'OI:' -> puttext; dopt -> putline;
+               (ptnId.T.copy,args.copyAst) -> type.copyAST -> nAST[]
+            #);
           InvType: Node
             (# dot:< (# T: ^text do '.' -> T[]; inner exit T[] #);
-               isOp:< (# op:^text do inner exit op[] #)
+               isOp:< (# op:^text do inner exit op[] #);
+               copyAST:<
+                 (# ptnId: ^Text;
+                    args: ^Arguments;
+                    nAST: ^ObjectInvocation
+                 enter(ptnId[],args[])               
+                 do (ptnId[],args[]) -> ObjectInvocation -> nAST[];
+                    (* we need to copy the comment!?*)
+                    inner
+                 exit nAST[]
+                 #);
             #);
           Unary: InvType 
             (# Label:: (# do 'ObjectInvocation_Unary' -> lab[] #);
@@ -3139,6 +3233,10 @@ AbstractSyntaxTree: Tree
                        (pos,break,false) -> args.PT #);
                length:: (# do ptnId.length + args.length -> value #);
                isOP:: (#do (*this(ObjectInvocation).getUnit*) ''-> op[] #);
+               copyAST::<
+                 (#
+                 do nAST.unary -> nAST.type[] 
+                 #)
             #);
           Binary: InvType
             (# Label:: (# do 'ObjectInvocation_Binary' -> lab[] #);
@@ -3149,6 +3247,10 @@ AbstractSyntaxTree: Tree
                     (pos,break,false) -> args.pt
                  #);
                length:: (# do ptnId.length + 1 + args.length -> value #);
+               copyAST::
+                 (#
+                 do nAST.Binary -> nAST.type[]
+                 #); 
                dot:: (# do ' ' -> T[] #);
                isOp::
                  (#
@@ -3166,6 +3268,10 @@ AbstractSyntaxTree: Tree
                PP:: (# do Label -> lx.append #);
                PT:: (# do (pos,break) -> ptnId.PT; (pos,break,false) -> args.PT #);
                length:: (#do ptnId.length + args.length -> value #);
+               copyAST::
+                 (#
+                 do nAST.Function -> nAST.type[]
+                 #)
             #);
           KeyWord: InvType
             (# Label:: (# do 'ObjectInvocation_KeyWord' -> lab[] #);
@@ -3233,6 +3339,10 @@ AbstractSyntaxTree: Tree
                  #);
                length:: 
                  (# do args.scanSons(# do current.length + value -> value #)#);
+               copyAST::
+                 (#
+                 do nAST.KeyWord -> nAST.type[]
+                 #)
             #);
           savedOGS: ^SuperOGsequence; savedOI: ^ObjectInvocation
        enter(name -> ptnId[] -> append,args[] -> append)
@@ -3279,6 +3389,10 @@ AbstractSyntaxTree: Tree
             #);
           bracketedListLength:: (# do noOfSons -> value #);
           length:: (# do 2 + IV.length -> value #);
+          copyAST::
+            (#
+            do IV.copyAST -> BracketedExp -> nAst[]
+            #);
           IV: ^Invocation; 
        enter IV[] -> append
        #);
@@ -3309,20 +3423,24 @@ AbstractSyntaxTree: Tree
           length:: (#do  T.length -> value #);
           label:: (# do 'name:' -> lab[] #);
           PP:: (# do label -> lx.append; ' ' -> lx.put; T[] -> lx.append #);
+          copyAST:: (#do T.copy -> Name -> nAST[] #)
        #);
      Const:< Lexem
        (# PT:: (# do T[] -> lx.append; PU  #);
           length:: (#do  T.length -> value #);
           Label:: (# do 'ConstLiteral' -> lab[] #);
           PP:: (# do Label -> lx.append; ' ' -> lx.put; T[] -> lx.append #);
-          isConstLiteral:: TrueValue
+          isConstLiteral:: TrueValue;
+          copyAST:: (# L: ^Lexem do T.copy -> Const -> nAST[] -> L[]; 
+                       unit[] -> L.unit[] #)
        #);
      FloatConst:< Lexem
        (# PT:: (# do T[] -> lx.append; PU #);
           length:: (#do  T.length -> value #);
           Label:: (# do 'FloatLiteral' -> lab[] #);
           PP:: (# do Label -> lx.append; ' ' -> lx.put; T[] -> lx.append #);
-          isConstLiteral:: TrueValue
+          isConstLiteral:: TrueValue;
+          copyAST:: (#do T.copy -> FloatConst -> nAST[] #)
        #);
      CharObj:< Lexem
        (# PT::  (# do '\'' -> lx.put;  T[] -> lx.append; '\'' -> lx.put #);
@@ -3333,14 +3451,16 @@ AbstractSyntaxTree: Tree
             do label -> lx.append; ' ' -> lx.put;
                '\''->lx.put; T[] -> lx.append; '\'' ->lx.put
             #);
-          isConstLiteral:: TrueValue
+          isConstLiteral:: TrueValue;
+          copyAST:: (#do T.copy -> CharObj -> nAST[] #)
        #);     
      StringObj:< Lexem
        (# PT::< (# do '"' -> lx.put;  T[] -> lx.append; '"' -> lx.put #);
           length:: (#do  T.length + 2 -> value #);
           Label:: (# do 'String:' -> lab[] #);
           PP:: (# do label -> lx.append; ' ' -> lx.put; T[] -> lx.append #);
-          isStringLiteral:: TRueValue
+          isStringLiteral:: TRueValue;
+          copyAST:: (#do T.copy -> StringObj -> nAST[] #)
        #);
      argBuf:  @
        (# init: (# do none -> head[] -> last[] #);
