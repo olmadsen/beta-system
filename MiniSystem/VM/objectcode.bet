@@ -4,23 +4,34 @@ INCLUDE 'Primitives';
 INCLUDE 'betaVM';
 ---lib:attributes---
 ObjectCode:
-  (# emitLLVM: (#exit false #);
+  (# notLLVM: @ boolean;
      init:<
-       (#
-       enter out[]
-       do vdtPatch.init;
+       (# emitLLVM: @boolean
+       enter(out[],emitLLVM)
+       do not emitLLVM -> notLLVM;
+          vdtPatch.init;
           inner
        #);
      bcPos: (# exit descs.current.bc.pos #);
      comment:
        (# T: ^text
        enter T[]
-       do ' -- ' -> out.puttext; T[] -> out.putline
+       do (if notLLVM then 
+              ' -- ' -> out.puttext;
+           else
+              ';; ' -> out.puttext;
+          if);
+          T[] -> out.putline
        #);
      comB:
        (# T: ^text
        enter T[]
-       do ' -- ' -> out.puttext; T[] -> out.puttext
+       do (if notLLVM then
+              ' -- ' -> out.puttext;
+           else
+              ';; ' -> out.puttext;
+          if);
+          T[] -> out.puttext
        #);
      comA: 
        (# T: ^text
@@ -35,7 +46,12 @@ ObjectCode:
      com2:
        (# T1,T2: ^text
        enter(T1[],T2[])
-       do ' -- ' -> out.puttext; T1[] -> out.puttext; 
+       do (if notLLVM then
+              ' -- ' -> out.puttext; 
+           else
+              ';; ' -> out.puttext
+          if);
+          T1[] -> out.puttext; 
           ' ' -> out.put; T2[] -> out.putline
        #);
      com: 
@@ -83,11 +99,17 @@ ObjectCode:
           nl: (# do emit; Tx.clear #);
           emit: 
             (# 
-            do Tx.newline; ' -- ' -> out.puttext; Tx[] -> out.puttext; 
+            do Tx.newline; 
+               (if notLLVM then
+                   ' -- ' -> out.puttext;
+                else
+                   ';; ' -> out.puttext
+               if);
+               Tx[] -> out.puttext; 
             #);
           print: (# do '***** ' -> puttext; Tx[] -> putline #);
           Tx: @Text
-       do inner; emit;
+       do (if notLLVM then inner; emit;if)
        #);          
      newComponent: (* Not used!? *)
        (# N: ^text; noOfDescs: @integer
@@ -107,23 +129,23 @@ ObjectCode:
      newVreg:
        (# rN: @integer; T: ^Text
        enter rN
-       do 'V' -> T[]; rN -> T.putint
+       do '%V' -> T[]; rN -> T.putint
        exit T[]
        #);
      newRreg:
        (# rN: @integer; T: ^Text
        enter rN
-       do 'R' -> T[]; rN -> T.putint
+       do '%R' -> T[]; rN -> T.putint
        exit T[]
        #);
      vReg:
        (# top: @integer; T: ^text
        enter top
-       do 'V' -> T[]; 
+       do '%V' -> T[]; 
           (if top > 0 then
               stack.VregNo[top] -> T.putint
            else
-              117 -> T.putint
+              0 -> T.putint
           if)
        exit T[]
        #);
@@ -134,7 +156,7 @@ ObjectCode:
           (if false and (stack.RregNo[top] = 0) then
               'this' -> T[]
            else
-              'R' -> T[];  
+              '%R' -> T[];  
               (if top > 0 then 
                   stack.RregNo[top] -> T.putint 
                else
@@ -155,13 +177,15 @@ ObjectCode:
           vpush:
             (# rN: @integer
             enter rN
-            do (if (vTop + 1 -> vTop) > vTopMax then vTop -> vTopMax if);
+            do (*';; vpush: ' -> out.putline;*)
+               (if (vTop + 1 -> vTop) > vTopMax then vTop -> vTopMax if);
                (if vTop > 0  then
                    (if vTop > vRegNo.range then vRegNo.range->vRegNo.extend if);
                    rN -> VregNo[vTop];
                 else
-                   (if emitLLVM then
-                       '*** vpush:vtop: ' -> puttext; vTop -> putint; newline
+                   (if not notLLVM then
+                       ';; vpush:vtop: ' -> out.puttext; vTop ->  out.putint;
+                       out.newline
                if)if);
                'vpush' -> dump
             #);
@@ -174,8 +198,8 @@ ObjectCode:
                    (if rTop > rRegNo.range then rRegNo.range->rRegNo.extend if);
                    rN -> RregNo[rTop];
                 else
-                   (if emitLLVM then
-                       '*** rpush:vtop: ' -> puttext; rTop -> putint; newline
+                   (if not notLLVM then
+                       ';; rpush:rtop: ' -> out.puttext; rTop ->  out.putint; out.newline
                if)if);
                'rpush' -> dump
             #);
@@ -201,12 +225,80 @@ ObjectCode:
             #);
           dumpVRN:
             (#
-            do 'vregNo:vTop: ' -> puttext;  vTop -> putint; ' :: ' -> puttext;
+            do 'vregNo:vTop: ' -> puttext;  vTop ->  out.putint; ' :: ' -> puttext;
                (for i: vTop repeat
-                    VregNo[i] -> putint; ' ' -> put
+                    VregNo[i] ->  out.putint; ' ' -> out.put
                for);
-               newline
+               out.newline
             #)
+       #);
+     LLVMstructs: @ Text;
+     thisClassN: ^Text;
+     getThisClass:
+       (# classN,T: ^text; rN: @integer
+       enter classN[]
+       do newReg -> rN -> newRreg -> out.puttext;
+          ' = getelementptr ' -> out.puttext; 
+          classN[] -> out.puttext; ', ' -> out.puttext;
+          (if true then
+              classN[] -> out.puttext;
+           else
+              thisClassN[] -> out.puttext;
+          if);
+          ' * ' -> out.puttext;
+          stack.rtop -> rReg -> out.puttext; 
+          ', i32 0 ' -> out.puttext
+       exit rN
+       #);
+     getThisClassX:
+       (# classN,T: ^text
+       enter classN[]
+       do 
+          ' = getelementptr ' -> out.puttext; 
+          classN[] -> out.puttext; ', ' -> out.puttext;
+          (if true then
+              classN[] -> out.puttext;
+           else
+              thisClassN[] -> out.puttext;
+          if);
+          ' * ' -> out.puttext;
+          stack.rtop -> rReg -> out.puttext; 
+          ', i32 0 ' -> out.puttext
+       #);     
+     mkLLVMclassName:
+       (# N,T: ^text
+       enter N[]
+       do N[] -> filter -> T[];
+          inner
+       exit T[]
+       #);
+     mkLLVMstructName: mkLLVMclassName
+       (#
+       do '%struct.' -> T.prepend
+       #);
+     prepStruct:
+       (# N,T: ^text
+       enter N[]
+       do N[] -> filter -> T[];
+          '%struct.' -> T.prepend
+       exit T[]
+       #);
+     filter:
+       (# N,T: ^text
+       enter N[]
+       do '' -> T[];
+          L: 
+          N.scanAll
+          (#
+          do (if ch
+              // '@' // '#' // ':' then
+                 '$' -> T.put
+              // '+'  then
+                 '_' -> T.put; 
+              else
+                 ch -> T.put
+             if)#)
+       exit T[]
        #);
      class:
        (# dumpClass:
@@ -219,74 +311,95 @@ ObjectCode:
           add:
             (# off: @integer
             enter off
-            do (if not first then
-                   ',' -> put;
-               if);
+            do (if not first then ',' -> LLVMstructs.put if);
                false -> first;
-               off -> putint; ':'->put; 
+               (*off -> putint; ':'->put; *)
                INNER;
             #);
           addR: add
-            (#
-            do 'I32*'-> puttext; 
+            (# OGid: ^text
+            enter OGid[]
+            do '%struct.' -> LLVMstructs.puttext;
+               OGid[] -> filter -> LLVMstructs.puttext; '*' -> LLVMstructs.put
             #);
           addV: add
             (# 
-            do 'I32'-> puttext; 
+            do 'i32'-> LLVMstructs.puttext; 
             #);
           first: @boolean;
           T: ^Text
        enter(N[],descNo,procE,topDescNo,originOff,originDescNo)
-       do '\nclass ' -> out.puttext; N[] -> out.puttext; ' ' -> out.put; 
-          descNo -> out.putint; ' ' -> out.put;
-          originOff -> out.putint; ' ' -> out.put;
-          originDescNo -> out.putint;
-          out.newline;
-          (if descNo = 0 then
-              dumpClass;
-              ' is ZERO!' -> putline
-          if);
-          (N[],descNo,originOff,originDescNo,out[]) -> descs.setCurrent;
-          (if descs.OD[topDescNo][]= none then 
-              dumpClass;
-              ' descs.OD[topDescNo='->puttext; 
-              topDescNo -> putint;
-              '][]= none' -> putline
-           else
-              (topDescNo,descs.OD[topDescNo].bc[]) -> descs.current.setSuperBC;
-          if);
-          descs.markAllocE;
-          (if procE then 
-              'procE:' -> puttext; N[] -> putline;
-              descs.markProcE if);
-          initGCinfo;
-          labs.init;
-          stack.init;
-          (* at entry to an object thisStack contains the arguments of the 
-           * object and the origin - here we make one rpush for the origin
-           * We need to pass noOfVargs amd noOfRargs and init stack with these
-           * See also rtn:
-           *)
+       do stack.init;               
           stack.rpush;
-          (if emitLLVM then
-              '\n%struct.' -> T[]; N[] -> T.puttext; 
-              T[] -> puttext; ' = type {' -> puttext;
+          (if notLLVM then
+              '\nclass ' -> out.puttext; N[] -> out.puttext; ' ' -> out.put; 
+              descNo -> out.putint; ' ' -> out.put;
+              originOff -> out.putint; ' ' -> out.put;
+              originDescNo -> out.putint;
+              out.newline;
+              (if descNo = 0 then
+                  dumpClass;
+                  ' is ZERO!' -> putline
+              if);
+              (N[],descNo,originOff,originDescNo,out[]) -> descs.setCurrent;
+              (if descs.OD[topDescNo][]= none then 
+                  dumpClass;
+                  ' descs.OD[topDescNo='->puttext; 
+                  topDescNo -> putint;
+                  '][]= none' -> putline
+               else
+                  (topDescNo,descs.OD[topDescNo].bc[]) -> descs.current.setSuperBC;
+              if);
+              descs.markAllocE;
+              (if procE then 
+                  'procE:' -> puttext; N[] -> putline;
+                  descs.markProcE 
+              if);
+              initGCinfo;
+              labs.init;
+           else
+              (N[],descNo,originOff,originDescNo,out[]) -> descs.setCurrent;
+              (topDescNo,descs.OD[topDescNo].bc[]) -> descs.current.setSuperBC;
+              (* at entry to an object thisStack contains the arguments of the 
+               * object and the origin - here we make one rpush for the origin
+               * We need to pass noOfVargs amd noOfRargs and init stack with these
+               * See also rtn:
+               *)
+
+              (if true
+               // ':=' -> N.equal then  '_assign' -> N[]
+               // '=' -> N.equal then '_equal' -> N[]
+               // '+' = (1 -> N.inxGet) then
+                  '_add' -> N[]; (2,N.length) -> N.sub -> N.append;
+              if);
+              N[] -> filter -> N[];
+              '%struct.' -> T[]; N[] -> T.puttext; 
+              '$' -> T.put; descNo -> T.putint;
+              T[] -> thisClassN[];
+              T[] -> LLVMstructs.puttext; ' = type {' -> LLVMstructs.puttext;
               true -> first;
               inner class;
-              '}'->puttext; newline;              
+              '}'-> LLVMstructs.puttext; LLVMstructs.newline;              
 
-              'define void ' -> puttext; N[] -> puttext; 
-              '(' -> put; '%struc.' -> (N.copy).prepend -> puttext;
-              ' *R0' -> puttext;
-              '){' -> putline;;
-              (*'R0 = new ' -> puttext; T[] -> putline*)
+              '\ndefine ' -> out.puttext; thisClassN[] -> out.puttext; 
+              '* @' -> out.puttext; N[] -> out.puttext;      
+              '$' -> out.put; descNo -> out.putint;
+              '(' -> out.put; 
+              thisClassN[] -> out.puttext;
+              (*'%struct.' -> (N.copy).prepend -> out.puttext;*)
+              ' *%R0' -> out.puttext;
+              '){' -> out.putline;
+              '%V0 = add i32 0, 0' -> out.putline; (* just a dummy *)
+              (*'R0 = new ' -> out.puttext; T[] -> out.putline*)
           if)
        #);
      super: 
        (# N: ^text; superDescNo: @integer
        enter(N[],superDescNo)
-       do ' -- super ' -> out.puttext; N[] -> out.putline;
-          descs.OD[superDescNo][] -> descs.current.superObjDesc[]
+       do (if notLLVM then
+              ' -- super ' -> out.puttext; N[] -> out.putline;
+              descs.OD[superDescNo][] -> descs.current.superObjDesc[]
+          if)
        #);
      markEnterE: (# do descs.markEnterE #);
      enterP:
@@ -295,24 +408,31 @@ ObjectCode:
        #);
      setThisStack:
        (#
-       do ' setThisStack ' -> out.putline;
-          codes.setThisStack -> emit
+       do (if notLLVM then
+              ' setThisStack ' -> out.putline;
+              codes.setThisStack -> emit
+          if)
        #);
      rpopThisObj:
        (#
-       do ' rpopThisObj ' -> out.putline;
-          codes.rpopThisObj -> emit
+       do (if notLLVM then
+              ' rpopThisObj ' -> out.putline;
+              codes.rpopThisObj -> emit
+           else
+          if)
        #);       
      actions:
        (# hasSuper,genDoEvent: @boolean
        enter(hasSuper,genDoEvent)
-       do 'DO:'->out.putline;
-          descs.markDoE;
-          (if genDoEvent then doEventQ if);          
+       do (if notLLVM then
+              'DO:'->out.putline;
+              descs.markDoE;
+              (if genDoEvent then doEventQ if);
+          if)
        #);
      mvStack:
        (#
-       do ' mvStack '->out.putline; codes.mvstack -> emit 
+       do (if notLLVM then ' mvStack '->out.putline; codes.mvstack -> emit if)
        #);
      markExitE: (# do descs.markExitE #);
      doExit:
@@ -324,20 +444,36 @@ ObjectCode:
      rtn: 
        (# LMR: @char
        enter LMR 
-       do ' rtn(' -> out.puttext; LMR->out.put; ')' -> out.put; out.newline;
-          codes.rtn -> emit ; LMR -> emit;
-          (* we need to pop the return values from the stack, but we dont
-           * know its type here - we thus currently assume that a ref is returned
-           *)
-          (if emitLLVM then
-              'ret I32* R0\n' -> puttext;
+       do (if notLLVM then
+              ' rtn(' -> out.puttext; LMR->out.put; ')' -> out.put; out.newline;
+              codes.rtn -> emit ; LMR -> emit;
+           else
+              (* we need to pop the return values from the stack, but we dont
+               * know its type here - we thus currently assume that a ref is returned
+               *)
+              'ret ' -> out.puttext; thisClassN[] -> out.puttext; ' *%R0\n' -> out.puttext;
           if);
           1 -> stack.rpop;
        #);
-     rtnV: (*rtnValue*)(#do ' rtnV\n' -> out.puttext;  codes.rtnV -> emit #);
+     rtnV: (*rtnValue*)
+       (#
+       do (If notLLVM then
+              ' rtnV\n' -> out.puttext;  codes.rtnV -> emit 
+           else
+          if)
+       #);
      rtnC: (# do ' rtnC' -> out.putline; codes.rtnC -> emit #);
      rtnExit: (# do ' rtnExit' -> out.putline; codes.rtnExit -> emit #);
-     rtnInner: (# do ' rtnInner' -> out.putline; codes.rtnInner -> emit #);
+     rtnInner: 
+       (# 
+       do (if notLLVM then
+              ' rtnInner' -> out.putline; codes.rtnInner -> emit
+           else
+              ';;; rtnInner\n' -> out.puttext;
+              'ret ' -> out.puttext; thisClassN[] -> out.puttext; 
+              ' *%R0\n' -> out.puttext;              
+          if)
+       #);
      rtnEvent: 
        (# hasExit: @integer 
        enter hasExit 
@@ -348,23 +484,36 @@ ObjectCode:
      allocEventQ:
        (# asObj: @boolean
        enter asObj
-       do ' allocEventQ\n' -> out.puttext;
-          codes.allocEventQ -> emit;
-          (if asObj then 1 -> emit else 0 -> emit if)
+       do (If notLLVM then
+              ' allocEventQ\n' -> out.puttext;
+              codes.allocEventQ -> emit;
+              (if asObj then 1 -> emit else 0 -> emit if)
+          if);
        #);
      rtnEventQ: 
        (# hasExit: @integer 
        enter hasExit 
-       do ' rtnEventQ ' -> out.puttext; hasExit -> out.putint; out.newline;
-          codes.rtnEventQ -> emit;
-          hasExit -> emit
+       do (if notLLVM then
+              ' rtnEventQ ' -> out.puttext; hasExit -> out.putint; out.newline;
+              codes.rtnEventQ -> emit;
+              hasExit -> emit
+          if)
        #);
      doEventQ:
        (#
-       do ' doEventQ\n' -> out.puttext;
-          codes.doEventQ -> emit
+       do (if notLLVM then
+              ' doEventQ\n' -> out.puttext;
+              codes.doEventQ -> emit
+          if);
        #);
-     stop: (# do ' stop' -> out.putline; codes.stop -> emit #);
+     stop: 
+       (# 
+       do (if notLLVM then
+              ' stop' -> out.putline; codes.stop -> emit
+           else
+              ';; stop\n' -> out.puttext
+          if)
+       #);
      makeEmptySub:
        (# N: ^text; descNo: @integer
        enter(N[],descNo)
@@ -376,10 +525,13 @@ ObjectCode:
      defLab:
        (# lab: @integer 
        enter lab
-       do ' L' -> out.puttext; lab -> out.putint; ':' -> out.put; out.newline;
-          lab -> labs.def;
-          (if emitLLVM then
-              '; <label>:' -> puttext; lab -> putint; newline
+       do (if notLLVM then
+              ' L' -> out.puttext; lab -> out.putint; ':' ->out.put; out.newline;
+              lab -> labs.def;
+           else
+              '; <label>: L' -> out.puttext; lab ->  out.putint; out.newline;
+              '   br label %L' -> out.puttext; lab ->  out.putint;  out.newline;
+              'L'-> out.puttext; lab ->  out.putint; ':' -> out.put; out.newline
           if);
        #);
      jmpGT: 
@@ -393,25 +545,27 @@ ObjectCode:
      jmp: 
        (# lab: @integer 
        enter lab 
-       do ' jmp L' -> out.puttext; lab -> out.putint; out.newline;
-          codes.jmp -> emit;
-          0 -> emit2;
-          lab -> labs.mark;
-          (if emitLLVM then
-              'br label %' -> puttext; lab -> putint; newline 
+       do (if notLLVM then
+              ' jmp L' -> out.puttext; lab -> out.putint; out.newline;
+              codes.jmp -> emit;
+              0 -> emit2;
+              lab -> labs.mark;
+           else
+              'br label %L' -> out.puttext; lab ->  out.putint; out.newline 
           if);          
        #);
      jmpFalse:
        (# Tlab,Flab: @integer 
        enter(Tlab,Flab) 
-       do ' jmpFalse L' -> out.puttext; Flab -> out.putint; out.newline;
-          codes.jmpFalse -> emit;
-          0 -> emit2;
-          Flab -> labs.mark;
-          (if emitLLVM then
-              'br i1 ' -> puttext; stack.vtop -> vReg -> puttext; 
-              ', label %' -> puttext; Tlab -> putint;
-              ', label %' -> puttext; Flab -> putint; newline 
+       do (if notLLVM then
+              ' jmpFalse L' -> out.puttext; Flab -> out.putint; out.newline;
+              codes.jmpFalse -> emit;
+              0 -> emit2;
+              Flab -> labs.mark;
+           else
+              'br i1 ' -> out.puttext; stack.vtop -> vReg -> out.puttext; 
+              ', label %L' -> out.puttext; Tlab ->  out.putint;
+              ', label %L' -> out.puttext; Flab ->  out.putint; out.newline 
           if);
           1-> stack.vpop
        #);
@@ -450,36 +604,49 @@ ObjectCode:
        #);
      tstOriginIsNone:
        (#
-       do ' tstOriginIsNone ' -> out.putline;
-          codes.tstOriginNone -> emit;
+       do (if notLLVM then
+              ' tstOriginIsNone ' -> out.putline;
+              codes.tstOriginNone -> emit;
+           else
+              
+          if)
        #);
      invoke: 
        (# N: ^text; descNo,staticOff: @integer; asObj: @boolean; iO: @integer;
           rN: @integer
        enter(N[],descNo,staticOff,asObj) 
-        do ' invoke ' -> out.puttext; N[] -> out.puttext; 
-           ' ' -> out.put; descNo -> out.putint; ' ' -> out.put;
-           staticOff -> out.putint; ' ' -> out.put;
-           (if asObj then 1 -> iO else 0 -> iO if);
-           io -> out.putint;
-           out.newline;
-           codes.invoke -> emit; descNo -> emit2; staticOff -> emit2;
-           iO -> emit;
-           (* the origin and possible arguments are on the stack
-            * As for now we dont know the no of arguments
-            * We thus make an rpop for the origin
-            * callee returns a value - here we dont know the type so we 
-            * assume that a ref to callee is returned
-            *)
-           1 -> stack.rpop;
-           stack.rpush;
-           (if emitLLVM then
-               newReg -> rN -> newVreg -> puttext; ' = ' -> puttext;
-               'new %struct.' -> (N.copy).prepend -> putline;
-               'call\t' -> puttext; N[] -> puttext; 
-               '(' -> put;  rN -> newVreg -> puttext; ')' ->put;
-               newline
-           if)
+       do (if notLLVM then
+              ' invoke ' -> out.puttext; N[] -> out.puttext; 
+              ' ' -> out.put; descNo -> out.putint; ' ' -> out.put;
+              staticOff -> out.putint; ' ' -> out.put;
+              (if asObj then 1 -> iO else 0 -> iO if);
+              io -> out.putint;
+              out.newline;
+              codes.invoke -> emit; descNo -> emit2; staticOff -> emit2;
+              iO -> emit;
+           else
+              (* the origin and possible arguments are on the stack
+               * As for now we dont know the no of arguments
+               * We thus make an rpop for the origin
+               * callee returns a value - here we dont know the type so we 
+               * assume that a ref to callee is returned
+               *)
+              N[] -> filter -> N[];
+              1 -> stack.rpop;
+              stack.rpush;
+              newReg -> rN -> newRreg -> out.puttext; ' = ' -> out.puttext;
+              ';; new %struct.' -> (N.copy).prepend -> out.putline;
+              'call ' -> out.puttext;
+              ' %struct.' -> (N.copy).prepend -> out.puttext;
+              '$' -> out.put; descNo -> out.putint;
+              '* @' -> out.puttext; N[] -> out.puttext; 
+              '$' -> out.put; descNo -> out.putint;
+              '(' -> out.put;  ' %struct.' -> (N.copy).prepend -> out.puttext;
+              '$' -> out.put; descNo -> out.putint;
+              ' * ' -> out.puttext;
+              rN -> newRreg -> out.puttext; ')' -> out.put;
+              out.newline
+          if)
         #);
      mkVindexed:
        (# descInx: @integer
@@ -495,8 +662,10 @@ ObjectCode:
        #);     
      saveAndSetThis:
        (#
-       do ' saveAndSetThis ' -> out.putline;
-          codes.saveAndSetThis -> emit
+       do (If notLLVM then
+              ' saveAndSetThis ' -> out.putline;
+              codes.saveAndSetThis -> emit
+          if)
        #);
      restoreThis:
        (#
@@ -660,22 +829,36 @@ ObjectCode:
      toSuper:
        (# descInx: @integer
        enter descInx
-       do ' toSuper ' -> out.puttext;
-          descInx -> out.putint; out.newline;
-          codes.toSuper -> emit; descInx -> emit2
+       do (if notLLVM then
+              ' toSuper ' -> out.puttext;
+              descInx -> out.putint; out.newline;
+              codes.toSuper -> emit; descInx -> emit2
+           else
+              ';; toSuper'->out.putline
+          if)
        #);
      innerx:
        (# inx: @integer 
        enter inx
-       do ' innerX ' -> out.puttext; ' ' -> out.put; inx -> out.putint; out.newline;
-          codes.innerx -> emit; inx -> emit;
+       do (if notLLVM then
+              ' innerX ' -> out.puttext; ' ' -> out.put; 
+              inx -> out.putint; out.newline;
+              codes.innerx -> emit; inx -> emit;
+           else
+             ';; innerx\n' -> out.puttext 
+          if)
        #);
      innerP: (* Inner P, where P.ON > 1 *)
        (# inx: @integer 
        enter inx
-       do ' innerP ' -> out.puttext; ' ' -> out.put; inx -> out.putint; out.newline;
-          codes.innerP -> emit; inx -> emit;
-          1 -> stack.rPop
+       do (if notLLVM then
+              ' innerP ' -> out.puttext; ' ' -> out.put; 
+              inx -> out.putint; out.newline;
+              codes.innerP -> emit; inx -> emit;
+
+           else
+              1 -> stack.rPop              
+          if)
        #);
      innerExit:
        (# inx: @integer 
@@ -687,8 +870,10 @@ ObjectCode:
      innerA:
        (# inx: @integer 
        enter inx
-       do ' innerA ' -> out.puttext; ' ' -> out.put; inx -> out.putint; out.newline;
-          codes.innerA -> emit; inx -> emit;
+       do (if notLLVM then
+              ' innerA ' -> out.puttext; ' ' -> out.put; inx -> out.putint; out.newline;
+              codes.innerA -> emit; inx -> emit;
+          if)
        #);
      suspendd: (# do ' suspend' -> out.putline; codes.susp -> emit #);
      doSuper: 
@@ -701,13 +886,12 @@ ObjectCode:
 
      pushThis:
        (# 
-       do ' pushThis ' -> out.putline;
-          codes.pushthis -> emit; 
-          0 -> stack.rPush;
-          (if emitLLVM and false then
-              'R' -> puttext; stack.rtop -> putint;
-              ' = this' -> putline;
-          if);
+       do (if notLLVM then
+              ' pushThis ' -> out.putline;
+              codes.pushthis -> emit; 
+           else
+              0 -> stack.rPush;
+          if)
        #);
      addOff:
        (# off: @integer
@@ -725,27 +909,40 @@ ObjectCode:
           stack.vPush
        #);
      pushg: 
-       (# N: ^text; off: @integer; rn: @integer
+       (# N: ^text; off: @integer; rN,rN2: @integer
        enter(N[],off)
-       do ' pushg ' -> out.puttext; off -> out.putint; 
-          ' ' -> out.put; N[] -> out.putline;
-          codes.pushg -> emit; off -> emit;
-
-          (if emitLLVM then
-              newReg -> rN -> newVreg -> puttext;
-              ' = load i32, i32* ' -> puttext; 
-              stack.rtop -> rReg -> puttext;
-              ', ' -> puttext; off -> putint; newline
+       do (if notLLVM then
+              ' pushg ' -> out.puttext; off -> out.putint; 
+              ' ' -> out.put; N[] -> out.putline;
+              codes.pushg -> emit; off -> emit;
+           else
+              ';; pushg "' -> out.puttext; N[] -> out.puttext; '"' -> out.put;
+              ' ' -> out.put; off -> out.putint; out.newline;
+              (if true then
+                  N[] -> prepStruct -> getThisClass -> rN;
+               else
+                  thisClassN[] -> getThisClass -> rN;
+              if);
+              ', i32 ' -> out.puttext; 
+              off - 1 -> out.putint; out.newline;
+              newReg -> rN2 -> newVreg -> out.puttext;
+              ' = load i32, i32* ' -> out.puttext;
+              rN -> newRreg -> out.puttext;
+              out.newline
           if);
           1 -> stack.rpop;
-          rN -> stack.vPush;
+          rN2 -> stack.vPush;
        #);
      fpushg: 
        (# N: ^text; off: @integer
        enter(N[],off)
-       do ' fpushg ' -> out.puttext; off -> out.putint; ' ' -> out.put; 
-          N[] -> out.putline;
-          codes.fpushg -> emit; off -> emit;
+       do (if notLLVM then
+              ' fpushg ' -> out.puttext; off -> out.putint; ' ' -> out.put; 
+              N[] -> out.putline;
+              codes.fpushg -> emit; off -> emit;
+           else
+              ';; fpushg\n' ->  out.puttext
+          if)
        #);     
      ovpushg:
        (# N: ^text; off: @integer
@@ -769,19 +966,38 @@ ObjectCode:
           stack.rPush
        #);
      rpushg: 
-       (# N: ^text; off: @integer; rN: @integer
+       (# N: ^text; off: @integer; rN,rN2: @integer; T: ^text
        enter(N[],off)
-       do ' rpushg ' -> out.puttext; off -> out.putint; 
-          ' ' -> out.put; N[] -> out.putline;
-          codes.rpushg -> emit; off -> emit;
-          (if emitLLVM then
-              newReg -> rN -> newRreg -> puttext;
-              ' = load i32, i32* ' -> puttext; 
-              stack.rtop -> rReg -> puttext;
-              ', ' -> puttext; off -> putint; newline
+       do (if notLLVM then
+              ' rpushg ' -> out.puttext; off -> out.putint; 
+              ' ' -> out.put; N[] -> out.putline;
+              codes.rpushg -> emit; off -> emit;
+           else
+              ';; rpushg ' -> out.puttext; N[] -> out.puttext; 
+              ' ' -> out.put; off -> out.putint; out.newline;
+              (if true then
+                  thisClassN[] -> getThisClass -> rN; (* must save current on stack*)
+               else
+                  '%originClass' -> getThisClass -> rN;
+              if);
+              ', i32 ' -> out.puttext; 
+              off - 1 -> out.putint; out.newline;
+              newReg -> rN2 -> newRreg -> out.puttext;
+              (if true then
+                  ' = load ' -> out.puttext; 
+                  N[] -> mkLLVMstructName -> T[] -> out.puttext;
+                  '* , ' -> out.puttext; 
+                  T[] -> out.puttext; '** ' -> out.puttext;
+               else
+                  ' = load i32*, i32** ' -> out.puttext;
+              if);
+              rN -> newRreg -> out.puttext;
+              out.newline;
+              ';; end rpushg\n' -> out.puttext
+
           if);
           1 -> stack.rpop;
-          rN -> stack.rPush;          
+          rN2 -> stack.rPush;          
        #);
      xpush:
        (# N: ^text; off: @integer
@@ -815,29 +1031,34 @@ ObjectCode:
      pushConst: 
        (# cst: @integer; rn: @integer
        enter cst
-       do ' pushc ' -> out.puttext; cst -> out.putint; out.newline;
-          (if true 
-           // cst <= 255 then
-              codes.pushc -> emit;
-              cst -> emit
-           // cst <= 255 * 255  then
-              codes.pushc2 -> emit;
-              cst -> emit2
-           else 
-              'OBS! Constant >= 2^16 is not implemented' -> comment
-          if);
-          (if emitLLVM then
-              newReg -> rN -> newVreg -> puttext;
-              ' = load i32,  ' -> puttext; cst -> putint; newline
+       do (if notLLVM then
+              ' pushc ' -> out.puttext; cst -> out.putint; out.newline;
+              (if true 
+               // cst <= 255 then
+                  codes.pushc -> emit;
+                  cst -> emit
+               // cst <= 255 * 255  then
+                  codes.pushc2 -> emit;
+                  cst -> emit2
+               else 
+                  'OBS! Constant >= 2^16 is not implemented' -> comment
+              if);
+           else
+              newReg -> rN -> newVreg -> out.puttext;
+              ' = add i32 0, ' -> out.puttext; cst -> out.putint; out.newline
           if);
           rn -> stack.vPush
        #);
      pushFloatConst:
        (# X: @Real
        enter X
-       do ' pushFloatConst ' -> out.puttext; X -> out.putReal; out.newline;
-          codes.pushFloatConst -> emit;
-          X -> emit8
+       do (if notLLVM then
+              ' pushFloatConst ' -> out.puttext; X -> out.putReal; out.newline;
+              codes.pushFloatConst -> emit;
+              X -> emit8
+           else
+              ';; pushFloatConst \n' -> out.puttext;
+          if)
        #);
      pushNone: 
        (# 
@@ -848,15 +1069,19 @@ ObjectCode:
      pushText:
        (# T,T1: ^text; I: @integer
        enter T[]
-       do ' pushText ' -> out.puttext; T[] -> out.putline;
-          codes.pushText -> emit;
-          T[] -> handleEscape -> T1[];
-          (* 'PushText: ' -> puttext; T1[] -> putline;*)
-          T1.length -> descs.current.addLiteral
-          (#
-          do i + 1 -> i -> T1.inxGet -> value;
-          #) -> emit;
-          stack.rPush
+       do (if notLLVM then
+              ' pushText ' -> out.puttext; T[] -> out.putline;
+              codes.pushText -> emit;
+              T[] -> handleEscape -> T1[];
+              (* 'PushText: ' -> puttext; T1[] -> putline;*)
+              T1.length -> descs.current.addLiteral
+              (#
+              do i + 1 -> i -> T1.inxGet -> value;
+              #) -> emit;
+              stack.rPush
+           else
+              ';; pushText \n' -> out.puttext;
+          if)
        #);
      handleEscape:
        (# T: ^text; T1: @text;
@@ -936,19 +1161,44 @@ ObjectCode:
      store: 
        (# N: ^text; off: @integer
        enter(N[],off) 
-       do ' store ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
-          codes.store -> emit; off -> emit;
-          1 -> stack.vpop
+       do (if notLLVM then
+              ' store ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
+              codes.store -> emit; off -> emit;
+              1 -> stack.vpop
+          if)
        #);
      storeg: 
-       (# N: ^text; off: @integer
+       (# N: ^text; off: @integer; rN: @integer
        enter(N[],off) 
-       do ' storeg ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
-          codes.storeg -> emit; off -> emit;
-          (if emitLLVM then
-              'store i32 ' -> puttext; stack.vtop -> vReg -> puttext;
-              ', i32* ' -> puttext; stack.rtop -> rReg -> puttext;
-              ', ' -> puttext; off -> putint; newline;
+       do (if notLLVM then
+              ' storeg ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
+              codes.storeg -> emit; off -> emit;
+           else
+              ';; storeg "' -> out.puttext; N[] -> out.puttext; '"' -> out.put;
+              ' ' -> out.put; off -> out.putint; out.newline;
+              
+              newReg -> rN -> newRreg -> out.puttext;
+              
+              (if true then
+                  N[] -> prepStruct -> getThisClassX;
+               else
+                  ' = getelementptr ' -> out.puttext; 
+                  thisClassN[] -> out.puttext; ', ' -> out.puttext;
+              if);
+              (* from id stack: *)
+              (*(if false then                  
+                  thisClassN[] -> out.puttext;
+               else
+                  N[] -> prepStruct -> out.puttext;
+              if);
+              ' * ' -> out.puttext;
+              stack.rtop -> rReg -> out.puttext; 
+               ', i32 0, ' -> out.puttexct;
+               *)
+              ', i32 ' -> out.puttext; off - 1 -> out.putint; out.newline;
+              'store i32 ' -> out.puttext; stack.vtop -> vReg -> out.puttext;
+              ', i32* ' -> out.puttext; 
+              rN -> newRreg -> out.putline
           if);
           1 -> stack.vpop;
           1 -> stack.rpop
@@ -956,9 +1206,13 @@ ObjectCode:
      fstoreg: 
        (# N: ^text; off: @integer
        enter(N[],off) 
-       do ' fstoreg ' -> out.puttext; off -> out.putint; ' ' -> out.put; 
-          N[] -> out.putline;
-          codes.fstoreg -> emit; off -> emit;
+       do (if notLLVM then
+              ' fstoreg ' -> out.puttext; off -> out.putint; ' ' -> out.put; 
+              N[] -> out.putline;
+              codes.fstoreg -> emit; off -> emit;
+           else
+              ';; fstoreg \n' -> out.puttext;
+          if);
           1 -> stack.vpop          
        #);     
      ovstoreg:
@@ -980,18 +1234,26 @@ ObjectCode:
      rstore: 
        (# N: ^text; off: @integer
        enter(N[],off) 
-       do ' rstore ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
-          (if off <= 255 then 
-              codes.rstore -> emit; off -> emit
+       do (if notLLVM  then
+              ' rstore ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
+              (if off <= 255 then 
+                  codes.rstore -> emit; off -> emit
+              if);
+           else
           if);
           1 -> stack.rPop
        #);
      rstoreg: 
        (# N: ^text; off: @integer
        enter(N[],off) 
-       do ' rstoreg ' -> out.puttext; off -> out.putint; ' ' -> out.put; N[] -> out.putline;
-          (if off <= 255 then 
-              codes.rstoreg -> emit; off -> emit
+       do (if notLLVM then
+              ' rstoreg ' -> out.puttext; off -> out.putint; 
+              ' ' -> out.put; N[] -> out.putline;
+              (if off <= 255 then 
+                  codes.rstoreg -> emit; off -> emit
+              if);
+           else
+              ';; rstoreg\n' -> out.putline
           if);
           2 -> stack.rPop
        #);
@@ -1049,31 +1311,48 @@ ObjectCode:
      rswap: 
        (# rn: @integer
        enter rn
-       do ' rswap ' -> out.puttext; rn -> out.putint; out.newline;
-          codes.rswap -> emit; rn -> emit
+       do (if notLLVM then
+              ' rswap ' -> out.puttext; rn -> out.putint; out.newline;
+              codes.rswap -> emit; rn -> emit
+           else
+              ';; rswap\n' -> out.puttext
+          if)
        #);
-     rPop: (# do ' rpop' -> out.putline; codes.rpop -> emit; 1 -> stack.rPop #);
-     vPop: (# do ' vpop' -> out.putline; codes.vpop -> emit; 1 -> stack.vPop #);
+     rPop: 
+       (# 
+       do (if notLLVM then
+              ' rpop' -> out.putline; codes.rpop -> emit; 1 -> stack.rPop 
+          if)
+       #);
+     vPop: 
+       (# 
+       do (if notLLVM then
+              ' vpop' -> out.putline; codes.vpop -> emit; 1 -> stack.vPop 
+          if)
+       #);
      CallPrim:
        (# P: ^text; op: @integer
        enter(P[],op)
-       do ' %' -> out.puttext; P[] -> out.puttext; ' ' -> out.put; op -> out.putint;
-          codes.prim -> emit; op -> emit;
-          (if op 
-           // prim.put then
-              (if emitLLVM then
-                  'call putCh ' -> puttext; stack.vtop -> vReg -> putline
+       do (if notLLVM then
+              ' %' -> out.puttext; P[] -> out.puttext; ' ' -> out.put; op -> out.putint;
+              codes.prim -> emit; op -> emit;
+              (if op 
+               // prim.attach then 
+                  ' ' -> out.put;
+                  'D' -> out.put;
+                  'D' -> emit 
+               // prim.fork // prim.cmpAndSwap // prim.thisCore then
+                  (* perhaps more prims require C-mode, 
+                   * but we are probably shure with the above ones
+                   *)
+                  true -> descs.onlyCinterpreter;
               if);
-              1 -> stack.vpop
-           // prim.attach then 
-              ' ' -> out.put;
-              'D' -> out.put;
-              'D' -> emit 
-           // prim.fork // prim.cmpAndSwap // prim.thisCore then
-              (* perhaps more prims require C-mode, 
-               * but we are probably shure with the above ones
-               *)
-              true -> descs.onlyCinterpreter;
+           else
+              (if op 
+               // prim.put then
+                  'call putCh ' -> out.puttext; stack.vtop -> vReg -> out.putline;
+                  1 -> stack.vpop
+              if)
           if);
           out.newline;
        #);
@@ -1082,52 +1361,85 @@ ObjectCode:
           LLVMvOp:
             (# opT: ^text
             enter opT[]
-            do newReg -> rN -> newVreg -> puttext;
-               ' = ' -> puttext; opT[] -> puttext;
-               ' i32 ' -> puttext; stack.vtop - 1 -> vReg -> puttext;
-               ', ' -> puttext; stack.vtop -> vReg -> putline
+            do newReg -> rN -> newVreg -> out.puttext;
+               ' = ' -> out.puttext; opT[] -> out.puttext;
+               ' i32 ' -> out.puttext; stack.vtop - 1 -> vReg -> out.puttext;
+               ', ' -> out.puttext; stack.vtop -> vReg -> out.putline
             #);
           rn: @integer
        enter operator
-       do ' ' -> out.put; 
-          (if operator
-           // codes.plus then 'plus' -> out.putline; 
-              (if emitLLVM then 'add ' -> LLVMvOp if);
-              2 -> stack.vpop;
-              rN -> stack.vPush;
-           // codes.minus then 'minus' -> out.putline
-           // codes.mult then 'mult' -> out.putline; 
-              (if emitLLVM then'mult' -> LLVMvOp if);
-              2 -> stack.vpop;
-              rN -> stack.vPush
-           // codes.rdiv then 'div' -> out.putline
-           // codes.idiv then 'idiv' -> out.putline
-           // codes.modd then 'modd' -> out.putline
-           // codes.eq then 'eq' -> out.putline
-           // codes.lt then 'lt' -> out.putline;
-              (if emitLLVM then 'icmp lt' -> LLVMvOp if);
-              2 -> stack.vpop;
-              rN -> stack.vPush;
-           // codes.le then 'le' -> out.putline;
-           // codes.gt then 'gt' -> out.putline;
-              (if emitLLVM then 'icmp gt' -> LLVMvOp if);
-              2 -> stack.vpop;
-              rN -> stack.vPush;              
-           // codes.ge then 'ge' -> out.putline
-           // codes.ne then 'ne' -> out.putline
-           // codes.andd then 'andd' -> out.putline
-           // codes.orr then 'orr' -> out.putline
-           // codes.xorr then 'xorr' -> out.putline
-           // codes.req then 'req' -> out.putline
-           // codes.rne then 'rne' -> out.putline
-           // codes.fplus then 'fplus' -> out.putline
-           // codes.fminus then 'fplus' -> out.putline
-           // codes.fmult then 'fmult' -> out.putline
-           // codes.fdiv then 'fdiv' -> out.putline
+       do (if notLLVM then
+              ' ' -> out.put; 
+              (if operator
+               // codes.plus then 'plus' -> out.putline; 
+               // codes.minus then 'minus' -> out.putline
+               // codes.mult then 'mult' -> out.putline; 
+               // codes.rdiv then 'div' -> out.putline
+               // codes.idiv then 'idiv' -> out.putline
+               // codes.modd then 'modd' -> out.putline
+               // codes.eq then 'eq' -> out.putline
+               // codes.lt then 'lt' -> out.putline;
+               // codes.le then 'le' -> out.putline;
+               // codes.gt then 'gt' -> out.putline;
+               // codes.ge then 'ge' -> out.putline
+               // codes.ne then 'ne' -> out.putline
+               // codes.andd then 'andd' -> out.putline
+               // codes.orr then 'orr' -> out.putline
+               // codes.xorr then 'xorr' -> out.putline
+               // codes.req then 'req' -> out.putline
+               // codes.rne then 'rne' -> out.putline
+               // codes.fplus then 'fplus' -> out.putline
+               // codes.fminus then 'fplus' -> out.putline
+               // codes.fmult then 'fmult' -> out.putline
+               // codes.fdiv then 'fdiv' -> out.putline
+               else
+                  operator -> out.putint; out.newline
+              if);
+              operator -> emit;
            else
-              operator -> out.putint; out.newline
-          if);
-          operator -> emit;
+               (if operator
+               // codes.plus then
+                  'add' -> LLVMvOp;
+                  2 -> stack.vpop;
+                  rN -> stack.vPush;
+                // codes.minus then 
+                   'minus' -> LLVMvOp
+               // codes.mult then 
+                  'mul' -> LLVMvOp;
+                  2 -> stack.vpop;
+                  rN -> stack.vPush
+                // codes.rdiv then 
+                   'div' -> out.putline
+                // codes.idiv then 
+                   'idiv' -> out.putline
+                // codes.modd then 
+                   'modd' -> out.putline
+                // codes.eq then 
+                   'eq' -> out.putline
+               // codes.lt then 
+                  'icmp lt' -> LLVMvOp;
+                  2 -> stack.vpop;
+                  rN -> stack.vPush;
+               // codes.le then 'le' -> out.putline;
+               // codes.gt then
+                  'icmp sgt' -> LLVMvOp;
+                  2 -> stack.vpop;
+                  rN -> stack.vPush;              
+               // codes.ge then 'ge' -> out.putline
+               // codes.ne then 'ne' -> out.putline
+               // codes.andd then 'andd' -> out.putline
+               // codes.orr then 'orr' -> out.putline
+               // codes.xorr then 'xorr' -> out.putline
+               // codes.req then 'req' -> out.putline
+               // codes.rne then 'rne' -> out.putline
+               // codes.fplus then 'fplus' -> out.putline
+               // codes.fminus then 'fplus' -> out.putline
+               // codes.fmult then 'fmult' -> out.putline
+               // codes.fdiv then 'fdiv' -> out.putline
+               else
+                  operator -> out.putint; out.newline
+              if);
+          if)
        #);
      i2f: (# do ' i2f' -> out.putline; codes.i2f -> emit #);
      f2i: (# do ' f2i' -> out.putline; codes.f2i -> emit #);
@@ -1143,13 +1455,21 @@ ObjectCode:
      nott: (# do ' not' -> out.putline; codes.nott -> emit #);
      saveBETAworld: 
        (#
-       do ' saveBETAworld' -> out.putline; 
-          codes.saveBETAworld -> emit
+       do (if notLLVM then
+              ' saveBETAworld' -> out.putline; 
+              codes.saveBETAworld -> emit
+           else
+              ';; saveBETAworld\n' -> out.puttext
+          if)
        #);
      saveStringOrigin:
        (#
-       do ' saveStringOrigin' -> out.putline;
-          codes.saveStringOrigin -> emit
+       do (if notLLVM then
+              ' saveStringOrigin' -> out.putline;
+              codes.saveStringOrigin -> emit
+           else
+              ';; saveStringOrigin' -> out.putline;
+          if)
        #);
      isMarked: [32] @boolean;
      initGCinfo: (#do (for i: isMarked.range repeat false-> isMarked[i] for)#);
@@ -1172,23 +1492,24 @@ ObjectCode:
           isIndexed: @boolean;
           V: @integer
        enter(objSize,isIndexed,OSDvisibility)
-       do ' end OSDV:' -> out.puttext; OSDvisibility -> out.putint; 
-          ' objSize:'->out.puttext; objSize -> out.putint;  
-          ' isIndexed:'->out.puttext; 
-          (if isIndexed then 1 -> V else 0 -> V if);
-          V -> out.putint;  ' '-> out.put;
-          stack.print -> out.puttext;
-          out.newline;
-          objSize -> descs.current.objSize;
-          V -> descs.current.isIndexed; 
-          OSDvisibility -> descs.current.OSDvisibility;     
-          (if OSDvisibility > 0 then
-              (*'\n**** OSDvisibility: ' -> puttext; 
-              OSDvisibility -> putint; newline*)
-          if);
-          labs.saveInImage ;
-          (if emitLLVM then
-              '}' -> putline
+       do (if notLLVM then
+              ' end OSDV:' -> out.puttext; OSDvisibility -> out.putint; 
+              ' objSize:'->out.puttext; objSize -> out.putint;  
+              ' isIndexed:'->out.puttext; 
+              (if isIndexed then 1 -> V else 0 -> V if);
+              V -> out.putint;  ' '-> out.put;
+              stack.print -> out.puttext;
+              out.newline;
+              objSize -> descs.current.objSize;
+              V -> descs.current.isIndexed; 
+              OSDvisibility -> descs.current.OSDvisibility;     
+              (if OSDvisibility > 0 then
+                  (*'\n**** OSDvisibility: ' -> puttext; 
+                   OSDvisibility -> putint; newline*)
+              if);
+              labs.saveInImage ;
+           else
+              '}' -> out.putline
           if)
        #);
      

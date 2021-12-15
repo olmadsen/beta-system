@@ -101,7 +101,7 @@ generator: variants
                OG.markForCodeGen
             #);
           Qgen:: 
-            (# T: @text; OGqual: ^ObjectGenerator
+            (# T: @text; OGqual: ^ObjectGenerator; org: ^Items
             do OG.getQual -> OGqual[]; (* is none for PersonLib !? *)
                cd.com(#
                      do 'DI:isConst:' -> TT; isConst -> BB;
@@ -164,7 +164,12 @@ generator: variants
                    (if OG.isFloat then
                        (sig.id[],this(DataItem).NewOff) -> cd.fstoreg
                     else
-                       (sig.id[],this(DataItem).NewOff) -> cd.storeg
+                       origin[] -> org[];
+                       (if true then
+                           (org.encOG.OGidx,this(DataItem).NewOff) -> cd.storeg
+                        else
+                           (sig.id[],this(DataItem).NewOff) -> cd.storeg
+                       if)
                    if)
                 // (OG.primNo = String_prim) and isConst then
                    (* Like S: obj "hello"
@@ -291,6 +296,7 @@ generator: variants
             (* called when not receiver - i.e. value to be pushed *)
             (# gdb::(#do ' newOff:'-> TT; newOff -> II #);
                orgIsVal: @integer;
+               org: ^Items;
                isResumeX: BooleanValue
                  (#
                  do (if E[] = none then 
@@ -373,7 +379,9 @@ generator: variants
                                or OG.isUnitValueObj then
                                (sig.id[],NewOff) -> cd.fpushg
                             else
-                               (sig.id[],NewOff) -> cd.pushg
+                               'pusg:A:' -> cd.comment;
+                               origin[] -> org[];
+                               (org.encOG.ogIDx,NewOff) -> cd.pushg
                            if)
                        if)
                    if)
@@ -407,7 +415,11 @@ generator: variants
                    (if (OG.primno = float_prim) or OG.isUnitValueObj then
                        (sig.id[],NewOff) -> cd.fstoreg
                     else
-                       (sig.id[],NewOff) -> cd.storeg
+                       (if true then
+                           (OG.OGidx,NewOff) -> cd.storeg
+                        else
+                           (sig.id[],NewOff) -> cd.storeg
+                       if)
                    if)
                 // OG.isValueObj then
                    (* is the order of src and dest objs on the stack correct? *)
@@ -863,10 +875,12 @@ generator: variants
             #);
           mkLLVMstruc:
             (# addRX:<
-                 (# off: @integer
-                 enter off
-                 do (if offTop < off then inner if);
-                    off -> offTop;
+                 (# off: @integer; OGid: ^text
+                 enter(off,OGid[])
+                 do (if offTop < off then 
+                        inner;
+                        off -> offTop;
+                    if)
                  #);
                addVX:<
                  (# off: @integer
@@ -874,16 +888,24 @@ generator: variants
                  do inner;
                     off -> offTop
                  #);
-               offTop: @integer
+               offTop: @integer; org: ^Items
             do 
                (if (IS.superDesc[] <> none) and (IS.superDesc[] <> objectDecl.desc) then
                       (*'\nsuper: ' -> puttext; IS.superDesc.sig.dopt -> puthead;*)
                       (*(IS.superDesc.theObjectGenerator).computeGCinfo*)
-                      IS.superDesc.encOG.mkLLVMstruc
+                   IS.superDesc.encOG.mkLLVMstruc
+                   (* must call addRX and addVR in enclosing mkLLVMstruc *)
                if);
                (if IS.newOriginOff <> 0 then (* some objects have no origin *)
-                   IS.newOriginOff -> addRX;
-               if);
+                   origin[] -> org[];
+                   (if org[] <> none then
+                       (if org.encOG.primNo = ifthen_prim then
+                           org.origin[] -> org[]
+                       if);
+                       (IS.newOriginOff,org.encOG.OGidx) -> addRX;
+                       (if (origin[] -> IS.originIsValue) then
+                           IS.newOriginOff + 1 -> addVX
+               if)if)if);
                IS.scanSons
                (# DI: ^DataItem; M: ^Module; MI: ^ModuleItem
                do (if current.isDataItem then
@@ -893,21 +915,23 @@ generator: variants
                        else
                           (*DI.sig.dopt->puttext; ':'->put; 
                            * DI.newOff->putint;newline;*)
-                          DI.newOff -> addRX
+                          (DI.newOff,DI.OG.OGidx) -> addRX
                       if);
                    else 
                       (if current## 
                        // Module## then
                           current[] -> M[]; 
-                          (*'Module: '->puttext; moduleName -> puttext; ' ' -> put;
+                          (*'Module: '->puttext; moduleName -> puttext; 
+                           * ' ' -> put;
                            M.newOff -> putint; newline;*)
-                          M.newOff -> addRX
+                          (M.newOff,moduleName) -> addRX
                        // ModuleItem## then
                           current[] -> MI[];
                           (if MI.MD.off > 0 then
-                              (*'MI:'->puttext; MI.MD. moduleName->puttext;' ' -> put;
+                              (*'MI:'->puttext; MI.MD. moduleName->puttext;
+                               * ' ' -> put;
                                MI.MD.newOff -> putint; newline;*)
-                              MI.MD.newOff -> addRX
+                              (MI.MD.newOff,MI.MD.moduleName) -> addRX
                   if)if)if)
                #);
             #);
@@ -1217,7 +1241,7 @@ generator: variants
                         -> cd.class
                       (#
                       do OG.mkLLVMstruc
-                         (# addRX::(#do off -> addR #);
+                         (# addRX::(#do (off,OGid[]) -> addR #);
                             addVX:: (# do off -> addV #)
                          #)
                       #);
@@ -1230,7 +1254,7 @@ generator: variants
                    cd.com(#do 'Store itemArgs' -> TT #);
                    scanItemArgsReverse
                    (#
-                   do true -> currentArg.store; 
+                   do (if not emitLLVM then true -> currentArg.store;  if)
                    #);                       
                    (if noGlobals and elimOrigin  then
                        (if traceNoGlobals then
@@ -1569,7 +1593,20 @@ generator: variants
             do 
                (if on > 0 then
                    cd.com(#do 'goOrigin:on:' -> TT; on -> II #);
-                   encOG.OGid -> T[]; ':origin' -> T.append;
+                   (if emitLLVM then
+                       origin[] -> org[];
+                       cd.com(#do org.encOG.primNo -> II; ' ' -> put; 
+                                org.encOG.dopt->TQ#);
+                       (if org.encOG.primNo = ifthen_prim then
+                           org.origin[] -> org[]
+                       if);
+                       org.encOG.OGidx -> T[];
+                       (*'$' -> T.put;
+                       org.newDescNo -> T.putint*)
+                    else
+                       encOG.OGid -> T[]; ':origin' -> T.append;
+                   if);
+
                    (* For each pattern in the origin chain, we must check
                     * whether or not the specific pattern has restrictions
                     * that are violated
@@ -2145,7 +2182,21 @@ generator: variants
        #);
      Address: superAdr
        (* E = first exp in "R.S.Q", ie. E = "R" *)
-       (# done: @boolean;
+       (# nameOfE_OG:
+            (# D: ^Decl; org: ^Items
+            do (if E[] <> none then
+                   E.ATD[] -> D[];
+                   (*'nameOfE:' -> puttext; E.dopt -> putline;*)
+                   D.origin[]->org[]; (*org.dopt -> putline;*)
+                   (if org.encOG.primNo = ifthen_prim then
+                       org.origin[] -> org[]; 
+                       (*':::'->putline; org.dopt -> putline;*)
+                   if);
+                   org.encOG.OGidx -> T[]
+               if)
+            exit T[]
+            #);
+          done: @boolean; T: ^text;
           load:: (* actually push value *)
             (#
             do (if isAdr then
@@ -2153,6 +2204,8 @@ generator: variants
                 else
                    (if off > 0 then
                        cd.com(#do 'load:'->TT; this(Address).print -> TT #);
+                       'address:load:' -> cd.comment;
+                       this(address).print -> cd.comment;
                        (if isValue then
                            (if originIsValue then
                                (if isFloat then
@@ -2165,7 +2218,11 @@ generator: variants
                                (if isFloat then
                                    ('',off) -> cd.fpushg
                                 else
-                                   ('',off) -> cd.pushg
+                                   '' -> T[];
+                                   (if rec[] <> none then rec.dopt -> T.append if);
+                                   '/'-> T.put;
+                                   (if E[] <> none then E.dopt -> T.append if);
+                                   (nameOfE_OG,off) -> cd.pushg
                                if)
                            if)
                         else
@@ -2177,8 +2234,12 @@ generator: variants
                                cd.pushNone;
                                cd.rswap;
                                ('',off) -> cd.rstoreg
-                           else
-                               ('',off) -> cd.rpushg
+                            else
+                               '' -> T[];
+                               (if rec[] <> none then rec.dopt -> T.append if);
+                               '/'-> T.put;
+                               (if E[] <> none then E.dopt -> T.append if);
+                               (nameOfE_OG,off) -> cd.rpushg
                            if)
                if)if)if)
             #);
@@ -2257,7 +2318,7 @@ generator: variants
                                    (if isUnitVal or isFloat then
                                        ('address:storeg',off) -> cd.fstoreg
                                     else
-                                       ('address:storeg',off) -> cd.storeg
+                                       (nameOfE_OG,off) -> cd.storeg
                                    if);
                            if)if)
                         else
@@ -2811,11 +2872,11 @@ generator: variants
             #);
        #);
      adjustOrigin:
-       (# originOff: @integer
-       enter originOff
+       (# originOff: @integer; OGid: ^text
+       enter(originOff,OGid[])
        do ('AdjustOrigin:originOff:',originOff->int2text) -> cd.com2;
           (if (originOff > 0) then
-              ('origin',originOff) -> cd.rpushg
+              (OGid[],originOff) -> cd.rpushg
           if)
        #);
      ObjectInvocation::
@@ -2861,13 +2922,14 @@ generator: variants
                 // immutable_prim then 
                    (if superAdj < 0 then 
                        (if on > 0 then 
-                           - superAdj -> AdjustOrigin;
+                           (- superAdj,'origin-x') -> AdjustOrigin;
                            (on - 1,this(ObjectInvocation)[]) 
                              -> (origin[]->org[]).goOrigin
                              -> (org[],orgIsVal)
                        if)
                     else
-                       superAdj -> AdjustOrigin;
+                       (superAdj,(origin[]->org[]).encOG.OGidx)
+                         -> AdjustOrigin;
                        (on,this(ObjectInvocation)[]) 
                          -> (origin[]->org[]).goOrigin
                          -> (org[],orgIsVal)
@@ -2882,7 +2944,7 @@ generator: variants
                     * For %this foo, ON = %this.origin, A.super.ON = foo.origin
                     *)
 
-                   superAdj -> AdjustOrigin;
+                   (superAdj,'origin-z') -> AdjustOrigin;
                    args.scanArgs(* only one argument in %this foo *)
                    (# A: ^ObjectSpecification
                    do current[] -> A[];
@@ -3518,11 +3580,19 @@ generator: variants
      (* cd: @ObjectCode; moved to abstractSyntaxTree for debugging purposes *)
      runTimeDescs:: (# do descs[] -> rtDescs[] #);
      descs: ^RunTimeDescriptors;
-     BC: @File;
+     BC,BCllvm: @File;
+     emitLLVM: @boolean
   do '**** GENERATOR ****' -> putline;     
      (FN[],'..s') -> mkAuxName -> BC.name;
      BC.openWrite;
-     BC[] -> cd.init;
+     (if emitLLVM then
+         ('tmp.xbeta','..s') -> mkAuxName -> BCllvm.name;
+         BCllvm.name -> putline;
+         BCllvm.openWrite;
+         (BCllvm[],emitLLVM) -> cd.init;
+      else
+         (BC[],emitLLVM) -> cd.init;
+     if);
      'QBETA'-> cd.comment;
      
      labelHandler.init;
@@ -3572,6 +3642,19 @@ generator: variants
      cd.descs[] -> descs[]; (* descs is transferred to betaVM ?*)
      true -> descs.newAlloc;
      cd.close;
+     (if emitLLVM then
+         (*(0,fromBeginning) -> BCllvm.setpos;*)
+         ';;; Start of LLVM\n' -> BC.puttext;
+         BCllvm.close;
+         BCllvm.openRead;
+         CD.LLVMstructs[] -> BC.puttext;
+         copy:
+           (if not BCllvm.eos then
+               BCllvm.get -> BC.put;
+               restart copy
+           if);
+         BCllvm.close
+     if);
      BC.close
   #)
 
