@@ -498,6 +498,26 @@ generator: variants
        enter(primNo,sig[],IS[])
        <<SLOT doMarkPrim:doPart>> 
        #);
+     callInvoke:
+       (# theOG: ^ObjectGenerator; staticOff: @integer
+       enter(theOG[],staticOff)
+       do (theOG.OGid,theOG.IS.newDescNo,staticOff,true)
+            -> cd.invoke
+          (# T: ^text
+          do cd.com(#do 'store origin:' -> TT #);
+             theOG.OGidx -> T[]; 
+             (*'$' -> T.put; IS.newDescNo -> T.putint;*)
+             theOG.IS.scanItemArgsReverse
+             (# DI: ^DataItem
+             do cd.com(#do '   ;;store arg: ' -> TT;
+                         currentarg.dopt -> TT #);
+                currentarg.dopt -> putline;
+                 (* check if ref or val *)
+                (T[],(currentArg[]->DI[]).newOff) -> cd.storeX
+             #);
+             (T[],theOG.IS.newOriginOff) -> cd.rstoreX
+          #);
+       #);
      ObjectGenerator::
        (# isArgOfE: ^Exp;
           markForCodeGen:: 
@@ -722,14 +742,26 @@ generator: variants
                        (* Invoke the singular object *)
                        cd.com(#do 'before objTmpStack:add: '->TT;
                                 IS.newDescNo -> II; ' ' -> TT; OGid -> TQ #);
-                       (OGid,IS.newDescNo,staticOff,true)
-                         -> cd.invoke
-                       (# T: ^text
-                       do cd.com(#do 'store origin:' -> TT #);
-                          OGidx -> T[]; 
-                          (*'$' -> T.put; IS.newDescNo -> T.putint;*)
-                         (T[],IS.newOriginOff) -> cd.rstoreX
+                       (if true then
+                           (this(ObjectGenerator)[],staticOff) 
+                           -> callInvoke
+                        else
+                           (OGid,IS.newDescNo,staticOff,true)
+                             -> cd.invoke
+                           (# T: ^text
+                           do cd.com(#do 'store origin:' -> TT #);
+                              OGidx -> T[]; 
+                              (*'$' -> T.put; IS.newDescNo -> T.putint;*)
+                              IS.scanItemArgsReverse
+                              (#
+                              do cd.com(#do '   ;;store arg: ' -> TT;
+                                          currentarg.dopt -> TT #);
+                                 (* check if ref or val *)
+                                 (T[],IS.newOriginOff) -> cd.rstore
+                              #);
+                              (T[],IS.newOriginOff) -> cd.rstoreX
                        #);
+                       if);
                        L:
                          (if not useReturnValue then 
                              IS.scanAllItemDecls
@@ -2232,13 +2264,17 @@ generator: variants
             (# D: ^Decl; org: ^Items
             do (if E[] <> none then
                    E.ATD[] -> D[];
-                   (*'nameOfE:' -> puttext; E.dopt -> putline;*)
-                   D.origin[]->org[]; (*org.dopt -> putline;*)
+                   (if false then
+                       'nameOfE:' -> puttext; E.dopt -> putline;
+                   if);
+                   D.origin[]->org[]; 
+                   (if false then org.encOG.dopt -> putline; if);
                    (if org.encOG.primNo = ifthen_prim then
                        org.origin[] -> org[]; 
                        (*':::'->putline; org.dopt -> putline;*)
                    if);
-                   org.encOG.OGidx -> T[]
+                   org.encOG.OGidx -> T[];
+                   (*T[] -> putline*)
                if)
             exit T[]
             #);
@@ -3639,17 +3675,16 @@ generator: variants
      runTimeDescs:: (# do descs[] -> rtDescs[] #);
      descs: ^RunTimeDescriptors;
      BC,BCllvm: @File;
-     emitLLVM: @boolean
+     emitLLVM,emitCom: @boolean
   do '**** GENERATOR ****' -> putline;      
      (if emitLLVM then
          (FN[],'.ll') -> mkAuxName -> BC.name;
          ('tmp.xbeta','.ll') -> mkAuxName -> BCllvm.name;
-         BCllvm.name -> putline;
          BCllvm.openWrite;
-         (BCllvm[],emitLLVM) -> cd.init;
+         (BCllvm[],emitLLVM,emitCom) -> cd.init;
       else
          (FN[],'..s') -> mkAuxName -> BC.name;
-         (BC[],emitLLVM) -> cd.init;
+         (BC[],emitLLVM,emitCom) -> cd.init;
      if);
      BC.openWrite;
      'QBETA'-> cd.comment;
@@ -3711,6 +3746,7 @@ generator: variants
          cd.typeInfo.printStructs;
          CD.LLVMstructs[] -> BC.puttext;
          'declare i32 @puts(i8* nocapture) nounwind\n' -> BC.puttext;
+         'declare i32 @putCh(i32 nocapture) nounwind\n' -> BC.puttext;
          copy:
            (if not BCllvm.eos then
                BCllvm.get -> BC.put;
