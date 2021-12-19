@@ -227,8 +227,8 @@ generator: variants
                E: ^Exp; originIsValue: @boolean; ptn: ^Pattern; 
                UN,UNx: ^NewProperty;
                OGx: ^ObjectGenerator
-            do cd.com(#do ' A:'->TT; A.print -> TT; ' '  -> TT; dopt->TT #);
-               cd.com(#do 'value_prim:'->TT;  OG.primNo = value_prim->BB #);
+            do cd.com(#do ' A:'->TT; A.print -> TT; ' '->TT; dopt->TT #);
+               cd.com(#do 'value_prim:'->TT;OG.primNo = value_prim->BB #);
 
                (* OG.primNo = value_prim for handling _v: ?Value 
                 * in integer, char and boolean *)
@@ -499,11 +499,11 @@ generator: variants
        <<SLOT doMarkPrim:doPart>> 
        #);
      callInvoke:
-       (# theOG: ^ObjectGenerator; staticOff: @integer
+       (# theOG: ^ObjectGenerator; staticOff: @integer; T: ^text
        enter(theOG[],staticOff)
        do (theOG.OGid,theOG.IS.newDescNo,staticOff,true)
             -> cd.invoke
-          (# T: ^text
+          (#
           do cd.com(#do 'store origin:' -> TT #);
              theOG.OGidx -> T[]; 
              (*'$' -> T.put; IS.newDescNo -> T.putint;*)
@@ -515,8 +515,25 @@ generator: variants
                  (* check if ref or val *)
                 (T[],(currentArg[]->DI[]).newOff) -> cd.storeX
              #);
-             (T[],theOG.IS.newOriginOff) -> cd.rstoreX
+             (T[],theOG.IS.newOriginOff) -> cd.rstoreX;
           #);
+          (if emitLLVM then
+              L:
+                (if theOG.isValueObj then
+                 else
+                    theOG.IS.scanAllItemDecls
+                    (# DI: ^DataItem
+                    do (if currentDcl.isOutArg then
+                           currentDcl[] -> DI[];
+                           (if DI.OG.isBasicValue then
+                               (T[],DI.newOff) -> cd.pushg;
+                            else
+                               (T[],DI.newOff) -> cd.rPushg;
+                           if);
+                           leave L
+                       if);
+                       (* callee is on rtop of rStack *)
+          #)if)if)
        #);
      ObjectGenerator::
        (# isArgOfE: ^Exp;
@@ -742,26 +759,7 @@ generator: variants
                        (* Invoke the singular object *)
                        cd.com(#do 'before objTmpStack:add: '->TT;
                                 IS.newDescNo -> II; ' ' -> TT; OGid -> TQ #);
-                       (if true then
-                           (this(ObjectGenerator)[],staticOff) 
-                           -> callInvoke
-                        else
-                           (OGid,IS.newDescNo,staticOff,true)
-                             -> cd.invoke
-                           (# T: ^text
-                           do cd.com(#do 'store origin:' -> TT #);
-                              OGidx -> T[]; 
-                              (*'$' -> T.put; IS.newDescNo -> T.putint;*)
-                              IS.scanItemArgsReverse
-                              (#
-                              do cd.com(#do '   ;;store arg: ' -> TT;
-                                          currentarg.dopt -> TT #);
-                                 (* check if ref or val *)
-                                 (T[],IS.newOriginOff) -> cd.rstore
-                              #);
-                              (T[],IS.newOriginOff) -> cd.rstoreX
-                       #);
-                       if);
+                       (this(ObjectGenerator)[],staticOff) -> callInvoke;
                        L:
                          (if not useReturnValue then 
                              IS.scanAllItemDecls
@@ -979,13 +977,12 @@ generator: variants
                       current[] -> DI[];
                       (if false then
                           'DI: ' -> puttext; DI.newOff -> putint;  
-                          ' '-> put;DI.sig.dopt -> putline;
+                          ' '-> put; DI.sig.dopt -> puttext; ' ' -> put;
+                          di.OG.OGidy -> putline;
                       if);
                       (if DI.OG.isBasicValue or DI.isValue then
                           DI.newOff -> addVX
                        else
-                          (*DI.sig.dopt->puttext; ':'->put; 
-                           * DI.newOff->putint;newline;*)
                           (DI.newOff,DI.OG.OGidy) -> addRX
                       if);
                    else 
@@ -2275,6 +2272,8 @@ generator: variants
                    if);
                    org.encOG.OGidx -> T[];
                    (*T[] -> putline*)
+                else
+                   'EisNone' -> T[]
                if)
             exit T[]
             #);
@@ -2286,8 +2285,6 @@ generator: variants
                 else
                    (if off > 0 then
                        cd.com(#do 'load:'->TT; this(Address).print -> TT #);
-                       'address:load:' -> cd.comment;
-                       this(address).print -> cd.comment;
                        (if isValue then
                            (if originIsValue then
                                (if isFloat then
@@ -2315,7 +2312,7 @@ generator: variants
                                cd.rswap;
                                cd.pushNone;
                                cd.rswap;
-                               ('',off) -> cd.rstoreg
+                               ('kuk',off) -> cd.rstoreg
                             else
                                '' -> T[];
                                (if rec[] <> none then rec.dopt -> T.append if);
@@ -2409,7 +2406,7 @@ generator: variants
                             * See store arguments
                             *)
                            (if true then cd.rswap if);
-                           ('',off) -> cd.rstoreg
+                           (nameOfE_OG,off) -> cd.rstoreg
                        if)
                if)if)
             #);
@@ -3176,7 +3173,12 @@ generator: variants
                      -> ObjStubStack.add;
                    (if ATd.isPattern then stubDescNo -> handleVargs if);
                    ('stub',stubDescNo,0,false) ->  cd.invoke
-               else cd.com(#do 'HEST'->TT; doPT -> TQ  #);
+                else cd.com
+                   (#do 'HEST: '->TT; doPT -> TQ; 
+                      'E:' -> TT; E.dopt -> TQ;
+                      ' rec:' -> TT;
+                      (if rec[] <> none then rec.dopt -> TQ if)
+                   #);
                    (rec[],E[],useReturnValue,staticOff,CC[],adr[],isResume) 
                      -> ATd.invoke;
                if);

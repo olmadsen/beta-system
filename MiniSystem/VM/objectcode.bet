@@ -126,7 +126,7 @@ ObjectCode:
                                                        * and EventProcessor
                                                        *)
        #);
-     newReg: @
+     allocReg: @
        (# rn: @integer
        do rn + 1 -> rn
        exit rn
@@ -143,7 +143,7 @@ ObjectCode:
        do '%R' -> T[]; rN -> T.putint
        exit T[]
        #);
-     vReg:
+     vRegInStack:
        (# top: @integer; T: ^text
        enter top
        do '%V' -> T[]; 
@@ -178,7 +178,7 @@ ObjectCode:
           init: 
             (#
             do 0 -> rTop -> vTop -> rTopMax -> vTopMax;
-               0 -> newReg.rN;
+               0 -> allocReg.rN;
             #);
           vpush:
             (# rN: @integer
@@ -317,6 +317,9 @@ ObjectCode:
                                              ' by: ' -> puttext;
                                              miN[] -> putline;
                                          if);
+                                         (if (T.length -> T.inxGet) = '*' then
+                                             '*' -> (miN.copy->miN[]).put
+                                         if);
                                          miN[] -> C.attQS[j][];
                                          leave patch
                              if)if)if)
@@ -393,11 +396,35 @@ ObjectCode:
                 if)for)
             #)
        #);
+     getElmPtr:
+       (# baseType,rnType,T: ^text; off,rN: @integer
+       enter(baseType[],off)
+       do '' -> T[];
+          allocReg -> rN -> newRreg -> T.puttext; 
+          ' = getelementptr ' -> T.puttext;
+          (if true then
+              stack.rType[stack.rTop - 1][] ->  rnType[] -> T.puttext;
+           else
+              baseType[] -> prepStruct -> T.puttext;
+          if);
+          ', ' -> T.puttext;
+          (if true then
+              stack.rType[stack.rTop - 1][] -> T.puttext;
+           else
+              baseType[] -> prepStruct -> T.puttext;
+          if);
+          ' * ' -> T.puttext;
+          stack.rTop - 1 -> rReg -> T.puttext;
+          ', i32 0, i32 ' -> T.puttext; off -> T.putint; 
+          T.newline;
+          T[] -> puttext
+       exit(T[],rN,rNtype[])
+       #);
      thisClassN: ^Text;
      getThisClass:
        (# classN,T: ^text; rN: @integer
        enter classN[]
-       do newReg -> rN -> newRreg -> out.puttext;
+       do allocReg -> rN -> newRreg -> out.puttext;
           ' = getelementptr ' -> out.puttext; 
           classN[] -> out.puttext; ', ' -> out.puttext;
           (if true then
@@ -798,7 +825,7 @@ ObjectCode:
               0 -> emit2;
               Flab -> labs.mark;
            else
-              '   br i1 ' -> out.puttext; stack.vtop -> vReg -> out.puttext; 
+              '   br i1 ' -> out.puttext; stack.vtop -> vRegInStack -> out.puttext; 
               ', label %L' -> out.puttext; Tlab ->  out.putint;
               ', label %L' -> out.puttext; Flab ->  out.putint; out.newline 
           if);
@@ -849,7 +876,7 @@ ObjectCode:
      invoke: 
        (# N,Ns: ^text; descNo,staticOff: @integer; 
           asObj: @boolean; iO: @integer;
-          rN: @integer
+          rN: @integer;
        enter(N[],descNo,staticOff,asObj) 
        do (if notLLVM then
               ' invoke ' -> out.puttext; N[] -> out.puttext; 
@@ -871,7 +898,7 @@ ObjectCode:
               N[] -> filter -> N[];
               ' ; ' -> out.puttext; N[] -> out.putline;
               '   ' -> out.puttext;
-              newReg -> rN -> newRreg -> out.puttext; ' = ' -> out.puttext;
+              allocReg -> rN -> newRreg -> out.puttext; ' = ' -> out.puttext;
               '$' -> N.put; descNo -> N.putint;
               N.copy -> Ns[];
               '%obj.' -> Ns.prepend;
@@ -887,7 +914,10 @@ ObjectCode:
               '(' -> out.put; Ns[] -> out.puttext; ' * ' -> out.puttext;
               rN -> newRreg -> out.puttext; ')' -> out.put;
               out.newline;
-
+              rN -> stack.Rpush(# do Ns[] -> stack.Rtype[stack.rtop][]#);
+              '   ;; push return value ' -> out.puttext; rN -> out.putint;
+              ' ' -> out.put; Ns[] -> out.putline;
+              '   ;; ' -> out.puttext; stack.print -> out.putline;
           if)
         #);
      mkVindexed:
@@ -1150,10 +1180,15 @@ ObjectCode:
      push: 
        (# N: ^text; off: @integer
        enter(N[],off)
-       do ' push ' -> out.puttext; off -> out.putint; 
-          ' ' -> out.put; N[] -> out.putline;
-          codes.push -> emit; off -> emit;
-          stack.vPush
+       do (if notLLVM then
+              ' push ' -> out.puttext; off -> out.putint; 
+              ' ' -> out.put; N[] -> out.putline;
+              codes.push -> emit; off -> emit;
+              stack.vPush
+           else
+              '   ;; push ' -> out.puttext; off -> out.putint; 
+              ' ' -> out.put; N[] -> out.putline;
+          if)
        #);
      pushg: 
        (# N: ^text; off: @integer; rN,rN2: @integer
@@ -1175,12 +1210,12 @@ ObjectCode:
               ', i32 ' -> out.puttext; 
               off - 1 -> out.putint; 
               '\n   ' -> out.puttext;
-              newReg -> rN2 -> newVreg -> out.puttext;
+              allocReg -> rN2 -> newVreg -> out.puttext;
               ' = load i32, i32* ' -> out.puttext;
               rN -> newRreg -> out.puttext;
               out.newline
           if);
-          1 -> stack.rpop;
+          1 -> stack.rpop; (* is there a corresponding push? *)
           rN2 -> stack.vPush;
        #);
      fpushg: 
@@ -1235,7 +1270,7 @@ ObjectCode:
               ', i32 ' -> out.puttext; 
               off - 1 -> out.putint; 
               '\n   ' -> out.puttext;
-              newReg -> rN2 -> newRreg -> out.puttext;
+              allocReg -> rN2 -> newRreg -> out.puttext;
               (if true then
                   ' = load ' -> out.puttext; 
                   (if false then
@@ -1303,7 +1338,7 @@ ObjectCode:
               if);
            else
               '   ' -> out.puttext;
-              newReg -> rN -> newVreg -> out.puttext;
+              allocReg -> rN -> newVreg -> out.puttext;
               ' = add i32 0, ' -> out.puttext; cst -> out.putint; out.newline
           if);
           rn -> stack.vPush
@@ -1425,6 +1460,9 @@ ObjectCode:
               ' ' -> out.put; N[] -> out.putline;
               codes.store -> emit; off -> emit;
               1 -> stack.vpop
+           else
+              '   ;; store ' -> out.puttext; N[] -> out.puttext;
+              ' ' -> out.put; N[] -> out.putline
           if)
        #);
      storeX: 
@@ -1438,7 +1476,7 @@ ObjectCode:
            else
               '   ;; storeX ' -> out.puttext; N[] -> out.puttext;
               ' ' -> out.put; off -> out.putint; '\n   ' -> out.puttext;
-              newReg -> rN -> newRreg -> out.puttext;
+              allocReg -> rN -> newRreg -> out.puttext;
               ' = getelementptr ' -> out.puttext; 
               N[] -> prepStruct -> out.puttext;
               ', ' -> out.puttext;
@@ -1447,7 +1485,7 @@ ObjectCode:
               stack.rTop -> rReg -> out.puttext;
               ', i32 0, i32 ' -> out.puttext; off - 1 -> out.putint; 
               out.newline;
-              '   store i32 ' -> out.puttext; stack.vTop -> vReg -> out.puttext;
+              '   store i32 ' -> out.puttext; stack.vTop -> vRegInStack -> out.puttext;
               ', i32* ' -> out.puttext; rN -> newRreg -> out.putline;
               1 -> stack.vpop
           if)
@@ -1465,7 +1503,7 @@ ObjectCode:
               ' ' -> out.put; off -> out.putint; 
               '\n   ' -> out.puttext;      
               
-              newReg -> rN -> newRreg -> out.puttext;
+              allocReg -> rN -> newRreg -> out.puttext;
               
               (if true then
                   N[] -> prepStruct -> getThisClassX;
@@ -1484,7 +1522,7 @@ ObjectCode:
                ', i32 0, ' -> out.puttexct;
                *)
               ', i32 ' -> out.puttext; off - 1 -> out.putint; out.newline;
-              '   store i32 ' -> out.puttext; stack.vtop -> vReg -> out.puttext;
+              '   store i32 ' -> out.puttext; stack.vtop -> vRegInStack -> out.puttext;
               ', i32* ' -> out.puttext; 
               rN -> newRreg -> out.putline
           if);
@@ -1561,7 +1599,7 @@ ObjectCode:
                       stack.print -> out.puttext;
                       '\n   ' -> out.puttext
                   if);
-                  newReg -> rN -> newRreg -> out.puttext;
+                  allocReg -> rN -> newRreg -> out.puttext;
                   ' = getelementptr ' -> out.puttext; 
                   N[] -> prepStruct -> out.puttext;
                    ', ' -> out.puttext;
@@ -1594,12 +1632,13 @@ ObjectCode:
                    else
                       rN -> newRreg -> out.putline
                   if)
-              if)
+              if);
+              2 -> stack.rPop
           if);
-          1 -> stack.rPop
+
        #);
      rstoreg: 
-       (# N: ^text; off: @integer
+       (# N: ^text; off,rN: @integer; rNtype: ^text
        enter(N[],off) 
        do (if notLLVM then
               ' rstoreg ' -> out.puttext; off -> out.putint; 
@@ -1608,9 +1647,21 @@ ObjectCode:
                   codes.rstoreg -> emit; off -> emit
               if);
            else
-              ';; rstoreg\n' -> out.putline
+              '   ;; rstoreg ' -> out.puttext; N[] -> out.puttext;
+              ' ' -> out.put; off -> out.putint; 
+              '\n   ' -> out.puttext;
+              (N[],off - 1) -> getElmPtr -> (out.puttext,rN,rNtype[]);
+              '   ;; ' -> out.puttext; stack.print -> out.putline;
+              '   store ' -> out.puttext; 
+              stack.rType[stack.rTop][] -> out.puttext; ' * ' -> out.puttext;
+              stack.rtop -> rReg -> out.puttext; 
+              ', ' -> out.puttext; 
+              (*rNtype[] -> out.puttext; *)
+              stack.rType[stack.rTop][] -> out.puttext;    
+              ' ** ' -> out.puttext;
+              rN -> newRreg -> out.puttext; out.newline;
           if);
-          2 -> stack.rPop
+          1 -> stack.rPop
        #);
      xstore: 
        (# N: ^text; off: @integer
@@ -1670,19 +1721,23 @@ ObjectCode:
               ' rswap ' -> out.puttext; rn -> out.putint; out.newline;
               codes.rswap -> emit; rn -> emit
            else
-              ';; rswap\n' -> out.puttext
+              '   ;; rswap\n' -> out.puttext
           if)
        #);
      rPop: 
        (# 
        do (if notLLVM then
               ' rpop' -> out.putline; codes.rpop -> emit; 1 -> stack.rPop 
+           else
+              1 -> stack.rPop
           if)
        #);
      vPop: 
        (# 
        do (if notLLVM then
               ' vpop' -> out.putline; codes.vpop -> emit; 1 -> stack.vPop 
+           else
+              1 -> stack.vPop
           if)
        #);
      CallPrim:
@@ -1706,7 +1761,7 @@ ObjectCode:
               (if op 
                // prim.put then
                   '   call i32 @putCh(i32 ' -> out.puttext; 
-                  stack.vtop -> vReg -> out.puttext;
+                  stack.vtop -> vRegInStack -> out.puttext;
                   ')\n' ->out.puttext;
                   1 -> stack.vpop
               if)
@@ -1719,10 +1774,10 @@ ObjectCode:
             (# opT: ^text
             enter opT[]
             do '   ' -> out.puttext;
-               newReg -> rN -> newVreg -> out.puttext;
+               allocReg -> rN -> newVreg -> out.puttext;
                ' = ' -> out.puttext; opT[] -> out.puttext;
-               ' i32 ' -> out.puttext; stack.vtop - 1 -> vReg -> out.puttext;
-               ', ' -> out.puttext; stack.vtop -> vReg -> out.putline
+               ' i32 ' -> out.puttext; stack.vtop - 1 -> vRegInStack -> out.puttext;
+               ', ' -> out.puttext; stack.vtop -> vRegInStack -> out.putline
             #);
           rn: @integer
        enter operator
@@ -1819,7 +1874,8 @@ ObjectCode:
               ' saveBETAworld' -> out.putline; 
               codes.saveBETAworld -> emit
            else
-              '   ;; saveBETAworld\n' -> out.puttext
+              '   ;; saveBETAworld\n' -> out.puttext;
+              1 -> stack.rPop
           if)
        #);
      saveStringOrigin:
