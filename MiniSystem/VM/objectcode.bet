@@ -120,13 +120,20 @@ ObjectCode:
        (# TT: (# T: ^text enter T[] do T[] -> S.append #);
           II: (# v: @integer enter v do v -> S.putint #);
           S: ^text
-       do (if true then
+       do (if true and not notLLVM then
               '   ;; ' -> S[];
               inner;
               S[] -> out.putline
           if)
        #);
-          
+     emitOp:
+       (# op: ^text
+       enter op[]
+       do (if not notLLVM then
+              '   ;; ' -> out.puttext
+          if);
+          op[] -> out.puttext
+       #);
      newComponent: (* Not used!? *)
        (# N: ^text; noOfDescs: @integer
        enter(N[],noOfDescs)
@@ -232,14 +239,21 @@ ObjectCode:
             (# T: @text
             do 'vTop(' -> T.puttext; vTop -> T.putint;
                ',' -> T.puttext; vTopMax -> T.putint;
-               ') rTop(' -> T.puttext; rTop -> T.putint;
+               ')=[' -> T.puttext;
+               (for i: vtop repeat 
+                    VregNo[i] -> T.putint;  
+                    (if i < vtop then ',' -> T.put if)
+               for);
+               ']' -> T.put;
+               ' rTop(' -> T.puttext; rTop -> T.putint;
                ',' -> T.puttext; rTopMax -> T.putint;
                ')=['->T.puttext;
                (for i: rtop repeat 
                     RregNo[i] -> T.putint;  ':' -> T.put;
                     rType[i][] -> T.puttext; 
-                    (if i < rtop then ',' -> T.put else ']' -> T.put if)
-               for)
+                    (if i < rtop then ',' -> T.put if)
+               for);
+               ']' -> T.put;
             exit T[]
             #);
           dump:
@@ -265,6 +279,8 @@ ObjectCode:
      LLVMstructs: @ Text;
      typeInfo: @
        (# dsc: [100] ^Info; top: @integer;
+          arrays: [100] ^text;
+          noOfArrays: @integer;
           current: ^Info;
           Info:
             (# sig: ^text;
@@ -394,6 +410,19 @@ ObjectCode:
                if)                   
             exit attSig[]
             #);
+          newArray:
+            (# T,type: ^text
+            do (if (noOfArrays + 1 -> noOfArrays) > arrays.range then 
+                   arrays.range -> arrays.extend
+               if);
+               '%array$' -> T[]; noOfArrays -> T.putint;
+               T.copy -> type[];
+               (*'*' -> type.put;*)
+               ' = type {i32, [0 x i32]}\n' -> T.append;
+               T[] -> arrays[noOfArrays][];
+            exit type[]
+            #);
+               
           printStructs:
             (# D: ^Info
             do ''-> LLVMstructs;
@@ -404,7 +433,8 @@ ObjectCode:
                         D.printStruct;
                         '}\n' -> LLVMstructs.puttext
                     if)
-               for)
+               for);
+               (for i: noOfArrays repeat arrays[i][] -> LLVMstructs.putline for);
             #);
           print:
             (#
@@ -416,6 +446,21 @@ ObjectCode:
                 if)for)
             #)
        #);
+     leag:
+       (# off,rN: @integer; rnType: ^text
+       enter off
+       do '   ' -> out.puttext;
+          allocReg -> rN -> emitRreg -> out.puttext;
+          ' = getelementptr ' -> out.puttext; 
+          stack.rType[stack.rTop][] 
+            -> deRef ->  rnType[] -> out.puttext;  ',' -> out.put;
+          rnType[] -> out.puttext; ' *' -> out.puttext;
+          stack.rTop -> rReg -> out.puttext; 
+          ', i32 0, i32 ' -> out.puttext; 
+          off -> out.putint; 
+          '\n   ' -> out.puttext;
+       exit rN
+       #);
      getElmPtr:
        (# baseType,rnType,T: ^text; off,rN: @integer
        enter(baseType[],off)
@@ -424,6 +469,7 @@ ObjectCode:
           ' = getelementptr ' -> T.puttext;
           stack.rType[stack.rTop - 1][] 
             ->  deRef -> rnType[] -> T.puttext;
+          
           ', ' -> T.puttext;
           stack.rType[stack.rTop - 1][] -> T.puttext;
           '  ' -> T.puttext;
@@ -525,6 +571,12 @@ ObjectCode:
             do 'i32'-> LLVMstructs.puttext; 
                (off,'i32') -> typeInfo.addRoff
             #);
+          addA: add
+            (# T:^text
+            do typeInfo.newArray -> T[];
+               '*' -> T.put;
+               (off,T[]) -> typeInfo.addRoff
+            #);
           first: @boolean
        enter(N[],descNo)
        do (if not notLLVM then
@@ -543,10 +595,8 @@ ObjectCode:
               
               '%' -> T[]; N[] -> T.puttext; 
               '$' -> T.put; descNo -> T.putint;
-              T.copy -> thisClassN[];
-              '*' -> (T.copy -> PthisClassN[]).put;
               T[] -> LLVMstructs.puttext; ' = type {' -> LLVMstructs.puttext;
-          true -> first;         
+              true -> first;         
               inner classDef;
               '}'-> LLVMstructs.puttext; LLVMstructs.newline;
           if)
@@ -976,15 +1026,44 @@ ObjectCode:
           codes.invokeExternal -> emit; externalNo -> emit
        #);
      allocIndexed:
-         (# N: ^text; descNo,size,isRefIndexed: @integer;
+       (# N,aType,eType: ^text; 
+          descNo,size,isRefIndexed,rN,rNx: @integer;
        enter(N[],descNo,size,isRefIndexed) 
-         do ' allocIndexed ' -> out.puttext; N[] -> out.puttext; 
-            ' ' -> out.put; 
-            descNo -> out.putint; ' ' -> out.put; 
+         do 'allocIndexed ' -> emitOp; N[] -> out.puttext; 
+            ' ' -> out.put; descNo -> out.putint; ' ' -> out.put; 
             size -> out.putint; ' ' -> out.put; 
-            isRefIndexed -> out.putint; out.newline;            
-            codes.allocIndexed -> emit; descNo -> emit2; size-> emit; 
-            isRefIndexed -> emit
+            isRefIndexed -> out.putint; out.newline;
+            (if notLLVM then
+                codes.allocIndexed -> emit; descNo -> emit2; size-> emit; 
+                isRefIndexed -> emit
+             else
+                (*PthisClassN[] -> putline;*)
+                lcom(#do PthisClassN[] -> TT #);
+                lcom(#do stack.print -> TT #);
+                
+                (*typeInfo.newArray -> aType[];*)
+                
+                (N[],2(*off*)) -> typeInfo.lookup -> aType[];
+                
+                lcom(#do aType[] -> TT; ' ' -> TT; eTYpe[] -> TT#);
+                
+                '   ' -> out.puttext;
+                allocReg -> rN -> emitRreg -> out.puttext;
+                ' = tail call i8 * @allocIndexed(i32 ' -> out.puttext;
+                stack.vtop - 1 -> vRegInstack -> out.puttext;
+                ',i32 ' -> out.puttext;
+                stack.vtop -> vRegInstack -> out.puttext;
+                ')\n   ' -> out.puttext;
+                
+                allocReg -> Rnx -> emitRreg -> out.puttext;
+                ' = bitcast i8* ' -> out.puttext; 
+                rN -> emitRreg -> out.puttext;
+                ' to ' -> out.puttext; 
+                aType[] -> out.puttext; '\n' -> out.puttext;
+                1 -> stack.rPop;
+                2 -> stack.vPop;
+                (rNx,aType[]) -> stack.rpushT
+            if)
        #);
      exealloc:
        (# N: ^text; descNo: @integer 
@@ -1312,14 +1391,49 @@ ObjectCode:
           stack.rPush
        #);
      xpushg:
-       (# N: ^text; off,isValueObj,size: @integer
+       (# N: ^text; off,isValueObj,size,rN,rNx,Vn: @integer
        enter(N[],off,isValueObj,size) 
-       do ' xpushg ' -> out.puttext; N[] -> out.puttext;  ' ' -> out.put; 
+       do 'xpushg ' -> emitOp; N[] -> out.puttext;  ' ' -> out.put; 
           off -> out.putint; ' ' -> out.put; 
           isValueObj -> out.putint; ' ' -> out.put; 
           size -> out.putint; out.newline;  
-          codes.xpushg -> emit; off -> emit; isValueObj -> emit; size -> emit;
-          stack.vPush
+          (if notLLVM then
+              codes.xpushg -> emit; off -> emit; isValueObj -> emit; 
+              size -> emit;
+           else
+              lcom(#do stack.print -> TT #);
+               allocReg -> rN  -> emitRreg -> out.puttext;
+              ' = getelementptr inbounds ' -> out.puttext;
+              stack.rType[stack.rTop][] -> deRef -> out.puttext;
+              ',  ' -> out.puttext; 
+              stack.rType[stack.rTop][] -> out.puttext;
+              ' ' -> out.puttext;
+              stack.rTop -> rReg -> out.puttext;
+              ', i32 0, i32 1\n' -> out.puttext;
+              
+              allocReg -> rNx -> emitRreg -> out.puttext;
+              ' = getelementptr inbounds [0 x i32], [0 x i32]* ' 
+                -> out.puttext;
+              rN -> emitRreg -> out.puttext;
+              ', i32 0, i32 ' -> out.puttext;
+              stack.vTop -> vRegInStack -> out.puttext;
+              out.newline;
+              allocReg -> vN -> emitVreg -> out.puttext;
+              ' = load i32 , i32* ' -> out.puttext; 
+              rNx -> emitRreg -> out.puttext;
+              ', align 4\n' -> out.puttext;
+              
+              (*'store i32 ' -> out.puttext;
+              vN -> emitVreg -> out.puttext;
+              ',  ' -> out.puttext;
+               stack.Rtype[stack.rTop  -1][] -> out.puttext; 
+               ' ' -> out.put;
+              stack.rTop - 1 -> Rreg -> out.puttext;
+              out.newline;*)
+          if);
+          1 -> stack.rpop;
+          1 -> stack.vpop;
+          vN -> stack.vPush
        #);
      xrpush:
        (# N: ^text; off: @integer
@@ -1505,19 +1619,18 @@ ObjectCode:
      storeg: 
        (# N: ^text; off: @integer; rN: @integer
        enter(N[],off) 
-       do (if notLLVM then
-              ' storeg ' -> out.puttext; off -> out.putint; 
-              ' ' -> out.put; N[] -> out.putline;
+       do 'storeg ' -> emitop;  N[] -> out.puttext; 
+          ' '-> out.put; off -> out.putint; out.putline;
+          (if notLLVM then
               codes.storeg -> emit; off -> emit;
            else
-              '   ;; storeg "' -> out.puttext; 
-              N[] -> out.puttext; '"' -> out.put;
-              ' ' -> out.put; off -> out.putint; 
-              '\n   ' -> out.puttext;      
-              
-              allocReg -> rN -> emitRreg -> out.puttext;
-              N[] -> prepStruct -> getElmPtrOutX;
-              ', i32 ' -> out.puttext; off - 1 -> out.putint; out.newline;
+              (if true then
+                  off - 1 -> leag -> rN;
+               else
+                  allocReg -> rN -> emitRreg -> out.puttext;
+                  N[] -> prepStruct -> getElmPtrOutX;
+                  ', i32 ' -> out.puttext; off - 1 -> out.putint; out.newline;
+              if);
               '   store i32 ' -> out.puttext;
               stack.vtop -> vRegInStack -> out.puttext;
               ', i32* ' -> out.puttext; 
@@ -1622,35 +1735,42 @@ ObjectCode:
      rstoreg: 
        (# N: ^text; off,rN,rNd: @integer; srcType,dstType,rNtype: ^text
        enter(N[],off) 
-       do (if notLLVM then
-              ' rstoreg ' -> out.puttext; off -> out.putint; 
-              ' ' -> out.put; N[] -> out.putline;
+       do 'rstoreg ' -> emitOp; N[] -> out.puttext;
+          ' ' -> out.put; off -> out.putint; out.newline;
+          (if notLLVM then
               (if off <= 255 then 
                   codes.rstoreg -> emit; off -> emit
               if);
            else
-              '   ;; rstoreg ' -> out.puttext; N[] -> out.puttext;
-              ' ' -> out.put; off -> out.putint; 
-              (N[],off) -> typeInfo.lookup -> dstType[];
-              '\n   ' -> out.puttext;
-              (N[],off - 1) -> getElmPtr -> (out.puttext,rN,rNtype[]);
-              stack.rType[stack.rTop][] -> srcType[];
-              '   ;; types:dst: ' -> out.puttext; dstType[] -> out.puttext; 
+              '   ;; ' -> out.puttext; stack.print -> out.putline;
+              (* rN = leag stack.rtop + off -1 *)
+              (if true then
+                  off - 1 -> leag -> rN;
+                  (N[],off) -> typeInfo.lookup -> dstType[];
+               else
+                  '\n   ' -> out.puttext;
+                  (N[],off - 1) -> getElmPtr -> (out.puttext,rN,rNtype[]);
+              if);
+              stack.rType[stack.rTop - 1][] -> srcType[];
+
+              ';; types:dst: ' -> out.puttext; dstType[] -> out.puttext; 
               ' src: ' -> out.puttext; srcType[] -> out.putline;
               '   ;; ' -> out.puttext; stack.print -> out.putline;
               (if dstType[] -> srcType.equal then
                   '   store ' -> out.puttext; 
-                  stack.rType[stack.rTop][] -> out.puttext; '  ' -> out.puttext;
-                  stack.rtop -> rReg -> out.puttext; 
+                  stack.rType[stack.rTop - 1][] -> out.puttext; 
+                  '  ' -> out.puttext;
+                  stack.rtop - 1-> rReg -> out.puttext; 
                   ', ' -> out.puttext; 
-                  stack.rType[stack.rTop][] -> out.puttext;    
+                  stack.rType[stack.rTop - 1][] -> out.puttext;    
                   ' * ' -> out.puttext;
                   rN -> emitRreg -> out.puttext; out.newline;
                else
                   '   ' -> out.puttext;
                   allocReg -> rNd -> emitRreg -> out.puttext;
                   ' = bitcast ' -> out.puttext;
-                  srcType[] -> out.puttext;  stack.rTop -> rReg -> out.puttext;
+                  srcType[] -> out.puttext;  ' ' -> out.put;
+                  stack.rTop - 1 -> rReg -> out.puttext;
                   ' to ' -> out.puttext; 
                   dstType[] -> out.putline;
                   '   ;; ' -> out.puttext; stack.print -> out.putline;
@@ -1668,7 +1788,7 @@ ObjectCode:
      xstore: 
        (# N: ^text; off: @integer
        enter(N[],off)
-       do ' xstore ' -> out.puttext; N[] -> out.puttext; ' ' -> out.put;  
+       do 'xstore ' -> emitOp; N[] -> out.puttext; ' ' -> out.put;  
           off -> out.putint; out.newline;
           (if off <= 255 then 
               codes.xstore -> emit; off -> emit
@@ -1676,16 +1796,48 @@ ObjectCode:
           1 -> stack.vpop
        #);
      xstoreg: 
-       (# N: ^text; off,isValueObj,size: @integer
+       (# N: ^text; off,isValueObj,size,rN,rNx: @integer
        enter(N[],off,isValueObj,size) 
-       do ' xstoreg ' -> out.puttext; N[] -> out.puttext; ' ' -> out.put;
+       do 'xstoreg ' -> emitop; N[] -> out.puttext; ' ' -> out.put;
           off -> out.putint; ' ' -> out.put; 
           isValueObj -> out.putint; ' ' -> out.put; 
           size -> out.putint; out.newline;          
-          off -> out.putint; ' ' -> out.put; N[] -> out.putline;
-          (if off <= 255 then 
-              codes.xstoreg -> emit; off -> emit; isValueObj -> emit; size -> emit; 
+          (if notLLVM then
+              (if off <= 255 then 
+                  codes.xstoreg -> emit; off -> emit; 
+                  isValueObj -> emit; size -> emit; 
+              if);
+           else
+              lcom(#do stack.print -> TT #);
+              allocReg -> rN  -> emitRreg -> out.puttext;
+              ' = getelementptr inbounds ' -> out.puttext;
+              stack.rType[stack.rTop][] -> deRef -> out.puttext;
+              ',  ' -> out.puttext; 
+              stack.rType[stack.rTop][] -> out.puttext;
+              ' ' -> out.puttext;
+              stack.rTop -> rReg -> out.puttext;
+              ', i32 0, i32 1\n' -> out.puttext;
+              
+              (*allocReg -> rNx -> emitRreg -> out.puttext;
+              ' = load i32, i32* ' -> out.puttext;
+              stack.vTop -> vRegInStack -> out.puttext;
+               ', align 4\n' -> out.puttext;*)
+              
+              allocReg -> rNx -> emitRreg -> out.puttext;
+              ' = getelementptr inbounds [0 x i32], [0 x i32]* ' 
+                -> out.puttext;
+              rN -> emitRreg -> out.puttext;
+              ', i32 0, i32 ' -> out.puttext;
+              stack.vTop -> vRegInStack -> out.puttext;
+              out.newline;
+              
+              'store i32 ' -> out.puttext; 
+              stack.vTop - 1 -> vRegInStack -> out.puttext;
+              ', i32* ' -> out.puttext;
+              rNx -> emitRreg -> out.puttext;
+              ', align 4\n' -> out.puttext;
           if);
+          1 -> stack.rpop;
           2 -> stack.vpop
        #);     
      xrstore: 
@@ -1717,13 +1869,19 @@ ObjectCode:
        #);
      swap: (# do ' swap' -> out.putline; codes.swap -> emit #); (* not in use*)
      rswap: 
-       (# rn: @integer
+       (# rn,R: @integer; T: ^text
        enter rn
-       do (if notLLVM then
-              ' rswap ' -> out.puttext; rn -> out.putint; out.newline;
+       do 'rswap ' -> emitOp; rn -> out.putint; out.newline;
+          (if notLLVM then              
               codes.rswap -> emit; rn -> emit
            else
-              '   ;; rswap\n' -> out.puttext
+              stack.RregNo[stack.rtop] -> R;
+              stack.RregNo[stack.rtop - 1] -> stack.RregNo[stack.rtop];
+              R -> stack.RregNo[stack.rtop - 1];
+              stack.rType[stack.rtop][] -> T[];
+              stack.rType[stack.rtop - 1][] 
+                -> stack.rType[stack.rtop][];
+              T[] -> stack.rType[stack.rtop - 1][]
           if)
        #);
      rPop: 
