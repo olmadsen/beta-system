@@ -8,15 +8,15 @@ declare i32 @putCh(i32 nocapture) nounwind
 ;;--------------------
 ;; class: foo$18, virtual: fisk$24, off: 0
 ;; class: foo$18, virtual: hest$26, off: 1
-%vdt_type$foo$18 = type {%vdt_ret$fisk$24*(%vdt_ret$fisk$24*)* }
+%vdt_type$foo$18 = type {%vdt_ret$fisk$24*()* }
 
 @vdt_data$foo$18 = global %vdt_type$foo$18 {
-    %vdt_ret$fisk$24*(%vdt_ret$fisk$24*)* @vdt_alloc$fisk$24
+    %vdt_ret$fisk$24*()* @vdt_alloc$fisk$24
 }
 
 %vdt_ret$fisk$24 = type{%fisk$24*,%fisk$24*(%fisk$24*)*}
 
-define %vdt_ret$fisk$24* @vdt_alloc$fisk$24(%vdt_ret$fisk$24* %R0){
+define %vdt_ret$fisk$24* @vdt_alloc$fisk$24(){
    %R1 = tail call i8* @malloc(i64 8) ;; sizeof(fisk$24))
    %R2 = bitcast i8* %R1 to %fisk$24 *
    %R3 = tail call i8* @malloc(i64 4) ;; sizeof(%vdt_return$fisk$24))
@@ -47,12 +47,13 @@ define void @main(){
    call i32 @putCh(i32 97)
    %R0 = alloca  %fisk$24
    call %fisk$24* @fisk$24(%fisk$24 *%R0)
-   
+
+   ;; lookup in vdt[0]  
    %3 = getelementptr %vdt_type$foo$18, %vdt_type$foo$18* @vdt_data$foo$18 , i32 0, i32 0
-   %4 = load %vdt_ret$fisk$24*(%vdt_ret$fisk$24*)*, %vdt_ret$fisk$24*(%vdt_ret$fisk$24*)** %3
+   %4 = load %vdt_ret$fisk$24*()*, %vdt_ret$fisk$24*()** %3
    
-   %R6 = alloca %vdt_ret$fisk$24
-   %5 = call  %vdt_ret$fisk$24* %4(%vdt_ret$fisk$24* %R6)
+   ;; call @vdt_alloc$fisk$24
+   %5 = call  %vdt_ret$fisk$24* %4()
    %6 = getelementptr %vdt_ret$fisk$24, %vdt_ret$fisk$24* %5, i32 0, i32 1
    %7 = load %fisk$24*(%fisk$24*)*, %fisk$24*(%fisk$24*)** %6
    %8 = getelementptr %vdt_ret$fisk$24, %vdt_ret$fisk$24* %5, i32 0, i32 0

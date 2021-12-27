@@ -1079,10 +1079,16 @@ ObjectCode:
      sendVirtual: 
        (# N: ^text; dinx,noOfRefArgs: @integer 
        enter(N[],dinx,noOfRefArgs) 
-       do ' sendv ' -> out.puttext; dinx -> out.putint; 
+       do 'sendv ' -> emitOp; dinx -> out.putint; 
           ' ' -> out.put; noOfRefArgs -> out.putint;
           ' ' -> out.put; N[] -> out.putline;
-          codes.sendv -> emit; dinx -> emit; noOfRefArgs -> emit
+          (if notLLVM then
+              codes.sendv -> emit; dinx -> emit; noOfRefArgs -> emit
+           else
+              ';; vdt: ' -> out.puttext; dinx -> out.putint;
+              ' -> descNo, R = alloc(descNo.size), ' -> out.puttext;
+              ', call descNo proc' -> out.putline;
+          if);
        #);
      invokev:
        (# N: ^text; dinx: @integer 
@@ -1117,7 +1123,9 @@ ObjectCode:
      vdtTableCopy:
        (# superDescNo: @integer; T: @text
        enter superDescNo
-       do (for i: descs.OD[superDescNo].vdtTable.range repeat (* range is too large *)
+       do (for i: descs.OD[superDescNo].vdtTop repeat
+               (*
+                 descs.OD[superDescNo].vdtTable.range repeat (* range is too large *)
                ' ' -> T.put; i -> T.putint; ':' -> T.put;
                descs.OD[superDescNo].vdtTable[i] -> T.putint; 
                (i,descs.OD[superDescNo].vdtTable[i]) -> descs.current.vdtAdd
@@ -2062,10 +2070,69 @@ ObjectCode:
               if);
               labs.saveInImage ;
            else
-              '}' -> out.putline
+              '}' -> out.putline;
+              inner;
+              '   ;; vdt:vdtTop: ' -> out.puttext;
+              descs.current.vdtTop -> out.putint; ' ' -> out.put;
+              (for i: descs.current.vdtTable.range repeat
+                   descs.current.vdtTable[i] -> out.putint;
+                   (if i < descs.current.vdtTable.range then 
+                       ',' -> out.put
+              if)for);
+              out.newline
           if)
        #);
-     
+     mkLLVMvirtualDefs:
+       (# hasVDTorInner:< BooleanValue
+            (#
+            do (for i: descs.current.vdtTable.range repeat
+                    (if (descs.current.vdtTable[i] > 0 -> value) then
+                        leave hasVDTorInner
+               if)for);
+               inner; (* check if inner *)
+            #);
+          objName:< (# T: ^text do inner exit T[] #);
+          vName:< 
+            (# off,dn: @integer; vN: ^text 
+            enter(off,dn)
+            do inner;
+            exit vN[]
+            #);
+          mkVdtType:
+            (#
+            do'%vdt_type' -> out.puttext; thisClassN[] -> out.puttext;
+              ' = type {' -> out.puttext;
+              (for i: descs.current.vdtTop repeat
+                   (if (descs.current.vdtTable[i] -> dN) > 0 then
+                       '%vdt_ret%' -> out.puttext;
+                       (i,dN) -> vName -> out.puttext;
+                       '*()*' -> out.puttext;
+                   if);
+                   (if i < descs.current.vdtTop then
+                       ',' -> out.put
+              if)for);
+              '}\n' -> out.puttext;
+            #);
+          mkVdtData:
+            (# T: ^text
+            do '@vdt_data' -> out.puttext; thisClassN[] -> out.puttext;
+               ' = global %vdt_type%' -> out.puttext;
+               thisClassN[] -> out.puttext;
+               ' {' -> out.puttext;
+               
+               '@vdt_alloc' -> out.puttext;
+               (*vName -> out.puttext;*)
+               
+               '}\n' -> out.puttext
+            #);
+          dn: @integer
+       do (if not notLLVM and hasVDTorInner then
+              mkVdtType;
+              mkVdtData;
+              inner;
+              
+          if)
+       #);
      close:
        (#
        do VdtPatch.patch;         
