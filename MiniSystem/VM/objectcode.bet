@@ -285,6 +285,7 @@ ObjectCode:
           Info:
             (# sig: ^text;
                attQs: [10] ^text; attQtop: @integer;
+               vdtType: ^Text;
                printStruct:
                  (#
                  do (for i: attQtop repeat
@@ -376,11 +377,12 @@ ObjectCode:
           addRoff:
             (# off: @integer; sig: ^text
             enter(off,sig[])
-            do (if off > current.attQtop then 
+            do (if (off + 1) > current.attQtop then 
                    current.attQs.range -> current.attQs.extend 
                if);
-               sig[] -> current.attQs[off][];
-               (if off > current.attQtop then off -> current.attQtop if)
+               sig[] -> current.attQs[off + 1][];
+               (if (off + 1) > current.attQtop then 
+                   off + 1-> current.attQtop if)
             #);
           lookup:
             (# sig: ^text; inx,off,dn: @integer; attSig: ^text
@@ -400,7 +402,7 @@ ObjectCode:
                    (*dsc[dn].print;*)
                    (if dsc[dn][] <> none then
                        (*dsc[dn].sig[] -> puttext; ' ' -> put;*)
-                       dsc[dn].attQs[off][] -> attSig[];
+                       dsc[dn].attQs[off + 1][] -> attSig[];
                     else
                        'none' -> attSig[]
                    if);
@@ -431,10 +433,12 @@ ObjectCode:
                         D.sig[] -> LLVMstructs.puttext;
                         ' = type {' -> LLVMstructs.puttext;
                         D.printStruct;
-                        '}\n' -> LLVMstructs.puttext
+                        '}\n' -> LLVMstructs.puttext;
+                       dsc[i].vdtType[] -> LLVMstructs.putline;
                     if)
                for);
                (for i: noOfArrays repeat arrays[i][] -> LLVMstructs.putline for);
+               
             #);
           print:
             (#
@@ -445,6 +449,13 @@ ObjectCode:
                         dsc[i].print
                 if)for)
             #)
+       #);
+     vdtType:
+       (# cN,T: ^text
+       enter cN[]
+       do '%vdt_type$' -> T[];
+          cN[] -> T.append
+       exit T[]
        #);
      leag:
        (# off,rN: @integer; rnType: ^text
@@ -478,7 +489,9 @@ ObjectCode:
           T.newline;
        exit(T[],rN,rNtype[])
        #);
-     thisClassN,PthisClassN: ^Text;
+     thisClassId,        (* className$descNo *)
+     thisClassN,         (* %thisClassId     *)
+     PthisClassN: ^Text; (* thisClassN*      *)
      deRef:
        (# T: ^text
        enter T[]
@@ -596,9 +609,15 @@ ObjectCode:
               '%' -> T[]; N[] -> T.puttext; 
               '$' -> T.put; descNo -> T.putint;
               T[] -> LLVMstructs.puttext; ' = type {' -> LLVMstructs.puttext;
-              true -> first;         
+              true -> first;  
+              'vdt_type$' -> T[];
+              N[] -> T.puttext; 
+              '$' -> T.put; descNo -> T.putint;
+              ' ' -> T.put;
+              (0,T[]) -> AddR; 
               inner classDef;
               '}'-> LLVMstructs.puttext; LLVMstructs.newline;
+              ';;%vdt_type ' -> LLVMstructs.putline;
           if)
        #);
      class:
@@ -657,9 +676,10 @@ ObjectCode:
               if);
               N[] -> filter -> N[];
               
-              '%' -> T[]; N[] -> T.puttext; 
-              '$' -> T.put; descNo -> T.putint;
-              T.copy -> thisClassN[];
+              N.copy -> thisClassId[]; 
+              '$' -> thisClassId.put; descNo -> thisClassId.putint;
+              '%' -> thisClassN[]; 
+              thisClassId[] -> thisClassN.puttext; 
               '*' -> (thisClassN.copy -> PthisClassN[]).put;
               '\n@S.' -> out.puttext; N[] -> out.puttext; 
               '$' -> out.put; descNo -> out.putint;               
@@ -768,10 +788,10 @@ ObjectCode:
      rtnExit: (# do ' rtnExit' -> out.putline; codes.rtnExit -> emit #);
      rtnInner: 
        (# 
-       do (if notLLVM then
-              ' rtnInner' -> out.putline; codes.rtnInner -> emit
+       do 'rtnInner' -> emitOp; out.newline;
+          (if notLLVM then
+              codes.rtnInner -> emit
            else
-              '   ;; rtnInner\n' -> out.puttext;
               '   ret ' -> out.puttext; thisClassN[] -> out.puttext; 
               ' *%R0\n' -> out.puttext;              
           if)
@@ -1128,7 +1148,9 @@ ObjectCode:
                  descs.OD[superDescNo].vdtTable.range repeat (* range is too large *)
                ' ' -> T.put; i -> T.putint; ':' -> T.put;
                descs.OD[superDescNo].vdtTable[i] -> T.putint; 
-               (i,descs.OD[superDescNo].vdtTable[i]) -> descs.current.vdtAdd
+               (i,descs.OD[superDescNo].vdtTable[i]
+               ,descs.OD[superDescNo].isInner[i]) 
+                 -> descs.current.vdtAdd
           for); 
           T[] -> comment;
           (* copy literals from super to current *)
@@ -1142,9 +1164,9 @@ ObjectCode:
           (*newline;*)
        #);
      vdtTable:
-       (# inx,descInx: @integer
-       enter(inx,descInx)
-       do (inx,descInx) -> descs.current.vdtAdd -> comment
+       (# inx,descInx: @integer; isInner: @boolean
+       enter(inx,descInx,isInner)
+       do (inx,descInx,isInner) -> descs.current.vdtAdd -> comment
        #);
      vdtTableAt:
        (* For OD:descNo, virtual/inner:inx is bound to descInx *)
@@ -1183,7 +1205,7 @@ ObjectCode:
                         bindinx[i] -> putint; ' ' -> put;
                         descInx[i] -> putint;  ' ' -> put;  newline;
                     if);
-                    (index[i],bindInx[i]) 
+                    (index[i],bindInx[i],false) (* never inner ? *)
                       -> descs.OD[descInx[i]].vdtAdd -> comment
                for)
             #)
@@ -1207,33 +1229,51 @@ ObjectCode:
               inx -> out.putint; out.newline;
               codes.innerx -> emit; inx -> emit;
            else
-             '   ;; innerx\n' -> out.puttext 
+              '   ;; innerx\n' -> out.puttext 
           if)
        #);
      innerP: (* Inner P, where P.ON > 1 *)
-       (# inx: @integer 
+       (# inx,rN,rNx,rNy: @integer; elmType: ^text
        enter inx
-       do (if notLLVM then
-              ' innerP ' -> out.puttext; ' ' -> out.put; 
-              inx -> out.putint; out.newline;
+       do  'innerP' -> emitOp; ' ' -> out.put; 
+          inx -> out.putint; out.newline;
+          (if notLLVM then             
               codes.innerP -> emit; inx -> emit;
-
            else
+              0 -> leag -> rN; (* pointer to vdt *)
+              allocReg -> rNy -> emitRreg -> out.puttext;
+              ' = load ' -> out.puttext;
+              thisClassId[] -> vdtType -> out.puttext;
+              '*, ' -> out.puttext;
+              thisClassId[] -> vdtType -> out.puttext;
+              '** ' -> out.puttext; 
+              rN -> emitRreg -> out.puttext;
+              out.newline;
+              allocReg -> rNx -> emitRreg -> out.puttext;
+              ' = getelementptr ' -> out.puttext;
+              thisClassId[] -> vdtType -> out.puttext;
+              ', ' -> out.puttext;
+              thisClassId[] -> vdtType -> out.puttext;
+              '* ' -> out.puttext; 
+              rNy ->  emitRreg -> out.puttext; 
+              ', i32 0, i32 ' -> out.puttext; inx - 1 -> out.putint;
+              out.newline;
+              
               1 -> stack.rPop              
           if)
        #);
      innerExit:
        (# inx: @integer 
        enter inx
-       do ' innerExit ' -> out.puttext; ' ' -> out.put; inx -> out.putint; out.newline;
+       do 'innerExit' -> emitOp; ' ' -> out.put; inx -> out.putint; out.newline;
           codes.innerExit -> emit; inx -> emit;
 
        #);
      innerA:
        (# inx: @integer 
        enter inx
-       do (if notLLVM then
-              ' innerA ' -> out.puttext; ' ' -> out.put; inx -> out.putint; out.newline;
+       do 'innerA ' -> emitOp; ' ' -> out.put; inx -> out.putint; out.newline;
+          (if notLLVM then              
               codes.innerA -> emit; inx -> emit;
           if)
        #);
@@ -1241,8 +1281,8 @@ ObjectCode:
      doSuper: 
        (# N: ^text; inx: @integer 
        enter(N[],inx) 
-       do ' doSuper' -> out.puttext; ' ' -> out.put; N[] -> out.puttext; ' ' -> out.put; 
-          inx -> out.putint; out.newline;
+       do 'doSuper' -> emitOp; ' ' -> out.put; N[] -> out.puttext; 
+          ' ' -> out.put; inx -> out.putint; out.newline;
           codes.doSuper -> emit; inx -> emit2;
        #);
 
@@ -1290,8 +1330,8 @@ ObjectCode:
               ' ' -> out.put; off -> out.putint; 
               
               '\n   ' -> out.puttext;
-              (* rN = lea stack.top + off - 1
-               * off - 1 -> vleag -> rn;
+              (* rN = lea stack.top + off
+               * off -> vleag -> rn;
                *)
               allocReg -> rN -> emitRreg -> out.puttext;
               ' = getelementptr ' -> out.puttext; 
@@ -1302,7 +1342,7 @@ ObjectCode:
               '  ' -> out.puttext;
               stack.rTop -> rReg -> out.puttext;
               ', i32 0 ' -> out.puttext; 
-              ', i32 ' -> out.puttext; off - 1 -> out.putint; 
+              ', i32 ' -> out.puttext; off -> out.putint; 
               '\n   ' -> out.puttext;
 
               allocReg -> rN2 -> emitVreg -> out.puttext;
@@ -1363,13 +1403,13 @@ ObjectCode:
               stack.Rtype[stack.rtop][] -> out.puttext;
               out.newline;
               
-              (* rN = rleag stack.rtop + off - 1
-               * off - 1 -> rleag -> (rN,elmType)
+              (* rN = rleag stack.rtop + off
+               * off -> rleag -> (rN,elmType)
                *)
               '   ' -> out.puttext;
               stack.Rtype[stack.rtop][] -> getElmPtrOut -> rN;
               ', i32 ' -> out.puttext; 
-              off - 1 -> out.putint; 
+              off -> out.putint; 
               '\n   ' -> out.puttext;
               
               allocReg -> rN2 -> emitRreg -> out.puttext;
@@ -1609,7 +1649,7 @@ ObjectCode:
               N[] -> prepStruct -> out.puttext; 
               ' * ' -> out.puttext;
               stack.rTop -> rReg -> out.puttext;
-              ', i32 0, i32 ' -> out.puttext; off - 1 -> out.putint; 
+              ', i32 0, i32 ' -> out.puttext; off -> out.putint; 
               out.newline;
               '   store i32 ' -> out.puttext; stack.vTop -> vRegInStack -> out.puttext;
               ', i32* ' -> out.puttext; rN -> emitRreg -> out.putline;
@@ -1624,7 +1664,7 @@ ObjectCode:
           (if notLLVM then
               codes.storeg -> emit; off -> emit;
            else
-              off - 1 -> leag -> rN;
+              off -> leag -> rN;
               '   store i32 ' -> out.puttext;
               stack.vtop -> vRegInStack -> out.puttext;
               ', i32* ' -> out.puttext; 
@@ -1710,7 +1750,7 @@ ObjectCode:
                   N[] -> prepStruct -> out.puttext; 
                   ' * ' -> out.puttext;
                   stack.rTop -> rReg -> out.puttext;
-                  ', i32 0, i32 ' -> out.puttext; off - 1 -> out.putint; 
+                  ', i32 0, i32 ' -> out.puttext; off -> out.putint; 
                   out.newline;
                   '   store ' -> out.puttext;
                   stack.Rtype[stack.rTop - 1][]  -> out.puttext; 
@@ -1738,7 +1778,7 @@ ObjectCode:
            else
               '   ;; ' -> out.puttext; stack.print -> out.putline;
               (* rN = leag stack.rtop + off -1 *)
-              off - 1 -> leag -> rN;
+              off -> leag -> rN;
               (N[],off) -> typeInfo.lookup -> dstType[];
               stack.rType[stack.rTop - 1][] -> srcType[];
 
@@ -2071,15 +2111,6 @@ ObjectCode:
               labs.saveInImage ;
            else
               '}' -> out.putline;
-              inner;
-              '   ;; vdt:vdtTop: ' -> out.puttext;
-              descs.current.vdtTop -> out.putint; ' ' -> out.put;
-              (for i: descs.current.vdtTable.range repeat
-                   descs.current.vdtTable[i] -> out.putint;
-                   (if i < descs.current.vdtTable.range then 
-                       ',' -> out.put
-              if)for);
-              out.newline
           if)
        #);
      mkLLVMvirtualDefs:
@@ -2091,7 +2122,6 @@ ObjectCode:
                if)for);
                inner; (* check if inner *)
             #);
-          objName:< (# T: ^text do inner exit T[] #);
           vName:< 
             (# off,dn: @integer; vN: ^text 
             enter(off,dn)
@@ -2099,38 +2129,91 @@ ObjectCode:
             exit vN[]
             #);
           mkVdtType:
-            (#
-            do'%vdt_type' -> out.puttext; thisClassN[] -> out.puttext;
-              ' = type {' -> out.puttext;
-              (for i: descs.current.vdtTop repeat
-                   (if (descs.current.vdtTable[i] -> dN) > 0 then
-                       '%vdt_ret%' -> out.puttext;
-                       (i,dN) -> vName -> out.puttext;
-                       '*()*' -> out.puttext;
-                   if);
-                   (if i < descs.current.vdtTop then
-                       ',' -> out.put
-              if)for);
-              '}\n' -> out.puttext;
+            (# T: ^text;
+            do '%vdt_type$' -> T[];
+               thisClassId[] -> T.puttext;
+               ' = type {' -> T.puttext;
+               (for i: descs.current.vdtTop repeat
+                    (if (descs.current.vdtTable[i] -> dN) > 0 then
+                        '%vdt_ret$' -> T.puttext;
+                        (i,dN) -> vName -> T.puttext;
+                        '*()*' -> T.puttext;
+                     else
+                        'i8*()*' -> T.puttext
+                    if);
+                    (if i < descs.current.vdtTop then
+                        ',' -> T.put
+               if)for);
+               '}\n' -> T.puttext;
+               T[] -> typeInfo.dsc[descs.current.descInx].vdtType[]
             #);
           mkVdtData:
-            (# T: ^text
-            do '@vdt_data' -> out.puttext; thisClassN[] -> out.puttext;
-               ' = global %vdt_type%' -> out.puttext;
-               thisClassN[] -> out.puttext;
+            (# T: ^text; dM: @integer
+            do '@vdt_data$' -> out.puttext; thisClassId[] -> out.puttext;
+               ' = global %vdt_type$' -> out.puttext;
+               thisClassId[] -> out.puttext;
                ' {' -> out.puttext;
-               
-               '@vdt_alloc' -> out.puttext;
-               (*vName -> out.puttext;*)
-               
+               (for i: descs.current.vdtTop repeat
+                    (if (descs.current.vdtTable[i] -> dN) > 0 then
+                        '%vdt_ret$' -> out.puttext; 
+                        (i,dN) -> vName -> out.puttext;
+                        '* ()*' -> out.puttext;
+                        ' @vdt_alloc$' -> out.puttext;
+                        (i,dN) -> vName -> out.puttext;
+                     else
+                        'i8* ()* null' -> out.puttext
+                    if);
+                    (if i < descs.current.vdtTop then
+                        ',' -> out.put
+               if)for);
                '}\n' -> out.puttext
             #);
+          mkVdtRet:
+            (#
+            do '%vdt_ret$' -> out.puttext; 
+               thisClassId[] -> out.puttext;
+               ' = type{' -> out.puttext;
+               thisClassN[] -> out.puttext; 
+               ',' -> out.put;
+               PthisClassN[] -> out.puttext; '(' -> out.put;
+               PthisClassN[] -> out.puttext; 
+               ')*}\n' -> out.puttext
+            #);
+          mkVDTalloc:
+            (#
+            do 'define %vdt_ret$' -> out.puttext;
+               thisClassId[] -> out.puttext;
+               '* @vdt_alloc$' -> out.puttext;
+               thisClassId[] -> out.puttext;
+               '(){\n' -> out.puttext;
+               
+               '   ret %vdt_ret$' -> out.puttext;
+               thisClassId[] -> out.puttext;
+               '* null}\n' -> out.puttext;
+            #);
           dn: @integer
-       do (if not notLLVM and hasVDTorInner then
-              mkVdtType;
-              mkVdtData;
-              inner;
-              
+       do (if not notLLVM then
+              (if true or hasVDTorInner then
+                  '   ;; vdt:vdtTop: ' -> out.puttext;
+                  descs.current.vdtTop -> out.putint; ' ' -> out.put;
+                  (for i: descs.current.vdtTop repeat
+                       descs.current.vdtTable[i] -> out.putint;
+                       ':' -> out.put;
+                       (if descs.current.isInner[i] then
+                           'I' -> out.put
+                        else
+                           'V' -> out.put
+                       if);
+                       (if i < descs.current.vdtTop then 
+                           ',' -> out.put
+                  if)for);
+                  out.newline;
+                  mkVdtType;
+                  mkVdtData;
+                  inner;
+              if);
+              mkVdtRet;
+              mkVDTalloc;
           if)
        #);
      close:
