@@ -787,14 +787,16 @@ ObjectCode:
      rtnC: (# do ' rtnC' -> out.putline; codes.rtnC -> emit #);
      rtnExit: (# do ' rtnExit' -> out.putline; codes.rtnExit -> emit #);
      rtnInner: 
-       (# 
-       do 'rtnInner' -> emitOp; out.newline;
+       (# entry: @char (* 'A': rtnInner in alloc-part *)
+       enter entry
+       do 'rtnInner ' -> emitOp; entry -> out.put; out.newline;
           (if notLLVM then
               codes.rtnInner -> emit
            else
-              '   ret ' -> out.puttext; thisClassN[] -> out.puttext; 
-              ' *%R0\n' -> out.puttext;              
-          if)
+              (if entry <> 'A' then
+                  '   ret ' -> out.puttext; thisClassN[] -> out.puttext; 
+                  ' *%R0\n' -> out.puttext;
+          if)if)
        #);
      rtnEvent: 
        (# hasExit: @integer 
@@ -936,6 +938,12 @@ ObjectCode:
        (# N,Ns: ^text; descNo,size,staticOff: @integer; 
           asObj: @boolean; iO: @integer;
           rN,rNx: @integer;
+          superN: ^text;
+          topSuperId:<
+            (# superId: ^text
+            do inner
+            exit superId[]
+            #);
        enter(N[],descNo,size,staticOff,asObj) 
        do (if notLLVM then
               ' invoke ' -> out.puttext; N[] -> out.puttext; 
@@ -962,10 +970,11 @@ ObjectCode:
               '$' -> N.put; descNo -> N.putint;
               N.copy -> Ns[];
               '%' -> Ns.prepend;
-              '   ; new ' -> out.puttext; Ns[] -> out.putline;
-              ' tail call i8* @malloc(i64 ' -> out.puttext;
+              'tail call i8* @malloc(i64 ' -> out.puttext;
               size * 4 -> out.putint;
               ')\n   ' -> out.puttext;
+              
+              
               allocReg -> rN -> emitRreg -> out.puttext; 
               ' = bitcast i8* ' -> out.puttext; 
               rNx -> emitRreg->out.puttext;
@@ -999,6 +1008,19 @@ ObjectCode:
               
               inner invoke;
               
+              topSuperId -> superN[];
+              (if not (superN[] -> N.equal) then 
+                  allocReg -> rNx -> emitRreg -> out.puttext;
+                  ' = bitcast ' -> out.puttext; 
+                  Ns[] -> out.puttext;
+                  '* ' -> out.puttext; rN -> emitRreg -> out.puttext;
+                  ' to ' -> out.puttext;
+                  '%' -> Ns[];
+                  superN[] -> Ns.append;
+                  Ns[] -> out.puttext; '*\n' -> out.puttext;
+                  superN[] -> N[];  
+                  rNx -> rN
+              if);
               '   call ' -> out.puttext; Ns[] -> out.puttext;
               '* @' -> out.puttext; N[] -> out.puttext; 
               '(' -> out.put; Ns[] -> out.puttext; ' * ' -> out.puttext;
@@ -1279,7 +1301,7 @@ ObjectCode:
               allocReg -> rNz -> emitRreg -> out.puttext; 
               ' = load ' -> out.puttext;
               (if true then
-                  ' i8*()*, i8*()** ' -> out.puttext;
+                  ' i8*(i8*)*, i8*(i8*)** ' -> out.puttext;
                else
                   thisClassId[] -> vdtType -> out.puttext;
                   ',' -> out.puttext;
@@ -1288,7 +1310,8 @@ ObjectCode:
               if);
               rNx -> emitRreg -> out.putline;
               allocReg -> vN -> emitVreg -> out.puttext;
-              ' = icmp eq i8*()* ' -> out.puttext; rNz -> emitRreg -> out.puttext;
+              ' = icmp eq i8*(i8*)* ' -> out.puttext; 
+              rNz -> emitRreg -> out.puttext;
               ', null' -> out.putline;
               allocReg -> vNt; allocReg -> vNf;
               'br i1 ' -> out.puttext; vN -> emitVreg -> out.puttext;
@@ -1297,6 +1320,17 @@ ObjectCode:
               out.newline;
               'L' -> out.puttext; vNf -> out.putint; ':\n' ->out.puttext;
               ';; inner not null ' -> out.putline;
+              allocReg -> rNx -> emitRreg -> out.puttext;
+              ' = bitcast  ' -> out.puttext;
+              stack.rType[stack.rTop][] -> out.puttext;
+              ' ' -> out.put;
+              stack.rTop -> rReg -> out.puttext;
+              ' to i8*\n' -> out.puttext;
+              'call i8* '  -> out.puttext; 
+              rNz -> emitRreg -> out.puttext;  
+              '(i8* ' -> out.puttext;
+              rNx -> emitRreg -> out.puttext;              
+              ')\n' -> out.puttext;
               'br label %L' -> out.puttext; vNt -> out.putint; 
               out.newline;
               'L' -> out.puttext; vNt -> out.putint; ':\n' ->out.puttext;
@@ -2177,17 +2211,20 @@ ObjectCode:
                (for i: descs.current.vdtTop repeat
                     (if (descs.current.vdtTable[i] -> dN) > 0 then
                         (if descs.current.isInner[i] then
-                            PthisClassN[] -> T.puttext;
-                            '(' -> T.put;
-                            PthisClassN[] -> T.puttext;
-                            ')*' -> T.puttext
+                            '%' -> T.put;
+                            (i,dN) -> vName -> T.puttext;
+                            (*PthisClassN[] -> T.puttext;*)
+                            '*(%' -> T.puttext;
+                            (i,dN) -> vName -> T.puttext;
+                            (*PthisClassN[] -> T.puttext;*)
+                            '*)*' -> T.puttext
                          else
                             '%vdt_ret$' -> T.puttext;
                             (i,dN) -> vName -> T.puttext;
                             '*()*' -> T.puttext;
                         if)
                      else
-                        'i8*()*' -> T.puttext
+                        'i8*(i8*)*' -> T.puttext
                     if);
                     (if i < descs.current.vdtTop then
                         ',' -> T.put
@@ -2205,12 +2242,13 @@ ObjectCode:
                     '\n      ' -> out.puttext;
                     (if (descs.current.vdtTable[i] -> dN) > 0 then
                         (if descs.current.isInner[i] then
-                            PthisClassN[] -> out.puttext;
-                            '(' -> out.put;
-                            PthisClassN[] -> out.puttext;
-                            ')* ' -> out.puttext;
+                             '%' -> out.put;
+                            (i,dN) -> vName -> out.puttext;
+                            '*(%' -> out.puttext;
+                            (i,dN) -> vName -> out.puttext;
+                            '*)* ' -> out.puttext;
                             '@' -> out.puttext;
-                            thisClassId[] -> out.puttext;
+                            (i,dN) -> vName -> out.puttext;
                          else
                             '%vdt_ret$' -> out.puttext; 
                             (i,dN) -> vName -> out.puttext;
@@ -2219,7 +2257,7 @@ ObjectCode:
                             (i,dN) -> vName -> out.puttext;
                         if)
                      else
-                        'i8* ()* null' -> out.puttext
+                        'i8* (i8* )* null' -> out.puttext
                     if);
                     (if i < descs.current.vdtTop then
                         ',' -> out.put
