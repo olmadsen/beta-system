@@ -317,18 +317,19 @@ ObjectCode:
                  T.scanAll
                (# i: @integer
                do i + 1 -> i;
-                  (if ch = '$' then i -> inx; leave L if);
+                  (if ch = '$' then i -> inx; (*leave L*) if);
                #);
             exit inx
             #);
           patch:
-            (# miN,T: ^text; inxA,inxB: @integer; C: ^Info
+            (# miN,T: ^text; inxA,inxB: @integer; C: ^Info;
+               trace: (# exit true #);
             enter miN[]
-            do (if false then
+            do (if trace then
                    'patch: ' -> puttext; miN[] -> puttext; ' ' -> put;
                if);
                miN[] -> getID -> inxA; 
-               (if false then
+               (if trace then
                    inxA -> putint; newline;
                if);
                (for i: top repeat
@@ -340,13 +341,13 @@ ObjectCode:
                                      (if ((1,inxA) -> miN.sub)
                                            ->
                                          ((1,inxB) -> T.sub).equal then
-                                         (If false then
+                                         (If trace then
                                              'match: ' -> puttext;
                                              miN[] -> puttext;
                                              ' ' -> put;
                                              T[] -> putline;
                                          if);
-                                         (if false then
+                                         (if trace then
                                              '*** patch:in: ' -> puttext;
                                              C.sig[] -> puttext;
                                              ' old: ' -> puttext;
@@ -404,12 +405,28 @@ ObjectCode:
                        (*dsc[dn].sig[] -> puttext; ' ' -> put;*)
                        dsc[dn].attQs[off + 1][] -> attSig[];
                     else
-                       'none' -> attSig[]
+                       'none' -> attSig[];
+                        print;
+                       '\n!!!! lookup: none! ' -> putline;
+                       sig[] -> puttext; ' off:' -> puttext;
+                       off -> putint; newline
                    if);
                    (*attSig[] -> putline*)
                 else
-                   'no-match' -> attSig[]
-               if)                   
+                   print;
+                   'no-match' -> attSig[];
+                   '\n!!!! lookup: no match! ' -> putline;
+                   sig[] -> puttext; ' off:' -> puttext;
+                   off -> putint; newline
+               if);
+               (if attSig[] = none then
+                   print;
+                   '\n!!!! lookup: noneX! ' -> putline;
+                   sig[] -> puttext; ' off:' -> puttext;
+                   off -> putint; 
+                   ' dn: ' -> puttext; dn -> putint; newline
+               if);
+               attSig[] -> putline;
             exit attSig[]
             #);
           newArray:
@@ -941,27 +958,36 @@ ObjectCode:
           if);          
        #);
      jmpFalse:
-       (# Tlab,Flab: @integer 
+       (# Tlab,Flab,vN: @integer 
        enter(Tlab,Flab) 
-       do (if notLLVM then
-              ' jmpFalse L' -> out.puttext; Flab -> out.putint; out.newline;
+       do 'jmpFalse L' -> emitOp; Flab -> out.putint; out.newline;
+          (if notLLVM then              
               codes.jmpFalse -> emit;
               0 -> emit2;
               Flab -> labs.mark;
            else
-              '   br i1 ' -> out.puttext; stack.vtop -> vRegInStack -> out.puttext; 
+              allocReg -> Vn -> emitVreg -> out.puttext;
+              ' = trunc  i32 ' -> out.puttext;
+              stack.vtop -> vRegInStack -> out.puttext; 
+              ' to i1\n' -> out.puttext;
+              '   br i1 ' -> out.puttext; 
+              Vn -> emitVreg -> out.puttext;
               ', label %L' -> out.puttext; Tlab ->  out.putint;
-              ', label %L' -> out.puttext; Flab ->  out.putint; out.newline 
+              ', label %L' -> out.puttext; Flab ->  out.putint; 
+              out.newline 
           if);
           1-> stack.vpop
        #);
      jmpTrue:
        (# lab: @integer 
        enter lab 
-       do '   jmpTrue L' -> out.puttext; lab -> out.putint; out.newline;
-          codes.jmpTrue -> emit;
-          0 -> emit2;
-          lab -> labs.mark
+       do 'jmpTrue L' -> emitOp; lab -> out.putint; out.newline;
+          (if notLLVM then
+              codes.jmpTrue -> emit;
+              0 -> emit2;
+              lab -> labs.mark
+           else
+          if)
        #);
      break:
        (# on,lab,descInx,pn: @integer
@@ -1071,7 +1097,7 @@ ObjectCode:
               
               inner invoke;
               
-              topSuperId -> superN[];
+              topSuperId -> filter -> superN[];
               (if not (superN[] -> N.equal) then 
                   '   ' -> out.puttext;
                   allocReg -> rNx -> emitRreg -> out.puttext;
@@ -1615,10 +1641,14 @@ ObjectCode:
               (stack.rType[stack.rtop][],off) 
                 -> typeInfo.lookup -> elmType[];
               elmType[] -> out.puttext;              
+              'rpushg:elmType: ' -> puttext; elmType[] -> putline;
+              
+              (N[],off) -> typeInfo.lookup -> putline;
+              
               ' ST:' -> out.puttext;
               stack.Rtype[stack.rtop][] -> out.puttext;
               out.newline;
-              
+              ';; ' -> out.puttext; stack.print ->out.putline;
               (* rN = rleag stack.rtop + off
                * off -> rleag -> (rN,elmType)
                *)
@@ -1880,6 +1910,7 @@ ObjectCode:
           (if notLLVM then
               codes.storeg -> emit; off -> emit;
            else
+              ';; ' -> out.puttext; stack.print -> out.putline;
               off -> leag -> rN;
               '   store i32 ' -> out.puttext;
               stack.vtop -> vRegInStack -> out.puttext;
@@ -1934,9 +1965,9 @@ ObjectCode:
      rstoreX: 
        (# N: ^text; off,rN: @integer
        enter(N[],off) 
-       do (if notLLVM  then
-              ' rstore ' -> out.puttext; off -> out.putint; 
-              ' ' -> out.put; N[] -> out.putline;
+       do 'rstoreX ' -> emitOp; off -> out.putint; 
+          ' ' -> out.put; N[] -> out.putline;
+          (if notLLVM  then              
               (if off <= 255 then 
                   codes.rstore -> emit; off -> emit
               if);
@@ -1954,7 +1985,7 @@ ObjectCode:
                   '*, R0' -> out.puttext;
                   out.newline
                else
-                  (if false then
+                  (if true then
                       ';; ' -> out.puttext;
                       stack.print -> out.puttext;
                       '\n   ' -> out.puttext
