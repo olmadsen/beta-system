@@ -213,7 +213,11 @@ SystemEnv
               // '-l' -> arg.equalNCS then
                  true -> compile.emitLLVM
               // '-a' -> arg.equalNCS then
-                 true -> compile.emitCom               
+                 true -> compile.emitCom  
+              // '-d' -> arg.equal then
+                 true -> compile.traceLLVMcalls
+              // '-D' -> arg.equal then
+                 true -> compile.traceLLVMcalls -> compile.dumpLLVMobjs
               // (arg.length > 2) and ('-d'-> ((1,2)->arg.sub).equalNCS) then
                  '\n**** debug:'->puttext; arg[] -> puttext;
                  (for i: arg.length - 2 repeat
@@ -239,24 +243,51 @@ SystemEnv
         for);
         noOfArguments  -> arguments -> FN[];
      #);
+   linkLLVM:
+     (# llvmLib,cmd: ^text; res: @integer;
+        system: external
+          (# cmd: [0] @char; res: @integer
+          enter cmd
+          do callC
+          exit res
+          #)
+     do BetaLib -> llvmLib[];
+        (*compile.dirCh*) 
+        '/MiniSystem/VM/qbeta_llvm_lib.c' -> llvmLib.append;
+        (* Note! clang is a link to clang-8, but system can apparently 
+         * not handle links - we thus use clang-8 directly
+         *)
+        'clang-8 ' -> cmd[];
+        (FN[],'.ll') -> mkAuxName -> cmd.append;
+        ' '  -> cmd.put;
+        llVmlib[] -> cmd.putline;
+        cmd[] -> putline;
+        cmd -> system -> res
+     #)
 do 'qBETA COMPILER: ' -> puttext;
    readArguments;
-   ('/MiniSystem/qbeta/BETAworld/','.xbeta') -> compile.initDirectoryModules;
+   ('/MiniSystem/qbeta/BETAworld/','.xbeta') 
+     -> compile.initDirectoryModules;
    FN[] -> compile.fixExtension_xbeta -> FN[] -> putline;
    FN[] -> F.name;
    F.openRead;
    
    (none,false,none,FN[]) -> compile; 
    
-   (if not compile.emitLLVM then (runMode,true) -> VM.init; if);
-   (if not compile.onlyLex 
-       and not compile.hasSyntaxError
-       and not compile.semanticErrors 
-       and not compile.emitLLVM then
-       (compile.runtimeDescs,compile.mainDescNo,FN[],runMode) 
-         -> VM.execute.init;
-       VM.execute[] -> fork;
-    else
+   (if compile.emitLLVM then
+       linkLLVM;
        stop
-   if);
+    else
+       (runMode,true) -> VM.init;
+       (if not compile.onlyLex 
+           and not compile.hasSyntaxError
+           and not compile.semanticErrors 
+           then
+           (compile.runtimeDescs,compile.mainDescNo,FN[],runMode) 
+             -> VM.execute.init;
+           VM.execute[] -> fork;
+        else
+           stop
+       if)
+   if)
 #)

@@ -4,10 +4,10 @@ INCLUDE 'Primitives';
 INCLUDE 'betaVM';
 ---lib:attributes---
 ObjectCode:
-  (# notLLVM,emitCom: @ boolean;
+  (# notLLVM,emitCom,traceLLVMcalls,dumpLLVMobjs: @ boolean;
      init:<
        (# emitLLVM: @boolean
-       enter(out[],emitLLVM,emitCom)
+       enter(out[],emitLLVM,emitCom,traceLLVMcalls,dumpLLVMobjs)
        do not emitLLVM -> notLLVM;
           vdtPatch.init;
           inner
@@ -776,12 +776,15 @@ ObjectCode:
               thisClassId[] -> thisClassN.puttext; 
               '*' -> (thisClassN.copy -> PthisClassN[]).put;
               
-              '\n@S.' -> out.puttext; N[] -> out.puttext; 
-              '$' -> out.put; descNo -> out.putint;               
-              ' = private unnamed_addr constant [' -> out.puttext;
-              thisClassN.length + 2 -> out.putint;
-              ' x i8] c"' -> out.puttext; thisClassN[] -> out.puttext;
-              '\\0A\\00"\n' -> out.puttext;
+              (if traceLLVMcalls then
+                  '\n@S.' -> out.puttext; N[] -> out.puttext; 
+                  '$' -> out.put; descNo -> out.putint;               
+                  ' = private unnamed_addr constant [' -> out.puttext;
+                  thisClassN.length + 2 -> out.putint;
+                  ' x i8] c"' -> out.puttext; thisClassN[] -> out.puttext;
+                  '\\0A\\00"\n' -> out.puttext;
+              if);
+              
               (if 'main' -> N.equal then
                   'define void @main(i8* %args){\n' -> out.puttext;
                else
@@ -794,15 +797,17 @@ ObjectCode:
                   ' *%R0' -> out.puttext;
                   '){\n' -> out.puttext;
               if);
-              '   %S = getelementptr [' -> out.puttext;
-              thisClassN.length + 2 -> out.putint;
-              ' x i8], [' -> out.puttext;
-              thisClassN.length + 2 -> out.putint; 
-              ' x i8]* @S.' -> out.puttext; N[] -> out.puttext; 
-              '$' -> out.put; descNo -> out.putint;
-              ', i64 0, i64 0\n' -> out.puttext;
-              
-              '   call i32 @puts(i8* %S)\n' -> out.puttext;
+              (if traceLLVMcalls then
+                  '   %S = getelementptr [' -> out.puttext;
+                  thisClassN.length + 2 -> out.putint;
+                  ' x i8], [' -> out.puttext;
+                  thisClassN.length + 2 -> out.putint; 
+                  ' x i8]* @S.' -> out.puttext; N[] -> out.puttext; 
+                  '$' -> out.put; descNo -> out.putint;
+                  ', i64 0, i64 0\n' -> out.puttext;
+                  
+                  '   call i32 @puts(i8* %S)\n' -> out.puttext;
+              if);
               '   %V0 = add i32 0, 0' -> out.putline; (* just a dummy *)
           if)
        #);
@@ -1078,56 +1083,12 @@ ObjectCode:
               '" ; "' -> out.puttext; N[] -> out.puttext;
               '"\n   ' -> out.puttext;
               
-              (if true then
-                  '$' -> N.put; descNo -> N.putint;
-                  N.copy -> Ns[];
-                  '%' -> Ns.prepend;
-                  (Ns[],size * 4 + 4) -> allocQbetaObj -> rN;
-                  rN -> stack.rpush
-                  (#do Ns[] -> stack.Rtype[stack.rTop][] #);
-               else
-                  allocReg -> rNx -> emitRreg -> out.puttext; 
-                  ' = ' -> out.puttext;
-                  '$' -> N.put; descNo -> N.putint;
-                  N.copy -> Ns[];
-                  '%' -> Ns.prepend;
-                  'tail call i8* @malloc(i64 ' -> out.puttext;
-                  size * 4 + 4 -> out.putint;
-                  ')\n   ' -> out.puttext;
-                  
-                  
-                  allocReg -> rN -> emitRreg -> out.puttext; 
-                  ' = bitcast i8* ' -> out.puttext; 
-                  rNx -> emitRreg->out.puttext;
-                  ' to ' -> out.puttext; 
-                  Ns[] -> out.puttext; ' *\n' -> out.puttext;
-                  
-                  rN -> stack.rpush
-                  (#do Ns[] -> stack.Rtype[stack.rTop][] #);
-                  
-                  '   ;; ' -> out.puttext;
-                  stack.print -> out.putline;
-                  
-                  (* store VDT *)
-                  '   ' -> out.puttext;
-                  allocReg -> rNx -> emitRreg -> out.puttext;
-                  ' = getelementptr ' -> out.puttext;  
-                  Ns[] -> out.puttext; 
-                  ', ' -> out.puttext; Ns[] -> out.puttext;
-                  '* ' -> out.puttext;
-                  rN -> emitRreg -> out.puttext;               
-                  ', i32 0, i32 0' -> out.puttext;
-                  out.newline;
-              
-                  '   store ' -> out.puttext;
-                  N[] -> vdtType -> out.puttext;
-                  '* @vdt_data$' -> out.puttext; N[] -> out.puttext;
-                  ', ' -> out.puttext; 
-                  N[] -> vdtType -> out.puttext;
-                  '** ' -> out.puttext;
-                  rNx -> emitRreg -> out.puttext;
-                  '\n   ' -> out.puttext;
-              if);
+              '$' -> N.put; descNo -> N.putint;
+              N.copy -> Ns[];
+              '%' -> Ns.prepend;
+              (Ns[],size + 1) -> allocQbetaObj -> rN;
+              (rN,Ns[]) -> stack.rpushT;
+
               inner invoke;
               
               topSuperId -> filter -> superN[];
@@ -1144,7 +1105,7 @@ ObjectCode:
                   superN[] -> N[];  
                   rNx -> rN
               if);
-              (if false (*dumpObj*) then
+              (if dumpLLVMobjs then
                   allocReg -> rNx -> emitRreg -> out.puttext;
                   ' = ptrtoint ' -> out.puttext; Ns[] -> out.puttext;
                   '* ' -> out.puttext; rN -> emitRreg -> out.puttext;
@@ -1357,7 +1318,9 @@ ObjectCode:
               '* ' -> out.puttext;
               rNy -> emitRreg -> out.putline;
               
-              (rNx,'%' -> (N.copy).prepend) -> dumpObj;
+              (if dumpLLVMobjs then
+                  (rNx,'%' -> (N.copy).prepend) -> dumpObj;
+              if);
               
               (if true then
                   '   call %' -> out.puttext; N[] -> out.puttext;
@@ -1718,7 +1681,7 @@ ObjectCode:
                   ';; ' -> out.puttext;
                   'rpushg:elmType: ' -> out.puttext; elmType[] -> out.puttext;
                   ' ' -> out.put;
-                  (N[],off) -> typeInfo.lookup -> out.putline;
+                  (*(N[],off) -> typeInfo.lookup -> out.putline;*)
               if);              
               ';; ' -> out.puttext; stack.print ->out.putline;
               (* rN = rleag stack.rtop + off
@@ -2531,31 +2494,32 @@ ObjectCode:
             #);
           mkVDTalloc:
             (# rNx,rNy,rNz,rNv: @integer; vdt_ret_type,funcPT: ^text
-            do '\n@S.vdt_ret$' -> out.puttext; 
-               
-               thisClassId[] -> out.puttext; 
-               
-               ' = private unnamed_addr constant [' -> out.puttext;
-               thisClassId.length + 8  +  2 -> out.putint;
-               ' x i8] c"vdt_ret$' -> out.puttext; 
-               thisClassId[] -> out.puttext;
-              '\\0A\\00"\n' -> out.puttext;
+            do (if traceLLVMcalls then
+                   '\n@S.vdt_ret$' -> out.puttext;                
+                   thisClassId[] -> out.puttext;                
+                   ' = private unnamed_addr constant [' -> out.puttext;
+                   thisClassId.length + 8  +  2 -> out.putint;
+                   ' x i8] c"vdt_ret$' -> out.puttext; 
+                   thisClassId[] -> out.puttext;
+                   '\\0A\\00"\n' -> out.puttext;
+               if);
                
                'define %vdt_ret$' -> out.puttext;
                thisClassId[] -> out.puttext;
                '* @vdt_alloc$' -> out.puttext;
-               thisClassId[] -> out.puttext;
+               thisClassId[] -> out.puttext;               
+               '(){\n' -> out.puttext;
                
-               '(){\n   ' -> out.puttext;
-               '   %S = getelementptr [' -> out.puttext;
-               thisClassId.length + 8 + 2 -> out.putint;
-               ' x i8], [' -> out.puttext;
-               thisClassId.length + 8 + 2 -> out.putint; 
-               ' x i8]* @S.vdt_ret$' -> out.puttext; 
-               thisClassId[] -> out.puttext; 
-              ', i64 0, i64 0\n' -> out.puttext;
-              
-               '   call i32 @puts(i8* %S)\n' -> out.puttext;
+               (if traceLLVMcalls then
+                   '   %S = getelementptr [' -> out.puttext;
+                   thisClassId.length + 8 + 2 -> out.putint;
+                   ' x i8], [' -> out.puttext;
+                   thisClassId.length + 8 + 2 -> out.putint; 
+                   ' x i8]* @S.vdt_ret$' -> out.puttext; 
+                   thisClassId[] -> out.puttext; 
+                   ', i64 0, i64 0\n' -> out.puttext;                   
+                   '   call i32 @puts(i8* %S)\n' -> out.puttext;
+               if);
                
                '%vdt_ret$' -> vdt_ret_type[];
                thisClassId[] -> vdt_ret_type.append;
