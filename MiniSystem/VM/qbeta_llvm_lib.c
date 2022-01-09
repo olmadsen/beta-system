@@ -9,6 +9,19 @@ char* allocIndexed(int size, int range){
   A[0] = range;
   return A;
 }
+int arrayLength(char * A){
+  return A[0];
+}
+char* allocString(char *T, int range){
+  char * stringObj;
+  int i;
+  printf("\nallocString: %s = ",T);
+  stringObj = allocIndexed(1,range);
+  for (i = 0; i < range; i++) {
+    stringObj[i + 1] =T[i];
+  }
+  return stringObj;
+}
 int putHex(int V){
   printf("%x %i\n",V,V);
   return 0;
