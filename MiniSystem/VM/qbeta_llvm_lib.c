@@ -4,21 +4,22 @@ int putCh(int ch){
   printf("%c",ch);
   return 0;
 }
-char* allocIndexed(int size, int range){
-  char * A = (char *)malloc(4 + range * size * 4);
-  A[0] = range;
+int* allocIndexed(int size, int range){
+  int * A = (int *)malloc(8 + range * size * 4);
+  A[0] = 0; // should be ref to en obj templete
+  A[1] = range;
   return A;
 }
-int arrayLength(char * A){
-  return A[0];
+int arrayLength(int * A){
+  return A[1];
 }
-char* allocString(char *T, int range){
-  char * stringObj;
+int* allocString(char *T, int range){
+  int * stringObj;
   int i;
   printf("\nallocString: %s = ",T);
   stringObj = allocIndexed(1,range);
   for (i = 0; i < range; i++) {
-    stringObj[i + 1] =T[i];
+    stringObj[i + 2] = T[i];
   }
   return stringObj;
 }

@@ -447,7 +447,7 @@ ObjectCode:
                '%array$' -> T[]; noOfArrays -> T.putint;
                T.copy -> type[];
                (*'*' -> type.put;*)
-               ' = type {i32, [0 x i32]}\n' -> T.append;
+               ' = type {i8*, i32, [0 x i32]}\n' -> T.append;
                T[] -> arrays[noOfArrays][];
             exit type[]
             #);
@@ -466,7 +466,7 @@ ObjectCode:
                     if)
                for);
                (for i: noOfArrays repeat arrays[i][] -> LLVMstructs.putline for);
-               
+               literals[] -> LLVMstructs.putline
             #);
           print:
             (#
@@ -602,13 +602,13 @@ ObjectCode:
           id[] -> out.puttext; ', i64 0, i64 0\n' -> out.puttext;
           
           allocReg -> rN1 -> emitRreg -> out.puttext;
-          ' = call i8* @allocString(i8* ' -> out.puttext;
+          ' = call i32* @allocString(i8* ' -> out.puttext;
           rN -> emitRreg -> out.puttext; ', i32 ' -> out.puttext;
-          range -> out.putint;
+          range - 2 -> out.putint;
           ')\n' -> out.puttext;
           
           allocReg -> rN -> emitRreg -> out.puttext;
-          ' = bitcast i8* ' -> out.puttext; rN1 -> emitRreg -> out.puttext;
+          ' = bitcast i32* ' -> out.puttext; rN1 -> emitRreg -> out.puttext;
           ' to ' -> out.puttext; sType[] -> out.puttext;
           '*\n' -> out.putline;
           (rN,'*' ->sType.put) -> stack.rPushT
@@ -1087,7 +1087,7 @@ ObjectCode:
      invoke: 
        (# N,Ns: ^text; descNo,size,staticOff: @integer; 
           asObj: @boolean; iO: @integer;
-          rN,rNx: @integer;
+          rN,rNx,rNy: @integer;
           superN: ^text;
           topSuperId:<
             (# superId: ^text
@@ -1229,14 +1229,14 @@ ObjectCode:
                 
                 '   ' -> out.puttext;
                 allocReg -> rN -> emitRreg -> out.puttext;
-                ' = tail call i8 * @allocIndexed(i32 ' -> out.puttext;
+                ' = tail call i32 * @allocIndexed(i32 ' -> out.puttext;
                 stack.vtop - 1 -> vRegInstack -> out.puttext;
                 ',i32 ' -> out.puttext;
                 stack.vtop -> vRegInstack -> out.puttext;
                 ')\n   ' -> out.puttext;
                 
                 allocReg -> Rnx -> emitRreg -> out.puttext;
-                ' = bitcast i8* ' -> out.puttext; 
+                ' = bitcast i32* ' -> out.puttext; 
                 rN -> emitRreg -> out.puttext;
                 ' to ' -> out.puttext; 
                 eType[] -> out.puttext; '\n' -> out.puttext;
@@ -1749,7 +1749,7 @@ ObjectCode:
           stack.rPush
        #);
      xpushg:
-       (# N,xType: ^text; off,isValueObj,size,rN,rNx,Vn: @integer
+       (# N,xType: ^text; off,isValueObj,size,rN,rNx,vN,vNx: @integer
        enter(N[],off,isValueObj,size) 
        do 'xpushg ' -> emitOp; N[] -> out.puttext;  ' ' -> out.put; 
           off -> out.putint; ' ' -> out.put; 
@@ -1766,6 +1766,7 @@ ObjectCode:
               lcom(#do stack.print -> TT #);
 
               stack.rType[stack.rTop][] -> xType[];
+             
               (if ('%String' -> ((1,7) -> xType.sub).equal)
                   and (stack.vVal[stack.vtop][] <> none)
                   and  (stack.vVal[stack.vtop].V = 0) then
@@ -1775,13 +1776,26 @@ ObjectCode:
                   stack.rType[stack.rTop][] -> out.puttext;
                   ' ' -> out.put;
                   stack.rRegNo[stack.rTop] -> emitRreg -> out.puttext;
-                  ' to i8*\n' -> out.puttext;
+                  ' to i32*\n' -> out.puttext;
                   
                   allocReg -> vN -> emitVreg -> out.puttext;
-                  ' = call i32 @arrayLength(i8* ' -> out.puttext;
+                  ' = call i32 @arrayLength(i32* ' -> out.puttext;
                   rN -> emitRreg -> out.puttext;
                   ')\n' -> out.puttext;
                else
+                  (if ('%String' -> ((1,7) -> xType.sub).equal) then
+                      ';; xpusg:String\n' -> out.puttext;
+                      (stack.rRegNo[stack.rTop], stack.rType[stack.rTop][],
+                      '{i32*,i32,[0 x i32]}*')
+                        -> bitCast
+                        -> stack.rRegNo[stack.rTop];
+                      '{i32*,i32,[0 x i32]}*' ->  stack.rType[stack.rTop][]
+                  if);
+                  allocReg -> vNx -> emitVreg -> out.puttext;
+                  ' = add i32 -1, ' -> out.puttext;
+                  stack.vTop -> vRegInStack -> out.puttext;
+                  out.newline;
+                  
                   allocReg -> rN  -> emitRreg -> out.puttext;
                   ' = getelementptr inbounds ' -> out.puttext;
                   stack.rType[stack.rTop][] -> deRef -> out.puttext;
@@ -1789,7 +1803,7 @@ ObjectCode:
                   stack.rType[stack.rTop][] -> out.puttext;
                   ' ' -> out.puttext;
                   stack.rTop -> rReg -> out.puttext;
-                  ', i32 0, i32 1\n' -> out.puttext; (* why 1 here?
+                  ', i32 0, i32 2\n' -> out.puttext; (* why 1 here?
                                                       * should be 
                                                       * vStack[vTop] + off?
                                                       *)
@@ -1809,7 +1823,8 @@ ObjectCode:
                     -> out.puttext;
                   rN -> emitRreg -> out.puttext;
                   ', i32 0, i32 ' -> out.puttext;
-                  stack.vTop -> vRegInStack -> out.puttext;
+                  vNx -> emitVreg -> out.puttext;
+                  (*stack.vTop -> vRegInStack -> out.puttext;*)
                   out.newline;
                   allocReg -> vN -> emitVreg -> out.puttext;
                   ' = load i32 , i32* ' -> out.puttext; 
@@ -2192,7 +2207,7 @@ ObjectCode:
           1 -> stack.vpop
        #);
      xstoreg: 
-       (# N: ^text; off,isValueObj,size,rN,rNx: @integer
+       (# N: ^text; off,isValueObj,size,vN,rN,rNx: @integer
        enter(N[],off,isValueObj,size) 
        do 'xstoreg ' -> emitop; N[] -> out.puttext; ' ' -> out.put;
           off -> out.putint; ' ' -> out.put; 
@@ -2205,6 +2220,11 @@ ObjectCode:
               if);
            else
               lcom(#do stack.print -> TT #);
+              allocReg -> vN -> emitVreg -> out.puttext;
+              ' = add i32 -1, ' -> out.puttext;
+              stack.vTop -> vRegInStack -> out.puttext;
+              out.newline;
+              
               allocReg -> rN  -> emitRreg -> out.puttext;
               ' = getelementptr inbounds ' -> out.puttext;
               stack.rType[stack.rTop][] -> deRef -> out.puttext;
@@ -2212,14 +2232,15 @@ ObjectCode:
               stack.rType[stack.rTop][] -> out.puttext;
               ' ' -> out.puttext;
               stack.rTop -> rReg -> out.puttext;
-              ', i32 0, i32 1\n' -> out.puttext;
+              ', i32 0, i32 2\n' -> out.puttext;
               
               allocReg -> rNx -> emitRreg -> out.puttext;
               ' = getelementptr inbounds [0 x i32], [0 x i32]* ' 
                 -> out.puttext;
               rN -> emitRreg -> out.puttext;
               ', i32 0, i32 ' -> out.puttext;
-              stack.vTop -> vRegInStack -> out.puttext;
+              vN -> emitVreg -> out.puttext;
+              (*stack.vTop -> vRegInStack -> out.puttext;*)
               out.newline;
               
               'store i32 ' -> out.puttext; 
