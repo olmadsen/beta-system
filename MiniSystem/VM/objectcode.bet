@@ -629,7 +629,7 @@ ObjectCode:
        enter(rNs,srcT[],dstT[])
        do allocReg -> rNd -> emitRreg -> out.puttext; 
           ' = bitcast ' -> out.puttext; 
-          srcT[] -> out.puttext;
+          srcT[] -> out.puttext; ' ' -> out.put;
           rNs -> emitRreg->out.puttext;
           ' to ' -> out.puttext; 
           dstT[] -> out.puttext; '\n' -> out.puttext; 
@@ -1906,10 +1906,15 @@ ObjectCode:
           if)
        #);
      pushNone: 
-       (# 
-       do ' pushNone' -> out.puttext; out.newline;
-          codes.pushNone -> emit;
-          stack.rPush
+       (# rN: @integer
+       do 'pushNone' -> emitOp; out.newline;
+          (if notLLVM then
+              codes.pushNone -> emit;
+              stack.rPush
+           else
+              (0,'null') -> stack.rPushT
+          if);
+
        #);
      pushText:
        (# T,T1: ^text; stringDescNo,I: @integer
@@ -2168,7 +2173,8 @@ ObjectCode:
 
        #);
      rstoreg: 
-       (# N: ^text; off,rN,rNd: @integer; srcType,dstType,rNtype: ^text
+       (# N: ^text; off,rN,rNd: @integer; srcType,dstType,rNtype: ^text;
+          isNull: @boolean
        enter(N[],off) 
        do 'rstoreg ' -> emitOp; N[] -> out.puttext;
           ' ' -> out.put; off -> out.putint; out.newline;
@@ -2182,18 +2188,34 @@ ObjectCode:
               off -> leag -> rN;
               (N[],off) -> typeInfo.lookup -> dstType[];
               stack.rType[stack.rTop - 1][] -> srcType[];
-
+              (if 'null' -> srcType.equal then
+                  dstType[]
+                    -> stack.rType[stack.rTop][] 
+                    ->  stack.rType[stack.rTop - 1][]
+                    -> srcType[];
+                  true -> isNull;
+                  ';; isNull: ' -> out.puttext; stack.print -> out.putline
+              if);
               ';; types:dst: ' -> out.puttext; dstType[] -> out.puttext; 
               ' src: ' -> out.puttext; srcType[] -> out.putline;
               '   ;; ' -> out.puttext; stack.print -> out.putline;
-              (if dstType[] -> srcType.equal then
+              (if (dstType[] -> srcType.equal) 
+                  (*or ('null'->srcType.equal->isNull)*)
+                  then
                   '   store ' -> out.puttext; 
-                  stack.rType[stack.rTop - 1][] -> out.puttext; 
-                  '  ' -> out.puttext;
-                  stack.rtop - 1-> rReg -> out.puttext; 
-                  ', ' -> out.puttext; 
-                  stack.rType[stack.rTop - 1][] -> out.puttext;    
-                  ' * ' -> out.puttext;
+                  (if isNull then
+                      srcType[] -> out.puttext;    
+                      ' null, ' -> out.puttext;
+                       dstType[] -> out.puttext;    
+                      ' * ' -> out.puttext;
+                   else
+                      stack.rType[stack.rTop - 1][] -> out.puttext; 
+                      '  ' -> out.puttext;
+                      stack.rtop - 1-> rReg -> out.puttext; 
+                      ', ' -> out.puttext; 
+                      stack.rType[stack.rTop - 1][] -> out.puttext;    
+                      ' * ' -> out.puttext;
+                  if);
                   rN -> emitRreg -> out.puttext; out.newline;
                else
                   '   ' -> out.puttext;
@@ -2390,6 +2412,47 @@ ObjectCode:
                rN -> stack.vPush;
                1 -> stack.Vtype[stack.vTop]
             #);
+           LLVMRefRElOp:
+            (# opT: ^text; rN,rNx: @integer; rIsNull,lIsNull: @boolean
+            enter opT[]
+            do 
+               (if true
+                // 'null' -> stack.rType[stack.rTop].equal then
+                   true -> rIsNull
+                // 'null' -> stack.rType[stack.rTop - 1].equal then
+                   true -> lIsNull
+                else
+                   stack.rRegNo[stack.rtop] -> rNx;
+                   (if stack.rType[stack.rtop][] 
+                         -> stack.rType[stack.rtop - 1].equal then
+                    else
+                       (rNx,stack.rType[stack.rtop][]
+                       ,stack.rType[stack.rtop - 1][])
+                         -> bitCast
+                         -> rNx                   
+                   if);
+               if);
+               '   ' -> out.puttext;
+               allocReg -> rN -> emitVreg -> out.puttext;
+               ' = ' -> out.puttext; opT[] -> out.puttext;
+               ' ' -> out.puttext;
+               (if true
+                // rIsNull then
+                   stack.rType[stack.rtop  - 1][] -> out.puttext;
+                   ' ' -> out.put;
+                   stack.rtop - 1 -> rReg -> out.puttext;
+                   ', null\n' -> out.puttext;
+                // lIsNull then
+                else
+                   stack.rType[stack.rtop  - 1][] -> out.puttext;
+                   ' ' -> out.put;
+                   stack.rtop - 1 -> rReg -> out.puttext;
+                   ', ' -> out.puttext; rNx -> emitrReg -> out.putline;
+               if);
+               2 -> stack.rpop;
+               rN -> stack.vPush;
+               1 -> stack.vType[stack.vTop]
+            #);
           rn: @integer
        enter operator
        do (if notLLVM then
@@ -2446,22 +2509,24 @@ ObjectCode:
                   rN -> stack.vPush
                // codes.eq then 
                    'icmp eq' -> LLVMbOp;
-
                // codes.lt then 
                   'icmp slt' -> LLVMbOp;
-
                // codes.le then 
                   'icmp sle' -> LLVMbOp;
                // codes.gt then
-                  'icmp sgt' -> LLVMbOp;
-              
-               // codes.ge then 'ge' -> out.putline
-               // codes.ne then 'ne' -> out.putline
-               // codes.andd then 'andd' -> out.putline
+                  'icmp sgt' -> LLVMbOp
+               // codes.ge then
+                  'icmp sge' -> LLVMbOp
+               // codes.ne then
+                  'icmp ne' -> LLVMbOp                  
+               // codes.andd then
+                  'and' -> LLVMBoolOp;
                // codes.orr then 
                   'or' -> LLVMBoolOp;
-               // codes.xorr then 'xorr' -> out.putline
-               // codes.req then 'req' -> out.putline
+               // codes.xorr then
+                  'xor' -> LLVMBoolOp;                  
+               // codes.req then 
+                  'icmp eq' -> LLVMRefRelOp;
                // codes.rne then 'rne' -> out.putline
                // codes.fplus then 'fplus' -> out.putline
                // codes.fminus then 'fplus' -> out.putline
