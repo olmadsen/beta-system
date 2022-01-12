@@ -37,6 +37,9 @@ int dumpHex(int V, int n){
   if ((n > 0) && (A[1] > 0)) dumpHex(A[1],n-1);
   return 0;
 }
+void notImpl(int op){
+  printf("\n!!!! objCode: %i not implemented in LLVM!\n",op);
+}
 void arrayStuff(int I){
   struct{int range;int AAA[11];} R;
   int V;

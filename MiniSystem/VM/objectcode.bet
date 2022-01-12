@@ -391,33 +391,44 @@ ObjectCode:
                sig[] -> Info -> dsc[descNo][] -> current[];
                (if descNo > top then descNo -> top if);
                (*' ' -> put; top -> putint; newline;*)
-               sig[] -> patch
+               sig[] -> patch;
+               descno -> theDn
             #);
+          theDn: @integer;
           addRoff:
             (# off: @integer; sig: ^text
             enter(off,sig[])
-            do (if (off + 1) > current.attQtop then 
+            do (if theDn = 184 then
+                   'Bum: ' -> puttext; off  -> putint;
+                   ' ' -> put; sig[] -> putline
+               if);
+               (if (off + 1) > current.attQtop then 
                    current.attQs.range -> current.attQs.extend 
                if);
                sig[] -> current.attQs[off + 1][];
                (if (off + 1) > current.attQtop then 
-                   off + 1-> current.attQtop if)
+                   off + 1-> current.attQtop 
+               if)
             #);
           lookup:
-            (# sig: ^text; inx,off,dn: @integer; attSig: ^text
+            (# sig: ^text; inx,off,dn: @integer; attSig: ^text;
+               trace: (#exit false #);
             enter(sig[],off)
             do (*print;*)
-               (*'lookup: ' -> puttext; sig[] -> puttext; ' off:' -> puttext;
-               off -> putint; ' ' -> put;*)
+               (if trace then
+                   'lookup: ' -> puttext; sig[] -> puttext; 
+                   ' off:' -> puttext; off -> putint; ' ' -> put;
+               if);
                sig.scanAll
                (# i: @integer
                do i + 1 ->i; 
                   (if ch = '$' then i -> inx if);
                #);
                (if inx > 0 then
-                   (*'match: ' -> puttext;*)
+                   (if trace then 'match: ' -> puttext;  if);
                    inx ->sig.setPos;
-                   sig.getint -> dn; (*dn -> putint; ' ' -> put;*)
+                   sig.getint -> dn; 
+                   (if trace then dn -> putint; ' ' -> put; if);
                    (*dsc[dn].print;*)
                    (if dsc[dn][] <> none then
                        (*dsc[dn].sig[] -> puttext; ' ' -> put;*)
@@ -438,11 +449,17 @@ ObjectCode:
                    off -> putint; newline
                if);
                (if attSig[] = none then
-                   (*print;*)
+                   print;
                    '\n!!!! lookup: noneX! ' -> putline;
                    sig[] -> puttext; ' off:' -> puttext;
                    off -> putint; 
-                   ' dn: ' -> puttext; dn -> putint; newline
+                   ' dn: ' -> puttext; dn -> putint; newline;
+                   lcom(#do '!!!! lookup: noneX! ' -> TT;
+                          sig[] -> TT; ' off:' -> TT;
+                          off -> II; 
+                          ' dn: ' -> TT; dn -> II
+                       #)
+                          
                if);
             exit attSig[]
             #);
@@ -484,10 +501,10 @@ ObjectCode:
             do 'typeInfo: ' -> puttext; top -> putint; newline;
                (for i: top repeat
                     (if dsc[i][] <> none then
-                        'off: ' -> puttext; i -> putint; ': ' -> puttext;
+                        'descNo: ' -> puttext; i -> putint; ': ' -> puttext;
                         dsc[i].print
                if)for);
-               literals[] -> LLVMstructs.puttext;
+               literals[] -> puttext;
             #)
        #);
      literals: @Text;
@@ -539,7 +556,7 @@ ObjectCode:
        (# objId: ^text; 
           size,rNx,rNy,rNz: @integer
        enter(objId[],size)
-       do ';; alloc ' -> out.puttext; objId[] -> out.puttext;
+       do '   ;; alloc ' -> out.puttext; objId[] -> out.puttext;
           '\n   ' -> out.puttext;
           allocReg -> rNx -> emitRreg -> out.puttext; 
           ' = ' -> out.puttext;
@@ -634,6 +651,13 @@ ObjectCode:
           ' to ' -> out.puttext; 
           dstT[] -> out.puttext; '\n' -> out.puttext; 
        exit rNd
+       #);
+     notImpl:
+       (# op: @integer
+       enter op
+       do 'call void @notImpl(i32 ' -> out.puttext;
+          op -> out.putint;
+          ')\n' -> out.putline
        #);
      dumpObj:
        (# rN,rNx: @integer; type: ^text
@@ -1074,6 +1098,7 @@ ObjectCode:
               descInx -> emit2;
               pn -> emit
            else
+              codes.break -> notImpl
           if)
        #);
      alloc: 
@@ -1124,12 +1149,15 @@ ObjectCode:
               '   ;; invoke: "' -> out.puttext; N[] -> out.puttext;
               N[] -> filter -> N[];
               '" ; "' -> out.puttext; N[] -> out.puttext;
-              '"\n   ' -> out.puttext;
+              '"\n' -> out.puttext;
+              
+              lcom(#do stack.print -> TT #);
               
               '$' -> N.put; descNo -> N.putint;
               N.copy -> Ns[];
               '%' -> Ns.prepend;
               (Ns[],size + 1) -> allocQbetaObj -> rN;
+
               (rN,Ns[]) -> stack.rpushT;
 
               inner invoke;
@@ -1162,6 +1190,7 @@ ObjectCode:
               '(' -> out.put; Ns[] -> out.puttext; ' * ' -> out.puttext;
               rN -> emitRreg -> out.puttext; ')' -> out.put;
               out.newline;
+              1 -> stack.rpop;
               '*' -> Ns.put;
               rN -> stack.Rpush
               (# 
@@ -1313,11 +1342,6 @@ ObjectCode:
               T[] -> deRef -> T[];
               
               (rNy,T[],dinx - 1) -> leaReg -> rNz;
-              
-              (*lookup: ' -> puttext;stack.rtype[stack.rtop][] -> puttext;
-              (stack.rtype[stack.rtop][],dinx) 
-                -> typeInfo.lookup -> elmTYpe[];
-               elmType[] -> putline;*)
               
               ';; load VDT\n' -> out.puttext;              
               '%vdt_ret$' -> T[]; N[] -> T.append;
@@ -1706,9 +1730,13 @@ ObjectCode:
      ovpushg:
        (# N: ^text; off: @integer
        enter(N[],off)
-       do ' ovpushg ' -> out.puttext; off -> out.putint; ' ' -> out.put; 
+       do ' ovpushg' -> emitOp; off -> out.putint; ' ' -> out.put; 
           N[] -> out.putline;
-          codes.ovpushg -> emit; off -> emit;
+          (if notLLVM then
+              codes.ovpushg -> emit; off -> emit;
+           else
+              codes.ovpushg -> notImpl 
+          if)
        #);
      fovpushg:
        (# N: ^text; off: @integer
@@ -1733,18 +1761,18 @@ ObjectCode:
               ' ' -> out.put; N[] -> out.putline;
               codes.rpushg -> emit; off -> emit;
            else
-              '   ;; rpushg N:' -> out.puttext; N[] -> out.puttext; 
-              ' ' -> out.put; off -> out.putint;  ' ET:'-> out.puttext;
               (stack.rType[stack.rtop][],off) 
                 -> typeInfo.lookup -> elmType[];
-              elmType[] -> out.puttext;              
-
+              
+              '   ;; rpushg N:' -> out.puttext; N[] -> out.puttext; 
+              ' ' -> out.put; off -> out.putint;  
+              ' ET:'-> out.puttext; elmType[] -> out.puttext;    
               ' ST:' -> out.puttext;
               stack.Rtype[stack.rtop][] -> out.puttext;
               out.newline;
               ';; ' -> out.puttext; stack.print ->out.putline;
+
               off -> leag -> rN;
-              
               allocReg -> rN2 -> emitRreg -> out.puttext;
               ' = load ' -> out.puttext; 
               elmType[] -> out.puttext;
@@ -2032,7 +2060,9 @@ ObjectCode:
               1 -> stack.vpop
            else
               '   ;; storeX ' -> out.puttext; N[] -> out.puttext;
-              ' ' -> out.put; off -> out.putint; '\n   ' -> out.puttext;
+              ' ' -> out.put; off -> out.putint;
+              '\n   ;; ' -> out.puttext; stack.print -> out.putline;
+              
               allocReg -> rN -> emitRreg -> out.puttext;
               ' = getelementptr ' -> out.puttext; 
               N[] -> prepStruct -> out.puttext;
@@ -2117,10 +2147,6 @@ ObjectCode:
                   codes.rstore -> emit; off -> emit
               if);
            else
-              '   ;; rstoreX "' -> out.puttext;
-              N[] -> out.puttext; '"' -> out.put;
-              ' ' -> out.put; off -> out.putint; 
-              '\n   ' -> out.puttext;
               (if false then
                   '   store ' -> out.puttext; 
                   stack.rTop -> emitRreg -> out.puttext;
@@ -2130,14 +2156,12 @@ ObjectCode:
                   '*, R0' -> out.puttext;
                   out.newline
                else
-                  (if true then
-                      ';; ' -> out.puttext;
-                      stack.print -> out.puttext;
-                      '\n   ' -> out.puttext
-                  if);
+                  '   ;; ' -> out.puttext; 
+                  stack.print -> out.putline;
+
                   (N[],off) -> typeInfo.lookup -> srcT[];
-                  ';; lookup:  ' -> out.puttext;  srcT[] -> out.putline;
-                  ';; ' -> out.puttext; stack.print -> out.putline;
+                  '   ;; lookup:  ' -> out.puttext;  srcT[] -> out.putline;
+                  '   ;; ' -> out.puttext; stack.print -> out.putline;
                   (* store rstack[rtop -i ] -> @rstack[rtop] *)
                   (* leaReg -> rN = rstack[rTop] *)
                   allocReg -> rN -> emitRreg -> out.puttext;
@@ -2165,9 +2189,11 @@ ObjectCode:
                   ', ' -> out.puttexT;
                   stack.Rtype[stack.rTop - 1][]  -> out.puttext; 
                   '* ' -> out.puttext;
-                  rN -> emitRreg -> out.putline
+                  rN -> emitRreg -> out.putline;
+                  rswap;
+                  '   ;; ' -> out.puttext; stack.print -> out.putline
               if);
-              2 -> stack.rPop;
+              1 -> stack.rPop;
               '   ;; ' -> out.puttext; stack.print -> out.putline
           if);
 
