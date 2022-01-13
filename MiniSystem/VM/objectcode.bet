@@ -132,7 +132,7 @@ ObjectCode:
        do (if not notLLVM then
               '   ;; ' -> out.puttext
           if);
-          op[] -> out.puttext
+          op[] -> out.puttext; ' ' -> out.put
        #);
      newComponent: (* Not used!? *)
        (# N: ^text; noOfDescs: @integer
@@ -552,6 +552,15 @@ ObjectCode:
           '\n   ' -> out.puttext;
        exit rN
        #);
+     iLoad:
+       (# rN,rNx: @integer
+       enter rN
+       do allocReg -> rNx -> emitVreg -> out.puttext;
+          ' = load i32, i32* ' -> out.puttext;
+          rN -> emitRreg -> out.puttext;
+          out.newline
+       exit rNx
+       #);
      allocObj:
        (# objId: ^text; 
           size,rNx,rNy,rNz: @integer
@@ -681,6 +690,7 @@ ObjectCode:
      thisClassId,        (* className$descNo *)
      thisClassN,         (* %thisClassId     *)
      PthisClassN: ^Text; (* thisClassN*      *)
+     isValueObject: @boolean;
      deRef:
        (# T: ^text
        enter T[]
@@ -699,6 +709,15 @@ ObjectCode:
      mkLLVMstructName: mkLLVMclassName
        (#
        do '%' -> T.prepend
+       #);
+     mkTypePtr:
+       (# N,T: ^text; descNo: @integer
+       enter(N[],descNo)
+       do '%' -> T[];
+          N[] -> filter -> T.puttext;
+          '$' -> T.put; descNo -> T.putint;
+          '*' -> T.put
+       exit T[]
        #);
      prepStruct:
        (# N,T: ^text
@@ -797,9 +816,10 @@ ObjectCode:
             #);
           N: ^text; descNo,topDescNo,originOff,originDescNo: @integer;
           procE: @boolean; (* mark start as proc-entry and enter-entry *)
+          isValueObj: @boolean;
           first: @boolean;
           T: ^Text
-       enter(N[],descNo,procE,topDescNo,originOff,originDescNo)
+       enter(N[],descNo,procE,topDescNo,originOff,originDescNo,isValueObj)
        do stack.init;               
           (if notLLVM then
               '\nclass ' -> out.puttext; N[] -> out.puttext; ' ' -> out.put; 
@@ -860,8 +880,16 @@ ObjectCode:
                   '\\0A\\00"\n' -> out.puttext;
               if);
               
-              (if 'main' -> N.equal then
+              (if true 
+               // 'main' -> N.equal then
                   'define void @main(i8* %args){\n' -> out.puttext;
+               // isValueObj and false then 
+                  true -> isValueObject;
+                  'define %Object' -> out.puttext; 
+                  '* @' -> out.puttext; N[] -> out.puttext;      
+                  '$' -> out.put; descNo -> out.putint;
+                  '(%Object* %R0, i32 %off' -> out.puttext;
+                  '){\n' -> out.puttext;
                else
                   'define ' -> out.puttext; thisClassN[] -> out.puttext; 
                   '* @' -> out.puttext; N[] -> out.puttext;      
@@ -941,11 +969,12 @@ ObjectCode:
               ' rtn(' -> out.puttext; LMR->out.put; ')' -> out.put; out.newline;
               codes.rtn -> emit ; LMR -> emit;
            else
-              (* we need to pop the return values from the stack, but we dont
-               * know its type here - we thus currently assume that a ref is returned
-               *)
-              (if 'main' -> ((2,5) -> thisClassN.sub).equal then
+              (if true
+               // 'main' -> ((2,5) -> thisClassN.sub).equal then
                   '   ret void\n' -> out.putline
+               // isValueObject then
+                  '   ret %Object* %R0\n' -> out.putline;
+                  false -> isValueObject
                else
                   '   ret ' -> out.puttext; 
                   thisClassN[] -> out.puttext; ' *%R0\n' -> out.puttext;
@@ -1138,13 +1167,13 @@ ObjectCode:
             exit superId[]
             #);
        enter(N[],descNo,size,staticOff,asObj) 
-       do (if notLLVM then
-              ' invoke ' -> out.puttext; N[] -> out.puttext; 
-              ' ' -> out.put; descNo -> out.putint; ' ' -> out.put;
-              staticOff -> out.putint; ' ' -> out.put;
-              (if asObj then 1 -> iO else 0 -> iO if);
-              io -> out.putint;
-              out.newline;
+       do 'invoke' -> emitOp; N[] -> out.puttext; 
+          ' ' -> out.put; descNo -> out.putint; ' ' -> out.put;
+          staticOff -> out.putint; ' ' -> out.put;
+          (if asObj then 1 -> iO else 0 -> iO if);
+          io -> out.putint;
+          out.newline;
+          (if notLLVM then              
               codes.invoke -> emit; descNo -> emit2; staticOff -> emit2;
               iO -> emit;
            else
@@ -1154,11 +1183,8 @@ ObjectCode:
                * callee returns a value - here we dont know the type so we
                * assume that a ref to callee is returned
                *)
-              '   ;; invoke: "' -> out.puttext; N[] -> out.puttext;
               N[] -> filter -> N[];
-              '" ; "' -> out.puttext; N[] -> out.puttext;
-              '"\n' -> out.puttext;
-              
+
               lcom(#do stack.print -> TT #);
               
               '$' -> N.put; descNo -> N.putint;
@@ -1236,12 +1262,18 @@ ObjectCode:
           codes.restoreThis -> emit
        #);
      invokeVal:
-         (# N: ^text; descNo,staticOff: @integer
+         (# N: ^text; descNo,staticOff,rN: @integer
        enter(N[],descNo,staticOff) 
-         do ' invokeVal ' -> out.puttext; N[] -> out.puttext; 
+         do 'invokeVal' -> emitOp; ' ' -> out.put; N[] -> out.puttext; 
             ' ' -> out.put; descNo -> out.putint; ' ' -> out.put;
-           staticOff -> out.putint; out.newline;
-           codes.invokeVal -> emit; descNo -> emit2; staticOff -> emit2
+            staticOff -> out.putint; out.newline;
+            (if notLLVM then
+                codes.invokeVal -> emit; descNo -> emit2; staticOff -> emit2
+             else;
+                (0,PthisClassN[],(N[],descNo) -> mkTypePtr) -> BitCast -> rN;
+                inner invokeVal;
+                
+            if)
          #);
      boxedInvokeVal:
        (# N: ^text; descNo,size: @integer
@@ -1673,16 +1705,19 @@ ObjectCode:
               codes.pushthis -> emit; 
            else
               lcom(#do 'pushThis' ->TT #);
-              0 -> stack.rPush(#do PthisClassN[] -> stack.Rtype[stack.rTop][] #);
+              (0,PthisClassN[]) -> stack.rPushT;
               lcom(#do stack.print -> TT #);
           if)
        #);
      addOff:
        (# off: @integer
        enter off
-       do ' addOff ' -> out.puttext; off -> out.putint; out.newline;
-          codes.addOff -> emit; off -> emit2;
-          stack.vPush
+       do 'addOff' -> emitOp; off -> out.putint; out.newline;
+          (if notLLVM then
+              codes.addOff -> emit; off -> emit2;
+           else
+              off -> pushConst
+          if)
        #);
      push: 
        (# N: ^text; off: @integer
@@ -1700,34 +1735,12 @@ ObjectCode:
      pushg: 
        (# N,rNtype: ^text; off: @integer; rN,rN2: @integer
        enter(N[],off)
-       do (if notLLVM then
-              ' pushg ' -> out.puttext; off -> out.putint; 
-              ' ' -> out.put; N[] -> out.putline;
+       do 'pushg' -> emitOp; off -> out.putint; 
+          ' ' -> out.put; N[] -> out.putline;
+          (if notLLVM then              
               codes.pushg -> emit; off -> emit;
            else
-              '   ;; pushg "' -> out.puttext; N[] -> out.puttext;
-              '"' -> out.put;
-              ' ' -> out.put; off -> out.putint; 
-              
-              '\n   ' -> out.puttext;
-              (* rN = lea stack.top + off
-               * off -> vleag -> rn;
-               *)
-              (if true then
-                  off  -> leag -> rN
-               else
-                  allocReg -> rN -> emitRreg -> out.puttext;
-                  ' = getelementptr ' -> out.puttext; 
-                  stack.rType[stack.rTop][] 
-                    -> deRef ->  rnType[] -> out.puttext;
-                  ', ' -> out.puttext;
-                  stack.rType[stack.rTop][] -> out.puttext;
-                  '  ' -> out.puttext;
-                  stack.rTop -> rReg -> out.puttext;
-                  ', i32 0 ' -> out.puttext; 
-                  ', i32 ' -> out.puttext; off -> out.putint; 
-                  '\n   ' -> out.puttext;
-              if);
+              off  -> leag -> rN;
               allocReg -> rN2 -> emitVreg -> out.puttext;
               ' = load i32, i32* ' -> out.puttext;
               rN -> emitRreg -> out.puttext;
@@ -1748,14 +1761,21 @@ ObjectCode:
           if)
        #);     
      ovpushg:
-       (# N: ^text; off: @integer
+       (# N: ^text; off,rN,rNx: @integer
        enter(N[],off)
-       do ' ovpushg' -> emitOp; off -> out.putint; ' ' -> out.put; 
+       do 'ovpushg' -> emitOp; off -> out.putint; ' ' -> out.put; 
           N[] -> out.putline;
           (if notLLVM then
               codes.ovpushg -> emit; off -> emit;
            else
-              codes.ovpushg -> notImpl 
+              codes.ovpushg -> notImpl;
+              off  -> leag -> rN;
+              (rN,'i32',off) -> leaReg -> rNx;
+              rN -> iLoad -> rNx;
+              (*allocReg -> rN -> emitRreg -> out.puttext;
+              ' = add i32 ' -> out.puttext; rNx -> emitRreg -> out.puttext;
+              ',' -> out.put; off -> out.putint; out.newline;*)
+              rNx -> stack.vPush
           if)
        #);
      fovpushg:
@@ -1776,9 +1796,9 @@ ObjectCode:
      rpushg: 
        (# N: ^text; off: @integer; rN,rN2: @integer; T,elmType: ^text
        enter(N[],off)
-       do 'rpushg' -> emitOp; ' ' -> out.put; N[] -> out.putline;
+       do 'rpushg' -> emitOp; ' ' -> out.put; N[] -> out.puttext; 
+          off -> out.putint; out.newline;
           (if notLLVM then
-              off -> out.putint;              
               codes.rpushg -> emit; off -> emit;
            else
               (stack.rType[stack.rtop][],off) -> typeInfo.lookup -> elmType[];
@@ -1833,13 +1853,20 @@ ObjectCode:
                   and (stack.vVal[stack.vtop][] <> none)
                   and  (stack.vVal[stack.vtop].V = 0) then
                   '**** xpushg: string[0] = length ' -> putline;
-                  allocReg -> rN -> emitRreg -> out.puttext;
-                  ' = bitcast '  -> out.puttext; 
-                  stack.rType[stack.rTop][] -> out.puttext;
-                  ' ' -> out.put;
-                  stack.rRegNo[stack.rTop] -> emitRreg -> out.puttext;
-                  ' to i32*\n' -> out.puttext;
                   
+                  (if true then
+                      (stack.rRegNo[stack.rTop]
+                      ,stack.rType[stack.rTop][]
+                      ,'i32*')  
+                        -> bitCast ->rN
+                   else
+                      allocReg -> rN -> emitRreg -> out.puttext;
+                      ' = bitcast '  -> out.puttext; 
+                      stack.rType[stack.rTop][] -> out.puttext;
+                      ' ' -> out.put;
+                      stack.rRegNo[stack.rTop] -> emitRreg -> out.puttext;
+                      ' to i32*\n' -> out.puttext;
+                  if);
                   allocReg -> vN -> emitVreg -> out.puttext;
                   ' = call i32 @arrayLength(i32* ' -> out.puttext;
                   rN -> emitRreg -> out.puttext;
@@ -1847,8 +1874,9 @@ ObjectCode:
                else
                   (if ('%String' -> ((1,7) -> xType.sub).equal) then
                       ';; xpusg:String\n' -> out.puttext;
-                      (stack.rRegNo[stack.rTop], stack.rType[stack.rTop][],
-                      '{i32*,i32,[0 x i32]}*')
+                      (stack.rRegNo[stack.rTop]
+                      , stack.rType[stack.rTop][]
+                      ,'{i32*,i32,[0 x i32]}*')
                         -> bitCast
                         -> stack.rRegNo[stack.rTop];
                       '{i32*,i32,[0 x i32]}*' ->  stack.rType[stack.rTop][]
@@ -1871,15 +1899,7 @@ ObjectCode:
                                                       *)
                   (* rN = adr of Indexed obj
                    * rStack[rTop] = typeOf(rN) *)
-                  
-                  (if false and not ('[0 x i32]*' -> stack.rType[stack.rTop].equal) then
-                      allocReg -> rNx -> emitRreg -> out.puttext;
-                      ' = bitcast ' -> out.puttext;
-                      stack.rType[stack.rTop][] -> out.puttext; ' ' -> out.put;
-                      rN -> emitRreg -> out.puttext;
-                      ' to [0 x i32]*\n' -> out.puttext;
-                      rNx -> rN;
-                  if);
+
                   allocReg -> rNx -> emitRreg -> out.puttext;
                   ' = getelementptr inbounds [0 x i32], [0 x i32]* ' 
                     -> out.puttext;
@@ -2358,8 +2378,13 @@ ObjectCode:
           stack.vPush; stack.vpush 
        #);
      rdouble: 
-       (# do ' rdouble' -> out.putline; codes.rdouble -> emit;
-          stack.rPush; stack.rpush           
+       (# 
+       do 'rdouble' -> emitOp; out.newline;
+          (if notLLVM then
+              codes.rdouble -> emit;
+           else
+              (stack.rRegNo[stack.rtop],stack.rType[stack.rtop][]) -> stack.rpushT;
+          if);
        #);
      swap: (# do ' swap' -> out.putline; codes.swap -> emit #); (* not in use*)
      rswap: 

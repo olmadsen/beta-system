@@ -1198,8 +1198,9 @@ generator: variants
                                        #);
                                  objectDecl[] -> ptn[];
                                  (mkStubName,dNo,false,ptn.OG.IS.newDescNo
-                                 ,newOriginOff,0) 
+                                 ,newOriginOff,0,false) 
                                    -> cd.class;
+                                 (* last arg is isValueObj - to be fixed ! *)
                                  cd.com(#
                                        do 'Load origin:OG.isVirtualArg:' -> TT;
                                           OG.isVirtualArg -> BB #);
@@ -1367,8 +1368,12 @@ generator: variants
                    do (if (origin[] -> org[]) <> none then
                           org.newDescNo -> originDescNo
                       if);
+                      (if encOG.isValueObj then 
+                          '****  value: ' -> puttext;
+                          encOG.OGid -> putline
+                      if);
                       (N[],newDescNo,false,(topSuper).newDescNo
-                      ,newOriginOff, originDescNo)
+                      ,newOriginOff, originDescNo,encOG.isValueObj)
                         -> cd.class;
                    #);
                    (* thisObj = the new instance of this class 
@@ -1495,23 +1500,19 @@ generator: variants
                                     -> super.computeAdr(#do addOG #)
                                     -> (rec[],E[],A[]);
                                   cd.com
-                                  (#do 'genClass:after:ComputeAdr:'-> TT; E.doPT -> TQ;
-                                     A.print -> TT #);
+                                  (#do 'genClass:after:ComputeAdr:'-> TT; 
+                                     E.doPT -> TQ; A.print -> TT #);
                               if);
+                              (* What goes on here?
+                               * Do we need staticOff below? *)
                               (if sig[] = none then
-                                  'Super:sig none'->cd.comment;
-                                  (* do we need staticOff below? *)
-                                  cd.com(#do'super:loadArgs:superAdj:A:'->TT;
+                                  cd.com(#do'super.sig:none:superAdj:'-> TT; 
                                            newOriginOff -> II #);
                                   (newOriginOff,0,CC[]) -> E.loadArgs; 
                                else
-                                  'Super:sig not none'->cd.comment;
-                                  cd.com(#do'super:loadArgs:superAdj:B:'->TT;
-                                                 - newOriginOff -> II #);
-                                  (* go ON - 1 
-                                   * but use newOriginOff first time
-                                   *)
-                                  (* do we need staticOff beloe? *)
+                                  cd.com(#do'super.sig:not:none:superAdj:'->TT;
+                                           - newOriginOff -> II #);
+                                  (* go ON - 1, use newOriginOff first time *)
                                   (- newOriginOff,0,CC[]) -> E.loadArgs; 
                               if);
                               E.handleVargs
@@ -1535,8 +1536,7 @@ generator: variants
                        if)
                    if);
                    (if sig[] <> none then
-                       (false,0,0) -> sig.Qgen
-                
+                       (*(false,0,0) -> sig.Qgen *)
                    if);
                    scanSons
                    (# I: ^Item; MP: ^Module
@@ -1581,7 +1581,7 @@ generator: variants
                    (# I: ^Item; superHasNewInner: @boolean
                    do current[] -> I[];
                       (if not I.isDecl then 
-                          cd.com(#do 'genclass:Qgen:stmt:'->TT; current.doPT->TQ#);
+                          cd.com(#do 'genclass:stmt:'->TT; current.doPT->TQ#);
                           (if isLast then
                               (if super.ATD[] <> none then
                                   super.ATd.OG.IS.newInner[] <> none
@@ -1591,46 +1591,29 @@ generator: variants
                       if) 
                    #);
                    leaveLab -> cd.defLab;
-                   (* we must push return values *)
-                   (* push return value 
-                    * - for DataItem: R: @Foo
-                    *   Foo should return (this(Foo)
-                    *   perhaps default?
-                    * - otherwise push variables in -> 
-                    *)
                    (if (superDesc[] <> none) and not superDesc.isPrimitive then
                        'M' -> cd.rtnInner
                     else
                        (if not OG.isValueObj then 0 -> cd.rtnEventQ if);
-                       cd.com(#do 'OG:pushReturn:' -> TT; 
-                                (if sig[] = none then 'none'->TQ
-                              else sig.id[] -> TQ if)#);
+                       cd.com(#do 'pushReturn: ' -> TT; 
+                                (if sig[] <> none then sig.id[] -> TQ if)#);
                        L:
-                         (if true then
-                             (if encOG.isValueObj then
-                                 (if sig[] <> none then
-                                     encOG.pushReturnValues
-                                 if);
-                                 cd.rtnV
-                              else
-                                 (if true then
-                                     scanAllItemDecls
-                                     (# DI: ^DataItem
-                                     do (if currentDcl.isOutArg then
-                                            currentDcl[] -> encOG.pushRtnV;
-                                            leave L
-                                     if)#);
-                                     cd.setThisStack;
-                                     cd.pushThis
-                                  else                               
-                                     (if sig[] <> none then 
-                                         encOG.pushReturnValues 
-                                      else
-                                         cd.setThisStack;
-                                         cd.pushThis
-                                     if);
-                         if)if)if);
-                       'D' -> cd.rtn
+                         (if encOG.isValueObj then
+                             (if sig[] <> none then
+                                 encOG.pushReturnValues
+                             if);
+                             cd.rtnV
+                          else
+                             scanAllItemDecls
+                             (# 
+                             do (if currentDcl.isOutArg then
+                                    currentDcl[] -> encOG.pushRtnV;
+                                    leave L
+                             if)#);
+                             cd.setThisStack;
+                             cd.pushThis
+                         if);
+                       'D' -> cd.rtn (* also for value object?  *)
                    if);
                    encOG.computeGCinfo;
 
@@ -1644,7 +1627,6 @@ generator: variants
                if);
                BindVirtuals;
                (if innerInx > 0 then
-                   (* mark an inner entry *)
                    (innerInx,0,true) -> cd.vdtTable; 
                if);
                cd.mkLLVMvirtualDefs
@@ -1664,7 +1646,7 @@ generator: variants
                    cd.com(#do 'goOrigin:on:' -> TT; on -> II #);
                    (if emitLLVM then
                        origin[] -> org[];
-                       cd.com(#do org.encOG.primNo -> II; ' ' -> put; 
+                       cd.com(#do org.encOG.primNo -> II; ' ' -> TT; 
                                 org.encOG.dopt->TQ#);
                        (if org.encOG.primNo = ifthen_prim then
                            org.origin[] -> org[]
@@ -3537,7 +3519,7 @@ generator: variants
        (# atD: ^Pattern; N: ^Text; 
           descNo,stubDescNo,superDescNo,originOff,originDescNo: @integer
        enter(atD[],N[],descNo,superDescNo,originOff,originDescNo)
-       do ('Stub',descNo,false,ATd.OG.IS.newDescNo,1,originDescNo) 
+       do ('Stub',descNo,false,ATd.OG.IS.newDescNo,1,originDescNo,false) 
             -> cd.class;
           cd.com(#do Atd.dopt -> TQ #);
           ATd.OG.iS.newDescNo -> cd.vdtTableCopy;
@@ -3710,7 +3692,7 @@ generator: variants
        (# genMain:
             (# 
             do ObjectGenerator -> QnewDesc -> mDescNo;
-               ('main',mDescNo,false,1,0,0) -> cd.class;
+               ('main',mDescNo,false,1,0,0,false) -> cd.class;
                cd.pushThis;
                (if false then
                    'TopModule: ' -> puttext;
@@ -3741,7 +3723,7 @@ generator: variants
           genThreadStub:
             (# descNo: @integer;
             do ObjectGenerator -> QnewDesc -> descNo;
-               ('ThreadStub',descNo,false,descNo,0,0) -> cd.class;
+               ('ThreadStub',descNo,false,descNo,0,0,false) -> cd.class;
                (false,false) -> cd.actions;
                ('ThreadStub','D') -> cd.call;
                cd.stop;
@@ -3750,7 +3732,7 @@ generator: variants
           genEventProcessor:
             (# descNo: @integer;
             do ObjectGenerator -> QnewDesc -> descNo;
-               ('EventProcessor',descNo,false,1,0,0) -> cd.class;
+               ('EventProcessor',descNo,false,1,0,0,false) -> cd.class;
                cd.stop; (* we should generate stop here and not in betaVM *)
                (1,false,0) -> CD.endClass;               
             #);                   
