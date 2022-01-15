@@ -507,6 +507,21 @@ generator: variants
        enter(primNo,sig[],IS[])
        <<SLOT doMarkPrim:doPart>> 
        #);
+     transInArgs:
+       (# theOG: ^ObjectGenerator; staticOff: @integer; T: ^text
+       enter(theOG[],staticOff)
+       do theOG.OGidx -> T[]; 
+          theOG.IS.scanItemArgsReverse
+          (# DI: ^DataItem
+          do cd.lcom(#do 'store arg: ' -> TT;
+                       currentarg.dopt -> TT #);
+             (if (currentArg[]->DI[]).isBasicValue then
+                 (T[],DI.newOff) -> cd.storeX
+              else
+                 (T[],DI.newOff,false) -> cd.rstoreX
+             if)
+          #);
+       #);
      callInvoke:
        (# theOG: ^ObjectGenerator; staticOff: @integer; T: ^text
        enter(theOG[],staticOff)
@@ -526,12 +541,18 @@ generator: variants
                 (if (currentArg[]->DI[]).isBasicValue then
                     (T[],DI.newOff) -> cd.storeX
                  else
-                    (T[],DI.newOff) -> cd.rstoreX
+                    (T[],DI.newOff,false) -> cd.rstoreX
                 if)
              #);
              (if theOG.IS.newOriginOff > 0 then
                  cd.lcom(#do 'store origin:' -> TT #);
-                 (T[],theOG.IS.newOriginOff) -> cd.rstoreX;
+                 (T[],theOG.IS.newOriginOff
+                 ,theOG.origin[] -> theOG.IS.originisValue
+                 ) -> cd.rstoreX;
+                 (if theOG.origin[] -> theOG.IS.originisValue then
+                     '**** origin is value: ' -> puttext; 
+                     theOG.OGid -> puttext; newline;
+                 if)
               else
                  cd.lcom(#do 'no origin:newOriginOff=0' -> TT #)
              if);
@@ -948,7 +969,45 @@ generator: variants
                if)
             #);
           mkLLVMstruc:
-            (# addRX:<
+            (# emitLLVMdataItems:
+                 (# OGx: ^ObjectGenerator; off: @integer
+                 enter(OGx[],off)
+                 do (*'**** ' -> puttext; OGx.OGid -> putline;*)
+                    (if (*(OGx.super[] <> none) and*) (OGx.super.ATd[] <> none) then
+                        (*'**   go super: '->putline;*)
+                        (OGx.super.ATd.OG[],off) -> emitLLVMdataItems
+                    if);
+                    (*'**   main: ' -> puttext; OGx.OGid -> putline;*)
+                    OGx.IS.scanSons
+                    (# DI: ^DataItem; M: ^Module; MI: ^ModuleItem
+                    do (if current.isDataItem then
+                           current[] -> DI[];
+                           cd.com(#do DI.sig.dopt -> TT;
+                                    ' Basic: ' -> TT; DI.OG.isBasicValue -> BB;
+                                    ' val: ' -> TT; DI.isValue -> BB;
+                                    ' valObj: ' -> TT; DI.OG.isValueObj -> BB;
+                                    ' Inx:' -> TT; DI.OG.IS.isIndexed -> BB;
+
+                                 #);
+                           (*'**   :emb: ' -> puttext; D
+                            * I.sig.dopt -> puttext;
+                           ' ' -> put; DI.newoff -> putint;
+                           ' ' -> put; off -> putint; newline;*)
+                           (if true
+                            // DI.OG.IS.isIndexed then
+                               DI.newOff + off -> addAX
+                            // DI.OG.isBasicValue then 
+                               DI.newOff + off-> addVX
+                            // DI.isValue then
+                               (DI.OG[],DI.newOff - 1) -> emitLLVMdataItems
+                            else
+                               (DI.newOff  + off,DI.OG.OGidy) -> addRX
+                           if)
+                        else
+                       if)
+                    #)
+                 #);
+               addRX:<
                  (# off: @integer; OGid: ^text
                  enter(off,OGid[])
                  do (*'**** addRX: ' -> puttext; off -> putint;
@@ -965,13 +1024,15 @@ generator: variants
                addVX:<
                  (# off: @integer
                  enter off
-                 do inner;
+                 do (*'**** addVX: ' -> puttext; off -> putint; newline;*)
+                    inner;
                     off -> offTop
                  #);
                addAX:<
                  (# off: @integer
                  enter off
-                 do inner;
+                 do (*'**** addAX: ' -> puttext; off -> putint; newline;*)
+                    inner;
                     off -> offTop
                  #);                 
                offTop: @integer; org: ^Items; 
@@ -982,13 +1043,11 @@ generator: variants
                  exit T[]
                  #);
                dn: @integer
-            do (if (IS.newDescNo = 184) then
-                   '**** mkLLVMstruc: ' -> puttext; 
-                   IS.newDescNo -> dn -> putint; 
-                   ' originOff: ' -> puttext;
-                   IS.newOriginOff -> putint; ' ' -> put;
-                   OGid -> putline;
-               if);
+            do (* Clean-up needed here
+                * Must be recursive in super as is emitLLVMdataItems
+                * Must handle more than one origin
+                * Must skip origin for value objects
+                *)
                (if (IS.superDesc[] <> none) 
                    and (IS.superDesc[] <> objectDecl.desc) then
                    (if false then
@@ -1022,24 +1081,27 @@ generator: variants
                        (if (origin[] -> IS.originIsValue) then
                            IS.newOriginOff + 1 -> addVX
                if)if)if);
+              (* '**** ' -> puttext; OGid -> putline;*)
                IS.scanSons
                (# DI: ^DataItem; M: ^Module; MI: ^ModuleItem
-               do (if IS.newDescNo = 184 then
-                      current.dopt -> putline
-                  if);
-                  (if current.isDataItem then
+               do (if current.isDataItem then
                       current[] -> DI[];
-                      (if IS.newDescNo = 184 then
-                          'DI: ' -> puttext; DI.newOff -> putint;  
-                          ' '-> put; DI.sig.dopt -> puttext; ' ' -> put;
-                          DI.OG.IS.isIndexed -> putboolean;  ' ' -> put;
-                          di.OG.OGidy -> putline;
-                      if);
+                      cd.com(#do DI.sig.dopt -> TT;
+                               ' basic: ' -> TT; DI.OG.isBasicValue -> BB;
+                               ' val: ' -> TT; DI.isValue -> BB;
+                               ' valObj: ' -> TT; DI.OG.isValueObj -> BB;
+                               ' Inx:' -> TT; DI.OG.IS.isIndexed -> BB;
+                               print
+                            #);
                       (if true
                        // DI.OG.IS.isIndexed then
                           DI.newOff -> addAX
-                       // DI.OG.isBasicValue or DI.isValue then
+                       // DI.OG.isBasicValue then 
                           DI.newOff -> addVX
+                       // DI.isValue then
+                          (*'*** embed value:' -> puttext; 
+                          DI.sig.dopt -> putline;*)
+                          (DI.OG[],DI.newOff - 1) -> emitLLVMdataItems;
                        else
                           (DI.newOff,DI.OG.OGidy) -> addRX
                       if);
@@ -1314,7 +1376,8 @@ generator: variants
                        (* we should clean-up below such that classDef 
                         * and genClass should not be duplicated here!?
                         *)
-                       (ptn.OG.OGid,ptn.OG.IS.newDescNo) -> cd.classDef
+                       (ptn.OG.OGid,ptn.OG.IS.newDescNo,false) 
+                         -> cd.classDef
                        (# OGx: ^ObjectGenerator
                        do (ptn.OG[]->OGx[]).mkLLVMstruc
                           (# addRX:: (#do (off,OGid[]) -> addR #);
@@ -1674,7 +1737,8 @@ generator: variants
                               #);
                        (NA.origin[]->org[]).encOG.OGidX -> T[];
                        (if (origin[] -> originIsValue) then
-                           cd.com(#do 'origin.valueOff:load ' -> TT; newOriginOff + 1 -> II #);
+                           cd.com(#do 'origin.valueOff:load ' -> TT; 
+                                    newOriginOff + 1 -> II #);
                            cd.rdouble;
                            (T[],newOriginOff) -> cd.rpushg;
                            cd.rswap;
@@ -1684,7 +1748,9 @@ generator: variants
                            (T[],newOriginOff) -> cd.rpushg;
                        if);
                        (if (origin[] <> none) (*and (on > 1)*) then
-                           (on - 1,NA[]) -> (origin[]->org[]).goOrigin -> (org[],orgIsVal)
+                           (on - 1,NA[]) 
+                             -> (origin[]->org[]).goOrigin
+                             -> (org[],orgIsVal)
                        if)
                    if);
                    (if (encOG.isArgofE[] <> none) then
@@ -1692,7 +1758,8 @@ generator: variants
                        (if false then
                            '**** GoOrigin:OG inArgument: ' -> putline;
                            encOG.dopt -> puthead;
-                           '**   of:'->putline; encOG.isArgofE.dopt -> puthead;
+                           '**   of:'->putline; 
+                           encOG.isArgofE.dopt -> puthead;
                            '**   originOff:'->puttext; off->putint; newline;
                        if);
                        ('ArgOG',off) -> cd.rpushg;
@@ -3556,7 +3623,7 @@ generator: variants
                              OG.IS.newDescNo -> II
                           #);
                if);
-               (OG.OGid,OG.IS.newDescNo) -> cd.classDef
+               (OG.OGid,OG.IS.newDescNo,OG.isValueObj) -> cd.classDef
                (#
                do OG.mkLLVMstruc
                   (# addRX:: (#do (off,OGid[]) -> addR #);
@@ -3810,7 +3877,7 @@ generator: variants
          'declare noalias i32* @allocString(i8*, i32)\n' -> BC.puttext;
          'declare i32 @puts(i8* nocapture) nounwind\n' -> BC.puttext;
          'declare i32 @putCh(i32 nocapture) nounwind\n' -> BC.puttext;
-         'declare i32 @puthex(i32 nocapture) nounwind\n' -> BC.puttext;
+         'declare i32 @putHex(i32 nocapture) nounwind\n' -> BC.puttext;
          'declare i32 @dumpHex(i32 nocapture, i32 nocapture) nounwind\n' 
          'declare void @notImpl(i32 nocapture) nounwind\n' 
            -> BC.puttext;
