@@ -31,7 +31,7 @@ int dumpHex(int V, int n){
   int * A = (int *) V;
   int i;
   printf("obj %x:\n",V);
-  for (i = 0; i < 5; i++)
+  for (i = 0; i < 10; i++)
     {printf("%i:%x, ",i,A[i]);}
   printf("\n");
   if ((n > 0) && (A[1] > 0)) dumpHex(A[1],n-1);
