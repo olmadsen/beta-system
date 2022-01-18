@@ -522,6 +522,42 @@ generator: variants
              if)
           #);
        #);
+     getOriginOff:
+       (# OGx,OGy: ^ObjectGenerator; ISx: ^items; rec,E: ^Exp; A: ^Address
+       enter OGx[]
+       do (if true then
+              '**   ' -> puttext; OGx.OGid -> puttext;
+              ' originOff: ' -> puttext; OGx.IS.newOriginOff -> putint;
+          if);
+          (if OGx.super.ATd[] <> none then
+              ' on: ' -> puttext; OGx.super.on -> putint; newline;
+              OGx.IS[] -> ISx[];
+              (for i: OGx.super.on repeat 
+                   ISx.origin[] -> ISx[];
+                   '**   origin: ' -> puttext; 
+                   (ISX.encOG->OGy[]).OGid -> putline
+              for);
+              cd.lcom(#do 'Before:computeAdr' -> TT;  OGx.OGid -> TT #);
+              0 -> Address 
+                -> OGx.super.computeAdr(# do 'OOPS!' -> putline #)
+                -> (rec[],E[],A[]);
+              A.print -> putline;
+              cd.lcom(# do A.print -> TT #);
+              (0,0,none) -> E.loadArgs;
+              cd.lcom(#do cd.stack.print -> TT #);
+              cd.lcom(#do 'KUK: ' -> TT; OGx.OGid -> TT; ' ' -> TT; 
+                        OGx.IS.newOriginOff -> II #);
+              cd.lcom(#do OGx.super.ATd.OG.OGid -> TT; ' ' -> TT;
+                        OGx.super.ATd.OG.IS.newOriginOff -> II #);
+              (OGx.OGidx (*OGx.super.Atd.OG.OGid*)
+              ,OGx.super.ATd.OG.IS.newOriginOff,false) -> cd.rstoreX;
+              (* OBS! false should be  boolean isValueObject *)
+              cd.lcom(#do 'goSuper' -> TT #);
+              OGx.super.ATd.OG[] -> getOriginOff;              
+           else
+              newline;              
+          if);
+       #);
      callInvoke:
        (# theOG: ^ObjectGenerator; staticOff: @integer; T: ^text
        enter(theOG[],staticOff)
@@ -531,10 +567,13 @@ generator: variants
                (#
                do (theOG.IS.topSuper).encOG.OGidy -> superId[]
                #)
-          do 
+          do (* vStack = [..., possible V-args
+              * rStack = [..., possible origin, possible R-args, callee
+              *)
              theOG.OGidx -> T[]; 
              (*'$' -> T.put; IS.newDescNo -> T.putint;*)
              theOG.IS.scanItemArgsReverse
+             (* should probably be:  scanNonBoundItemArgs *)
              (# DI: ^DataItem
              do cd.lcom(#do 'store arg: ' -> TT;
                          currentarg.dopt -> TT #);
@@ -544,19 +583,29 @@ generator: variants
                     (T[],DI.newOff,false) -> cd.rstoreX
                 if)
              #);
+             (* vStack = [...,
+              * rStack = [..., possible origin, callee
+              *)
+             (if false then
+                 '\n**** invoke: ' -> puttext; T[] -> putline;
+                 '** stack: ' -> puttext; cd.stack.print -> putline;
+                 theOG[] -> getOriginOff ;
+             if);
+             
              (if theOG.IS.newOriginOff > 0 then
-                 cd.lcom(#do 'store origin:' -> TT #);
+                 cd.lcom(#do 'store mainPart origin:' -> TT #);
                  (T[],theOG.IS.newOriginOff
                  ,theOG.origin[] -> theOG.IS.originisValue
                  ) -> cd.rstoreX;
-                 (if false then
-                     (if theOG.origin[] -> theOG.IS.originisValue then
-                         '**** origin is value: ' -> puttext; 
-                         theOG.OGid -> puttext; newline;
-                 if)if)
+                 (if false and (theOG.origin[] -> theOG.IS.originisValue)
+                     then
+                     '**** origin is value: ' -> puttext; 
+                     theOG.OGid -> puttext; newline;
+                 if)
               else
                  cd.lcom(#do 'no origin:newOriginOff=0' -> TT #)
              if);
+             
              cd.lcom(#do 'topSuper:' -> TT; 
                        (theOG.IS.topSuper).newDescNo -> II;
                        ' ' ->  TT;
@@ -1541,6 +1590,14 @@ generator: variants
                                              E[] -> rec[]
                                   if)if)#)
                                else 
+                                  (* super is searched in the origin of 
+                                   * this(OG); we must then have an 
+                                   * additional goOrigin from this(OG);
+                                   * this is handled by passing newOriginOff
+                                   * as an argument of Address - superAdj;
+                                   * adjustOrigin will generate this goOrigin
+                                   * if superAdj > 0
+                                   *)
                                   newOriginOff
                                     -> Address
                                     -> super.computeAdr(#do addOG #)
@@ -1552,13 +1609,13 @@ generator: variants
                               (* What goes on here?
                                * Do we need staticOff below? *)
                               (if sig[] = none then
-                                  cd.com(#do'super.sig:none:superAdj:'-> TT; 
+                                  cd.com(#do'super.sig:none:superAdj:'-> TT;
                                            newOriginOff -> II #);
                                   (newOriginOff,0,CC[]) -> E.loadArgs; 
                                else
                                   cd.com(#do'super.sig:not:none:superAdj:'->TT;
                                            - newOriginOff -> II #);
-                                  (* go ON - 1, use newOriginOff first time *)
+                                  (* go ON-1, use newOriginOff first time *)
                                   (- newOriginOff,0,CC[]) -> E.loadArgs; 
                               if);
                               E.handleVargs
@@ -2787,9 +2844,7 @@ generator: variants
                   (#do 'computeAdr:'->TT; j+1->j->II; ':rec:'->TT; 
                      (if rec[]<> none then rec.dopt-> TQ else 'none'->TQ if);
                      ' E:'->TT; E.dopt -> TQ;  
-                     (if A.E[] <> none then
-                         ' A.E:' -> TT; A.E.dopt -> TQ;
-                     if);
+                     (if A.E[] <> none then ' A.E:' -> TT; A.E.dopt -> TQ if);
                      nl; A.print -> TT; 
                   #);
                   (if isFirst then
@@ -3042,6 +3097,7 @@ generator: variants
                 // stringGet_prim // indexedGet_prim
                 // immutable_prim then 
                    (if superAdj < 0 then 
+                       '**** superAdj < 0' -> puttext; dopt -> putline;
                        (if on > 0 then 
                            (- superAdj,'origin-x') -> AdjustOrigin;
                            (on - 1,this(ObjectInvocation)[]) 
@@ -3367,13 +3423,14 @@ generator: variants
             #);
           getAdr::
             (# rec,E: ^Exp
-            do cd.com(#do 'BracketedExp:getAdr:'->TT;adr.print -> TT 
-                     #);
+            do cd.com(#do 'BracketedExp:getAdr:'->TT;adr.print -> TT #);
                adr[] -> IV.computeAdr -> (rec[],E[],adr[]);
-               cd.com(#do 'BracketedExp:getAdr:after:computeAdr:'->TT; adr.print->TT#);
+               cd.com(#do 'BracketedExp:getAdr:after:computeAdr:'->TT; 
+                        adr.print->TT#);
                cd.com(#do'getAdr:loadArgs:superAdj:G:'->TT;
                               adr.superAdj -> II #);
-               (adr.superAdj,0,none) -> E.loadArgs; (* do we need staticOff here? *)
+               (adr.superAdj,0,none) -> E.loadArgs; 
+               (* do we need staticOff here? *)
                (* (rec[],E[],true,0,0,none,adr[],false) -> E.invoke;*)
             #);
           pushThis:: 
@@ -3506,13 +3563,14 @@ generator: variants
             (# 
             do cd.com(#do 'StringObj:loadOrigin:' -> TT; dopt->TT; #);
                (if not elimOrigin then 
-                   (T[],0) -> cd.pushText; 'bingo: ' -> puttext; T[] -> putline 
+                   (T[],0) -> cd.pushText; 
+                   'StringObj:LoadOrigin:bingo: ' -> puttext; T[] -> putline 
                if);                
                this(StringObj)[] -> E[] -> rec[]
             #);
-          getAdr:: (# do this(StringObj)[] -> adr.E[]; (*T[]->cd.pushText*) #);
+          getAdr:: (#do this(StringObj)[] -> adr.E[]; (*T[]->cd.pushText*)#);
           invoke:: 
-            (# stringDescNo,n: @integer ; (* no of embbedded invocations in T *)
+            (# stringDescNo,n: @integer; (* no of embedded invocations in T*)
                start,end: [4] @integer; 
                prev: @integer;
                doAdd: @boolean;
