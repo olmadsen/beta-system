@@ -589,12 +589,12 @@ ObjectCode:
           size,rNx,rNy,rNz: @integer
        enter(objId[],size)
        do '   ;; alloc ' -> out.puttext; objId[] -> out.puttext;
-          '\n' -> out.puttext;
+          '\n   ' -> out.puttext;
           allocReg -> rNx -> emitRreg -> out.puttext; 
           ' = ' -> out.puttext;
           'tail call i8* @malloc(i64 ' -> out.puttext;
           size * 4 -> out.putint;
-          ')\n   ' -> out.puttext;
+          ')\n' -> out.puttext;
           (if true then
               (rNx,'i8*','*'->(objId.copy).put) -> bitCast -> rNy
            else
@@ -1202,7 +1202,7 @@ ObjectCode:
        (# N,Ns,Nx: ^text; descNo,size,staticOff: @integer; 
           asObj: @boolean; iO: @integer;
           rN,rNx,rNy,rNz,rNq,vN,vNx,tLab,fLab,rLab,lLab,rSn
-          ,normalRtnLab,breakLab: @integer;
+          ,normalRtnLab,breakLab,contBreakLab,selectBreakLab: @integer;
           superN,T,Tx: ^text;
           topSuperId:<
             (# superId: ^text
@@ -1317,8 +1317,8 @@ ObjectCode:
               (* check if normal return og leave or restart *)
               (* rtn = callee  => normal return
                * rtn <> callee =>  break
-               *     rtn <> this => further  return
-               *     rtn = this  => end of break; exe leave  or restart
+               *     rtn <> this => continue break, unwind of stack
+               *     rtn = this  => end of break; select leave or restart
                *)
               allocReg -> normalRtnLab;
               allocReg -> breakLab;
@@ -1353,38 +1353,25 @@ ObjectCode:
               
               '   br i1 ' -> out.puttext;
               vN -> emitVreg -> out.puttext;
-              allocReg -> tLab; allocReg -> fLab;
-              ', label %X' -> out.puttext; tLab -> out.putint;
-              ', label %X' -> out.puttext; fLab -> out.putint;
+              allocReg -> contBreakLab; allocReg -> selectBreakLab;
+              ', label %selectBreakLab' -> out.puttext; 
+              selectBreakLab -> out.putint;
+              ', label %contBreakLab' -> out.puttext; 
+              contBreakLab -> out.putint;
               out.newline;
-              'X' -> out.put; fLab -> out.putint; ':' -> out.put;
-              out.newline;
+              'contBreakLab' -> out.puttext; contBreakLab -> out.putint; 
+              ':' -> out.put; out.newline;
               
               '   ret ' -> out.puttext; PthisClassN[] -> out.puttext;
               ' ' -> out.put;
               rNq -> emitRreg -> out.putline;
               
-              (if 'main' -> ((2,5) -> thisClassN.sub).equal then
-                  '   ret void\n' -> out.putline
-               else
-                  (if false then
-                      (rNz,Ns[],PthisClassN[]) -> bitCast -> rNq;
-                      
-                      (0,thisClassN[]) -> dumpObj;
-                      (rNz,Ns[]->deRef) -> dumpObj;
-                      (rN,Ns[]->deRef) -> dumpObj;
-
-                      '   ret ' -> out.puttext;
-                      PthisClassN[] -> out.puttext;
-                      ' ' -> out.put; rNq -> emitRreg -> out.puttext;
-                      out.newline;
-                  if);
-              if);
-              'X' -> out.put; tLab -> out.putint; ':' -> out.put;
+              'selectBreakLab' -> out.puttext; selectBreakLab -> out.putint;
+              ':' -> out.put; out.newline;
+              
               (if true then
                   (rNz,'*'->(Ns.copy).put ->deref, '[0 x i32]*')
                     -> bitcast -> rN;
-                  (*(rN,'i32*',0) -> leaReg -> rNx;*)
                   
                   '   ' -> out.puttext;
                   allocReg -> rNx -> emitRreg -> out.puttext;
@@ -1404,19 +1391,22 @@ ObjectCode:
                       ')\n' -> out.puttext;
                   if);
                   
-                  '   ' -> out.puttext;
-                  allocReg -> vNx -> emitVreg -> out.puttext;
-                  ' = icmp slt i32 2, ' -> out.puttext;
-                  vN -> emitVreg -> out.puttext; out.newline;
-                  
-                  allocReg -> tLab; allocReg -> fLab;
-                  '   br i1 ' -> out.puttext; vNx -> emitVreg ->out.puttext;
-                  ', label %X' -> out.puttext; tLab -> out.putint;
-                  ', label %X' -> out.puttext; fLab -> out.putint;
-                  out.newline;
-                                    
-                  'X' -> out.put; fLab -> out.putint; ':' -> out.put;
-                  out.newline;
+                  (if false then
+                      '   ' -> out.puttext;
+                      allocReg -> vNx -> emitVreg -> out.puttext;
+                      ' = icmp slt i32 2, ' -> out.puttext;
+                      vN -> emitVreg -> out.puttext; out.newline;
+                      
+                      allocReg -> tLab; allocReg -> fLab;
+                      '   br i1 ' -> out.puttext; 
+                      vNx -> emitVreg ->out.puttext;
+                      ', label %X' -> out.puttext; tLab -> out.putint;
+                      ', label %X' -> out.puttext; fLab -> out.putint;
+                      out.newline;
+                      
+                      'X' -> out.put; fLab -> out.putint; ':' -> out.put;
+                      out.newline;
+                  if);
                   
                   (if traceLLVMcalls then
                       allocReg -> rSn;                  
@@ -1445,6 +1435,7 @@ ObjectCode:
                   rNy -> emitRreg -> out.puttext;
                   '\n' -> out.puttext;
                   
+                  '   ' -> out.puttext;
                   allocReg -> vNx -> emitVreg -> out.puttext;
                   ' = icmp eq i32 1, ' -> out.puttext;
                   vN -> emitVreg -> out.puttext; out.newline;
@@ -1457,17 +1448,20 @@ ObjectCode:
                   
                   'X' -> out.put; rLab -> out.putint; ':' -> out.put;
                   out.newline;
-                  '   br label %L1' -> out.putline;
+                  '   br label %L1 ; restart' -> out.putline;
                   
                   'X' -> out.put; lLab -> out.putint; ':' -> out.put;
                   out.newline;
-                  '   br label %L2' -> out.putline;
+                  '   br label %L2 ; leave' -> out.putline;
                   
-                  'X' -> out.puttext; tLab -> out.putint; ':' -> out.put;
-                  out.newline;
+                  (if false then
+                      'X' -> out.puttext; tLab -> out.putint; 
+                      ':' -> out.put;
+                      out.newline;
+                  if);
                   
-                  '   br label %normalRtnLab' -> out.puttext;
-                  normalRtnLab -> out.putint; out.newline;
+                  (*'   br label %normalRtnLab' -> out.puttext;
+                  normalRtnLab -> out.putint; out.newline;*)
                   'normalRtnLab' -> out.puttext; 
                   normalRtnLab -> out.putint; 
                   ':' -> out.put;
