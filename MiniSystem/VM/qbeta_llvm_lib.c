@@ -24,7 +24,7 @@ int* allocString(char *T, int range){
   return stringObj;
 }
 int putHex(int V){
-  printf("%x %i\n",V,V);
+  printf("puthex: %x %i\n",V,V);
   return 0;
 }
 int dumpHex(int V, int n){

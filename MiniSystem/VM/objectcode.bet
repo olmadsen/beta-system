@@ -558,7 +558,7 @@ ObjectCode:
           stack.rTop -> rReg -> out.puttext; 
           ', i32 0, i32 ' -> out.puttext; 
           off -> out.putint; 
-          '\n   ' -> out.puttext;
+          '\n' -> out.puttext;
        exit rN
        #);
      leaReg:
@@ -572,7 +572,7 @@ ObjectCode:
           reg -> emitRreg -> out.puttext; 
           ', i32 0, i32 ' -> out.puttext; 
           off -> out.putint; 
-          '\n   ' -> out.puttext;
+          '\n' -> out.puttext;
        exit rN
        #);
      iLoad:
@@ -589,7 +589,7 @@ ObjectCode:
           size,rNx,rNy,rNz: @integer
        enter(objId[],size)
        do '   ;; alloc ' -> out.puttext; objId[] -> out.puttext;
-          '\n   ' -> out.puttext;
+          '\n' -> out.puttext;
           allocReg -> rNx -> emitRreg -> out.puttext; 
           ' = ' -> out.puttext;
           'tail call i8* @malloc(i64 ' -> out.puttext;
@@ -684,7 +684,8 @@ ObjectCode:
      bitcast:
        (# rNs,rNd: @integer; srcT,dstT: ^text
        enter(rNs,srcT[],dstT[])
-       do allocReg -> rNd -> emitRreg -> out.puttext; 
+       do '   ' -> out.puttext;
+          allocReg -> rNd -> emitRreg -> out.puttext; 
           ' = bitcast ' -> out.puttext; 
           srcT[] -> out.puttext; ' ' -> out.put;
           rNs -> emitRreg->out.puttext;
@@ -708,7 +709,7 @@ ObjectCode:
           ' to i32\n' -> out.puttext;
           'call i32 @dumpHex(i32 ' -> out.puttext;
           rNx -> emitRreg -> out.puttext; 
-          ',i32 0)\n' -> out.puttext;
+          ',i32 1)\n' -> out.puttext;
        #);
      thisClassId,        (* className$descNo *)
      thisClassN,         (* %thisClassId     *)
@@ -1138,9 +1139,9 @@ ObjectCode:
           if)
        #);
      break:
-       (# on,lab,descInx,pn: @integer
+       (# on,lab,descInx,pn,rN,rNx,rNy: @integer; T:^text
        enter(on,lab,descInx,pn)
-       do 'break ' -> emitOp;; on -> out.putint; ' ' -> out.put; 
+       do 'break ' -> emitOp; on -> out.putint; ' ' -> out.put; 
           lab -> out.putint; ' ' -> out.put; descInx -> out.putint;
           ' ' -> out.put; pn -> out.putint;
           out.newline;
@@ -1154,7 +1155,29 @@ ObjectCode:
               descInx -> emit2;
               pn -> emit
            else
-              codes.break -> notImpl
+              '**** break: ' -> puttext; lab -> putint;newline;
+              stack.put;
+              (if true then
+                  '%vdt_type$' -> T[];
+                  (2,stack.rType[stack.rTop].length)
+                    ->stack.rType[stack.rTop].sub -> T.append;
+                  '*' -> T.put;
+                  0 -> leag -> rNx;
+                  (rNx, T[], 'i32*') -> bitCast -> rNy;
+                  'store i32 ' -> out.puttext;
+                  lab -> out.putint;
+                  ', i32* ' -> out.puttext;
+                  rNy -> emitRreg -> out.putline;
+                  
+                  (stack.rRegNo[stack.rTop]
+                  , stack.rType[stack.rTop][]
+                  ,PthisClassN[])
+                    -> bitCast -> rN;
+                  '   ret ' -> out.puttext; 
+                  PthisClassN[] -> out.puttext;
+                  ' '  -> out.put;
+                  rN -> emitRreg -> out.putline
+              if)
           if)
        #);
      alloc: 
@@ -1178,7 +1201,8 @@ ObjectCode:
      invoke: 
        (# N,Ns,Nx: ^text; descNo,size,staticOff: @integer; 
           asObj: @boolean; iO: @integer;
-          rN,rNx,rNy: @integer;
+          rN,rNx,rNy,rNz,rNq,vN,vNx,tLab,fLab,rLab,lLab,rSn
+          ,normalRtnLab,breakLab: @integer;
           superN,T,Tx: ^text;
           topSuperId:<
             (# superId: ^text
@@ -1269,30 +1293,187 @@ ObjectCode:
                           Tx[] -> putline;
                       if);
                       (rNx,'*'->(T.copy).put,'*'->Tx.put) -> bitCast -> rNx
-                  if);
-
+                  if);                  
                   
-                  
-                  'store ' -> out.puttext; Ns[] -> out.puttext;
+                  '   store ' -> out.puttext; Ns[] -> out.puttext;
                   '* ' -> out.puttext;
                   rN -> emitRreg -> out.puttext; 
                   ',  ' -> out.puttext;
                   Ns[] -> out.puttext; '** ' -> out.puttext;
                   rNx -> emitRreg -> out.putline; 
               if);
-              '   call ' -> out.puttext; Ns[] -> out.puttext;
+              allocReg -> rNz -> emitRreg -> out.puttext;
+              ' =  call ' -> out.puttext; Ns[] -> out.puttext;
               '* @' -> out.puttext; N[] -> out.puttext; 
               '(' -> out.put; Ns[] -> out.puttext; ' * ' -> out.puttext;
               rN -> emitRreg -> out.puttext; ')' -> out.put;
               out.newline;
               1 -> stack.rpop;
               '*' -> Ns.put;
-              rN -> stack.Rpush
-              (# 
-              do Ns[] -> stack.Rtype[stack.rtop][]
-              #);
-              '   ;; push return value ' -> out.puttext; rN ->out.putint;
-              ' ' -> out.put; Ns[] -> out.putline;
+              rN -> stack.Rpush(#do Ns[] -> stack.Rtype[stack.rtop][]#);
+              (if 'main' -> ((2,5) -> thisClassN.sub).equal then
+                  leave invoke
+              if);
+              (* check if normal return og leave or restart *)
+              (* rtn = callee  => normal return
+               * rtn <> callee =>  break
+               *     rtn <> this => further  return
+               *     rtn = this  => end of break; exe leave  or restart
+               *)
+              allocReg -> normalRtnLab;
+              allocReg -> breakLab;
+              (* compare rtn = callee *)
+              '   ' -> out.puttext;
+              allocReg -> vNx -> emitVreg -> out.puttext;
+              ' = icmp eq '  -> out.puttext;
+              Ns[] -> out.puttext;
+              rNz -> emitRreg -> out.puttext;
+              ', ' -> out.puttext;
+              rN -> emitRreg -> out.puttext;
+              out.newline;
+              
+              '   br i1 ' -> out.puttext;
+              vNx -> emitVreg -> out.puttext;
+              ', label %normalRtnLab' -> out.puttext; 
+              normalRtnLab -> out.putint;
+              ', label %breakLab' -> out.puttext; breakLab -> out.putint;
+              out.newline;
+              
+              'breakLab' -> out.puttext; breakLab -> out.putint; 
+              ':' -> out.put; out.newline;
+              
+              (rNz,Ns[],PthisClassN[])  -> bitCast -> rNq;
+              '   ' -> out.puttext;
+              allocReg -> vN -> emitVreg -> out.puttext;
+              ' = icmp eq ' -> out.puttext;
+              PthisClassN[] -> out.puttext;
+              ' ' -> out.put; 0 -> emitRreg -> out.puttext; 
+              ', ' -> out.puttext;
+              rNq -> emitRreg -> out.putline;
+              
+              '   br i1 ' -> out.puttext;
+              vN -> emitVreg -> out.puttext;
+              allocReg -> tLab; allocReg -> fLab;
+              ', label %X' -> out.puttext; tLab -> out.putint;
+              ', label %X' -> out.puttext; fLab -> out.putint;
+              out.newline;
+              'X' -> out.put; fLab -> out.putint; ':' -> out.put;
+              out.newline;
+              
+              '   ret ' -> out.puttext; PthisClassN[] -> out.puttext;
+              ' ' -> out.put;
+              rNq -> emitRreg -> out.putline;
+              
+              (if 'main' -> ((2,5) -> thisClassN.sub).equal then
+                  '   ret void\n' -> out.putline
+               else
+                  (if false then
+                      (rNz,Ns[],PthisClassN[]) -> bitCast -> rNq;
+                      
+                      (0,thisClassN[]) -> dumpObj;
+                      (rNz,Ns[]->deRef) -> dumpObj;
+                      (rN,Ns[]->deRef) -> dumpObj;
+
+                      '   ret ' -> out.puttext;
+                      PthisClassN[] -> out.puttext;
+                      ' ' -> out.put; rNq -> emitRreg -> out.puttext;
+                      out.newline;
+                  if);
+              if);
+              'X' -> out.put; tLab -> out.putint; ':' -> out.put;
+              (if true then
+                  (rNz,'*'->(Ns.copy).put ->deref, '[0 x i32]*')
+                    -> bitcast -> rN;
+                  (*(rN,'i32*',0) -> leaReg -> rNx;*)
+                  
+                  '   ' -> out.puttext;
+                  allocReg -> rNx -> emitRreg -> out.puttext;
+                  ' = getelementptr [0 x i32], [0 x i32]* ' -> out.puttext;
+                  rN -> emitRreg -> out.puttext;
+                  ', i32 0, i32 0\n' -> out.puttext;
+                  
+                  '   ' -> out.puttext;
+                  allocReg -> vN -> emitVreg -> out.puttext;
+                  ' = load i32 ' -> out.puttext; 
+                  ', i32* ' -> out.puttext; 
+                  rNx -> emitRreg -> out.putline;
+                  
+                  (if false then
+                      '   call i32 @putHex(i32 ' -> out.puttext; 
+                      vN -> emitVreg -> out.puttext;
+                      ')\n' -> out.puttext;
+                  if);
+                  
+                  '   ' -> out.puttext;
+                  allocReg -> vNx -> emitVreg -> out.puttext;
+                  ' = icmp slt i32 2, ' -> out.puttext;
+                  vN -> emitVreg -> out.puttext; out.newline;
+                  
+                  allocReg -> tLab; allocReg -> fLab;
+                  '   br i1 ' -> out.puttext; vNx -> emitVreg ->out.puttext;
+                  ', label %X' -> out.puttext; tLab -> out.putint;
+                  ', label %X' -> out.puttext; fLab -> out.putint;
+                  out.newline;
+                                    
+                  'X' -> out.put; fLab -> out.putint; ':' -> out.put;
+                  out.newline;
+                  
+                  (if traceLLVMcalls then
+                      allocReg -> rSn;                  
+                      '   %S' -> out.puttext; rSn -> out.putint;
+                      '= getelementptr [' -> out.puttext;
+                      thisClassN.length + 2 -> out.putint;
+                      ' x i8], [' -> out.puttext;
+                      thisClassN.length + 2 -> out.putint; 
+                      ' x i8]* @S.' -> out.puttext; 
+                      thisClassId[] -> out.puttext; 
+                      ', i64 0, i64 0\n' -> out.puttext;                  
+                      '   call i32 @puts(i8* %S' -> out.puttext;
+                      rSn -> out.putint;
+                      ')\n' -> out.puttext;
+                  if);
+                  
+                  (* restore vdt *)
+                  (rNz,Ns[]->deref,0) -> leaReg -> rNy;
+                  '   store ' -> out.puttext;
+                  (2,Ns.length) -> Ns.sub  -> vdtType -> out.puttext;
+                  ' @vdt_data$' -> out.puttext; 
+                  (2,Ns.length - 1) -> Ns.sub -> out.puttext;
+                  ', ' -> out.puttext; 
+                  (2,Ns.length) -> Ns.sub -> vdtType -> out.puttext;
+                  '* ' -> out.puttext;
+                  rNy -> emitRreg -> out.puttext;
+                  '\n' -> out.puttext;
+                  
+                  allocReg -> vNx -> emitVreg -> out.puttext;
+                  ' = icmp eq i32 1, ' -> out.puttext;
+                  vN -> emitVreg -> out.puttext; out.newline;
+                  
+                  allocReg -> rLab; allocReg -> lLab;
+                  '   br i1 ' -> out.puttext; vNx -> emitVreg ->out.puttext;
+                  ', label %X' -> out.puttext; rLab -> out.putint;
+                  ', label %X' -> out.puttext; lLab -> out.putint;
+                  out.newline;
+                  
+                  'X' -> out.put; rLab -> out.putint; ':' -> out.put;
+                  out.newline;
+                  '   br label %L1' -> out.putline;
+                  
+                  'X' -> out.put; lLab -> out.putint; ':' -> out.put;
+                  out.newline;
+                  '   br label %L2' -> out.putline;
+                  
+                  'X' -> out.puttext; tLab -> out.putint; ':' -> out.put;
+                  out.newline;
+                  
+                  '   br label %normalRtnLab' -> out.puttext;
+                  normalRtnLab -> out.putint; out.newline;
+                  'normalRtnLab' -> out.puttext; 
+                  normalRtnLab -> out.putint; 
+                  ':' -> out.put;
+                  out.newline;
+              if);
+              out.newline;
               stack.put
           if)
         #);
