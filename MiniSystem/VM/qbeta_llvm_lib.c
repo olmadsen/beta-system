@@ -16,7 +16,7 @@ int arrayLength(int * A){
 int* allocString(char *T, int range){
   int * stringObj;
   int i;
-  printf("\nallocString: %s = ",T);
+  //printf("\nallocString: %s = ",T);
   stringObj = allocIndexed(1,range);
   for (i = 0; i < range; i++) {
     stringObj[i + 2] = T[i];

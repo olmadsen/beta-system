@@ -120,13 +120,16 @@ ObjectCode:
        (# TT: 
             (# T: ^text 
             enter T[] 
-            do T.scanAll
-               (# 
-               do (if  ch = ascii.newline then 
-                      '|' -> S.put 
-                   else 
-                      ch  -> S.put 
-               if)#)
+            do (if T[] = none then
+                   'none' -> S.append
+                else
+                   T.scanAll
+                   (# 
+                   do (if  ch = ascii.newline then 
+                          '|' -> S.put 
+                       else 
+                          ch  -> S.put 
+               if)#)if)
             #);
           II: (# v: @integer enter v do v -> S.putint #);
           S: ^text
@@ -476,8 +479,8 @@ ObjectCode:
                           sig[] -> TT; ' off:' -> TT;
                           off -> II; 
                           ' dn: ' -> TT; dn -> II
-                       #)
-                          
+                       #);
+                   '%noneX' -> attSig[] 
                if);
             exit attSig[]
             #);
@@ -651,9 +654,8 @@ ObjectCode:
      allocString:
        (# T,id,sType: ^text; stringDescNo,rN,rN1,range: @integer
        enter(T[],stringDescNo)
-       do '**** allocText: ' -> puttext; 
-          stringDescNo -> stringType -> sType[] -> putline;
-          newline;
+       do 
+          stringDescNo -> stringType -> sType[];
           
           
           T[] -> mkTextConst -> (id[],range);
@@ -755,12 +757,24 @@ ObjectCode:
        (# N,T: ^text
        enter N[]
        do (if true
+           // N[] = none then
+              'filter$none' -> T[]
            // ':=' -> N.equal then  '_assign' -> T[]
            // '=' -> N.equal then '_equal' -> T[]
+           // '==' -> N.equal then '_requal' -> T[]
+           // '<=' -> N.equal then '_lessequal' -> T[]
            // '+' = (1 -> N.inxGet) then
               '_add' -> T[]; (2,N.length) -> N.sub -> T.append;
            // ':=$' -> ((1,3) -> N.sub).equal then
               '_assign$' -> T[]; (4,N.length) -> N.sub -> T.append
+
+           // '<=' -> ((1,2) -> N.sub).equal then
+              '_lessequal' -> T[]; (3,N.length) -> N.sub -> T.append
+           // '==' -> ((1,2) -> N.sub).equal then
+              '_requal' -> T[]; (3,N.length) -> N.sub -> T.append
+           // (1 -> N.inxGet) = '=' then
+              '_equal' -> T[]; (2,N.length) -> N.sub -> T.append
+              
            else
               '' -> T[];          
               L: 
@@ -1110,6 +1124,12 @@ ObjectCode:
               0 -> emit2;
               Flab -> labs.mark;
            else
+              stack.put;
+              (if stack.vTop = 0 then
+                  '   ;; jmpFalse: stack.vTop = 0' -> out.putline;
+                  '\n!!!! jmpFalse: stack.vTop = 0' -> putline;
+                  leave jmpFalse 
+              if);
               (if stack.Vtype[stack.vTop] = 1 then
                   stack.vRegNo[stack.vTop] -> Vn
                else
@@ -2092,6 +2112,12 @@ ObjectCode:
           (if notLLVM then
               codes.rpushg -> emit; off -> emit;
            else
+              stack.put;
+              (if stack.rtop = 0 then
+                  '   ;; OBS! stack.rtop = 0' -> out.putline;
+                  '!!!! rpushg: stack.rtop = 0' -> putline;
+                  leave rpushg
+              if);
               (if (stack.rRegNo[stack.rtop] = 0) and isValueObject then
                   '*** rpushg:in value object: ' -> puttext;
                   N[] -> putline;
@@ -2223,7 +2249,11 @@ ObjectCode:
        enter(N[],off)
        do 'xrpushg ' -> emitop; off -> out.putint; 
           ' ' -> out.put; N[] -> out.putline;
-          codes.xrpushg -> emit; off -> emit;
+          (if notLLVM then
+              codes.xrpushg -> emit; off -> emit;
+           else
+              codes.xrpushg -> notImpl
+          if)
        #);
      pushConst: 
        (# cst: @integer; rn: @integer
@@ -2516,14 +2546,17 @@ ObjectCode:
               ', i32 0, i32 ' -> out.puttext; off -> out.putint; 
               out.newline;
               
+              (if stack.rtop < 2 then
+                  '\n!!!! rstoreX: stack.rtop < 2' -> putline;
+                  '   ;; rstoreX: stack.rtop < 2' -> out.putline;
+                  leave rstoreX
+              if);
               (if not (srcT[] -> stack.Rtype[stack.rTop - 1].equal) then
                   (rN,'*' -> (srcT.copy).put
                   ,'*' -> (stack.Rtype[stack.rTop - 1].copy).put
                   )
                     -> bitCast -> rN;
-                  (*srcT[] ->   stack.Rtype[stack.rTop - 1][]*)
               if);
-              
               '   store ' -> out.puttext;
               stack.Rtype[stack.rTop - 1][]  -> out.puttext; 
               ' ' -> out.puttext;
@@ -2704,6 +2737,11 @@ ObjectCode:
           (if notLLVM then              
               codes.rswap -> emit; rn -> emit
            else
+              (if stack.rtop < 2 then
+                  '   ;;; rswap: stack.rtop < 2' -> out.putline;
+                  '\n!!!! rswap: stack.rtop < 2' -> putline;
+                  leave rswap
+              if);
               stack.RregNo[stack.rtop] -> R;
               stack.RregNo[stack.rtop - 1] -> stack.RregNo[stack.rtop];
               R -> stack.RregNo[stack.rtop - 1];
@@ -3005,7 +3043,7 @@ ObjectCode:
             exit vN[]
             #);
           mkVdtType:
-            (# T: ^text;
+            (# T,N: ^text;
             do '%vdt_type$' -> T[];
                thisClassId[] -> filter -> T.puttext;
                ' = type {' -> T.puttext;
@@ -3013,16 +3051,16 @@ ObjectCode:
                     (if (descs.current.vdtTable[i] -> dN) > 0 then
                         (if descs.current.isInner[i] then
                             '%' -> T.put;
-                            dN -> vName -> T.puttext;
+                            dN -> vName -> N[] -> T.puttext;
                             '*(%' -> T.puttext;
-                            dN -> vName -> T.puttext; '*' -> T.put;
+                            N[] -> T.puttext; '*' -> T.put;
                             (if isValueObject then
                                 ', i32' -> T.puttext;
                             if);
                             ')*' -> T.puttext
                          else
                             '%vdt_ret$' -> T.puttext;
-                            dN -> vName -> T.puttext;
+                            dn -> vName -> T.puttext;
                             '*()*' -> T.puttext;
                         if)
                      else
@@ -3036,7 +3074,13 @@ ObjectCode:
                         ',' -> T.put
                if)for);
                '}\n' -> T.puttext;
-               T[] -> typeInfo.dsc[descs.current.descInx].vdtType[];
+               (if typeInfo.dsc[descs.current.descInx][] = none then
+                   '\n!!!! mkVdtType: '
+                   'typeInfo.dsc[descs.current.descInx][] = none' -> putline;
+                   '!!    vdtType: ' -> puttext; T[] -> putline
+                else
+                   T[] -> typeInfo.dsc[descs.current.descInx].vdtType[];
+               if);
             #);
           mkVdtData:
             (# T: ^text; dM: @integer
@@ -3087,7 +3131,13 @@ ObjectCode:
                    ', i32' -> T.puttext
                if);
                ')*}\n' -> T.puttext;
-               T[] -> typeInfo.dsc[descs.current.descInx].vdtRet[]
+               (if typeInfo.dsc[descs.current.descInx][] = none then
+                   '\n!!!! mkVdtRet: '
+                   'typeInfo.dsc[descs.current.descInx][] = none' -> putline;
+                   '!!    vdtRet: ' -> puttext; T[] -> putline
+                else
+                   T[] -> typeInfo.dsc[descs.current.descInx].vdtRet[]
+               if)
             #);
           mkVDTalloc:
             (# rNx,rNy,rNz,rNv: @integer; vdt_ret_type,funcPT: ^text
