@@ -424,11 +424,7 @@ ObjectCode:
           addRoff:
             (# off: @integer; sig: ^text
             enter(off,sig[])
-            do (if theDn = 184 then
-                   'Bum: ' -> puttext; off  -> putint;
-                   ' ' -> put; sig[] -> putline
-               if);
-               (if (off + 1) > current.attQtop then 
+            do (if (off + 1) > current.attQtop then 
                    current.attQs.range -> current.attQs.extend 
                if);
                sig[] -> current.attQs[off + 1][];
@@ -859,7 +855,7 @@ ObjectCode:
           if);
           stack.init;
           (if notLLVM then
-              '\nclass' -> out.puttext; N[] -> out.puttext; ' ' -> out.put; 
+              '\nclass ' -> out.puttext; N[] -> out.puttext; ' ' ->out.put; 
               descNo -> out.putint; ' ' -> out.put;
               originOff -> out.putint; ' ' -> out.put;
               originDescNo -> out.putint;
@@ -1169,7 +1165,6 @@ ObjectCode:
               descInx -> emit2;
               pn -> emit
            else
-              '**** break: ' -> puttext; lab -> putint;newline;
               stack.put;
               (if true then
                   '%vdt_type$' -> T[];
@@ -1213,7 +1208,7 @@ ObjectCode:
           if)
        #);
      invoke: 
-       (# N,Ns,Nx: ^text; descNo,size,staticOff: @integer; 
+       (# N,Ns,Nx,rtnType: ^text; descNo,size,staticOff: @integer; 
           asObj: @boolean; iO: @integer;
           calleeReg,
           rN,rNx,rNy,rNz,rNq,vN,vNx,tLab,fLab,rLab,lLab,rSn
@@ -1274,42 +1269,33 @@ ObjectCode:
                   ',i32 1)\n' -> out.puttext;
               if);
               (if staticOff > 0 then
-                  (if false then
-                      '*** save object: ' -> puttext; staticOff -> putint;
-                      ' '  -> put; N[] -> putline;
-                  if);
-                  (0,thisClassN[],staticOff)  -> leaReg -> rNx;
-
-                  (if false then
-                      (* This check is a hack to get around the problem that
-                       * String moule in LIB gets the type of the String
-                       * pattern. The problem is that typeInfo.patch is based
-                       * on matching pattern names so two patterns with the
-                       * same name may result in wrong types
-                       *)
-                      (thisClassN[],staticOff) -> typeInfo.lookUp -> T[]; 
-                      '*'-> (Ns.copy).put -> Tx[];
-                      (if not (Tx[] -> T.equal) then
-                          (if true then
-                              '**** invoke:not equal: ' -> puttext;
-                              'lookup: ' -> puttext; T[] -> puttext; 
-                              ' invoke: ' -> puttext;
-                              Tx[] -> putline;
-                              '*** save object: ' -> puttext;
-                              staticOff -> putint;
-                              ' '  -> put; N[] -> putline;
-                          if);
-                          (rNx,'*'->(T.copy).put,'*'->Tx.put) 
-                            -> bitCast -> rNx
-                  if)if);      
+                  (* we have X: obj / val foo
+                   * the new foo object shall be stored in X (staticOff)
+                   * If foo returns a value that is not a ref to foo,
+                   * then dont store. The return value may be an integer.
+                   * The return value is fecthed after the call.
+                   * OBS! foo may also return a foo ref that differs from
+                   * the new foo object
+                   *)
+                  (thisClassN[],staticOff) ->  typeInfo.lookup -> rtnType[];
+                  '   ;; save object: ' -> out.puttext; 
+                  '*'-> (Ns.copy).put -> Tx[] -> out.puttext;
+                  ' dstType: '  -> out.puttext; rtnType[] -> out.putline;
                   
-                  '   store ' -> out.puttext; calleeType[] -> out.puttext;
-                  '* ' -> out.puttext;
-                  calleeReg -> emitRreg -> out.puttext; 
-                  ',  ' -> out.puttext;
-                  calleeType[] -> out.puttext; '** ' -> out.puttext;
-                  rNx -> emitRreg -> out.putline; 
-              if);
+                  (if rtnType[] -> Tx.equal then
+                      (0,thisClassN[],staticOff)  -> leaReg -> rNx;
+
+                      '   store ' -> out.puttext; 
+                      calleeType[] -> out.puttext;
+                      '* ' -> out.puttext;
+                      calleeReg -> emitRreg -> out.puttext; 
+                      ',  ' -> out.puttext;
+                      calleeType[] -> out.puttext; '** ' -> out.puttext;
+                      rNx -> emitRreg -> out.putline; 
+                   else
+                      '   ;; dont save - object computes a return value'
+                        -> out.putline
+              if)if);
               allocReg -> rNz -> emitRreg -> out.puttext;
               ' =  call ' -> out.puttext; Ns[] -> out.puttext;
               '* @' -> out.puttext; N[] -> out.puttext; 
@@ -1676,8 +1662,9 @@ ObjectCode:
                      ' ' -> TT; orgType[] -> TT #);
               stack.put;
               (if orgOff = 0 then
-                  '!!!! originOff = 0\n'  -> puttext;
-                  lcom(#do '!!!! originOff = 0 '  -> TT #);
+                  '!!!! sendv:originOff = 0 :'  -> puttext;
+                  N[] -> putline;
+                  lcom(#do '!!!! originOff = 0 '  -> TT; N[] -> TT  #);
                   1 -> orgOff (* a hack !? *)
               if);
               (rNx,orgType[],orgOff) -> leaReg -> rNy;
@@ -1854,31 +1841,53 @@ ObjectCode:
      innerP: (* Inner P, where P.ON > 1 *)
        (# inx,rN,rNx,rNy,rNz,vN,vNt,vNf: @integer; elmType: ^text
        enter inx
-       do  'innerP' -> emitOp; ' ' -> out.put; 
+       do 'innerP' -> emitOp; ' ' -> out.put; 
           inx -> out.putint; out.newline;
           (if notLLVM then             
               codes.innerP -> emit; inx -> emit;
            else
-              0 -> leag -> rN; (* pointer to vdt *)
-              allocReg -> rNy -> emitRreg -> out.puttext;
-              ' = load ' -> out.puttext;
-              thisClassId[] -> vdtType -> out.puttext;
-              '*, ' -> out.puttext;
-              thisClassId[] -> vdtType -> out.puttext;
-              '** ' -> out.puttext; 
-              rN -> emitRreg -> out.puttext;
-              '\n   ' -> out.puttext;
+              stack.put;
+              (if true then
+                  0 -> leag -> rN; (* pointer to vdt *)
+                  
+                  stack.rType[stack.rtop][] -> elmType[];
+                  (2,elmType.length) -> elmType.sub -> elmType[];
+                  
+                  allocReg -> rNy -> emitRreg -> out.puttext;
+                  ' = load ' -> out.puttext;
+                  elmType[] -> vdtType -> out.puttext;
+                  ', ' -> out.puttext;
+                  elmType[] -> vdtType -> out.puttext;
+                  '* ' -> out.puttext; 
+                  rN -> emitRreg -> out.puttext;
+                  '\n' -> out.puttext;
+                  
+                  (* rN = ptrToVDT; Load vdt[inx - 1] = inner *)
+                  (rNy,elmType[] -> vdtType -> deRef,inx - 1) 
+                    -> leaReg -> rNx;
+                  
+               else
+                  0 -> leag -> rN; (* pointer to vdt *)
+                  
+                  allocReg -> rNy -> emitRreg -> out.puttext;
+                  ' = load ' -> out.puttext;
+                  thisClassId[] -> vdtType -> out.puttext;
+                  '*, ' -> out.puttext;
+                  thisClassId[] -> vdtType -> out.puttext;
+                  '** ' -> out.puttext; 
+                  rN -> emitRreg -> out.puttext;
+                  '\n   ' -> out.puttext;
               
-              allocReg -> rNx -> emitRreg -> out.puttext;
-              ' = getelementptr ' -> out.puttext;
-              thisClassId[] -> vdtType -> out.puttext;
-              ', ' -> out.puttext;
-              thisClassId[] -> vdtType -> out.puttext;
-              '* ' -> out.puttext; 
-              rNy ->  emitRreg -> out.puttext; 
-              ', i32 0, i32 ' -> out.puttext; inx - 1 -> out.putint;
-              '\n   ' -> out.puttext;
-              
+                  allocReg -> rNx -> emitRreg -> out.puttext;
+                  ' = getelementptr ' -> out.puttext;
+                  thisClassId[] -> vdtType -> out.puttext;
+                  ', ' -> out.puttext;
+                  thisClassId[] -> vdtType -> out.puttext;
+                  '* ' -> out.puttext; 
+                  rNy ->  emitRreg -> out.puttext; 
+                  ', i32 0, i32 ' -> out.puttext; inx - 1 -> out.putint;
+                  '\n   ' -> out.puttext;
+              if);
               allocReg -> rNz -> emitRreg -> out.puttext; 
               ' = load ' -> out.puttext;
               (if true then
@@ -2425,7 +2434,6 @@ ObjectCode:
               if);
               
               (if stack.vType[stack.vtop] = 1 then
-                  '**** storeg:i1: ' -> putline;
                   allocReg -> vN -> emitVreg -> out.puttext;
                   ' = zext i1 ' -> out.puttext;
                   stack.vRegNo[stack.vtop] -> emitVreg -> out.puttext;
@@ -2839,7 +2847,7 @@ ObjectCode:
                // codes.plus then 'plus' -> out.putline; 
                // codes.minus then 'minus' -> out.putline
                // codes.mult then 'mult' -> out.putline; 
-               // codes.rdiv then 'div' -> out.putline
+               // codes.rdiv then 'div' -> out.putline (* not used? *)
                // codes.idiv then 'idiv' -> out.putline
                // codes.modd then 'modd' -> out.putline
                // codes.eq then 'eq' -> out.putline
@@ -2875,7 +2883,7 @@ ObjectCode:
                   'mul' -> LLVMvOp;
                   2 -> stack.vpop;
                   rN -> stack.vPush
-               // codes.rdiv then 
+               // codes.rdiv then (* not used? *)
                    'div' -> out.putline
                // codes.idiv then 
                   'sdiv' -> LLVMvOp;
@@ -3037,8 +3045,9 @@ ObjectCode:
                '}\n' -> T.puttext;
                (if typeInfo.dsc[descs.current.descInx][] = none then
                    '\n!!!! mkVdtType: '
-                   'typeInfo.dsc[descs.current.descInx][] = none' -> putline;
-                   '!!    vdtType: ' -> puttext; T[] -> putline
+                   'typeInfo.dsc[descs.current.descInx][] = none' 
+                     -> putline;
+                   '!!   vdtType: ' -> puttext; T[] -> putline
                 else
                    T[] -> typeInfo.dsc[descs.current.descInx].vdtType[];
                if);
