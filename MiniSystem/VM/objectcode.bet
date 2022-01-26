@@ -704,9 +704,13 @@ ObjectCode:
        exit rNd
        #);
      notImpl:
-       (# op: @integer
+       (# op: @integer;
+          Tx: ^Text
        enter op
-       do 'call void @notImpl(i32 ' -> out.puttext;
+       do 'not implemented: ' -> Tx[];
+          inner notImpl;
+          lcom(#do Tx[] -> Tt #);
+          'call void @notImpl(i32 ' -> out.puttext;
           op -> out.putint;
           ')\n' -> out.putline
        #);
@@ -1748,10 +1752,18 @@ ObjectCode:
      call: 
        (# N: ^text; LMR: @char
        enter(N[],LMR)
-       do ' call(' -> out.puttext; LMR -> out.put; ')' -> out.put;
-          N[] -> out.putline; 
-          codes.call -> emit;
-          LMR -> emit
+       do (if notLLVM then
+              ' call(' -> out.puttext; LMR -> out.put; ')' -> out.put;
+              N[] -> out.putline; 
+              codes.call -> emit;
+              LMR -> emit
+           else
+              codes.call -> notImpl
+              (#
+              do ' call(' ->Tx.append; LMR -> Tx.put; ')' -> Tx.put;
+                 N[] ->Tx.append
+              #)
+          if)
        #);
      vdtTablePrint:
        (# descNo: @integer; T: @text
@@ -1966,7 +1978,14 @@ ObjectCode:
               codes.innerA -> emit; inx -> emit;
           if)
        #);
-     suspendd: (# do ' suspend' -> out.putline; codes.susp -> emit #);
+     suspendd: 
+       (# 
+       do (if notLLVM then
+              ' suspend' -> out.putline; codes.susp -> emit 
+           else
+              codes.susp -> notImpl(#do 'suspend' -> Tx.append #)
+          if)
+       #);
      doSuper: 
        (# N: ^text; inx: @integer 
        enter(N[],inx) 
@@ -2939,7 +2958,8 @@ ObjectCode:
                   'xor' -> LLVMBoolOp;                  
                // codes.req then 
                   'icmp eq' -> LLVMRefRelOp;
-               // codes.rne then 'rne' -> out.putline
+               // codes.rne then 
+                  'icmp ne' -> LLVMRefRelOp;
                // codes.fplus then 'fplus' -> out.putline
                // codes.fminus then 'fplus' -> out.putline
                // codes.fmult then 'fmult' -> out.putline
@@ -2984,7 +3004,7 @@ ObjectCode:
      initGCinfo: (#do (for i: isMarked.range repeat false-> isMarked[i] for)#);
      addGCinfo:
        (# add: 
-            (# off: @integer 
+            (# off: @integer
             enter off 
             do (if off > isMarked.range then
                    isMarked.range -> isMarked.extend 
