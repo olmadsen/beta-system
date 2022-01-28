@@ -1311,7 +1311,8 @@ ObjectCode:
                   '*'-> (Ns.copy).put -> Tx[] -> out.puttext;
                   ' dstType: '  -> out.puttext; rtnType[] -> out.putline;
                   
-                  (if rtnType[] -> Tx.equal then
+                  (if (rtnType[]->deRef) -> calleeType.equal then
+
                       (0,thisClassN[],staticOff)  -> leaReg -> rNx;
 
                       '   store ' -> out.puttext; 
@@ -1323,7 +1324,10 @@ ObjectCode:
                       rNx -> emitRreg -> out.putline; 
                    else
                       '   ;; dont save - object computes a return value'
-                        -> out.putline
+                        -> out.putline;
+                      lcom(#do 'thisType: ' -> TT; calleeTYpe[]->TT;
+                             ' rtnType: ' -> TT; rtnType[] -> TT 
+                          #);
               if)if);
               allocReg -> rNz -> emitRreg -> out.puttext;
               ' =  call ' -> out.puttext; Ns[] -> out.puttext;
@@ -2535,17 +2539,21 @@ ObjectCode:
           if)
        #);
      rstoreX: 
-       (# N,srcT: ^text; off,rN: @integer; isValueObjectOrigin: @boolean
+       (# N,srcT: ^text; off,rN: @integer; 
+          isValueObjectOrigin: @boolean
        enter(N[],off,isValueObjectOrigin) 
        do 'rstoreX ' -> emitOp; off -> out.putint; 
-          ' ' -> out.put; N[] -> out.putline;
+          ' ' -> out.put; N[] -> out.puttext;
+          ' isValueObjectOrigin: ' -> out.puttext; 
+          (if isValueObjectOrigin then 'T' -> out.put else 'F' ->out.put if);
+          out.newline;
           (if notLLVM  then              
               (if off <= 255 then 
                   codes.rstore -> emit; off -> emit
               if);
            else
               stack.put;
-              
+              (* rstore rReg[rTop - 1] in rReg[rTop].off *)
               (N[],off) -> typeInfo.lookup -> srcT[];
               '   ;; lookup:  ' -> out.puttext;  srcT[] -> out.putline;
               stack.put;
@@ -2735,15 +2743,40 @@ ObjectCode:
           stack.vPush; stack.vpush 
        #);
      rdouble: 
-       (# 
-       do 'rdouble' -> emitOp; out.newline;
+       (# off: @integer
+       enter off (*currently just used for LLVM *)
+       do 'rdouble' -> emitOp; off -> out.putint; out.newline;
           (if notLLVM then
               codes.rdouble -> emit;
            else
-              (stack.rRegNo[stack.rtop],stack.rType[stack.rtop][]) -> stack.rpushT;
+              (if (stack.rTop < 1)  then
+                  codes.rdouble->notImpl
+                  (#do ' rtop:' -> Tx.puttext; stack.rtop ->tx.putint #);
+                  leave rdouble
+              if);
+              stack.put;
+              (stack.rRegNo[stack.rtop],stack.rType[stack.rtop][]) 
+                -> stack.rpushT;
+              (if true
+               // off = -1 then
+                  (if (stack.rTop < 3)  then
+                      codes.rdouble->notImpl
+                      (#do ' rtop:' -> Tx.puttext; stack.rtop ->tx.putint #);
+                      leave rdouble
+                  if);
+                  stack.rRegNo[stack.rtop - 2] 
+                    -> stack.rRegNo[stack.rtop - 1];
+                  stack.rType[stack.rtop - 2][]
+                    -> stack.rType[stack.rtop - 1][];
+               // off <> 0 then
+                  (* we assume that off = - 1 or 0 *)
+                  codes.rdouble ->notImpl
+                      (#do 'off must be 0 or -1' -> Tx.append #)
+              if);
+              stack.put;
           if);
        #);
-     swap: (# do ' swap' -> out.putline; codes.swap -> emit #); (* not in use*)
+     swap: (#do ' swap' -> out.putline; codes.swap -> emit #); (* not used*)
      rswap: 
        (# rn,R: @integer; T: ^text
        enter rn
@@ -2767,8 +2800,9 @@ ObjectCode:
        #);
      rPop: 
        (# 
-       do (if notLLVM then
-              ' rpop' -> out.putline; codes.rpop -> emit; 1 -> stack.rPop 
+       do 'rpop' -> emitOp; 
+          (if notLLVM then
+              codes.rpop -> emit; 1 -> stack.rPop 
            else
               1 -> stack.rPop;
               stack.put
