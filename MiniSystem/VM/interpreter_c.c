@@ -3408,10 +3408,13 @@ bool traceThreads = true;
 	    //threadNo = threadNo + 1;
 	    B->threadId = threadNo + 1;
 	    if ((threadNo + 1) > MAX_THREADS) {
+#ifdef __arm__
+#else	      
 	      printf("\nFatal error: too many threads: %i\n",threadNo);
 	      fprintf(trace,"\nFatal error: too many threads: %i\n",threadNo);
 	      fflush(output);
 	      fflush(trace);
+#endif	      
 	      stop;
 	    }
 	    threadStatus[B->threadId] = t_running;

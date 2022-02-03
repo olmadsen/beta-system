@@ -46,6 +46,9 @@ void putch(char c)
     raw_putc('\r');
   raw_putc(c);
 }
+void putnl()
+{ putch(10); putch(13);
+}
 void puthex(int V)
 { int X;
   char d[8];

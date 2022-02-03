@@ -102,7 +102,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   putch('\n');
   
   X = 0x1234;
-  putstr("&X,X, X[0]  :");
+  putstr("&X,X, X[0]:");
   puthex((int)&X);
   putch(',');
   puthex(X);
@@ -118,7 +118,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
     {putstr("OBS! Did not get lock 1st!\n");}
   */
   
-  putstr("Try cmpAndSwap\n");
+  /*putstr("Try cmpAndSwap\n");
   X = 0;
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 1st!\n");} else {putstr("Did not get lock 1st!\n");}
@@ -127,7 +127,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   V = 0; 
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
-  putstr("Hmm!?\n");
+  putstr("Hmm!?\n");*/
   
   //beta_fork(l);
   //start1();

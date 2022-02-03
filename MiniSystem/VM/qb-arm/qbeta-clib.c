@@ -12,13 +12,12 @@ extern void raw_putc(char c);
 extern void init_uart();
 extern void init_mmu();
 //extern void init_mmu_x();
-extern void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags );
+extern void kernel_main(unsigned int r0, unsigned int r1, unsigned int atags );
 
-
-/* Increase program data space. As malloc and related functions depend on this,
-   it is useful to have a working implementation. The following suffices for a
-   standalone system; it exploits the symbol _end automatically defined by the
-   GNU linker. */
+/* Increase program data space. As malloc and related functions depend 
+ * on this, it is useful to have a working implementation. 
+ * The following suffices for a standalone system; it exploits the 
+ * symbol _end automatically defined by the GNU linker. */
 caddr_t _sbrk( int incr )
 {
     extern char _end;
@@ -34,28 +33,26 @@ caddr_t _sbrk( int incr )
      return (caddr_t)prev_heap_end;
 }
 
-
 void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
 {
     /*__bss_start__ and __bss_end__ are defined in the linker script */
     int* bss = &__bss_start__;
     int* bss_end = &__bss_end__;
     int* bss_i = bss;
-    /*
-        Clear the BSS section
-
-        See http://en.wikipedia.org/wiki/.bss for further information on the
-            BSS section
-
-        See https://sourceware.org/newlib/libc.html#Stubs for further
-            information on the c-library stubs
+    /* Clear the BSS section
+     * See http://en.wikipedia.org/wiki/.bss 
+     * for further information on the BSS section
+     * See https://sourceware.org/newlib/libc.html#Stubs 
+     * for further information on the c-library stubs
     */
     while( bss < bss_end )
         *bss++ = 0;
 
+    //init_mmu();
+    //putstr("\n\n**** After init_mmu\n");    
     init_uart();
-    putstr("After init_uart\n");
-    init_mmu();
+    putstr("\n\n**** After init_uart\n");
+
     putstr("\nAfter init_uart and init_mmu\n");    
     putstr("\n_cstartUp:bss    : ");
     puthex((int)bss_i);
@@ -66,12 +63,8 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
     kernel_main( r0, r1, r2 );
 
     /* ... but if we do, safely trap here */
-    while(1)
-    {
-        /* EMPTY! */
-    }
+    while(1){ /* EMPTY! */ }
 }
-
 
 void Bfork(void * interpreter, void * B, int coreNo)
 { put32(0x50,(int)interpreter);
@@ -96,5 +89,23 @@ void Bfork(void * interpreter, void * B, int coreNo)
       putstr("coreNo not in 1,2,3\n");
       break;
     }
-  
+}
+
+void reset_handler(){
+  putstr("reset\n");
+}
+void undefined_handler(){
+  putstr("reset\n");
+}
+void svc_handler(){
+  putstr("reset\n");
+}
+void prefetch_handler(){
+  putstr("reset\n");
+}
+void data_handler(){
+  putstr("reset\n");
+}
+void IRQ_handler(){
+  putstr("reset\n");
 }

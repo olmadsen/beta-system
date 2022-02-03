@@ -1,10 +1,10 @@
 .globl init_mmu
 init_mmu:
 	
-	ldr r0,=#65 // 'A'
+	/*ldr r0,=#65 // 'A'
 	push {lr}	
 	bl raw_putc	
-	pop {lr}
+	pop {lr}*/
 	
 	// Disable L1 Caches.	
 	MRC P15, 0, R1, C1, C0, 0 // Read SCTLR.
@@ -38,10 +38,10 @@ set_loop:
 	BLE way_loop 		  // if not, iterate way_loop.
 
 		
-	ldr r0,=#66 // 'B'
+	/*ldr r0,=#66 // 'B'
 	push {lr}	
 	bl raw_putc	
-	pop {lr}
+	pop {lr}*/
 
 	
 	// Initialize translation table control registers 
@@ -88,10 +88,11 @@ loop:
 	SUBS R4, #1 
 	BNE loop
 
-	push {lr}
+	/*push {lr}
 	ldr r0,=#67 // 'c'
 	bl raw_putc
-	pop {lr}
+	pop {lr}*/
+	
 	b EnableMMU_caches
 	// constant pool
 .align 2
@@ -151,7 +152,7 @@ EnableMMU_caches:
 	DSB
 	ISB
 
-	push {lr}
+	/*push {lr}
 	ldr r0,=#68 // 'D'
 	bl raw_putc
 	pop {lr}
@@ -159,16 +160,80 @@ EnableMMU_caches:
 	LDR R1, =mutex
 	LDR R0,[R1]
 	
-	//ldr r0,=#69 // 'E'
+	ldr r0,=#69 // 'E'
 	push {lr}	
 	bl raw_putc	
 	pop {lr}
+	
+	LDR R1, =S0
+	push {r0,r1,r2,r3,lr}
+	mov r0,r1
+	bl putstr
+	pop {r0,r1,r2,r3,lr}
+
+	MRC P15,0, R2, C0,C2,3
+	push {r0,r1,r2,r3,lr}
+	mov r0,r2
+	bl puthex
+	pop {r0,r1,r2,r3,lr}
+
+	
+	push {r0,r1,r2,r3,lr}
+	bl putnl
+	pop {r0,r1,r2,r3,lr}
+
+	LDR R1, =S1
+	push {r0,r1,r2,r3,lr}
+	mov r0,r1
+	bl putstr
+	pop {r0,r1,r2,r3,lr}	
+	
+	MRRC P15, 1, R0, R1, C15 // Read CPUECTLR.
+	push {r0,r1,r2,r3,lr}
+	bl puthex
+	pop {r0,r1,r2,r3,lr}	
+
+	push {r0,r1,r2,r3,lr}
+	bl putnl
+	pop {r0,r1,r2,r3,lr}
+	
+	LDR R1, =S2
+	push {r0,r1,r2,r3,lr}
+	mov r0,r1
+	bl putstr
+	pop {r0,r1,r2,r3,lr}
+	
+	MRC P15, 0, R1, C1, C0, 0 // Read SCTLR.	
+	push {r0,r1,r2,r3,lr}
+	mov r0,r1
+	bl puthex
+	pop {r0,r1,r2,r3,lr}
+	
+	push {r0,r1,r2,r3,lr}
+	//bl putnl
+	pop {r0,r1,r2,r3,lr}
+	
+	push {lr}
+	ldr r0,=#70 // 'F'
+	bl raw_putc
+	pop {lr}
+	
+	//LDR R1, =mutex
+	//LDREX R0,[R1]
+	
+	push {lr}	
+	bl raw_putc	
+	pop {lr}*/
 	
 	bx lr
 
 .align 2
 mutex:
 	.word 69 // 'E'
+
+S0:	.asciz "\nID_ISAR3: "
+S1:	.asciz "CPUECTLR: "	
+S2:	.asciz "SCTLR   : "	
 	
 // constant pool
 .align 2
