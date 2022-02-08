@@ -116,7 +116,8 @@ mutex:
 // constant pool
 .align 2
 	.ltorg
-	
+
+.data	
 .align 14  // alig at 2^14 = 16K boundary
 .globl ttb0_base
 ttb0_base:
@@ -140,13 +141,16 @@ ttb0_base:
 	PUT_64B \ATTR_HI, ((\PA) & 0xFFE00000) | \ATTR_LO | 0x1
 	.endm
 .align 14
-.globl ttb0_base_x
-ttb0_base_x:
+.globl pagetable_macro
+pagetable_macro:
+ttb0_base1:
 	TABLE_ENTRY level2_pagetable, 0
 	BLOCK_1GB 0x40000000, 0, 0x740
 	BLOCK_1GB 0x80000000, 0, 0x740
 	BLOCK_1GB 0xC0000000, 0, 0x740
-.align 12
+	.align 12
+.globl ttb0_base1
+ttb0_base1:	
 level2_pagetable:
 	.set ADDR, 0x000 // The current page address.
 	.rept 0x200
@@ -156,6 +160,7 @@ level2_pagetable:
 	////////////////////////////
 
 
+.text
 	
 .globl init_mmu_x
 init_mmu_x:

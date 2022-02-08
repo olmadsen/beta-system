@@ -2,6 +2,7 @@ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qlexer';
 INCLUDE 'qabstractSyntaxTree';
 INCLUDE 'qprimitives';
+INCLUDE 'xparser';
 ---lib:attributes---
 (************************ Grammar **********************************
  * Module ::= DataItem
@@ -28,6 +29,7 @@ parser: AbstractSyntaxTree
           (*rootModule.name.lexemSy -> root.nm[];*)
           root[] -> rootM[];
        #);     
+     XP: @xparser;
      superParser:
        (# fileName,pathToFN: ^text; 
           inFile: ^file;
@@ -586,7 +588,6 @@ parser: AbstractSyntaxTree
                if)
             #)
        #);
-
      pInvocation:
        (* foo
         * R.foo
@@ -599,16 +600,10 @@ parser: AbstractSyntaxTree
           E: ^Exp;
           i: @integer
        do Invocation -> IV[]; 
-          (if fat then 
-              'pExp:A: ' -> puttext; lex.current -> putline;
-          if);
           Loop:
             (#
             do i + 1 -> i;
                pExp -> E[] -> IV.append; (* elim is E.isEmpty *)
-               (if fat then 
-                   'pExp:B: ' -> puttext; lex.current -> putline;
-               if);
                (if lex.symb 
                 // lex.symbols.dot then
                    lex;
@@ -617,17 +612,12 @@ parser: AbstractSyntaxTree
                    restart Loop
                 // lex.symbols.idf then
                if)
-            #);
-          
+            #);          
           (if i = 1 then 
               E.isEmpty -> IV.isEmpty
           if);
-          (if fat then 
-              'pExp:C: ' -> puttext; lex.current -> putline;
-          if);
        exit IV[]
        #);
-     fat: @boolean;
      scanForBrace:
        (# T,inn: ^Text; first,last: @integer
        enter T[]
@@ -672,7 +662,6 @@ parser: AbstractSyntaxTree
           #)
        exit S[]
        #);
-     newFatComma: (# exit true #);
      pExp:
        (* R.foo
         * f(e1,e2,e3)
@@ -704,13 +693,25 @@ parser: AbstractSyntaxTree
                // lex.symbols.leftBrack then
                   lex;
                   sym[] -> pFunction  -> E[]
-               // lex.symbols.leftSquare then
-                  lex;
-                  'go: ' -> puttext; 
-                  lex.symb -> lex.symbols.asText -> putline;
-                  sym[] -> pNewFatComma -> E[]
-               else (*unary *)
-                  (sym[],arguments) -> UnaryGen -> E[]
+               else
+                  (if newFatComma then
+                      (if lex.symb
+                       // lex.symbols.leftSquare then
+                          lex;
+                          (*'go[]: ' -> puttext; 
+                           lex.symb -> lex.symbols.asText -> putline;*)
+                          sym[] -> pNewFatComma -> E[]
+                       // lex.symbols.begin then
+                          lex;
+                          (*'go{}: ' -> puttext; 
+                           lex.symb -> lex.symbols.asText -> putline;*)
+                          sym[] -> pNewFatCommaB -> E[]
+                       else (*unary *)
+                          (sym[],arguments) -> UnaryGen -> E[]
+                      if)
+                   else 
+                      (sym[],arguments) -> UnaryGen -> E[]
+                  if)
               if);
            // lex.symbols.special then
               lex.sym[] -> sym[];
@@ -743,23 +744,85 @@ parser: AbstractSyntaxTree
        exit E[]
        #);
      pNewFatComma:
-       (# sym: ^text; F: ^exp;
+       (# sy,sig,comma: ^text; F: ^exp;
           args: ^Arguments;
           OG: ^ObjectSpecification
-       enter sym[]
-       do Arguments -> args[];  true -> args.isFunction;
+       enter sy[]
+       do Arguments -> args[];  true -> args.isKeyword;
+          sy.copy -> sig[]; '[' -> sig.put; sig.copy -> comma[];
           loop:
             (if true then
-                pObjectSpec -> OG[] -> args.append;
+                (*'**** ' -> puttext;  sig[] -> puttext;
+                ' ' -> put; lex.symb -> lex.symbols.asText ->  putline;*)
+                (if lex.symb <> lex.symbols.rightSquare then
+                    comma[] -> Name -> args.append;
+                    pObjectSpec -> OG[] -> args.append;
+                if);
                 (if lex.symb = lex.symbols.rightSquare then
+                    ']'-> sig.put;
+                    ']' -> comma[];
                     lex;
                     (if lex.symb = lex.symbols.idf then
+                        lex.sym.copy -> sig.puttext;
+                        lex.sym.copy -> comma.puttext;
                         lex;
-                        (if lex. symb = lex.symbols.leftSquare then
+                        (if lex.symb = lex.symbols.leftSquare then
+                            '[' -> sig.put;
+                            '[' -> comma.put;
                             lex;
                             restart loop
-            if)if)if)if);
-          (sym[],args[]) -> FunctionGen -> F[];
+                        if)                        
+                     else
+                        ']' -> Name -> args.append;
+                    if)
+                 else
+                    syntaxError
+                if)
+            if);
+          (*'**** newFatComma: ' -> puttext; sig[] -> putline;*)
+          (sy[],args[]) -> KeyWordGen -> F[];
+       exit F[]
+       #);
+     pNewFatCommaB:
+       (# sy,sig,comma: ^text; F: ^exp;
+          args: ^Arguments;
+          IS: ^Items
+       enter sy[]
+       do Arguments -> args[];  true -> args.isKeyword;
+          sy.copy -> sig[]; '{' -> sig.put; sig.copy -> comma[];
+          loop:
+            (if true then
+                (*'**** ' -> puttext;  sig[] -> puttext;
+                ' ' -> put; lex.symb -> lex.symbols.asText ->  putline;*)
+                (if lex.symb <> lex.symbols.end then
+                    comma[] -> Name -> args.append;
+                    pItems -> IS[] -> args.append;
+                if);
+                (if lex.symb 
+                 // lex.symbols.end then
+                    '}'-> sig.put;
+                    '}' -> comma[];
+                    lex;
+                    (if lex.symb = lex.symbols.idf then
+                        lex.sym.copy -> sig.puttext;
+                        lex.sym.copy -> comma.puttext;
+                        lex;
+                        (if lex.symb = lex.symbols.begin then
+                            '{' -> sig.put;
+                            '}' -> comma.put;
+                            lex;
+                            restart loop
+                        if)
+                     else
+                        '}' -> Name -> args.append;  
+                    if)
+                 // lex.symbols.eos then
+                 else
+                    syntaxError
+                if)         
+            if);
+          (*'**** newFatComma:B: ' -> puttext; sig[] -> putline;*)
+          (sy[],args[]) -> KeyWordgen -> F[];
        exit F[]
        #);
      pFunction:
@@ -831,7 +894,6 @@ parser: AbstractSyntaxTree
               if);
               ':' -> sym.put;
               sym.copy -> Name -> args.append;
-              false -> fat;
               loop:
                 (#
                 do (if true then
@@ -845,7 +907,6 @@ parser: AbstractSyntaxTree
                        lex;
                        restart Loop
                 if)#);
-              false -> fat;
            else
               sym.copy -> Name -> args.append;
               Loop:
@@ -1287,7 +1348,12 @@ parser: AbstractSyntaxTree
              true -> lex.isXbeta;
              path.init;
              (fullPath,FN[]) -> locateWorld -> topPath[];
-             (topPath[],altParser) -> pModule -> rootModule[];
+             (if false and altParser then
+                 topPath[]  -> XP.topPath[];
+                 (topPath[],altParser) -> XP.pModule -> rootModule[];
+              else
+                 (topPath[],altParser) -> pModule -> rootModule[];
+             if);
              rootModule.handleDirModules (* all of BETAworld is parsed*)
              (# pDirModule::
                   (#

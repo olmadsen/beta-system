@@ -121,8 +121,6 @@ loop:
 	
 	.align 12
 	.globl ttb0_base
-	.globl ttb0_base_x
-ttb0_base_x:
 ttb0_base: 
 	TABLE_ENTRY level2_pagetable, 0 
 	BLOCK_1GB 0x40000000, 0, 0x740 

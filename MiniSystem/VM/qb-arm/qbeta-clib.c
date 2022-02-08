@@ -53,7 +53,6 @@ void _cstartup( unsigned int r0, unsigned int r1, unsigned int r2 )
     init_uart();
     putstr("\n\n**** After init_uart\n");
 
-    putstr("\nAfter init_uart and init_mmu\n");    
     putstr("\n_cstartUp:bss    : ");
     puthex((int)bss_i);
     putstr("\n_cstartUp:bss_end: ");

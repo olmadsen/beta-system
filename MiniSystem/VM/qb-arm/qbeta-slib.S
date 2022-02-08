@@ -376,7 +376,8 @@ S0:	.asciz "\ninit_mmu and init_uart done!\n"
 .align 2
 mutex:
 	.word 69 // 'E'
-	
+
+/*
 .globl reset_handler
 .globl undefined_handler
 .globl svc_handler
@@ -400,4 +401,5 @@ monitor_vector_table_base_address:
 	B data_handler
 	NOP
 	B IRQ_handler
+*/
 // You can place the FIQ handler code here.

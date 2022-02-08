@@ -8,8 +8,8 @@
 extern void start1();
 extern void Bfork(void * interpreter, void * B, int coreNo);
 extern int cmpAndSwap(int adr, int old, int new); 
-extern void init_mmu();
-extern void init_mmu_s();
+//extern void init_mmu();
+//extern void init_mmu_s();
 extern int _start;
 extern int _end;
 extern int __bss_start;
@@ -17,7 +17,9 @@ extern int __data_start;
 extern int _edata;
 extern int __bss_end__;
 extern int ttb0_base;
-extern int ttb0_base_x;
+extern int ttb1_base;
+extern int level2_pagetable;
+extern int pagetable_macro;
 extern unsigned char BC[];
 
 void hello(char *S)
@@ -63,44 +65,57 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   //init_mmu_s();
   //putstr("\nAfter init-mmu\n");
   //puthex(Q);
+
+  putstr("\n\n**** qbeta is here ****\n");
+  putstr("\n_start      : ");
+  puthex((int)&_start);
+  
+  putstr("\n__data_start: ");
+  puthex((int)&__data_start);
+  putstr("\n_edata      : ");  
+  puthex((int)&_edata);  
+  putstr("\n__bss_start : ");
+  puthex((int)&__bss_start);
+  putstr("\n__bss_end__ : ");
+  puthex((int)&__bss_end__);  
+  putstr("\n_end        : ");
+  puthex((int)&_end);  
+  putch('\n');
+
   putstr("\nTTL: \nttb0_base: ");
   puthex((int)&ttb0_base);
   putstr(" length: ");
   putint(4096);
-  putstr(" ttb0_base_x: ");
-  puthex((int)&ttb0_base_x);
   putch('\n');
   A = (unsigned int*) &ttb0_base;
-  for (i = 0; i < 4096; i++) {
-    if ((i < 3) || (4092 < i)) {
+  putstr("Pagetable_start:\n");
+  for (i = 0; i < 8; i++) {
+      puthex((int)&A[i]);
+      putch(':');
+      puthex(A[i]);
+      putch('\n');
+  }
+  /*
+  A = (unsigned int*) &pagetable_macro;
+  putstr("\nPagetable_macro:\n");
+  for (i = 0; i < 8; i++) {
+      puthex((int)&A[i]);
+      putch(':');
+      puthex(A[i]);
+      putch('\n');
+  }
+  A = (unsigned int*) &ttb1_base; //level2_pagetable;
+  putstr("Level2_pagetable:\n");
+  for (i = 0; i < 512; i++) {
+    if ((i < 3) || (508 < i)) {
       puthex((int)&A[i]);
       putch(':');
       puthex(A[i]);
       putch('\n');
     }
     if (i == 4) putstr("...\n");
-  }
-  putstr("qbeta is here\n");
-  putstr("\n_start      : ");
-  puthex((int)&_start);
-  
-  putstr("\n__data_start: ");
-  puthex((int)&__data_start);
-
-  putstr("\n_edata      : ");  
-  puthex((int)&_edata);
-  
-  putstr("\n__bss_start : ");
-  puthex((int)&__bss_start);
-
-  putstr("\n__bss_end__ : ");
-  puthex((int)&__bss_end__);
-  
-  putstr("\n_end        : ");
-  puthex((int)&_end);
- 
-  putch('\n');
-  
+    }
+  */
   X = 0x1234;
   putstr("&X,X, X[0]:");
   puthex((int)&X);
@@ -118,7 +133,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
     {putstr("OBS! Did not get lock 1st!\n");}
   */
   
-  /*putstr("Try cmpAndSwap\n");
+  putstr("Try cmpAndSwap\n");
   X = 0;
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 1st!\n");} else {putstr("Did not get lock 1st!\n");}
@@ -127,7 +142,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   V = 0; 
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
-  putstr("Hmm!?\n");*/
+  putstr("Hmm!?\n");
   
   //beta_fork(l);
   //start1();
