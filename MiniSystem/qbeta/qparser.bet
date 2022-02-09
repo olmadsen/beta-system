@@ -48,6 +48,10 @@ parser: AbstractSyntaxTree
           (fileName[],inFile[]) -> lex.init;
           true -> lex.isXbeta;
           lex;
+          newFatComma and altParser -> pNewFatCommaFile;
+          (if pNewFatCommaFile then
+              '**** parse new syntax:\n' -> puttext; fileName[] -> putline
+          if);
           INNER;
           inFile.close;
           oldLex.hasLexError or lex.hasLexError -> oldlex.hasLexError;
@@ -163,9 +167,20 @@ parser: AbstractSyntaxTree
        (# IV: ^Invocation;
           IS: ^Items;          
           OG: ^ObjectGenerator;
+          E: ^Exp
        do pInvocation -> IV[];
+          (if false then
+              '**** pInv: ' -> puttext; IV.dopt -> puttext;
+              ' ' -> put; lex.symb -> lex.symbols.asText -> putline;
+          if);
           pMainPart -> IS[]; (* if we split OG into singular and pattern
                               * then there must be a main part *)
+          (if pNewFatCommaFile and IS.isEmpty then
+              IV.last -> E[];
+              (if (E.args[] <> none) and (E.args.inBraces) then
+                  '**** pOG:got:arg:as:mainPart: ' -> puttext;
+                  IV.dopt -> puthead
+          if)if);
           (IV[],IS[]) -> ObjectGenerator -> OG[]
        exit OG[]
        #);
@@ -362,6 +377,7 @@ parser: AbstractSyntaxTree
                     else
                        pObjectSpec -> I.append
                    if)
+               
                 // lex.symbols.leftBrack then
                    (* (exp) ... *)
                    (if false then
@@ -375,6 +391,10 @@ parser: AbstractSyntaxTree
                       lex;
                       propId[] -> pNewProperty -> I.append;
                    #)
+                // lex.symbols.const 
+                // lex.symbols.floatConst 
+                // lex.symbols.charSy then 
+                   pObjectSpec -> I.append; (* perhaps OG *)
                if);
                (if lex.symb = lex.symbols.semicolon then
                    lex; 
@@ -667,7 +687,7 @@ parser: AbstractSyntaxTree
         * %if E0 %then E1 %else E2
         *)
        (# sym,sym2: ^Text;
-          E: ^Exp; 
+          E: ^Exp; prevSymb: @char
        do (* '\npExp: ' -> puttext; lex.symb -> lex.symbols.print; 
            *  ' ' -> put; lex.sym[] -> puttext;
            * *)
@@ -687,30 +707,33 @@ parser: AbstractSyntaxTree
            // lex.symbols.idf then 
               lex.sym[] -> sym[];
               lex;
-              (if lex.symb 
-               // lex.symbols.leftBrack then
-                  lex;
-                  sym[] -> pFunction  -> E[]
-               else
-                  (if newFatComma then
-                      (if lex.symb
-                       // lex.symbols.leftSquare then
-                          lex;
-                          (*'go[]: ' -> puttext; 
-                           lex.symb -> lex.symbols.asText -> putline;*)
-                          sym[] -> pNewFatComma -> E[]
-                       // lex.symbols.begin then
-                          lex;
-                          (*'go{}: ' -> puttext; 
-                           lex.symb -> lex.symbols.asText -> putline;*)
-                          sym[] -> pNewFatCommaB -> E[]
-                       else (*unary *)
-                          (sym[],arguments) -> UnaryGen -> E[]
-                      if)
+              (if pNewFatCommaFile then
+                  (if lex.symb
+                   // lex.symbols.leftBrack 
+                   // lex.symbols.leftSquare
+                   // lex.symbols.begin then
+                      lex.symb -> prevSymb;
+                      lex;
+                      (if false then
+                          'goFAT: ' -> puttext; 
+                          sym[] -> puttext;
+                          ' ' -> puttext; 
+                          prevSymb -> lex.symbols.asText -> puttext;
+                          newline;
+                      if);
+                      (sym[],prevSymb) -> pNewFatCommaX -> E[]
+                   else (*unary *)
+                      (sym[],arguments) -> UnaryGen -> E[]
+                  if)
+              else              
+                  (if lex.symb 
+                   // lex.symbols.leftBrack then
+                      lex;
+                      sym[] -> pFunction  -> E[]
                    else 
                       (sym[],arguments) -> UnaryGen -> E[]
                   if)
-              if);
+              if)
            // lex.symbols.special then
               lex.sym[] -> sym[];
               lex;
@@ -740,6 +763,93 @@ parser: AbstractSyntaxTree
               StringObj -> E.unit[]
           if)
        exit E[]
+       #);
+     pNewFatCommaX:
+       (# sy,sig,comma: ^text; F: ^exp;
+          args: ^Arguments;
+          IS: ^Items;
+          leftB,rightB: @char;
+          asCh:
+            (# sy: @integer; T: ^Text
+            enter sy
+            do (if sy
+                // lex.symbols.leftBrack then '(' -> T[]
+                // lex.symbols.rightBrack then ')' -> T[]
+                // lex.symbols.begin then '{' -> T[]
+                // lex.symbols.end then '}' -> T[]
+                // lex.symbols.leftSquare then '[' -> T[]
+                // lex.symbols.rightSquare then ']' -> T[]
+                else
+                   '?' -> T[]
+               if)
+            exit T[]
+            #);
+       enter(sy[],leftB)
+       do (if false then
+              'pNFCX: ' -> puttext; sy[] -> puttext; ' ' -> put;
+              leftB -> asCh -> puttext;
+          if);
+          leftB + 1 -> rightB;
+          
+          (if false then
+              ' ' -> put; rightB -> asCh -> puttext; ' ' -> put;
+          if);
+          
+          Arguments -> args[];  true -> args.isKeyword;
+          true -> args.inBraces;
+          sy.copy -> sig[]; leftB -> asCh -> sig.puttext; 
+          sig.copy -> comma[];
+          
+          (if false then
+              sig[] -> puttext;  ' ' -> put; comma[] -> putline;
+          if);
+          loop:
+            (if true then
+                (if false then
+                    '**** ' -> puttext;  sig[] -> puttext;
+                    ' ' -> put; lex.symb -> lex.symbols.asText ->  putline;
+                if);
+                (if lex.symb <> rightB then
+                    comma[] -> Name -> args.append;
+                    pItems -> IS[] -> args.append;
+                if);
+                (if lex.symb 
+                 // lex.symbols.comma // lex.symbols.semiColon then
+                    lex;
+                    restart loop
+                 // rightB then
+                    rightB -> asCh -> sig.puttext;
+                    rightB -> asCh -> comma[];
+                    lex;
+                    (if lex.symb = lex.symbols.idf then
+                        lex.sym.copy -> sig.puttext;
+                        lex.sym.copy -> comma.puttext;
+                        lex;
+                        (if lex.symb 
+                         // lex.symbols.leftBrack
+                         // lex.symbols.leftSquare
+                         // lex.symbols.begin then
+                            lex.symb -> leftB;
+                            leftB + 1 -> rightB;
+                            leftB -> asCh -> sig.puttext;
+                            leftB -> asCh -> comma.puttext;
+                            lex;
+                            restart loop
+                        if)
+                     else
+                        leftB + 1 -> asCh -> Name -> args.append;  
+                    if)
+                 // lex.symbols.eos then
+                 else
+                    117 -> syntaxError
+                if)      
+            if);
+          (if false then
+              '**** newFatComma:X: ' -> puttext; sig[] -> puttext;
+              ' ' -> put; lex.symb -> lex.symbols.asText -> putline;
+          if);
+          (sy[],args[]) -> KeyWordgen -> F[];
+       exit F[]
        #);
      pNewFatComma:
        (# sy,sig,comma: ^text; F: ^exp;
@@ -790,6 +900,7 @@ parser: AbstractSyntaxTree
           IS: ^Items
        enter sy[]
        do Arguments -> args[];  true -> args.isKeyword;
+          true -> args.inBraces;
           sy.copy -> sig[]; '{' -> sig.put; sig.copy -> comma[];
           loop:
             (if true then
@@ -810,7 +921,7 @@ parser: AbstractSyntaxTree
                         lex;
                         (if lex.symb = lex.symbols.begin then
                             '{' -> sig.put;
-                            '}' -> comma.put;
+                            '{' -> comma.put;
                             lex;
                             restart loop
                         if)
@@ -1299,7 +1410,7 @@ parser: AbstractSyntaxTree
      rootModule,
      main: ^Module;
      mainPT,mainPP: @boolean;
-     altParser: @boolean
+     altParser,pNewFatCommaFile: @boolean
   do (if onlyLex then
          (FN[],altParser) -> genTokenStream
       else
@@ -1360,7 +1471,7 @@ parser: AbstractSyntaxTree
                      moduleDir[] -> path.push;
                      (path.append,moduleDir[]) -> DirectoryComponents
                      (# 
-                     do (if isAltExtension then
+                     do (if false and isAltExtension then
                             '**   DirElm:altExtension:\n ' -> puttext; 
                             current[] -> putline;
                         if);
