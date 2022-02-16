@@ -4,6 +4,7 @@
 .global _get_stack_pointer
 .global init_mmu_s
 _start:
+	//CPS 0x1F
 
 	// Processors are in Secure SVC mode after reset. 
 	MOV    R0, #0 
@@ -69,6 +70,9 @@ _start:
 	//MCR P15, 0, R1, C12, C0, 0 // Initialize VBAR (Secure).
 	//LDR R1, =monitor_vector_table_base_address
 	//MCR P15, 0, R1, C12, C0, 1 // Initialize MVBAR.
+
+	LDR R1, =Vectors
+	MCR P15, 4, R1, C12, C0, 0 // Initialize HVBAR.
 
 	// Enable asynchronous aborts, interrupts, and fast interrupts.
 	//CPSIE aif
@@ -403,3 +407,109 @@ monitor_vector_table_base_address:
 	B IRQ_handler
 */
 // You can place the FIQ handler code here.
+    .global Vectors
+
+//----------------------------------------------------------------
+// Exception Vector Table
+//----------------------------------------------------------------
+// Note: LDR PC instructions are used here, though branch (B) instructions
+// could also be used, unless the exception handlers are >32MB away.
+
+Vectors:
+    LDR PC, Reset_Addr
+    LDR PC, Undefined_Addr
+    LDR PC, SVC_Addr
+    LDR PC, Prefetch_Addr
+    LDR PC, Abort_Addr
+    LDR PC, Hypervisor_Addr
+    LDR PC, IRQ_Addr
+    LDR PC, FIQ_Addr
+
+
+    .balign 4
+Reset_Addr:
+    .word Reset_Handler
+Undefined_Addr:
+    .word Undefined_Handler
+SVC_Addr:
+    .word SVC_Handler
+Prefetch_Addr:
+    .word Prefetch_Handler
+Abort_Addr:
+    .word Abort_Handler
+Hypervisor_Addr:
+    .word Hypervisor_Handler
+IRQ_Addr:
+    .word IRQ_Handler
+FIQ_Addr:
+    .word FIQ_Handler
+
+	
+//----------------------------------------------------------------
+// Exception Handlers
+//----------------------------------------------------------------
+
+/*Undefined_Handler:
+	B Undefined_Handler
+SVC_Handler:
+	B SVC_Handler
+Prefetch_Handler:
+	B Prefetch_Handler
+Abort_Handler:
+	B Abort_Handler
+Hypervisor_Handler:
+	B Hypervisor_Handler
+IRQ_Handler:
+	B IRQ_Handler
+FIQ_Handler:
+	B FIQ_Handler
+	*/
+Reset_Handler:
+	LDR R0, =Err7
+	bl putstr
+L7:	
+	B   L7
+Undefined_Handler:
+	LDR R0, =Err0
+	bl putstr
+L0:	
+	B   L0
+SVC_Handler:
+	LDR R0, =Err1
+	bl putstr
+L1:	
+	B   L1
+Prefetch_Handler:
+ 	LDR R0, =Err2
+	bl putstr
+L2:	
+	B   L2
+Abort_Handler:
+	LDR R0, =Err3
+	bl putstr
+L3:	
+	B   L3
+Hypervisor_Handler:
+	LDR R0, =Err4
+	bl putstr
+L4:	
+	B   L4
+IRQ_Handler:
+	LDR R0, =Err5
+	bl putstr
+L5:	
+	B   L5
+FIQ_Handler:
+	LDR R0, =Err6
+	bl putstr
+L6:	
+	B   L6
+.align 2
+Err0:	 .asciz "\nUndefined\n"
+Err1:	 .asciz "\nSVC\n"		
+Err2:	 .asciz "\nPrefetch\n"
+Err3:	 .asciz "\nAbort\n"
+Err4:	 .asciz "\nHypervisor\n"			
+Err5:	 .asciz "\nIRQ\n"			
+Err6:	 .asciz "\nFIQ\n"
+Err7:	.asciz "\nReset_handler\n"

@@ -146,7 +146,8 @@ EnableMMU_caches:
 	ORR R1, R1, #(0x1 << 2) // The C bit (data cache).
 	ORR R1, R1, #(0x1 << 12) // The I bit (instruction cache).
 	ORR R1, R1, #0x1 // The M bit (MMU).
-	MCR P15, 0, R1, C1, C0, 0 // Write SCTLR.
+	MCR P15, 0, R1, C1, C0, 0 // Write SCTLR.	
+	//MCR P15, 4, R1, C1, C0, 0 // Write ??SCTLR.
 	DSB
 	ISB
 

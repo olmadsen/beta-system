@@ -9,9 +9,9 @@ ls %1 %BLA%/rpi.x %BL%/runbeta-arm.c %BLA%/qbeta-clib.c  %BLA%/qbeta-slib.S  %BL
 
 :: echo arm-none-eabi-gcc -O0 -DRPI3 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv8-a -mtune=cortex-a53 -nostartfiles -g -Wl,-T,%BLA%/rpi.x %1 %BL%/runbeta-arm.c %BLA%/qbeta-clib.c %BLA%/qbeta-slib.S %BLA%/init_mmuL.S -o kernel.elf
 
-::arm-none-eabi-gcc -O0 -DRPI3 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv8-a -mtune=cortex-a53 -nostartfiles -g -Wl,-T,%BLA%/rpi.x %1 %BL%/runbeta-arm.c %BLA%/qbeta-clib.c %BLA%/qbeta-slib.S %BLA%/init_mmuL.S -o kernel.elf
+arm-none-eabi-gcc -O0 -DRPI3 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv8-a -mtune=cortex-a53 -nostartfiles -g -Wl,-T,%BLA%/rpi.x %1 %BL%/runbeta-arm.c %BLA%/qbeta-clib.c %BLA%/qbeta-slib.S %BLA%/init_mmuL.S -o kernel.elf
 
-arm-none-eabi-gcc -O0 -DRPI3 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv8-a -mtune=cortex-a53 -nostartfiles -g -Wl,-T,%BLA%/rpi.x %1 %BL%/runbeta-arm.c %BLA%/qbeta-clib.c %BLA%/qbeta-slib-ARM-support.S %BLA%/startup-ARM-support.S -o kernel.elf
+::arm-none-eabi-gcc -O0 -DRPI3 -mfpu=neon-vfpv4 -mfloat-abi=hard -march=armv8-a -mtune=cortex-a53 -nostartfiles -g -Wl,-T,%BLA%/rpi.x %1 %BL%/runbeta-arm.c %BLA%/qbeta-clib.c %BLA%/qbeta-slib-ARM-support.S %BLA%/startup-ARM-support.S -o kernel.elf
 
 echo     Hello
 
