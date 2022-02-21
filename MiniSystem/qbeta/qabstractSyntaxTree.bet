@@ -1665,7 +1665,19 @@ AbstractSyntaxTree: Tree
        do inner
        #);
      Signature:< Scope
-       (* In xbeta, Signature have subpatterns UnarySignature, etc *)
+       (* In xbeta and qbeta, Signature have subpatterns UnarySignature, etc.
+        * There is some mess with how a signature is represented
+        * unary: Signature(name(bar),Arguments()) 
+        * function: Signature(name(foo),Argumnets())
+        * binary: Signature(name(++),Arguments())
+        * keyword: Signature(Arguments(name(@go)))
+        * All arguments are in-argis in Items
+        * Attributes:
+        *    id: ^text
+        *    args: ^Arguments
+        *    type:
+        *    isKeyWord,isNewFatCommaSig
+        *)
        (# PT:: 
             (# inDecl: @boolean
             enter inDecl
@@ -1706,7 +1718,16 @@ AbstractSyntaxTree: Tree
                if)
             #);
           Label:: (# do 'Signature' -> lab[] #);
-          PP::(# do Label -> lx.append #);
+          PP::
+            (# 
+            do Label -> lx.append; 
+               ' id="' -> lx.append; id[] -> lx.append; '"' -> lx.put;
+               ' isKW=' -> lx.append; 
+               (if isKeyWord then 'T' -> lx.put else 'F' -> lx.put if);
+               ' isNewFatKW=' -> lx.append; 
+               (if isNewFatCommaSig then 'T' -> lx.put else 'F' -> lx.put if);
+               ' L=' -> lx.append; type.label -> lx.append
+            #);
           type: ^SigType;
           SigType: Node 
             (# id: ^text;
@@ -1744,7 +1765,7 @@ AbstractSyntaxTree: Tree
             #);
           Function:< SigType
             (# label:: (# do 'Function' -> lab[] #);
-               PT:: (# do id[] -> lx.puttext; (pos,break,inDecl) -> args.PT #);
+               PT:: (#do id[] -> lx.puttext; (pos,break,inDecl) -> args.PT #);
                copyAST::
                  (#
                  do (id[],args[],isKeyWord) -> FunctionSigGen -> nAST[]
@@ -1777,6 +1798,9 @@ AbstractSyntaxTree: Tree
                if);
                (if args[] <> none then args[] -> append if);
             #);
+          (* Keyword = Signature(args)
+           * else    = Signature(name(id),args?)
+           *)
        enter(init) 
           (* OBS! (init[with only enter id[]],isKeyWord) does not work 
            * Perhaps compiler error!?
@@ -1792,7 +1816,7 @@ AbstractSyntaxTree: Tree
      UnarySigGen: Sig_Generator (# do id[] -> sig.Unary -> sig.type[] #);
      FunctionSigGen: Sig_Generator(# do id[] -> sig.Function -> sig.type[] #);
      KeyWordSigGen: Sig_Generator(# do id[] -> sig.KeyWord -> sig.type[] #);
-     BinarySigGen: Sig_Generator(# do id[] -> sig.Binary -> sig.type[] #);     
+     BinarySigGen: Sig_Generator(# do id[] -> sig.Binary -> sig.type[] #);
      Arguments:< Node
        (# elm:< Item;
           PT:: 
@@ -1825,8 +1849,8 @@ AbstractSyntaxTree: Tree
                        scanSons
                        (# 
                        do 'in ' -> lx.puttext; 
-                          (* if current.isDataItem then current is not marked as
-                           * inArg since it is in the arg list
+                          (* if current.isDataItem then current is not marked
+                           * as inArg since it is in the arg list
                            * Only dataitems in maipart are marked as inArg
                            *)
                           (pos,break) -> current.PT; 
@@ -1836,7 +1860,8 @@ AbstractSyntaxTree: Tree
                        '(' -> lx.put;
                        scanSons
                        (# 
-                       do (pos,break) -> current.PT; (if not isLast then ',' -> lx.put if) 
+                       do (pos,break) -> current.PT; 
+                          (if not isLast then ',' -> lx.put if) 
                        #);
                        ')' -> lx.put
                    if)
@@ -1855,7 +1880,7 @@ AbstractSyntaxTree: Tree
            * {S1} and {S2} parse to Argumens with inBraces = true
            *)
           isArguments:: TrueValue;
-          isNewKeyWord: @boolean; (* as in @if: ... with only >> args are used*)
+          isNewKeyWord: @boolean; (*as in @if: ... with only >>args are used*)
           copyAST::<
             (# nArgs: ^Arguments
             do (*'arguments:'->puttext; dopt -> putline;*)
@@ -2229,27 +2254,12 @@ AbstractSyntaxTree: Tree
                  #);
             #);
           isCore:: (#do OG.IS.isCore -> value #);
-          noOfArgs: IntegerValue
-            (# superPtn: ^Pattern
-            do (if
-                   not OG.super.lastHasActualArgs and
-                   (OG.super.ATd[] <> none) and
-                   (OG.super.ATd.isPattern) (* if not, semnatic error *)
-                   then
-                   &(OG.super.ATd[]->superPtn[]).noOfArgs -> value
-               if);
-               (*'*** noOfArgs: ' -> puttext; sig.dopt -> puttext;
-               ' ' -> put; value -> putint;*)
-               value + sig.args.length -> value;
-               (* ' -> put; value -> putint; newline*)
-            #);
           scanArgs:
             (# currentArg: ^Decl; superPtn: ^Pattern
-            do (*'pattern:scanArgs:'->puttext; noOfArgs -> putint;
-               ' isNK:'->puttext; sig.args.isNewKeyWord -> putboolean;
-               newline;*)
-               (if (noOfArgs = 0) or sig.args.isNewKeyWord then
-                   (* Formal args may be declared as: >> A: ?integer *)
+            do (*'pattern:scanArgs:isNK:'->puttext; 
+                * sig.args.isNewKeyWord -> putboolean; newline;*)
+               (if true or sig.args.isNewKeyWord then
+                   (* Formal args may be declared as: in A:  var integer *)
                    OG.IS.scanItemArgs
                    (#
                    do currentArg[] -> this(scanArgs).currentArg[];
@@ -3813,7 +3823,11 @@ AbstractSyntaxTree: Tree
             #);
           length:: (#do  T.length -> value #);
           label:: (# do 'name:' -> lab[] #);
-          PP:: (# do label -> lx.append; ' ' -> lx.put; T[] -> lx.append #);
+          PP:: 
+            (# 
+            do label -> lx.append; ' ' -> lx.put; 
+               '"' -> lx.put; T[] -> lx.append; '"' -> lx.put
+            #);
           copyAST:: (#do T.copy -> Name -> nAST[] #)
        #);
      Const:< Lexem
