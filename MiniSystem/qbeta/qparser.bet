@@ -534,41 +534,49 @@ parser: AbstractSyntaxTree
         * %put x: ?integer ... :
         * ++ V: ?integer: 
         *)
-       (# sym,id: ^text; sig: ^Signature; args: ^Arguments;
+       (# sym,id: ^text; sig: ^Signature; args: ^Arguments; prevSymb: @char;
           elimArgs: (# exit true #)
        do (if lex.symb              
            // lex.symbols.idf then 
               lex.sym[] -> sym[];
               lex;
-              (if pNewFatCommaFile and (lex.symb = lex.symbols.leftBrack) then
-                  (if false then
-                      '**** pSignature:arguments: ' -> puttext;
-                      sym[] -> putline;
-                  if);
-                  lex;
-                  Arguments -> args[]; true -> args.isKeyword;
-                  (if elimArgs then
-                      (sym[],args[],true) -> KeyWordSigGen -> sig[];
-                      (* Note sym[]->sig.id[] is overwritten below *)
-                  if);
-                  sym[] -> pArgumentsX
-                  (#
-                  do (if elimArgs then
-                         D[] -> sig.append
-                      else
-                         D[] -> args.append;  
-                     if);
-                     (if false then D.dopt -> putline if)
-                  #) 
-                    -> id[];
-                  (if not elimArgs then
-                      (sym[],args[],true) -> KeyWordSigGen -> sig[];
-                  if);
-                  id[] -> sig.id[];
-                  true -> sig.isNewFatCommaSig;
-                  (if false then
-                      '**** pSignature: ' -> puttext; sig.dopt -> puttext;
-                      ' id: ' -> puttext; id[] -> putline
+              (if pNewFatCommaFile then
+                  (if lex.symb 
+                   // lex.symbols.leftBrack 
+                   // lex.symbols.leftSquare
+                   // lex.symbols.begin then
+                      lex.symb -> prevSymb;
+                      (if false then
+                          '**** pSignature:arguments: ' -> puttext;
+                          sym[] -> putline;
+                      if);
+                      lex;
+                      Arguments -> args[]; true -> args.isKeyword;
+                      (if elimArgs then
+                          (sym[],args[],true) -> KeyWordSigGen -> sig[];
+                          (* Note sym[]->sig.id[] is overwritten below *)
+                      if);
+                      (sym[],prevSymb) -> pSigArgs
+                      (#
+                      do (if elimArgs then
+                             D[] -> sig.append
+                          else
+                             D[] -> args.append;  
+                         if);
+                         (if false then D.dopt -> putline if)
+                      #) 
+                        -> id[];
+                      (if not elimArgs then
+                          (sym[],args[],true) -> KeyWordSigGen -> sig[];
+                      if);
+                      id[] -> sig.id[];
+                      true -> sig.isNewFatCommaSig;
+                      (if false then
+                          '**** pSignature: ' -> puttext; sig.dopt -> puttext;
+                          ' id: ' -> puttext; id[] -> putline
+                      if)
+                   else
+                      (sym[],arguments,false) -> UnarySigGen -> sig[]
                   if)
                else 
                   (* UnarySignature *)
@@ -610,11 +618,26 @@ parser: AbstractSyntaxTree
           if);
        exit sig[]
        #);     
-
-     pArgumentX:
+     brackAsText:
+       (# sy: @integer; T: ^Text
+       enter sy
+       do (if sy
+           // lex.symbols.leftBrack then '(' -> T[]
+           // lex.symbols.rightBrack then ')' -> T[]
+           // lex.symbols.begin then '{' -> T[]
+           // lex.symbols.end then '}' -> T[]
+           // lex.symbols.leftSquare then '[' -> T[]
+           // lex.symbols.rightSquare then ']' -> T[]
+           else
+              '?' -> T[]
+          if)
+       exit T[]
+       #);
+     pSigArg:
        (# D: ^Decl; P: ^Pattern
        do pDecl -> D[]; (* Perhaps not all decl's should be allowed *)
-          true -> D.isArg;
+          true -> D.isArg; (* when is D.isArg used ? *)
+          true -> D.isInArg;
           (if D## = pattern## then
               D[] -> P[];
               (if P.ptnKind = plainPtn then
@@ -625,39 +648,50 @@ parser: AbstractSyntaxTree
           #)if)if)
        exit D[]
        #);
-     pArgumentsX:
-       (# sym: ^Text; D: ^TopNode; id,comma: ^text
-       enter sym[]
-       do sym.copy -> comma[]; '(' -> comma.put -> name -> D[];
+     pSigArgs:
+       (# sym: ^Text; D: ^TopNode; id,comma: ^text;
+          leftB,rightB: @char
+       enter(sym[],leftB)
+       do leftB + 1 -> rightB;
+          sym.copy -> comma[]; 
+          leftB -> brackAsText -> comma.puttext -> name -> D[];
           comma.copy -> id[];
-          inner pArgumentsX;
+          inner pSigArgs;
           Loop:
             (#
-            do pArgumentX -> D[]; 
-               inner pArgumentsX;
+            do pSigArg -> D[]; 
+               inner pSigArgs;
                (if lex.symb 
-                // lex.symbols.rightBrack then
+                // rightB (*lex.symbols.rightBrack*) then
                    lex;
                    (if lex.symb 
                     // lex.symbols.fatComma then
-                       ')' -> comma[];
+                       rightB -> brackAsText -> comma[];
                        lex.sym.copy -> comma.append;
                        lex;
-                       (if lex.symb = lex.symbols.leftBrack then
-                           '(' -> comma.put -> Name -> D[];
+                       (if lex.symb 
+                        // lex.symbols.leftBrack 
+                        // lex.symbols.leftSquare
+                        // lex.symbols.begin then
+                           lex.symb -> leftB;
+                           leftB + 1 -> rightB;
+                           leftB -> brackAsText -> comma.puttext -> Name -> D[];
                            comma.copy -> id.append;
                            lex;
-                           inner pArgumentsX;
+                           inner pSigArgs;
                            restart Loop
                         else
                            111 -> syntaxError
                        if)
                     else
-                       ')' -> comma[] -> name -> D[];
+                       rightB -> brackAsText -> comma[] -> name -> D[];
                        comma.copy -> id.append;
-                       inner pArgumentsX
+                       inner pSigArgs
                    if)
                 // lex.symbols.comma then
+                   ',' -> comma[] -> name -> D[];
+                   ',' -> id.append;
+                   inner pSigArgs;
                    lex;
                    restart Loop
                if)
@@ -914,6 +948,8 @@ parser: AbstractSyntaxTree
                 if);
                 (if lex.symb 
                  // lex.symbols.comma // lex.symbols.semiColon then
+                    ',' -> sig.put;
+                    ',' -> comma[];
                     lex;
                     restart loop
                  // rightB then
