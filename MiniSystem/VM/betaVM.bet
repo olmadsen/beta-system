@@ -1614,7 +1614,7 @@ betaVM:
                            'inx: ' -> out.puttext; inx ->out.putint;
                            out.newline;                           
                            ('xpushg:',true,out[]) -> X.dump;
-                           (if isValueObj = 0 then
+                           (if (isValueObj = 0) and (size = 1) then
                                (* basic object: imply size = 1
                                 * off = 1, probably the same value
                                 * as used in QallocIndexed and
@@ -1624,9 +1624,18 @@ betaVM:
                                ix -> X.get -> value -> thisStack.vpush;
                                (X[],ix,value) -> VtoOut;
                             else (* valueObject *)
-                               inx + off + newAllocOff + 1 - 2  -> ix 
-                                 -> thisStack.vPush;
-                               X[] -> thisStack.rpush
+                               (if size > 1 then
+                                   (for i: size repeat
+                                        inx + off + newAllocOff + i - 2 
+                                          -> ix -> X.get
+                                          -> thisStack.vPush;
+                                   for)
+                                else
+                                   inx + off + newAllocOff + 1 - 2  -> ix 
+                                     -> thisStack.vPush;
+                                   X[] -> thisStack.rpush
+                               if);
+                               (*X[] -> thisStack.rpush - why ? *)
                            if);
                            ('xpushg:',true,out[]) -> thisStack.dump;
                            (thisObj[],R[],true,thisStack[],off,true,inx
@@ -1813,10 +1822,23 @@ betaVM:
                         X[] -> R[];
                         thisStack.vpop -> inx;
                         (if isValueObj = 1 then thisStack.vPop -> value (* not used *) if);
-                        (for i: size repeat
-                             (thisStack.vpop -> value,off + inx + newAllocOff - i + 1)
-                               -> R.assign;
-                        for);
+                        (# RX: [2] @integer; top: @integer;
+                        do (for i: size repeat
+                                (if size = 2 then (*  if true  ?*)
+                                    (thisStack.vpop 
+                                      -> value -> RX[top + 1 -> top]
+                                    ,off + inx + newAllocOff - i + 1)
+                                      -> R.assign;
+                                 else
+                                    (thisStack.vpop -> value,off + inx + newAllocOff - i + 1)
+                                      -> R.assign;
+                                if);
+                           for);
+                           (if size = 2 then
+                               (X[],off,RX[2],RX[1]) -> FtoOut;
+                               out.newline;
+                           if);
+                        #);
                         (X[],off + inx + newAllocOff,value) -> VtoOut;
                         ('xstoreg:',true,out[]) -> R.dump;
                         (thisObj[],thisStack[],true,R[],off,true,inx,thisCode.descInx,glsc,value) -> vStoreEvent
@@ -2686,7 +2708,7 @@ betaVM:
                            
                         (if false then float1 -> putreal; newline if);
                         float1 -> thisStack.fpush;
-                     // codes.fmult then
+                     // codes.fmult // codes.rdiv then
                         'fmult' -> exe;
                         thisStack.fpop -> float2;
                         thisStack.fpop -> float1;
