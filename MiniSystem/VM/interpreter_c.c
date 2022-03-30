@@ -1862,8 +1862,9 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 
 #ifdef TRACE
-  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
-	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
+  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i) staticOff = %i\n"
+	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc
+	  ,staticOff);
 #endif
 #ifdef EVENT
   // OBS! Y is not declared
