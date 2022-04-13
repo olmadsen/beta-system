@@ -73,6 +73,7 @@ typedef struct Block {
   char *traceFile;
   FILE *trace;
   Btemplate * origin;
+  FILE *output;
 } Block;
 
 typedef struct Event {

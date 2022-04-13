@@ -1235,6 +1235,7 @@ Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, 
 
 void dumpRstack(FILE *trace,Btemplate *stack);
 void dumpVstack(FILE *trace,Btemplate *stack);
+void dumpLscStack(FILE *trace,Btemplate * obj);
 
 #ifdef DUMP
 void StacksToOut(FILE *trace,Btemplate *thisObj, Btemplate *thisStack)//, Block *ctx)
@@ -1245,6 +1246,8 @@ void StacksToOut(FILE *trace,Btemplate *thisObj, Btemplate *thisStack)//, Block 
   dumpRstack(trace,thisStack);
   dumpVstack(trace,thisStack);
   fprintf(trace,"\n");
+  dumpLscStack(trace,thisObj);
+  dumpLscStack(trace,thisStack);
 }
 
 void dumpObj(FILE *trace,char *name,Btemplate *X){
@@ -1269,7 +1272,7 @@ void dumpStackX(Btemplate *obj);
 
 void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
 #ifdef __arm__
-  putstr("\n\n*** Run-time error: ");
+  putstr("\n\n**** Run-time error: ");
   putstr(msg);
   putstr(" obj: ");
   putstr(nameOf(thisObj));
@@ -1278,7 +1281,7 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
   putint(glsc);
   putstr("\n");
 #else
-  printf("\n\n*** Run-time error: %s\n\nObject: %s(%i) at: %i\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
+  printf("\n\n**** Run-time error: %s\n\nObject: %s(%i) at: %i\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
 #endif
   dumpStackX(thisObj);
 
@@ -1323,10 +1326,14 @@ void dumpStackX(Btemplate *obj){
     Y = obj->rstack[2];
 #ifdef __arm__
 #else
-    printf("Caller: %s(%i) at: %i thisStack: %s\n"
+    printf("caller: %s(%i) at: %i thisStack: %s\n"
 	   ,nameOf(X),topOfLsc(X,-1),topOfLsc(X,0),nameOf(Y));
 #endif
-    if (descNo(X->desc) != threadStubDescNo) dumpStackX(X);
+    if (((descNo(X->desc) == threadStubDescNo)) ||
+	(descNo(X->desc) == (threadStubDescNo - 2 ))) // mainDescNo
+	return;
+    else
+      dumpStackX(X);
   }
 }
 
@@ -1423,6 +1430,13 @@ Btemplate *rTopElm(Btemplate*stack,int inx){
   return stack->rstack[stack->rtop - inx];
 }
 
+void rswapIndexed(Btemplate *stack,int inx){
+  Btemplate *obj; int i;
+  obj = stack->rstack[stack->rtop - inx];
+  for (i = 1; i <= inx; i++)
+    stack->rstack[stack->rtop - i] = stack->rstack[stack->rtop - i + 1];
+  stack->rstack[stack->rtop] = obj;
+}
 void lscPush(Btemplate *stack,int V){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
   if ((stack->lscTop = stack->lscTop + 1) > 16 ) runTimeErrorX("lscStack overflow",stack,-1);
@@ -1430,7 +1444,7 @@ void lscPush(Btemplate *stack,int V){
 }
 
 int lscPop(Btemplate *stack){
-  if ((stack->lscTop = stack->lscTop - 1) < -1) runTimeErrorX("lscStack underflow",stack,-1);
+  if ((stack->lscTop = stack->lscTop - 1) < -1) runTimeErrorX("lscPop: lscStack underflow",stack,-1);
   return stack->lscStack[stack->lscTop + 1];
 }
 void cSaveReturn(Btemplate *obj,int descNo, int lsc){
@@ -1444,9 +1458,17 @@ void cSaveReturn(Btemplate *obj,int descNo, int lsc){
   obj->lscStack[obj->lscTop] = lsc;
 }
 
+void dumpLscStack(FILE *trace,Btemplate * obj){
+  int i;
+  fprintf(trace,"\tlscStack:top: %i [", obj->lscTop);
+  for (i = 0; i < obj->lscTop; i++){
+    fprintf(trace, "%i: %i, ",i, obj->lscStack[i]);
+  }
+  fprintf(trace,"]\n");
+}
 int cRestoreReturn(Btemplate * obj){
   //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
-  if (obj->lscTop < 0) runTimeErrorX("\n**** ERROR:  lscStack underflow\n",obj,-1);
+  if (obj->lscTop < 0) runTimeErrorX("cRestoreReturn: lscStack underflow\n",obj,-1);
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
   return V;
@@ -2308,6 +2330,7 @@ void  *interpreter(void *B){;
       int threadId;
   threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
+
   //betaWorld = thisBlock->world;
 
 #ifdef linux
@@ -2355,8 +2378,12 @@ bool traceThreads = true;
   trace = fopen(thisBlock->traceFile,"w");
   thisBlock->trace = trace;
   setbuf(trace, NULL);
-  output = fopen("output","w");
-  setbuf(output, NULL);
+  if (threadId == 0){
+    output = fopen("output","w");
+    setbuf(output, NULL);
+  }else{
+    output = thisBlock->output;
+  }
 #endif
   //printf("After trace = fopen\n");
   Btemplate *enablee = 0;
@@ -2820,14 +2847,24 @@ bool traceThreads = true;
 	vPush(thisStack,arg2);
 	break;
       case _rswap:
-	arg1 = op1(bc,&glsc); // arg1 > 1, not handled 
-	X = rPop(thisStack);
-	Y = rPop(thisStack);
+	arg1 = op1(bc,&glsc); // arg1 > 1, not handled
 #ifdef TRACE
-        fprintf(trace,"rswap %s %s\n",nameOf(X),nameOf(Y));
+        fprintf(trace,"rswap %i\n",arg1);
+#endif
+	if (arg1 > 0) {
+#ifdef TRACE	  
+	  printf("rswap: %i\n",arg1);
+#endif	  
+	  rswapIndexed(thisStack,arg1);
+	}else {
+	  X = rPop(thisStack);
+	  Y = rPop(thisStack);
+#ifdef TRACE
+        fprintf(trace,"\trswap %s %s\n",nameOf(X),nameOf(Y));
 #endif
 	rPush(thisStack,X);
 	rPush(thisStack,Y);
+	}
 	break;
       case rtn:
 	arg1 = op1(bc,&glsc);
@@ -2837,14 +2874,20 @@ bool traceThreads = true;
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
 #ifdef TRACE
-	fprintf(trace,"\n\tFROM thisObj:'%s'(descNo:%i,glsc:%i,thisStack:'%s') \n"
+	fprintf(trace,"\n\trtn:FROM thisObj:'%s'(descNo:%i,glsc:%i,thisStack:'%s') \n"
 		,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 #endif
 	X = thisObj;
+#ifdef TRACE
+	StacksToOut(trace,thisObj,thisStack);
+#endif	
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
 	glsc = cRestoreReturn(thisObj);
 	currentDescNo = cRestoreReturn(thisObj);
+#ifdef TRACE	
+	StacksToOut(trace,thisObj,thisStack);
+#endif	
 	bc = codeFromDescNo(currentDescNo);
         if (! isXbeta)rPush(thisStack,X);
 #ifdef TRACE
@@ -2941,7 +2984,7 @@ bool traceThreads = true;
 	break;
       case tstOriginNone:
 #ifdef TRACE
-	fprintf(trace,"tstOriginNone");
+	fprintf(trace,"tstOriginNone\n");
 #endif
 	if (rTopElm(thisStack,0) == NULL)
 	  runTimeErrorX("Origin of invoke is NONE",thisObj,glsc); 
@@ -3296,7 +3339,9 @@ bool traceThreads = true;
 	    printf("%c",(char)arg2);
 	    fprintf(output,"%c",(char)arg2);
 	    fflush(output);
-	    fprintf(trace,"put: %c\n",(char)arg2);	    
+#ifdef TRACE	    
+	    fprintf(trace,"put: %c\n",(char)arg2);
+#endif
 	    //printf("\n");
 	    //fflush(stdout); apparently using stdout gives a linker error!?
 	    //fpurge(stdout);
@@ -3391,6 +3436,7 @@ bool traceThreads = true;
 	    B->top = Y;
 	    B->world = thisBlock->world;
 	    B->origin = NULL;
+	    B->output = output;
 #ifdef TRACE
 	    //printf("\ncurrentDescNo: %i %i %i threadNo: %i\n"
 	    //,B->currentDescNo,B->glsc,(int)B->bc,threadNo);
