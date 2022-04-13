@@ -1003,7 +1003,7 @@ AbstractSyntaxTree: Tree
           PT:: 
             (#
             do (if true then
-                   (*'--' -> lx.puttext; sig.id[] -> lx.puttext*)
+                   '--' -> lx.puttext; sig.id[] -> lx.puttext; lx.newline
                 else
                    (pos,break) -> MD.PT 
                if);
@@ -1154,10 +1154,12 @@ AbstractSyntaxTree: Tree
              * when scanning args of foo, args in bar shall not be included
              * since they are bound to e1,e2,e3
              *)
-            (# currentArg: ^Decl; E: ^Exp; BE: ^BracketedExp
+            (# skipMain: @boolean;
+               currentArg: ^Decl; E: ^Exp; BE: ^BracketedExp
+            enter skipMain
             do (if (super.ATd[] <> none) then
                    (super.last) -> E[];
-                   (if 'BracketedExp' -> (E.label).equal then
+                   (if (E[] <> none) and ('BracketedExp' ->(E.label).equal) then
                        (*'**** scanNonBoundItemArgs: ' -> puttext;*)
                        ((E[]-> BE[]).IV.last) -> E[]; (* hack, must scan IV *)
                        (*E.dopt -> putline*)
@@ -1172,7 +1174,8 @@ AbstractSyntaxTree: Tree
                        E.dopt -> putline;
                        dopt -> putline;
                    if);
-                   (if (E.args[] <> none) and (E.args.noOfSons > 0) then
+                   (if (E[] <> none) and (E.args[] <> none)
+                       and (E.args.noOfSons > 0) then
                        (if false then
                            '**** scanNonBoundItemArgs:Bound in super:'->puttext;
                            (if sig[] <> none then 
@@ -1188,23 +1191,25 @@ AbstractSyntaxTree: Tree
                        #)
                    if);
                if);
-               (if false and (sig[] <> none) then 
-                   (* sig is included in scanDecls *)
-                   sig.scanSons
+               (if not skipMain then
+                   (if false and (sig[] <> none) then 
+                       (* OBS! do we need to scan sig with new syntax? *)
+                       (* sig is included in scanDecls *)
+                       sig.scanSons
+                       (#
+                       do (if current.isDecl then
+                              current[] -> currentArg[];
+                              inner scanNonBoundItemArgs
+                          if)
+                       #)
+                   if);
+                   scanDecls
                    (#
-                   do (if current.isDecl then
-                          current[] -> currentArg[];
+                   do currentDcl[] -> currentArg[];
+                      (if currentArg.isInArg then
                           inner scanNonBoundItemArgs
                       if)
-                   #)
-               if);
-               scanDecls
-               (#
-               do currentDcl[] -> currentArg[];
-                  (if currentArg.isInArg then
-                      inner scanNonBoundItemArgs
-                  if)
-               #)
+               #)if)
             #);
           scanItemArgs:
             (# currentArg: ^Decl; vn,rn: @integer
@@ -1252,6 +1257,18 @@ AbstractSyntaxTree: Tree
                         args[top - i + 1][] -> currentArg[];
                         inner scanItemArgsReverse
                for)if)
+            #);
+          noOfRefArgs: 
+            (# N: @integer
+            do true -> scanNonBoundItemArgs
+               (# DI: ^DataItem
+               do (if currentArg.isDataItem 
+                      and not (currentArg[]->DI[]).isValue then
+                      N + 1 -> N;
+                      currentArg.dopt -> putline
+                  if)
+               #)
+            exit N
             #);
           theObjectGenerator:: (# do father[] -> OGx[] #);
           isImmutable::

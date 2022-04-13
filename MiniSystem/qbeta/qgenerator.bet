@@ -81,6 +81,21 @@ generator: variants
           popReturn:: (# do '\nModuleItem:popReturn'->putline #);
           findNextImp:: (# do bcp -> md.findNextImp -> impx[] #);          
        #);
+     newProperty::
+       (# qgen::  
+            (# 
+            do (if '%module' -> propId.T.equalNCS then
+                   (if traceModules then
+                       '**** newProperty:qGen: ' -> puttext; dopt -> putline;
+                   if);
+                   cd.com(#do 'newProperty:qGen: ' -> TT; dopt -> TT #);
+                   args.scanSons
+                   (# inv: ^Invocation
+                   do (true,0,0) -> (current[]->inv[]).ATd.qGen
+                   #)
+               if)
+            #)
+       #);
      DataItem::
        (* Cases
         *    C1: val integer(12)
@@ -1647,7 +1662,8 @@ generator: variants
                  #);   
                mainPathModule: ^Module;     
                CC: ^CallChain; superVar: ^Variant;
-               superIsPrimitive: @boolean
+               superIsPrimitive: @boolean;
+               noOfRefArgsInSuper: @integer;
                  (*enter(N[],sig[],descNo,Super[],OG[],CC[],var[])*)
             enter(OG[],CC[],var[])
             do (* Is called with descNo = NewDescNo *)
@@ -1655,7 +1671,7 @@ generator: variants
                 * The actual variant should have info about: 
                 * actual descNo and actual storage layout 
                 *)
-               (* the following dataitems used to be argumenst of genClass *)
+               (* the following dataitems used to be arguments of genClass *)
                OG.OGid -> N[];
                OG.sig[] -> sig[];
                newDescNo -> descNo;
@@ -1748,12 +1764,29 @@ generator: variants
                        (if traceNoGlobals then
                            cd.com(#do 'No globals,no origin'->TT; dopt->TT; print #)
                        if)
-                    else                
+                    else
+                       (* if super has ref args, then these are on the stack
+                        * and top one will be assigned to origin
+                        *)
+                       (if true then
+                           (if (noOfRefArgs -> noOfRefArgsInSuper) > 0
+                               then
+                               noOfRefArgsInSuper -> cd.rswap
+                           if)
+                        else
+                           (if superDesc[] <> none then
+                           (if (superDesc.noOfRefArgs -> noOfRefArgsInSuper) > 0
+                               then
+                               noOfRefArgsInSuper -> cd.rswap
+                           if)
+                       if)if);
                        cd.tstOriginIsNone;
                        ('origin',newOriginOff) -> cd.rstore;
                        (if (origin[] -> originIsValue) then
                            ('origin.valueOff',NewOriginOff + 1) -> cd.store
-                   if)if);
+                       if);
+
+                   if);
                    (if not OG.isValueObj then 
                        (if not ((superDesc[] <> none) 
                            and not superDesc.isPrimitive) then
@@ -1884,6 +1917,9 @@ generator: variants
                               E.handleVargs
                            #);
                        if);
+                       (if noOfRefArgsInSuper > 0 then 
+                           noOfRefArgsInSuper -> cd.rswap 
+                       if);
                        superDesc.newDescNo -> cd.toSuper;
                        cd.markEnterE; 
                     else
@@ -1907,7 +1943,8 @@ generator: variants
                    scanSons
                    (# I: ^Item; MP: ^Module
                    do current[] -> I[];
-                      (if I.isDecl then
+                      (if true
+                       // I.isDecl then
                           (if not I.isPattern or I.isVirtual then
                               (false,0,0) -> current.Qgen -> MP[];
                               (if MP[] <> none then
@@ -1916,7 +1953,10 @@ generator: variants
                            else
                               (if I[] = StringDecl[] then
                                   (false,0,0) -> current.Qgen if) 
-                   if)if)#);
+                          if)
+                       // I.isNewProp then
+                          (false,0,0) -> current.Qgen -> MP[];
+                   if)#);
                    (if mainPathModule[] <> none then
                        (*'gen:mainPathModule: ' -> puttext;
                         * mainPathModule.DI.OG.IS.newDescNo -> putint;  
