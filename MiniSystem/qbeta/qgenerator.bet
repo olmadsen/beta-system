@@ -736,8 +736,9 @@ generator: variants
           #)              
        #);
      callInvoke:
-       (# theOG: ^ObjectGenerator; staticOff: @integer; T: ^text
-       enter(theOG[],staticOff)
+       (# theOG: ^ObjectGenerator; staticOff: @integer; fromStub: @boolean; 
+          T: ^text
+       enter(theOG[],staticOff,fromStub)
        do cd.lcom(#do 'OGid:'->TT; theOG.OGid -> TT;
                     ' OGidx: '-> TT; theOG.OGidx -> TT;
                     ' OGidv: ' -> TT; theOG.OGidv -> TT
@@ -802,16 +803,21 @@ generator: variants
                        ' ' ->  TT; (theOG.IS.topSuper).encOG.OGidy -> TT
                     #)
           #);
-          (if emitLLVM then
+          (if (newOutgen or emitLLVM) and not fromStub then
               L:
                 (if theOG.isValueObj then
+                    '**** OG is value: ' -> puttext; theOG.dopt -> putline;
                  else
                     theOG.IS.scanAllItemDecls
                     (# DI: ^DataItem
                     do (if currentDcl.isOutArg then
                            currentDcl[] -> DI[];
-                           (if DI.OG.isBasicValue then
+                           (if true
+                            // DI.OG.isBasicValue then
                                (T[],DI.newOff) -> cd.pushg;
+                            // DI.OG.isValueObj then
+                               '**** out arg: ' -> puttext; DI.dopt -> putline;
+                               DI.newOff -> cd.pushConst
                             else
                                (T[],DI.newOff) -> cd.rPushg;
                            if);
@@ -1075,7 +1081,7 @@ generator: variants
                        (* Invoke the singular object *)
                        cd.com(#do 'before objTmpStack:add: '->TT;
                                 IS.newDescNo -> II; ' ' -> TT; OGid -> TQ #);
-                       (this(ObjectGenerator)[],staticOff) -> callInvoke;
+                       (this(ObjectGenerator)[],staticOff,false) -> callInvoke;
                        L:
                          (if not useReturnValue then 
                              IS.scanAllItemDecls
@@ -1531,10 +1537,12 @@ generator: variants
                                      OG.getdescNo -> putint; 
                                      newline;
                                  if);
-                                 (stubN[],dNo,false) -> cd.classDef;
+                                 (stubN[],dNo,false) -> cd.classDef
+                                 (#
+                                 do (2,OG.OGidx) -> addR
+                                 #);
                                  (OG.OGidx,OG.getDescNo,false)  
                                    -> cd.classDef;
-                                 
                                  (stubN[],dNo,false,ptn.OG.IS.newDescNo
                                  ,newOriginOff,0,false) 
                                    -> cd.class;
@@ -1576,24 +1584,32 @@ generator: variants
                                      (if OG.IS.isEmpty and 
                                          not OG.super.hasVirtualArgs 
                                          then
-                                         (OG.super.Atd.OG[],0)
+                                         (OG.super.Atd.OG[],0,true)
                                            -> callInvoke
                                       else (* never happens! *)
-                                         (OG[],0) -> callInvoke
+                                         (OG[],0,true) -> callInvoke
                                      if)
                                   else
                                      (id[],OG.getDescNo,OG.IS.objSize,0,true)
                                      -> cd.invoke
                                  if);
                                  leaveLab -> cd.defLab;
+                                 (if newOutGen then
+                                     (* move refTo thisObj to caller stack *)
+                                     cd.pushThis;
+                                     (stubT[],2) -> cd.rstoreg;
+                                     cd.setThisStack;
+                                     cd.pushThis;
+                                     (stubT[],2) -> cd.rpushg;
+                                 if);
                                  'D' -> cd.rtn;
                                  (* The vdtTableAt here overrides the one in 
                                   * HandleVirtArgument (check it)
                                   *)
-                                 (objSize,false,newBasicProp.OSDvisibility) 
+                                 (2(*objSize*),false,newBasicProp.OSDvisibility)
                                    -> cd.endClass;
                                  cd.mkLLVMvirtualDefs;
-                                 cd.com(#do 'vdt:a:descNo'-> TT; newDescNo -> II;
+                                 cd.com(#do 'vdt:a:descNo'-> TT; newDescNo->II;
                                           ' dNo:'->TT; dNo -> II; 
                                           ' newDescNo: ' -> TT; newDescNo->II
                                        #);
@@ -2010,12 +2026,14 @@ generator: variants
                              if);
                              cd.rtnV
                           else
-                             scanAllItemDecls
-                             (# 
-                             do (if currentDcl.isOutArg then
-                                    currentDcl[] -> encOG.pushRtnV;
-                                    leave L
-                             if)#);
+                             (if not newOutGen then
+                                 scanAllItemDecls
+                                 (# 
+                                 do (if currentDcl.isOutArg then
+                                        currentDcl[] -> encOG.pushRtnV;
+                                        leave L
+                                 if)#)
+                             if);
                              cd.setThisStack;
                              cd.pushThis
                          if);
@@ -2377,15 +2395,18 @@ generator: variants
                          if);
                          
                          cd.com(#do 'handleVirtualArgs: ' -> TT; name[]-> TQ;nl;
-                                  'E: ' -> TT; E.label->TT; ' ' -> TT; E.dopt -> TQ; nl;
+                                  'E: ' -> TT; E.label->TT; ' ' -> TT; 
+                                  E.dopt -> TQ; nl;
                                   'formalArg: '-> TT; formalArg.dopt -> TQ;nl;
                                   'actualArg: '-> TT; actualArg.dopt -> TQ;
                                #);
-                         cd.com(#do 'OGx:'->TT; OGx.label->TT; ' '->TT; OGx.dopt -> TQ #);
+                         cd.com(#do 'OGx:'->TT; OGx.label->TT; ' '->TT; 
+                                  OGx.dopt -> TQ #);
                          
                          cd.com(#do 'VDT:q:'->TT; 
                                   formalArg.off -> II;
-                                  ' (actualArg.desc).newDescno: ' -> TT; descno ->II;
+                                  ' (actualArg.desc).newDescno: ' -> TT; 
+                                  descno ->II;
                                   ' (OGx.desc).newDescNo: ' -> TT;
                                   (OGx.desc).newDescNo ->II; 
                                #);
@@ -2399,10 +2420,11 @@ generator: variants
                              OGX.dopt -> puthead;
                          if);
                          
-                         (*should be delayed to  generation of Stub - but how?
-                          * and howdo we know if this is a singular function ptn?
-                          * perhpas we juts need the descMo of stub?
-                          * cd.vdtTable places it at the right descInc
+                         (* should be delayed to generation of Stub - but how?
+                          * and how do we know if this is a singular function 
+                          * ptn?
+                          * perhpas we just need the descMo of stub?
+                          * cd.vdtTable places it at the right descInx
                           *)
                          
                          (* for OD=(OGx.desc).newDescNo, 
