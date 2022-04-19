@@ -792,7 +792,7 @@ generator: variants
               * rStack = [..., possible origin, callee]
               *)
              (if false then
-                 '\n**** invoke: ' -> puttext; T[] -> putline;
+                 '\n**** invoke:stub ' -> puttext; T[] -> putline;
                  '** stack: ' -> puttext; cd.stack.print -> putline;
              if);
              
@@ -804,27 +804,31 @@ generator: variants
                     #)
           #);
           (if (newOutgen or emitLLVM) and not fromStub then
-              L:
-                (if theOG.isValueObj then
-                    '**** OG is value: ' -> puttext; theOG.dopt -> putline;
-                 else
-                    theOG.IS.scanAllItemDecls
-                    (# DI: ^DataItem
-                    do (if currentDcl.isOutArg then
-                           currentDcl[] -> DI[];
-                           (if true
-                            // DI.OG.isBasicValue then
-                               (T[],DI.newOff) -> cd.pushg;
-                            // DI.OG.isValueObj then
-                               '**** out arg: ' -> puttext; DI.dopt -> putline;
-                               DI.newOff -> cd.pushConst
-                            else
-                               (T[],DI.newOff) -> cd.rPushg;
+              (if true then
+                  (theOG[],T[]) -> pushOut
+               else
+                  L:
+                    (if theOG.isValueObj then
+                        '**** OG is value: ' -> puttext; theOG.dopt -> putline;
+                     else
+                        theOG.IS.scanAllItemDecls
+                        (# DI: ^DataItem
+                        do (if currentDcl.isOutArg then
+                               currentDcl[] -> DI[];
+                               (if true
+                                // DI.OG.isBasicValue then
+                                   (T[],DI.newOff) -> cd.pushg;
+                                // DI.OG.isValueObj then
+                                   '**** out arg: ' -> puttext; 
+                                   DI.dopt -> putline;
+                                   DI.newOff -> cd.pushConst
+                                else
+                                   (T[],DI.newOff) -> cd.rPushg;
+                               if);
+                               leave L
                            if);
-                           leave L
-                       if);
-                       (* callee is on rtop of rStack *)
-          #)if)if)
+                           (* callee is on rtop of rStack *)
+          #)if)if)if)
        #);
      ObjectGenerator::
        (# isArgOfE: ^Exp;
@@ -991,16 +995,15 @@ generator: variants
              *)
             (# gdb:: 
                  (#
-                 do OGid -> TQ;
+                 do 'OGid:' -> TT; OGid -> TQ;
                     (if IS.isEmpty then 
-                        'IS.isempty!' -> TT 
+                        ' IS.isempty!' -> TT 
                      else
-                        'singular!' -> TT
+                        ' singular!' -> TT
                     if);
-                    ' staticOff: '-> TT; staticOff -> II;
-                    ' descNo: ' -> TT; IS.newDescno->II;
-                    ' top:'->TT; Qvariants.top -> II; '\n' -> TT;
-                    'superAdj: ' -> TT; superAdj -> II
+                    ' staticOff='-> TT; staticOff -> II;
+                    ' descNo=' -> TT; IS.newDescno->II;
+                    ' superAdj=' -> TT; superAdj -> II
                  #);
                printQoff:
                  (#
@@ -2706,7 +2709,8 @@ generator: variants
             #);
           invoke:: 
             (# 
-            do (rec[],E[],useReturnValue,staticOff,CC[],adr[]) 
+            do cd.com(#do 'ptn:invoke: ' -> TT; useReturnValue -> BB#);
+               (rec[],E[],useReturnValue,staticOff,CC[],adr[]) 
                  -> currentPtnKind.invoke 
             #);
           popReturn:
@@ -2996,37 +3000,46 @@ generator: variants
           Qgen:: 
             (# gdb:: 
                  (# 
-                 do scanSons
+                 do ' useRtnV:'->TT; useReturnValue -> BB;
+                    scanSons
                     (# ptn: ^Pattern; OI: ^ObjectInvocation
                     do (if (current## = ObjectInvocation##)
                            and 
                            ((current[] -> OI[]).ATD## = pattern##) then
                            OI.ATd[] -> ptn[];
-                           ' descNo: ' -> TT;
-                           ptn.OG.IS.newDescNo -> II;
-                           ' top: ' -> TT;
-                           PTN.OG.Qvariants.top -> II
+                           ' descNo: ' -> TT; ptn.OG.IS.newDescNo -> II;
+                           
                        if)
                     #)                                         
                  #);
                rec,E: ^Exp; T: ^Text;
+               IVinx,IVlength: @integer; noOrigin: @boolean;
                needOrigin: booleanValue
                  (# IT: ^Items; Ex: ^Exp
                  do true -> value;
                     cd.com(#do 'needorigin:'-> TT; dopt -> TQ #);
                     scanSons
                     (#
-                    do current[] -> E[]; 
-                       (if E.ATd.isPattern and not E.isConstLiteral and (Ex[] = none) then 
-                           E[] -> Ex[] if);
-                       (* if-stmt below is superflouos *)
+                    do IVlength + 1 -> IVlength;
+                       current[] -> E[]; 
+                       (if E.ATd.isPattern and not E.isConstLiteral 
+                           and (Ex[] = none) then 
+                           E[] -> Ex[];
+                           IVlength -> IVinx
+                       if);
+                       (* if-stmt below is superflouos?
+                        * not clear why superflouos!?
+                        * and what goes non here?
+                        *)
                        (if not isLast then E[] -> rec[] 
                         else
-                           (if isFirst then E[] -> rec[] -> Ex[]
+                           (if isFirst then 
+                               E[] -> rec[] -> Ex[];
+                               IVlength -> IVinx                               
                        if)if)
                     #);
                     cd.com(#do 'needOrigin:E:'->TT; E.dopt -> TQ;
-                             ' E.ATd:'-> TT; E.atd.dopt -> TQ #);
+                             ' E.ATd:'-> TT; E.ATd.dopt -> TQ #);
 
                     (if not E.ATd.isPattern then (* DataItem *)
                         cd.com(#do 'needOrigin:dataItem:leave'->TT #);
@@ -3043,34 +3056,34 @@ generator: variants
                         if);
                     if);
                     (if Ex[] = none then
-                        'needOrigin: Ex is none: ' -> puttext; dopt -> putline
+                        'needOrigin: Ex is none: ' -> puttext; dopt -> putline;
+                        leave needOrigin
+                    if);
+                    Ex[] -> E[];
+                    Ex.ATd.desc -> IT[]; 
+                    (if IT.noGlobals and elimOrigin then
+                        cd.com(#do 'Ex!LoadOrign:no:loadOrigin: ' -> TT;
+                                 IT.encOG.doPT -> TQ #);
+                        (if value and false then
+                            '!!! needOrigin:conflict:A: ' -> puttext; 
+                            dopt -> puttext;
+                            ' E: ' -> puttext; E.dopt -> puttext;
+                            ' Ex: ' -> puttext; Ex.dopt -> putline
+                        if);
+                        false -> value;
                      else
-                        Ex[] -> E[];
-                        Ex.ATd.desc -> IT[]; 
-                        (if IT.noGlobals and elimOrigin then
-                            cd.com(#do 'Ex!LoadOrign:no:loadOrigin: ' -> TT;
-                                     IT.encOG.doPT -> TQ #);
-                            (if value and false then
-                                '!!! needOrigin:conflict:A: ' -> puttext; dopt -> puttext;
-                                ' E: ' -> puttext; E.dopt -> puttext;
-                                ' Ex: ' -> puttext; Ex.dopt -> putline
-                            if);
-                            false -> value;
-
-                         else
-                            (if not value then
-                                '!!! needOrigin:conflict:B: ' -> puttext; dopt -> puttext;
-                                ' E: ' -> puttext; E.dopt -> puttext;
-                                ' Ex: ' -> puttext; Ex.dopt -> putline
-                            if); 
-                            cd.com(#do 'doNeedOrigin:Ex:'->TT; Ex.dopt -> TQ #)
-                    if)if); 
+                        (if not value then
+                            '!!! needOrigin:conflict:B: ' -> puttext; 
+                            dopt -> puttext;
+                            ' E: ' -> puttext; E.dopt -> puttext;
+                            ' Ex: ' -> puttext; Ex.dopt -> putline
+                        if); 
+                        cd.com(#do 'doNeedOrigin:Ex:'->TT; Ex.dopt -> TQ #)
+                    if);
+                    not value -> noOrigin
                  #);
                done: @boolean
-            do (if false then
-                   'Invocation:Qgen:' -> puttext; dopt -> putline;
-               if);
-               (* for P1.X := P2.Y,
+            do (* for P1.X := P2.Y,
                 * we need no origin for P1 (and X!?)
                 * we need adress of P1 to be added address of X to get embedded
                 * adr of X
@@ -3082,42 +3095,44 @@ generator: variants
                (* The code below is ugly - we should not test for 
                 * BracketedExp, but just call a virtual method
                 * Same for isConstant check
-                * Also needOrigin must be clean up
+                * Also needOrigin must be cleaned up
                 * Alltogether we should rewrite computeAdr to include
-                * handling of constants, patterns with no origin and bracketedExp
+                * handling of constants, patterns with no origin 
+                * and bracketedExp
                 *)
                scanSons
                (# BE: ^BracketedExp
-               do cd.com(#do current.label -> TT; current.dopt -> TT  #);
+               do cd.com(#do 'checkFor:BE:'->TT; current.label->TT; 
+                           ' '->TT; current.dopt -> TT #);
                   (if 'BracketedExp' -> (current.label).equalNCS then
                       current[] -> BE[];
                       (if BE.noOfSons > 1 then
                           cd.com(#do 'BE:sons: ' -> TT; BE.noOfSons -> II #);
                           (useReturnValue,superAdj,staticOff) -> BE.qgen;
                           true -> done;
-                      if)
-                  if)
-               #);
+               if)if)#);
                (if not done then
-                   isConstant(# isConst:: (#do V -> cd.pushConst; true->done #)#)
+                   isConstant(# isConst:: (#do V -> cd.pushConst; true->done#)#)
                if);
                (if not done then
                (# A: ^Address; off,argNo: @integer; isResume: @boolean
                do (if needOrigin then
-                      cd.com(#do 'IV:FISK:superAdj:' -> TT; superAdj -> II #);
+                      cd.com(#do 'IV:needOrigin;superAdj:'->TT; superAdj->II #);
                       superAdj
                         -> Address
                         -> computeAdr -> (rec[],E[],A[]);
+                   else
+                      cd.com(#do 'IV:no:needOrigin:E: ' -> TT; E.dopt -> TQ #);
                   if);
                   (if (E.ATd.primNo = vAssign_prim) and (A[] <> none) then 
                       A.off -> off 
                   if);
-                  cd.com(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj-> II; 
+                  cd.com(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II; 
                            (if A[] <>  none then A.print -> TT if); nl;
                            'rec: ' -> TT; rec.dopt -> TQ; 
                            'E: ' -> TT; E.dopt -> TQ;
-                           'isValueAssign: ' 
-                             -> TT;E.ATd.primNo = vAssign_prim -> BB; 
+                           'isValueAssign: ' -> TT;
+                           E.ATd.primNo = vAssign_prim -> BB; 
                         #);
                   (* case bar(L1) where L1 is a unit
                    * we should not push L2.magnitude
@@ -3127,7 +3142,9 @@ generator: variants
                    * E.invoke generates assigmnet for := and invocation for foo
                    *)
                   cd.com(#do'IV:before:loadArgs:superAdj='->TT; superAdj->II #);
+
                   (superAdj,off,CC[]) -> E.loadArgs -> isResume;
+
                   (if isResume and false then
                       '**** IV:isResume: ' -> puttext; dopt -> puttext;
                       ' rec: ' -> puttext;
@@ -3135,16 +3152,37 @@ generator: variants
                       ' E: ' -> puttext; E.dopt -> putline;
                   if);
                   cd.com(#do 'IV:after:loadArgsOf:' -> TT; E.dopt -> TQ;
-                           (if A[] <> none then A.print -> TT if) #);
-                  
-                  (rec[],E[],useReturnValue,staticOff,CC[],A[],isResume)
-                    -> E.invoke;
+                           (if A[] <> none then A.print -> TT if);
+                        ' useRtnV: ' -> TT; useReturnValue -> BB
+                        #);
+                  (if false then
+                      '**** IV:' ->puttext; dopt-> puttext;
+                      ' ' -> put; E.dopt -> putline;
+                      noOrigin -> putBoolean; ' ' -> put; IVinx -> putint;
+                      ' ' -> put; IVlength -> putint; newline;
+                  if);
+                  (if noOrigin and (IVinx < IVlength) then
+                      (* we come here if E does not need an origin
+                       * For IV = I1.I2.,,,.In, E  = Ej, j = IVinx, n = IVlength
+                       *)
+                      (rec[],E[],true,staticOff,CC[],A[],isResume)
+                        -> E.invoke
+                   else
+                      (rec[],E[],useReturnValue,staticOff,CC[],A[],isResume)
+                        -> E.invoke;
+                  if);
+                  cd.com(#do 'FISK:' -> TT; E.dopt -> TQ; #);
+                  (* if E does not need  an origin we have to call
+                   * invoke for Ej+1,...,En
+                   * But qGen,needOrigin,isConst,computeAdr must be rewritten!
+                   *)
                   scanSons
                   (# found: @boolean; Ey: ^Exp;
                   do (if found then
                          cd.com(#do'invoke:tail: ' -> TT; current.dopt -> TQ #);
                          (superAdj,off,CC[]) -> (current[]->Ey[]).loadArgs;
-                         (E[],current[],useReturnValue,staticOff,CC[],A[],false) 
+                         (E[],current[],not isLast (*useReturnValue*)
+                         ,staticOff,CC[],A[],false)
                            -> Ey.invoke;
                      if);
                      (if current[] = E[] then true -> found if);
@@ -3216,9 +3254,7 @@ generator: variants
                 *)
                scanSons
                (#
-               do rec[] -> pRec[];
-                  E[] -> rec[];
-                  current[] -> E[];                  
+               do rec[] -> pRec[]; E[] -> rec[]; current[] -> E[];
                   cd.com
                   (#do 'computeAdr:'->TT; j+1->j->II; ':rec:'->TT; 
                      (if rec[]<> none then rec.dopt->TQ else 'none'->TQ if);
@@ -3229,8 +3265,7 @@ generator: variants
                   (if isFirst then
                       E[] -> rec[];
                       E.pushThis;
-                      (A.superAdj,none) 
-                        -> E.loadOrigin -> (rec[],E[],orgIsVal);
+                      (A.superAdj,none) -> E.loadOrigin -> (rec[],E[],orgIsVal);
                       (* we should ignore rec and E - defined above 
                        * And A.superAdj should be eliminated *)
                       inner computeAdr;
@@ -3290,8 +3325,7 @@ generator: variants
                                * || ascii.isDigit(ch2)
                                * see comment at the beginning of computeAdr
                                *)
-                              cd.com(#do'computeAdr:loadArgs:superAdj:D:'
-                                         ->TT;
+                              cd.com(#do'computeAdr:loadArgs:superAdj:D:'->TT;
                                              superAdj -> II #);
                               (superAdj,0,none) -> rec.loadArgs;
                               (* Perhaps a combined invoke & getAdr *)
@@ -3309,8 +3343,7 @@ generator: variants
                       if)                 
                   if);
                   (if isLast then
-                      cd.com(#do 'computeAdr:isLast:E: ' -> TT; 
-                               E.dopt -> TQ #)
+                      cd.com(#do 'computeAdr:isLast:E: '->TT; E.dopt->TQ #)
                   if)
                #);
             exit(rec[],E[],A[])
@@ -3632,8 +3665,8 @@ generator: variants
                (if atd## 
                 // pattern## then
                    atd[] -> ptn[];
-                   cd.com(#do '>top:'->TT; ptn.OG.Qvariants.top -> II;
-                            'descNo:'->TT; ptn.OG.IS.newdescno -> II #);
+                   cd.com(#do 'OI:invoke:isPtn:descNo'->TT; 
+                            ptn.OG.IS.newdescno -> II #);
                 // module## then
                    'module' -> cd.comment
                 // moduleItem## then
@@ -3661,18 +3694,24 @@ generator: variants
                if);
                
                (if hasVirtualArgs then
-                   (if false then
+                   (if true then
                        '**** genStubv:'->putline; dopt -> puthead;
+                       ' ' -> put; useReturnValue -> putBoolean;
+                       newline
                    if);
                    (ATd[],'',QnewDesc->stubDescNo,ATd.OG.IS.newDescNo,0,0)
                      -> ObjStubStack.add;
                    (if ATd.isPattern then stubDescNo -> handleVargs if);
-                   ('stub',stubDescNo,4,0,false) ->  cd.invoke
+                   ('stub',stubDescNo,4,0,false) ->  cd.invoke;
+                   (if newOutGen and useReturnValue then
+                       (ATd.OG[],'stub') -> pushOut
+                   if);
                 else cd.com
                    (#do 'HEST: '->TT; doPT -> TQ; 
                       'E:' -> TT; E.dopt -> TQ;
                       ' rec:' -> TT;
-                      (if rec[] <> none then rec.dopt -> TQ if)
+                      (if rec[] <> none then rec.dopt -> TQ if);
+                      ' useRtnV:' -> TT; useReturnValue -> BB
                    #);
                    (rec[],E[],useReturnValue,staticOff,CC[],adr[],isResume) 
                      -> ATd.invoke;
@@ -3968,7 +4007,26 @@ generator: variants
                start,end: [4] @integer; 
                prev: @integer;
                doAdd: @boolean;
-               plusDecl: ^Pattern
+               plusDecl: ^Pattern;
+               getPlusRes:
+                 (#
+                 do L:
+                      plusDecl.OG.IS.scanAllItemDecls
+                      (# DI: ^DataItem
+                      do (if currentDcl.isOutArg then
+                             currentDcl[] -> DI[];
+                             (if true
+                              // DI.OG.isBasicValue then
+                                 (T[],DI.newOff) -> cd.pushg;
+                              // DI.OG.isValueObj then
+                                 '**** out arg: ' -> puttext; DI.dopt ->putline;
+                                 DI.newOff -> cd.pushConst
+                              else
+                                 (T[],DI.newOff) -> cd.rPushg;
+                             if);
+                           leave L
+                      if)#)
+                 #);
             do
                getStringPlus -> plusDecl[];
                (stringDecl.desc).newDescNo -> stringDescNo;
@@ -3993,6 +4051,7 @@ generator: variants
                       (plusDecl.sig.id[],plusDecl.OG.getDescNo,
                       plusDecl.OG.IS.objSize,0,true) 
                         -> cd.invoke;
+                      getPlusRes;
                   if);
                   (*cd.com(#do 'execute' -> TT;
                            (start[n],end[n]) -> T.sub -> TT #);
@@ -4001,21 +4060,52 @@ generator: variants
                   (plusDecl.sig.id[],plusDecl.OG.getDescNo
                   ,plusDecl.OG.IS.objSize,0,true)
                     -> cd.invoke;
+                  getPlusRes;
                   end[n] -> prev;
                   true  -> doAdd
                #);
                (*cd.com
                (#do 'pushText: ' -> TT; (prev + 1,T.length) -> T.sub -> TQ #);*)
                ((prev + 1,T.length) -> T.sub,stringDescNo)  -> cd.pushText;
-               (if doAdd then 
-                   
+               (if doAdd then                    
                    (plusDecl.sig.id[],plusDecl.OG.getDescNo
                    ,plusDecl.OG.IS.objSize,0,true) 
                      -> cd.invoke;
-
+                   getPlusRes;
                if);
                (if not useReturnValue then cd.rPop if)
             #);
+       #);
+     pushOut:
+       (# OGx: ^ObjectGenerator; id: ^text
+       enter(OGx[],id[])
+       do L:
+            (if OGx.isValueObj then
+                '**** pushOut:OG is value: ' -> puttext; 
+                OGx.dopt -> putline;
+             else
+                OGx.IS.scanAllItemDecls
+                (# DI: ^DataItem; 
+                do (if currentDcl.isOutArg then
+                       currentDcl[] -> DI[];
+                       (if true
+                        // DI.OG.isBasicValue then
+                           (if DI.OG.isFloat then
+                               (id[],DI.newOff) -> cd.fpushg;
+                            else
+                               (id[],DI.newOff) -> cd.pushg;
+                           if)
+                        // DI.OG.isValueObj then
+                           '**** pushOut:valueArg: ' -> puttext; 
+                           DI.dopt -> putline;
+                           DI.newOff -> cd.pushConst
+                        else
+                           (id[],DI.newOff) -> cd.rPushg;
+                       if);
+                       leave L
+                   if);
+                   (* callee is on rtop of rStack *)
+          #)if)
        #);
      genStub:
        (# atD: ^Pattern; N: ^Text; 
