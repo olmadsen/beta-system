@@ -696,6 +696,29 @@ AbstractSyntaxTree: Tree
             #);
           length:: (# do sig.length + 5 + OG.length -> value #);
           label:: (# do 'obj' -> lab[] #);
+          emitHTML::
+            (# F: @File; FN: ^Text
+            do (*pathToModuleFN -> putline;  *)
+               pathToModuleFN -> FN[];
+               '/' -> FN.append;
+               sig.id[] -> FN.append;
+              (* FN[] -> putline;*)
+               '.html' -> FN.append;
+               FN[] -> F.name;
+               F.openWrite;
+               doHTML -> F.putline;
+               F.close;
+               OG.IS.scanSons
+               (# I:^Item; D: ^Decl;
+                  M: ^ModuleItem
+               do (if ((current[]->I[]).isDecl) 
+                      and ((I[]->D[]).isModuleItem) then
+                      D[] -> M[];
+                      (*'BÅT: ' -> puttext; M.sig.id[] -> putline;*)
+                      M.MD.emitHTML
+                  if)
+               #);
+            #);
           HTML::
             (#
             do '<!DOCTYPE html>\n'
@@ -1011,8 +1034,27 @@ AbstractSyntaxTree: Tree
                if);
             #);
           length:: (# do MD.length -> value #);
+          HTML::
+            (# F: @File; FN: ^Text
+            do '\n%module ' -> lx.puttext; 
+               '<a href="' -> lx.append;
+               sig.id[] -> lx.puttext;
+               '/' -> lx.put;
+               sig.id[] -> lx.append; '.html'-> lx.append;
+               '">'-> lx.append;
+               sig.id[] -> lx.puttext;
+               '</a><br>\n' -> lx.append;
+               (*MD.pathToModuleFN -> putline;  
+               MD.pathToModuleFN -> FN[];
+               '/' -> FN.put;
+               sig.id[] -> FN.append;
+               '.html' -> FN.append;
+               FN[] -> F.name;
+               F.openWrite;
+               F.close*)
+            #);
           isModuleItem:: TrueValue;
-          getEntries:: (# do MD.getEntries -> (names[],entries[]) #);
+          getEntries:: (# do MD.getEntries -> (names[],entries[])#);
           Entity:: (# do MD.entity -> E[]#);
           xKind:: (# do MD.xkind -> K #);
           kind:: (# do MD.kind -> ch #);
@@ -1814,7 +1856,11 @@ AbstractSyntaxTree: Tree
             #);
           HTML::
             (#
-            do id[] -> lx.append
+            do '<b id="' -> lx.append;
+               id[] -> lx.append;
+               '">' -> lx.append;
+               id[] -> lx.append;
+               '</b>' -> lx.append
             #);
           type: ^SigType;
           SigType: Node 
@@ -2210,7 +2256,13 @@ AbstractSyntaxTree: Tree
                if);*)
                
                pos -> sig.HTML;
-               ': ' -> lx.append;
+               ':' -> lx.put;
+               (if ptnKind
+                // virtualPtn then '&lt' -> lx.append
+                // furtherPtn then ':' -> lx.put; '&lt' -> lx.append
+                // finalPtn then ':' -> lx.put
+               if);
+               ' ' -> lx.put;
                pos + 3 -> OG.HTML
             #);          
           setNewId::
@@ -3802,7 +3854,7 @@ AbstractSyntaxTree: Tree
                PT:: (# do (pos,break) -> ptnId.PT; 
                        (pos,break,false) -> args.PT #);
                length:: (# do ptnId.length + args.length -> value #);
-               HTML:: (# do ptnId.T[] -> lx.append #); 
+               HTML:: (#do (if true then pos -> ptnId.HTML else ptnId.T[] -> lx.append if)#); 
                isOP:: (#do (*this(ObjectInvocation).getUnit*) ''-> op[] #);
                copyAST::<
                  (#
@@ -3839,7 +3891,7 @@ AbstractSyntaxTree: Tree
             (# label:: (# do 'ObjectInvocation_Function' -> lab[] #);
                PP:: (# do Label -> lx.append #);
                PT:: (# do (pos,break) -> ptnId.PT; (pos,break,false) -> args.PT #);
-               HTML:: (# do ptnId.T[] -> lx.append #); 
+               HTML:: (# do (if true then pos -> ptnId.HTML else ptnId.T[] -> lx.append if)#); 
                length:: (#do ptnId.length + args.length -> value #);
                copyAST::
                  (#
@@ -4019,6 +4071,87 @@ AbstractSyntaxTree: Tree
             #)
        enter T[]
        #);
+     findFilePath:
+       (# apl,dcl,N: ^text;
+          getCh:
+            (# T: ^text; ch: @char
+            do T.setPos;
+               L: (if not T.eos then
+                      T.get -> ch; 
+                      (*'"'->put; ch -> put; '"'->put;*)
+                      suspend;
+                      restart L
+                  if);
+               0 -> ch;
+               suspend
+            exit ch
+            #);
+          aplScanner,dclScanner: @ | getCh;
+          cha,chd: @char; up: @integer; aplS,dclS,link: ^text;
+          trace: @boolean
+       enter(apl[],dcl[],N[])
+       do apl.copy -> aplScanner.T[];
+          dcl.copy -> dclScanner.T[];
+          (if false and ('entry' -> N.equalNCS) -> trace then
+              N[] -> putline;
+              aplScanner.T[] -> putline;
+              dclScanner.T[] -> putline
+          if);
+          1 -> cha -> chd;
+          L:
+            (if (cha = chd) 
+                and (cha <> 0) and (chd <> 0)
+                then 
+                aplScanner -> cha;
+                dclScanner -> chd;
+                (if trace then
+                    cha -> put; ',' -> put; chd -> put; '.' -> put;
+                if);
+                restart L 
+            if);
+          (if trace then newline; if);
+          (if trace then
+              cha -> put; ' ' -> put; chd -> put; ' ' -> put;
+              '('->put;aplScanner.T.pos -> putint; 
+              ',' -> put; apl.length -> putint;
+              ', cha=' -> puttext; cha -> putint;
+              ')'->put;
+              (*'<br>' -> lx.append;*)
+              false -> trace
+          if);
+          (aplscanner.T.pos,apl.length) -> apl.sub -> aplS[];
+          (if false then 
+              aplS[] -> lx.putline;
+              '<br>' -> lx.append; 
+          if);
+          '' -> link[];
+          (if (cha = 0) then
+              (if chd <> 0 then
+                  '**** inconsistence: ' -> puttext; apl[] -> putline;
+                  dcl[] -> putline;
+              if)
+           else
+              (aplscanner.T.pos,dcl.length) -> dcl.sub -> dclS[];
+              (if false then 
+                  dclS[] -> lx.putline;
+                  '<br>' -> lx.append; 
+              if);
+              aplS.scanAll
+              (#
+              do (if ch = '\\' then up + 1 -> up if)
+              #);
+              (for i: up + 1 repeat '..\\' -> link.append for);
+              dclS[] -> link.append;
+          if);
+          (if false then link[] -> lx.putline; if);
+          '<a href="' -> lx.append; link[] -> lx.append;
+          '#' -> lx.append;
+          N[] -> lx.append;
+          '">' -> lx.append;
+          N[] -> lx.append;
+          '</a>' -> lx.append
+       exit link[]
+       #);
      Name:< Lexem
        (# PT:: 
             (# 
@@ -4037,6 +4170,44 @@ AbstractSyntaxTree: Tree
             (# 
             do label -> lx.append; ' ' -> lx.put; 
                '"' -> lx.put; T[] -> lx.append; '"' -> lx.put
+            #);
+          HTML::
+            (# to: ^iModule; dclx: ^Decl; M: ^Module
+            do (*'name: ' -> puttext; T[] -> putline; *)
+               (if false then T[] -> lx.append; if);
+               (if ATd[] <> none then 
+                   (if false then 
+                       ' ATd:' -> putline;
+                       ' [ATd: <br>' -> lx.append;
+                       (theModule->M[]).pathToModuleFN -> lx.append;
+                       '<br>' -> lx.append;
+                   if);
+                   getDeclModule -> (to[],dclx[]);
+                   (if false then
+                       (if to[]<> none then 
+                           to.name -> lx.puttext; 
+                        else
+                           'to:???' -> lx.append;
+                       if); 
+                       '\<br>' -> lx.puttext;
+                       to.pathToFN -> lx.append;
+                       '\n<br>%' -> lx.puttext;
+                       (if dclx[] <> none then 
+                           dclx.sig.id[] -> lx.append; 
+                        else
+                           'dclx:???' -> lx.append;                       
+                       if);
+                       ':' -> lx.put;
+                       ATd.sig.id[] -> lx.append; 
+                   if);
+                   (if ((theModule->M[]).pathToModuleFN <> none)
+                       and (to.pathToFN <> none) then
+                       ((theModule->M[]).pathToModuleFN,to.pathToFN,T[])
+                         -> findFilePath;
+                   if);
+                   (if false then ']<br>' -> lx.puttext; if);
+                   
+               if)
             #);
           copyAST:: (#do T.copy -> Name -> nAST[] #)
        #);
