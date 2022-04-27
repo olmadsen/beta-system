@@ -91,6 +91,7 @@ Tree: DirectoryModules
      TopNode:
        (# vNode:< TopNode;
           label:< (# lab: ^text do '???' -> lab[]; inner exit lab[] #);
+          
           doPP:
             (#
             do &text[] -> lx[];
@@ -98,26 +99,6 @@ Tree: DirectoryModules
                PP;
                false -> mark;
             exit lx[]
-            #);
-          emitHTML:<
-            (#
-            do inner 
-            #);
-          doHTML:
-            (#
-            do &text[] -> lx[];
-               HTML
-            exit lx[]
-            #);
-          HTML:<
-            (# indent:
-                 (# pos: @integer
-                 enter pos
-                 do (for i: pos repeat '&nbsp;' -> lx.append for);
-                 #);
-                 pos: @integer
-            enter pos
-            do inner
             #);
           PP:< 
             (# 
@@ -143,6 +124,13 @@ Tree: DirectoryModules
                if);
             exit lx[] 
             #); 
+          doP:
+            (# pos: @integer; break: @boolean;
+            enter(pos,break)
+            do &text[] -> lx[];
+               (0,true) -> PT;
+            exit lx[]
+            #);
           doPT:
             (#
             enter mark
@@ -151,7 +139,6 @@ Tree: DirectoryModules
                false -> mark;
             exit lx[]
             #);
-
           doPTnoComments:
             (#
             do true -> noComments;
@@ -160,25 +147,95 @@ Tree: DirectoryModules
                false -> noComments;
             exit lx[]
             #);
-          doP:
-            (# pos: @integer; break: @boolean;
-            enter(pos,break)
-            do &text[] -> lx[];
-               (0,true) -> PT;
-            exit lx[]
-            #);
           length:< integerValue(# do inner #);
-          PT:<
-            (# pos: @integer; break: @boolean;
+          superPP:
+            (# mkBreak:<
+                 (# pos: @integer; break: @boolean;
+                 enter(pos,break)
+                 do inner
+                 #);
+               standAlone: BooleanValue
+                 (# ch: @char; ix: @integer
+                 do lx.length -> ix;  (*'"' -> put;*)
+                    L:
+                      (if ix > 0 then                        
+                          ix -> lx.inxGet -> ch; 
+                          (*ch -> put;
+                           (if commentBefore then 'B'->put else 'A' -> put if);
+                           *)
+                        (if true
+                         // ch = ascii.newline then
+                            true -> value;
+                            leave standAlone
+                         // ch <= ' ' then;
+                            ix - 1 -> ix;
+                            restart L
+                        if)
+                     else
+                        true -> value
+                      if);
+                    (*'"'->put*)
+                 #);               
+               printComment:
+                 (* A comment has thje form
+                  * '<n> hello world' 
+                  *      if only white space before the comment
+                  * 'n> how are you' 
+                  *      if the comment appears after 
+                  *      some code on the same line
+                  *)
+                 (# ix,xpos: @integer
+                 do (if comment[] <> none then
+                        comment.setPos;
+                        1 -> ix;
+                        emit:
+                          (# doBreak,isAlone: @boolean;
+                          do standAlone -> isAlone;
+                             (ix ->comment.inxGet) = '<' -> doBreak;
+                             (if doBreak then 
+                                 comment.get;
+                                 comment.getint - 3 -> xpos;
+                                 (if not commentBefore then 
+                                     (pos,true) -> mkBreak;
+                                 if)
+                              else 
+                                 comment.getint;
+                                 (if not isAlone then
+                                     ' ' -> lx.put
+                                 if)
+                             if);
+                             comment.get; (* read '>' *)
+                             '--' -> lx.puttext;
+                             comment.scan
+                             (# 
+                             do (if ch <> ascii.newline then 
+                                    ch -> lx.put;
+                                 else
+                                    comment.pos + 1 -> ix;
+                                    (*(pos,true) -> mkBreak;*)
+                                    restart emit 
+                             if) #);
+                             (if doBreak or isAlone  then
+                                 (pos ,true) -> mkBreak;
+                             if)
+                          #)                        
+                    if)
+                 #);
+               pos: @integer; break: @boolean;
+            enter(pos,break)                
+            do inner
+            #);
+          comment: ^text; commentBefore: @boolean;
+          PT:< SuperPP
+            (# 
                block:
                  (# pos,width: @integer; break: @boolean
                  enter(pos,width)
                  do lineWidth < (pos + width) -> break;
                     inner
                  #);
-               mkBreak:
-                 (# pos: @integer; break: @boolean;
-                 enter(pos,break)
+               mkBreak::
+                 (# 
                  do (if lx.length > 0 then (* no break or space if first line *)
                         (if break then
                             lx.newline;
@@ -189,12 +246,36 @@ Tree: DirectoryModules
                  #);
                mkBreak0: mkBreak(##);
                mkBreak1: mkBreak(# do ' ' -> lx.put #);
-            enter(pos,break) 
             do (if mark then lx.getpos -> beginPos  if);
                inner;
                (if mark then lx.getpos -> endPos if)
             exit lx[]
             #);
+          emitHTML:<
+            (#
+            do inner 
+            #);
+          doHTML:
+            (#
+            do &text[] -> lx[];
+               HTML
+            exit lx[]
+            #);
+          HTML:< SuperPP
+            (#  mkBreak::
+                 (#
+                 do (if break then
+                        '<br>\n' -> lx.append;
+                        (for i: pos repeat '&nbsp;' -> lx.append for)
+                    if)
+                 #);
+               indent:
+                 (# pos: @integer
+                 enter pos
+                 do (for i: pos repeat '&nbsp;' -> lx.append for);
+                 #);
+            do inner
+            #);          
           son,next,last,father: ^TopNode;
           clear:< (* Sets all variables in AST to initial values
                    * Needed when compile is called more than once
