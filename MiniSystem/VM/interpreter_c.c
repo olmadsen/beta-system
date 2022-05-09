@@ -2565,10 +2565,10 @@ bool traceThreads = true;
 	break;
       case ovpushg:
 	arg1 = op1(bc,&glsc);
+	arg3 = vPop(thisStack); //descInx of valObj,not used
 	arg2 = vPop(thisStack);
 	X = rPop(thisStack);
 	if (X == NULL) {
-
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
 	arg3 = getV(X,arg1 + arg2 - 1);
@@ -2707,9 +2707,11 @@ bool traceThreads = true;
 	break;
       case ovstoreg:
 	arg1 = op1(bc,&glsc);
+
 	arg2 = vPop(thisStack);
 	X = rPop(thisStack);
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	arg3 = vPop(thisStack); //descInx of valObj, not used	
 	arg3 = vPop(thisStack);
 	X->vfields[arg1 + arg3 - 1] = arg2;
 #ifdef TRACE
@@ -2717,7 +2719,6 @@ bool traceThreads = true;
 #endif
 	break;
       case vassign:
-
 	arg1 = op1(bc,&glsc);   // size
 	mode = op1(bc,&glsc); 
 	arg2 = vPop(thisStack); // destOff
@@ -2729,7 +2730,8 @@ bool traceThreads = true;
 	for (i = 1; i <= arg1; i++){
 	  D[i] = vPop(thisStack);
 	}
-	if (mode == 1) {
+	if (mode == 1) { // originIsValObj
+	  arg3 = vPop(thisStack); //descInx of valObj,not used
 	  arg2 = arg2 + vPop(thisStack) - 1;
 	}
         for (i = 1; i <= arg1; i++) {
@@ -2804,6 +2806,7 @@ bool traceThreads = true;
 	break;
       case pushValue:
 	arg1 = op1(bc,&glsc);   // size
+	arg3 = vPop(thisStack); //descInx of valObj, not used	
 	arg2 = vPop(thisStack); // srcOff
 	X = rPop(thisStack);    // srcObj
 #ifdef TRACE
@@ -4246,6 +4249,7 @@ bool traceThreads = true;
 	break;
       case fovpushg:
 	off = op1(bc,&glsc);
+	arg3 = vPop(thisStack); //descInx of valObj	
 	inx = vPop(thisStack);
 	X = rPop(thisStack);
 	arg1 = getV(X,off + inx - 1);
@@ -4260,6 +4264,7 @@ bool traceThreads = true;
 	arg2 = vPop(thisStack);
 	arg1 = vPop(thisStack);
 	X = rPop(thisStack);
+	arg3 = vPop(thisStack); //descInx of valObj	
 	inx = vPop(thisStack);
 	//printf("**** fovstoreg %i\n",off);
 	X->vfields[off + inx - 1] = arg1;
