@@ -3851,6 +3851,7 @@ bool traceThreads = true;
       case sendv: 
 	arg1 = op1(bc,&glsc);
 	arg2 = op1(bc,&glsc);
+	arg3 = op1(bc,&glsc); // origin is value object
 #ifdef TRACE
 	fprintf(trace,"sendv %i",arg1);
 #endif	

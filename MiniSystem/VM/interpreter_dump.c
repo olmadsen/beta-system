@@ -261,7 +261,8 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case sendv:
 	arg1 = op1(bc,&glsc);
 	arg2 = op1(bc,&glsc);
-	fprintf(trace,"sendv %i %i",arg1,arg2);
+	arg3 = op1(bc,&glsc);
+	fprintf(trace,"sendv %i %i",arg1,arg2,arg3);
 	break;
       case sendx: 
 	fprintf(trace,"send %i",op1(bc,&glsc)); 
