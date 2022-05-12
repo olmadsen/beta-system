@@ -62,7 +62,7 @@ typedef void *FILE;
 #define DUMP
 #endif
 
-//#define TRACE
+#define TRACE
 //#define EVENT
     
 #define useBetaHeap true
@@ -1429,7 +1429,10 @@ Btemplate *rTopElm(Btemplate*stack,int inx){
   checkInHeap(stack->rstack[stack->rtop - inx]);
   return stack->rstack[stack->rtop - inx];
 }
-
+int vTopElm(Btemplate*stack,int inx){
+  if ((stack->vtop - inx) < -1) runTimeErrorX("vStack underflow:vTopElm",stack,-1);
+  return stack->vstack[stack->vtop - inx];
+}
 void rswapIndexed(Btemplate *stack,int inx){
   Btemplate *obj; int i;
   obj = stack->rstack[stack->rtop - inx];
@@ -1835,7 +1838,7 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
   ctx->currentDescNo = descNo;
   if (isXbeta) {
       ctx->thisObj = ctx->callee;
-    }else{
+    }else{ 
       ctx->thisObj = ctx->callee;
       ctx->thisStack = ctx->thisObj; // OBS - cf invodeObj
     }
@@ -1883,6 +1886,8 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 
+  if (isValObj) vPush(ctx->thisStack,thisValObjDescInx);
+  isValObj = false;
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i) staticOff = %i\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc
@@ -1900,6 +1905,7 @@ void invokeValObj(Block *ctx,int descNo,int staticOff){
 #ifdef TRACE
   fprintf(ctx->trace,"invokeVal %i %i\n",descNo,staticOff);
 #endif
+    printf("\ninvokeVal %i %i\n",descNo,staticOff);
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
  
   lscPush(ctx->thisObj,staticOff);
@@ -1914,6 +1920,9 @@ void invokeValObj(Block *ctx,int descNo,int staticOff){
   ctx->glsc = getAllocE(getDesc(descNo));
   //ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   //ctx->glsc = getAllocE(ctx->thisObj->desc);
+  isValObj = true;
+  thisValObjDesc = getDesc(descNo);
+  thisValObjDescInx = descNo;
 }
 void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
@@ -2892,6 +2901,7 @@ bool traceThreads = true;
 	StacksToOut(trace,thisObj,thisStack);
 #endif	
 	bc = codeFromDescNo(currentDescNo);
+	isValObj = getIsValObj(descInx);
         if (! isXbeta)rPush(thisStack,X);
 #ifdef TRACE
 	fprintf(trace,"\tTO thisObj:'%s'(descNo:%i,glsc:%i,thisStack:'%s')"
@@ -3868,8 +3878,19 @@ bool traceThreads = true;
 	thisBlock->origin = rPop(thisStack);
 	// looks wrong with X below?
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+	
+	switch(isValObj){
+	  case true:
+	    fprintf(trace,"\nsendv: isValObj");
+	    arg3 = vdtTable(trace,thisBlock->origin,vTopElm(thisStack,0));
+	    break;
+	default:
+	  if (arg3 == 1)
+	    fprintf(trace,"\nsendv: origin:isValObj");
+	  else
+	    arg3  = vdtTable(trace,thisBlock->origin,arg1); // descNo
+	}
 
-	arg3 = vdtTable(trace,thisBlock->origin,arg1); // descNo
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
@@ -3883,7 +3904,9 @@ bool traceThreads = true;
 	    fprintf(trace,"\top ref:B:  %x\n",refArgs[i]);
 #endif
 	  }
-	}
+	}	
+	if (isValObj) vPush(thisStack,thisValObjDescInx);
+	isValObj = false;
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif

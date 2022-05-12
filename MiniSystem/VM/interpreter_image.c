@@ -37,13 +37,18 @@
    BCstart: size of BC
    : bytecodes ...
 */
-bool isXbeta; 
+bool isXbeta;
+
 bool newAlloc = false;
 int newAllocOff = 0;
 
 //for Arduino, typdef apparently must be in the beginning of the file!?
 typedef unsigned char byte;
 typedef unsigned char * ObjDesc;
+
+bool isValObj; 
+ObjDesc thisValObjDesc;
+int thisValObjDescInx;
 
 #ifdef __arm__
 typedef unsigned char byte;
@@ -110,6 +115,7 @@ enum {
   GCinfo_index = 38,
   BC_index = 42,
   vdtTable_index = 46,
+  isValObj_index = 50,
 };
 
 
