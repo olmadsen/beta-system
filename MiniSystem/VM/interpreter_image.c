@@ -105,17 +105,18 @@ enum {
   objSize_index = 10,
   isIndexed_index = 14,
   originOff_index = 18,
-  procE_index = 20,
-  alloE_index = 22,
-  enterE_index = 24,
-  doE_index = 26,
-  exitE_index = 28,
-  labIndex = 30,
-  literal_index = 34,
-  GCinfo_index = 38,
-  BC_index = 42,
-  vdtTable_index = 46,
-  isValObj_index = 50,
+  isValObj_index = 20,
+  procE_index = 22,
+  alloE_index = 24,
+  enterE_index = 26,
+  doE_index = 28,
+  exitE_index = 30,
+  labIndex = 32,
+  literal_index = 36,
+  GCinfo_index = 40,
+  BC_index = 44,
+  vdtTable_index = 48,
+  
 };
 
 
@@ -284,6 +285,9 @@ int getInt4(int inx){
     + descs[inx + 1] * 256 + descs[inx];
 }; 
 
+int desc_getInt1(ObjDesc desc,int inx) {
+  return desc[inx];
+};
 
 int desc_getInt2(ObjDesc desc,int inx) {
   return desc[inx] * 256 + desc[inx + 1];
@@ -312,7 +316,12 @@ int getStrucRefDescNo(){
 int getStringTableIndex(){
   return getInt4(stringTable_index);
 };
-
+ObjDesc getDesc(int descNo);
+int getIsValObj(int descInx){
+  //printf("getIsValObj: descInx %i\n",descInx);
+  
+  return desc_getInt2(getDesc(descInx),isValObj_index);
+}
 char *getString(int inx){
   //fprintf(trace,"inx: %i %c %s",inx, stringTable[inx], (char *)stringTable+inx);
   return (char *) stringTable + inx + 3;

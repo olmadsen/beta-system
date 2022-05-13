@@ -62,7 +62,7 @@ typedef void *FILE;
 #define DUMP
 #endif
 
-#define TRACE
+//#define TRACE
 //#define EVENT
     
 #define useBetaHeap true
@@ -1885,27 +1885,27 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->thisObj = ctx->callee;
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
-
+  fprintf(ctx->trace,"isValObj: %i\n",isValObj);
   if (isValObj) vPush(ctx->thisStack,thisValObjDescInx);
   isValObj = false;
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i) staticOff = %i\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc
 	  ,staticOff);
+  StacksToOut(ctx->trace,ctx->thisObj,ctx->thisStack);  
 #endif
 #ifdef EVENT
   // OBS! Y is not declared
-  // arg 4 : 2 should be origin?
+  // arg 4 : 2 should be origin? 
   // we should probably save ctx->thisObj in Y here: caller
   // mkAllocEvent(alloc_event,Y,ctx->thisObj,2,false,ctx->currentDescNo,ctx->glsc,false);
-#endif
+#endif  
 };
 
 void invokeValObj(Block *ctx,int descNo,int staticOff){
 #ifdef TRACE
   fprintf(ctx->trace,"invokeVal %i %i\n",descNo,staticOff);
 #endif
-    printf("\ninvokeVal %i %i\n",descNo,staticOff);
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
  
   lscPush(ctx->thisObj,staticOff);
@@ -2152,7 +2152,7 @@ int fileOpen(Btemplate *FN){
     }
   filesTop = filesTop + 1;
 #ifdef TRACE
-  printf("fileOpen: filesTop: '%s' %i %x\n",N,filesTop,files[filesTop - 1]);
+  printf("fileOpen: filesTop: '%s' %i %x\n",N,filesTop,(int)files[filesTop - 1]);
 #endif
   return filesTop - 1;
 }
@@ -2574,16 +2574,16 @@ bool traceThreads = true;
 	break;
       case ovpushg:
 	arg1 = op1(bc,&glsc);
-	arg3 = vPop(thisStack); //descInx of valObj,not used
+	dscNo = vPop(thisStack); //descInx of valObj,not used
 	arg2 = vPop(thisStack);
 	X = rPop(thisStack);
 	if (X == NULL) {
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
-	arg3 = getV(X,arg1 + arg2 - 1);
+	arg3 = getV(X,arg1 + arg2 - 1 + X->valOff);
         vPush(thisStack,arg3);
 #ifdef TRACE
-	fprintf(trace,"ovpushg %s[%i] = %s\n",nameOf(X),arg3);
+	fprintf(trace,"ovpushg %s[%i+%i-1] = %i\n",nameOf(X),arg1,arg2,arg3);
 #endif
 	break;
       case rpushg:
@@ -2722,7 +2722,7 @@ bool traceThreads = true;
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	arg3 = vPop(thisStack); //descInx of valObj, not used	
 	arg3 = vPop(thisStack);
-	X->vfields[arg1 + arg3 - 1] = arg2;
+	X->vfields[arg1 + arg3 - 1 + X->valOff] = arg2;
 #ifdef TRACE
 	fprintf(trace,"ovstoreg %i\n",arg1);
 #endif
@@ -2893,7 +2893,7 @@ bool traceThreads = true;
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);
 #endif	
-	thisStack = rPop(thisObj);
+	thisStack = rPop(thisObj); 
 	thisObj = rPop(thisObj);
 	glsc = cRestoreReturn(thisObj);
 	currentDescNo = cRestoreReturn(thisObj);
@@ -2901,20 +2901,22 @@ bool traceThreads = true;
 	StacksToOut(trace,thisObj,thisStack);
 #endif	
 	bc = codeFromDescNo(currentDescNo);
-	isValObj = getIsValObj(descInx);
+	isValObj = getIsValObj(currentDescNo);  
         if (! isXbeta)rPush(thisStack,X);
 #ifdef TRACE
-	fprintf(trace,"\tTO thisObj:'%s'(descNo:%i,glsc:%i,thisStack:'%s')"
-		,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+	fprintf(trace,"\tTO thisObj:'%s'(descNo:%i,glsc:%i,thisStack:'%s', isValObj: %i"
+		,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack)
+		,isValObj);
 	dumpStack(trace,thisStack);
-#endif
-#ifdef EVENT
+#endif  
+#ifdef EVENT 
 	if (((char)arg1 == 'A') && (thisObj != X)){
 	  mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 	}
 #endif
 	break;
       case rtnV:
+	isValObj = false;
 	arg1 = lscPop(thisObj); // staticOff
 #ifdef TRACE
 	fprintf(trace,"rtnV: %i\n",arg1);
@@ -2940,7 +2942,7 @@ bool traceThreads = true;
       case setThisStack:
 #ifdef TRACE
 	fprintf(trace,"setThisStack\n");
-#endif
+#endif 
 	thisStack = thisObj->rstack[thisObj->rtop];
         break;
       case rpopThisObj:
@@ -3863,7 +3865,7 @@ bool traceThreads = true;
 	arg2 = op1(bc,&glsc);
 	arg3 = op1(bc,&glsc); // origin is value object
 #ifdef TRACE
-	fprintf(trace,"sendv %i",arg1);
+	fprintf(trace,"sendv %i %i %i",arg1,arg2,arg3);
 #endif	
 	refArgsTop = 0;
 	if (arg2 > 0) {
@@ -3871,8 +3873,9 @@ bool traceThreads = true;
 	    refArgsTop = refArgsTop + 1;
 	    refArgs[refArgsTop] = rPop(thisStack);
 #ifdef TRACE	    
-	    fprintf(trace,"\top ref:A:  %x\n",refArgs[refArgsTop]);
+	    fprintf(trace,"\top ref:A:  %x\n",(int)refArgs[refArgsTop]);
 #endif
+	    
 	  }
 	} 
 	thisBlock->origin = rPop(thisStack);
@@ -3881,17 +3884,24 @@ bool traceThreads = true;
 	
 	switch(isValObj){
 	  case true:
-	    fprintf(trace,"\nsendv: isValObj");
-	    arg3 = vdtTable(trace,thisBlock->origin,vTopElm(thisStack,0));
+	    fprintf(trace,"\nsendv: isValObj\n");
+	    StacksToOut(trace,thisObj,thisStack);//,thisBlock);
+	    //arg3 = vdtTable(trace,thisBlock->origin,vTopElm(thisStack,0));
+	    //arg3 = vdtTable(trace,thisValObjDesc,arg1);
+	    arg3 = desc_getInt4(thisValObjDesc,vdtTable_index + (arg1 - 1) * 4);
+	    vPush(thisStack,thisValObjDescInx);
 	    break;
 	default:
-	  if (arg3 == 1)
+	  if (arg3 == 1){
 	    fprintf(trace,"\nsendv: origin:isValObj");
-	  else
+	    arg3 = desc_getInt4(getDesc(vTopElm(thisStack,0))
+				     ,vdtTable_index + (arg1 - 1)* 4);
+	  }else
 	    arg3  = vdtTable(trace,thisBlock->origin,arg1); // descNo
 	}
 
 #ifdef TRACE
+	fprintf(trace,"Virtual:desc:binding: %i\n",arg3);
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
@@ -3901,11 +3911,11 @@ bool traceThreads = true;
 	  for (i = 1; i <= arg2; i++) {
 	    rPush(thisStack,refArgs[refArgsTop - i  + 1]);
 #ifdef TRACE
-	    fprintf(trace,"\top ref:B:  %x\n",refArgs[i]);
+	    fprintf(trace,"\top ref:B:  %x\n",(int)refArgs[i]);
 #endif
 	  }
 	}	
-	if (isValObj) vPush(thisStack,thisValObjDescInx);
+	//if (isValObj) vPush(thisStack,thisValObjDescInx);
 	isValObj = false;
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);

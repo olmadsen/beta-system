@@ -262,7 +262,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg1 = op1(bc,&glsc);
 	arg2 = op1(bc,&glsc);
 	arg3 = op1(bc,&glsc);
-	fprintf(trace,"sendv %i %i",arg1,arg2,arg3);
+	fprintf(trace,"sendv %i %i %i",arg1,arg2,arg3);
 	break;
       case sendx: 
 	fprintf(trace,"send %i",op1(bc,&glsc)); 
@@ -424,8 +424,9 @@ void dumpDesc(FILE *trace, int xdescNo) {
     int oS = objSize(desc);
     int iI = isIndexed(desc);
     fprintf(trace,"%s",getString(desc_getInt2(desc,0)));
-    fprintf(trace," descNo:%i objSize:%i isIndexed:%i originOff:%i\n"
+    fprintf(trace," descNo:%i objSize:%i isIndexed:%i originOff:%i "
 	    ,descNo(desc),oS,iI,desc_getInt2(desc,originOff_index));
+    fprintf(trace,"isValObj:%i\n",getIsValObj(xdescNo));
     /* the tests for VS and RS are no longer needed since all fields
      * are pæaced in the dynamixe array fields
      */
