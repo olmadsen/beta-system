@@ -1886,7 +1886,7 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
   fprintf(ctx->trace,"isValObj: %i\n",isValObj);
-  if (isValObj) vPush(ctx->thisStack,thisValObjDescInx);
+  //if (isValObj) vPush(ctx->thisStack,thisValObjDescInx);
   isValObj = false;
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i) staticOff = %i\n"
@@ -2501,6 +2501,13 @@ bool traceThreads = true;
 #endif
 	checkInHeap(thisObj);
 	rPush(thisStack,thisObj);
+	break;
+      case pushValId:
+#ifdef TRACE
+	fprintf(trace,"pushValId\n");
+#endif
+	vPush(thisStack,1);
+	vPush(thisStack,thisValObjDescInx);
 	break;
       case pushC: 
 	arg1 = op1(bc,&glsc);
@@ -3889,7 +3896,7 @@ bool traceThreads = true;
 	    //arg3 = vdtTable(trace,thisBlock->origin,vTopElm(thisStack,0));
 	    //arg3 = vdtTable(trace,thisValObjDesc,arg1);
 	    arg3 = desc_getInt4(thisValObjDesc,vdtTable_index + (arg1 - 1) * 4);
-	    vPush(thisStack,thisValObjDescInx);
+	    //vPush(thisStack,thisValObjDescInx);
 	    break;
 	default:
 	  if (arg3 == 1){

@@ -74,6 +74,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case pushthis:
 	fprintf(trace,"pushthis ");
 	break;
+      case pushValId:
+	fprintf(trace,"pushValId ");
+	break;
       case pushC: 
 	arg1 = op1(bc,&glsc);
 	fprintf(trace,"pushC %i", arg1);

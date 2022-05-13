@@ -267,7 +267,8 @@ enum {
   fovpushg = 118,
   fovstoreg = 119,
   mkVindexed = 128,
-  mkRindexed = 129
+  mkRindexed = 129,
+  pushValId = 130
 };
 
 
@@ -430,7 +431,6 @@ char * nameOf(Btemplate *obj){
   int inx = desc_getInt2(desc,0);
   return getString(inx);
 }
-
 
 int topDescNo(Btemplate *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
 
