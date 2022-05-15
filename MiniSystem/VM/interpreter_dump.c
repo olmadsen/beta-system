@@ -261,11 +261,11 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case innerExit:
 	fprintf(trace,"innerExit %i",op1(bc,&glsc));
 	break;
-      case sendv:
+      case invokev:
 	arg1 = op1(bc,&glsc);
 	arg2 = op1(bc,&glsc);
 	arg3 = op1(bc,&glsc);
-	fprintf(trace,"sendv %i %i %i",arg1,arg2,arg3);
+	fprintf(trace,"invokev %i %i %i",arg1,arg2,arg3);
 	break;
       case sendx: 
 	fprintf(trace,"send %i",op1(bc,&glsc)); 

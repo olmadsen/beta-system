@@ -178,7 +178,7 @@ enum {
   innerx = 35 ,
   rtnInner = 36 ,
   innerExit = 37 ,
-  sendv = 38, 
+  invokev = 38, 
   sendx = 39 ,     
   newVrep = 40 ,
   jmpTrue = 41 ,

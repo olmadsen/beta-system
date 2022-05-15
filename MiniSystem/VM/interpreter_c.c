@@ -1,7 +1,5 @@
-//#define _GNU_SOURCE 
-//#define __ARDIUNO__  // just my attempt;-)
-//#define usewinsock2
-//#define usekbhit
+//#define _GNU_SOURCE define __ARDIUNO__ // just my attempt;-) define
+//#usewinsock2 define usekbhit
 #ifdef linux
 //#warning "linux is defined!"
 #include <unistd.h> // to get sleep function for linux
@@ -2436,7 +2434,7 @@ bool traceThreads = true;
   double float1, float2, float3;
   bool running = true, doTrace = false; 
   Btemplate *X, *Y;
-  Btemplate *refArgs[10]; int refArgsTop = 0; // see sendv below
+  Btemplate *refArgs[10]; int refArgsTop = 0; // see invokev below
   int cnt = 0;
   char ch;
 
@@ -3867,12 +3865,12 @@ bool traceThreads = true;
 	fprintf(trace,"\n");
 #endif
 	break;
-      case sendv: 
+      case invokev: 
 	arg1 = op1(bc,&glsc);
 	arg2 = op1(bc,&glsc);
 	arg3 = op1(bc,&glsc); // origin is value object
 #ifdef TRACE
-	fprintf(trace,"sendv %i %i %i",arg1,arg2,arg3);
+	fprintf(trace,"invokev %i %i %i",arg1,arg2,arg3);
 #endif	
 	refArgsTop = 0;
 	if (arg2 > 0) {
@@ -3891,7 +3889,7 @@ bool traceThreads = true;
 	
 	switch(isValObj){
 	  case true:
-	    fprintf(trace,"\nsendv: isValObj\n");
+	    fprintf(trace,"\ninvokev: isValObj\n");
 	    StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 	    //arg3 = vdtTable(trace,thisBlock->origin,vTopElm(thisStack,0));
 	    //arg3 = vdtTable(trace,thisValObjDesc,arg1);
@@ -3900,7 +3898,7 @@ bool traceThreads = true;
 	    break;
 	default:
 	  if (arg3 == 1){
-	    fprintf(trace,"\nsendv: origin:isValObj");
+	    fprintf(trace,"\ninvokev: origin:isValObj");
 	    arg3 = desc_getInt4(getDesc(vTopElm(thisStack,0))
 				     ,vdtTable_index + (arg1 - 1)* 4);
 	  }else
