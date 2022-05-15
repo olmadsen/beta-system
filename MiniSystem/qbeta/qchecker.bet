@@ -150,36 +150,42 @@ checker: Parser
                   if)if);
                #)
             #);
-          checkGlobals:
-            (# noGlobalsInSuper,noGlobals,noGlobalsInSub: @boolean
+          checkGlobalAccess:
+            (# globalRestrictionsInSuper,globalRestrictionsInMain,globalRestrictionsInSub: @boolean
             do (if superDesc[] <> none then
-                   &superDesc.checkGlobals -> 
-                   (noGlobalsInSuper,noGlobals,noGlobalsInSub)
+                   &superDesc.checkGlobalAccess -> 
+                   (globalRestrictionsInSuper,globalRestrictionsInMain,globalRestrictionsInSub)
                if);
                (if true
-                // (noGlobals = false) and (noGlobalsInSub = false) then
+                // (globalRestrictionsInMain = false) 
+                   and (globalRestrictionsInSub = false) then
                    (* super may acces globals
-	            * main may access globals unles globals-property
+	            * main may access globals unless globals-property
                     * so scan for globals below *)
-                // (noGlobals = false) and (noGlobalsInSub = true) then
+                // (globalRestrictionsInMain = false) 
+                   and (globalRestrictionsInSub = true) then
                    (* super may access globals
 	            * main may not access globals, so leave *)
-                   true -> noGlobalsInSuper -> noGlobals -> noGlobalsInSub;
-                   leave checkGlobals
-                // (noGlobals = true) and (noGlobalsInSub = false) then  
+                   true -> globalRestrictionsInSuper -> globalRestrictionsInMain 
+                     -> globalRestrictionsInSub;
+                   leave checkGlobalAccess
+                // (globalRestrictionsInMain = true) and (globalRestrictionsInSub = false) 
+                   then  
                    (* super may not access globals
 	            * main may access globals unless globals-prop
                     * scan for globals in main *)
-                // (noGlobals = true) and (noGlobalsInSub = true) then  
+                // (globalRestrictionsInMain = true) and (globalRestrictionsInSub = true) 
+                   then  
                      (* super may not access globals
 	              * main may not access globals - leave *)
-                   true -> noGlobalsInSuper -> noGlobals -> noGlobalsInSub;
-                   leave checkGlobals
+                   true -> globalRestrictionsInSuper -> globalRestrictionsInMain
+                     -> globalRestrictionsInSub;
+                   leave checkGlobalAccess
                if);
-               noGlobals -> noGlobalsInSuper;
-               false -> noGlobals -> noGlobalsInSub;
+               globalRestrictionsInMain -> globalRestrictionsInSuper;
+               false -> globalRestrictionsInMain -> globalRestrictionsInSub;
                (if newBasicProp.globals[] <> none then
-                   true -> noGlobals -> noGlobalsInSub;
+                   true -> globalRestrictionsInMain -> globalRestrictionsInSub;
                    L: newBasicProp.scanGlobals
                      (# INV: ^Invocation
                      do current.scanSons
@@ -188,21 +194,25 @@ checker: Parser
                            (if ('inSub' -> OI.ptnId.T.equalNCS) then
                                (*'***insub'-> putline; dopt -> putline;*)
                                (* OBS [globals[P1,P2,inSub,...]] *)
-                               false -> noGlobalsInSub
+                               false -> globalRestrictionsInSub
                             else 
-                               false -> noGlobals -> noGlobalsInSub; 
+                               false -> globalRestrictionsInMAin -> globalRestrictionsInSub; 
                                leave L
                      if)#)#)
                if);
-               (if traceNoGlobals then
-                   '-----CheckGlobals:\n '->puttext;
-                   father.dopt -> putline;
-                   (if noGlobalsInSuper then 'noGlobalsInSuper:true, ' -> puttext if);
-                   (if noGlobals then 'noGlobals:true, ' -> puttext if);
-                   (if noGlobalsInSub  then 'noGlobalsInSub:true' -> puttext if);
+               (if traceNoGlobals and
+                   (globalRestrictionsInSuper or globalRestrictionsInMain or globalRestrictionsInSub)
+                   then
+                   '****  CheckGlobalAccess:\n'->puttext;
+                   encOg.dopt -> puthead;
+                   (if globalRestrictionsInSuper then 
+                       'globalRestrictionsInSuper:' -> puttext if);
+                   (if globalRestrictionsInMain then 
+                       'globalRestrictionsInMain:' -> puttext if);
+                   (if globalRestrictionsInSub  then 'globalRestrictionsInSub:' ->puttext if);
                    newline;
                if);
-            exit(noGlobalsInSuper,noGlobals,noGlobalsInSub)
+            exit(globalRestrictionsInSuper,globalRestrictionsInMain,globalRestrictionsInSub)
             #);
           
           check::
@@ -247,39 +257,25 @@ checker: Parser
                #);
                checkDoubleDecls;
 
-               checkGlobals -> (noGlobalsInSuper,noGlobals,noGlobalsInSub);
-               (*'***** checkglobals:'->putline;
-                encOG..dopt -> putline;
-                (if noGlobalsInSuper then ' -> noGlobalsInSuper'->puttext if);
-                (if noGlobals then ' -> noGlobals' -> putline if);*)
-               
-               (if traceNoGlobals and  noGlobalsInSuper and not noGlobals then
-                   '\n****noGloblasInSuper but globals in main: ' -> putline;
-                   encOG.dopt -> putline
-               if);
-               (if traceNoGlobals then
-                   (if noGlobals then
-                       '*** no globals may be accessed: ' -> putline;
-                    else
-                       '*** globals may be accessed ' -> putline
-               if)if);
+               checkGlobalAccess 
+                 -> (globalRestrictionsInSuper,globalRestrictionsInMain,globalRestrictionsInSub);
             #);
-          noGlobalsInSuper,         (* true: no global access in super *)
-          noGlobals,                (* true: no global access in main *)
-          noGlobalsInSub: @boolean; (* true: no global access in main.sub *)
+          globalRestrictionsInSuper,         (* restrictions on globals in super *)
+          globalRestrictionsInMain,          (* restrictions on globals in main *)
+          globalRestrictionsInSub: @boolean; (* restrictions on globals  main.sub *)
           alloc::
             (# allocOrigin:
                  (# 
-                 do (if elimOrigin and noGlobals then
+                 do (if elimOrigin and globalRestrictionsInMain then
                      else
                         rsize + 1 -> rsize -> originOff
                     if)
                  #);
             do (if traceNoGlobals then
-                   (if noGlobals then
+                   (if globalRestrictionsInMain then
                        '*** thisOG does not acces global attributes:\n '
                          -> puttext;
-                       father.father.doPP -> putline;
+                       father.father.doPT -> puthead
                if)if);
                (if super.ATd[] <> none then
                    (if superDesc[] = none then
@@ -289,10 +285,10 @@ checker: Parser
                    superDesc.vsize -> vsize;
                    superDesc.rsize -> rsize;
                    superDesc.dsize -> dsize;
-                   (if super.isThisBlockLevel and 
-                       (not super.isImplSuper) and (not super.isSingularImplSuper)
+                   (if super.isThisBlockLevel and (not super.isImplSuper) 
+                       and (not super.isSingularImplSuper)
                        then
-                       (if elimOrigin and noGlobalsInSuper then
+                       (if elimOrigin and globalRestrictionsInSuper then
                            rsize + 1 -> rsize -> originOff
                         else
                            superDesc.originOff -> originOff
