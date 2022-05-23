@@ -62,12 +62,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
 
   while(glsc < bcTop) {
     if ((glsc + 1) == desc_getInt2(desc,procE_index)) fprintf(trace,"procE:\n");
-    if ((glsc + 1) == alloE(desc)) fprintf(trace,"alloE:\n");
-    if ((glsc + 1) == desc_getInt2(desc,enterE_index)) fprintf(trace,"enterE:\n");
+    if ((glsc + 1) == alloE(desc)) fprintf(trace,"storeArgsE:\n");
+    if ((glsc + 1) == desc_getInt2(desc,enterE_index)) fprintf(trace,"allocE:\n");
     if ((glsc + 1) == desc_getInt2(desc,doE_index)) fprintf(trace,"doE:\n");
     if ((glsc + 1) == desc_getInt2(desc,exitE_index))fprintf(trace,"exitE:\n");
 
-    fprintf(trace,"%i:\t",glsc);
+    fprintf(trace,"%i:\t",glsc + 1); // we add 1 to show same glsc as in
+                                     // the dump from objectImage
     opCode = bc[glsc]; glsc = glsc + 1; 
     switch (opCode)
       {
@@ -427,7 +428,7 @@ void dumpDesc(FILE *trace, int xdescNo) {
     int oS = objSize(desc);
     int iI = isIndexed(desc);
     fprintf(trace,"%s",getString(desc_getInt2(desc,0)));
-    fprintf(trace," descNo:%i objSize:%i isIndexed:%i originOff:%i "
+    fprintf(trace," descInx:%i objSize:%i isIndexed:%i originOff:%i "
 	    ,descNo(desc),oS,iI,desc_getInt2(desc,originOff_index));
     fprintf(trace,"isValObj:%i\n",getIsValObj(xdescNo));
     /* the tests for VS and RS are no longer needed since all fields

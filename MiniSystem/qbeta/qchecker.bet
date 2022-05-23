@@ -21,6 +21,7 @@ handleGeneric: (# exit true #);
 traceNoGlobals: (# exit false #);
 checker: Parser
   (# traceCheck,traceSearch: @ boolean;
+     checkingModule: @boolean;
      Module::<
        (# setUpOrigin:: 
             (# 
@@ -33,12 +34,14 @@ checker: Parser
           check::
             (#
             do (if traceCheck then
-                   '**** Module:check: ' -> puttext; sig.doPT -> putline
+                   '**** Module:check: ' -> puttext; sig.doPT -> putline;
+                   dopt -> puthead;
                if); 
                (none,basicScope[],none,true) -> sig.check;
                (none,basicScope[],none,true) -> OG.check; 
                markInModuleProp;
-               this(Module)[] -> imports.addM
+               this(Module)[] -> imports.addM;
+               this(Module)[] -> requires.add
             #);
           alloc:: 
             (# 
@@ -72,12 +75,20 @@ checker: Parser
           check:: 
             (# 
             do (if verbose then
-                   'Check ModuleItem: ' -> puttext; sig.doPT -> putline;
+                   '**** Check ModuleItem: ' -> puttext; sig.doPT->putline;
                if);
                (if false then
                    (none,basicScope[],none,true) -> MD.check
                if);
                false -> wasChecked
+            #);
+          checkRequires::
+            (#
+            do not MD.isIncluded -> done;
+               (if false then
+                   '**** MI:MD.isIncluded: ' -> puttext; sig.dopt->puttext;
+                   ' ' -> put; done -> putboolean; newline
+               if)
             #);
           alloc:: 
             (# 
@@ -333,7 +344,7 @@ checker: Parser
                         do (if current## <= Decl## then
                                current-> D[];
                                (if false then
-                                   '** sig:search: ' -> puttext; CS[]->puttext;
+                                   '** sig:search:'->puttext; CS[]->puttext;
                                    ' try: ' -> puttext; D.dopt -> putline;
                                if);
                                (if (CS[] -> D.sig.id.equalNCS) then
@@ -359,10 +370,10 @@ checker: Parser
                                (if ATd## = ModuleItem## then
                                    (* A hack, and worse: this does 
                                     * not work as long as
-                                    * we check all modules. An non included
+                                    * we check all modules. An no included
                                     * module may use another non included 
                                     * module, which implies that this 
-                                    * modules will be marked as used!
+                                    * module will be marked as used!
                                     *)
                                    (*'!!!! Found ModuleItem (hack): ' 
                                     * -> puttext;
@@ -388,19 +399,40 @@ checker: Parser
             exit(ATd[],pn)
             #); 
           searchIncludeProp:
-            (# NA: ^Lexem; CS: ^Text; ATd: ^Decl;
+            (# NA: ^Lexem; CS: ^Text; ATd: ^Decl; org: ^Items; F: ^node;
                trace: (# exit false #);
             enter(NA[])
-            do (if false then
-                   '**** searchIncludeProp: ' -> puttext; dopt -> putline;
-                   '**   origin: ' -> putline; origin.dopt -> putline
-               if);
+            do (if traceCheck then
+                   '**** searchIncludeProp: ' -> puttext; 
+                   NA.dopt -> puttext; ' in: ' -> putline;
+                   dopt -> puthead;
+                   '**   origin: ' -> putline; 
+                   (if origin[] = none then
+                       'none'->putline
+                    else
+                       origin.dopt -> puthead
+               if)if);
                (if (1 -> NA.T.inxGet) = '#' then 
                    (2,NA.T.length) -> NA.T.sub -> CS[]
                 else
                    NA.T[] -> CS[];
                if);
-
+               (if (origin[] <> none) 
+                   and not (origin[]->org[]).isChecked then
+                   (if traceCheck then
+                       '\n**** searchIncludeProp:Origin not checked: ' 
+                         -> puttext;
+                       org.encOG.OGid -> putline;
+                      (* '**   origin:beingChecked: ' -> puttext;
+                       org.beingChecked -> putboolean; newline;
+                       '**   to.search:in:origin: ' -> puttext;
+                       org.label -> puttext; 
+                       ' org.father.label: ' -> puttext;
+                       org.father.label -> putline;
+                       org.father.doPT -> puthead*)
+                   if);
+                   (none,org[],none,true) -> (org.father[]->F[]).check;
+               if);
                scanSons
                (# I: ^Item; prop: ^NewProperty; 
                do current[] -> I[];
@@ -605,17 +637,21 @@ checker: Parser
                     (# INV: ^Invocation;
                     do current[] ->INV[];
                        INV.scanSons
-                       (#do
-                          (if not current.isConstLiteral then 
+                       (#
+                       do (if not current.isConstLiteral then 
                               NPA[] -> SemanticError
                               (#
-                              do 'Argument of %basic must be an integer constant: ' -> msg;
+                              do 'Argument of %basic must be an '
+                                 'integer constant: ' -> msg;
                                  current.doPT -> putline
                  #)if)#)#)#);
                
                checkInclude:
                  (# NPA: ^NewPropertyArguments
-                 do scanSons(#do (none,basicScope.origin[],none,true)-> current.check #);
+                 do scanSons
+                    (#
+                    do (none,basicScope.origin[],none,true)->current.check
+                    #);
                     scanSons(#do (if isLast then current[] -> NPA[] if)#);
                     NPA.scanSons
                     (# INV: ^Invocation; MI: ^ModuleItem
@@ -625,11 +661,69 @@ checker: Parser
                         else
                            NPA[] -> SemanticError
                            (#
-                           do 'Argument of include must be a Module: ' 
+                           do 'Argument of %include must be a Module: ' 
                                 -> msg;
                               current.doPT -> msg
                            #)
                     if)#)
+                 #);
+               checkModule:
+                 (# NPA: ^NewPropertyArguments; org: ^Items
+                 do (if false then
+                        '**** checkModuleProp: ' -> puttext; dopt->puttext;
+                        ' in: ' -> puttext; 
+                        (origin[]->org[]).encOG.OGid -> putline
+                    if);
+                    
+                    scanSons
+                    (# 
+                    do (if false then
+                           '**   doCheck: ' -> puttext; 
+                           current.label ->puttext;
+                           ' ' ->put; current.dopt -> putline;
+                       if);
+                       true -> checkingModule;
+                       (if not isFirst then
+                           true -> (current[]->NPA[]).inModulePropX;
+                       if);
+                       (none,basicScope[],none,true)->current.check;
+                    #);
+                    false -> checkingModule;
+                    scanSons
+                    (#
+                    do (*'** argX: ' -> puttext; current.dopt -> putline;*)
+                       (if not isFirst then 
+                           current[] -> NPA[];
+                           NPA.scanSons
+                           (# INV: ^Invocation; MI: ^ModuleItem
+                           do current[] -> INV[];
+                              (*'**   arg:' ->puttext; INV.doPT->putline;*)
+                              (if INV.ATd.isModuleItem then 
+                                  (*(if isFirst then
+                                      '**** checkModule:mark: ' -> puttext;
+                                   else
+                                      ',' -> put
+                                  if);
+                                   INV.dopt -> puttext; *)
+                                  
+                                  (*(INV.ATd[]->MI[]).MD.markInModuleProp;
+                                  *)
+                                  (INV.ATd[]->MI[]).MD[]
+                                    -> (theModule).requires.add;
+                                  true -> (INV.ATd[]->MI[]).inModuleProp
+                               else
+                                  NPA[] -> SemanticError
+                                  (#
+                                  do 'Argument of %module must be a Module: ' 
+                                       -> msg;
+                                     current.doPT -> msg
+                                  #)
+                    if)#)if)#); 
+                    (*newline;*)
+                    (if false then
+                        '**** checkModule:done: ' -> puttext;
+                        dopt -> putline
+                    if)
                  #);
             do (if false then
                    '**** NewProperty:Check: ' -> puttext; dopt -> putline;
@@ -642,6 +736,8 @@ checker: Parser
                         checkBasic
                      // '%module' -> propId.T.equalNCS 
                      // '%modules' -> propId.T.equalNCS then 
+                        checkModule;
+                        leave L
                      // '%include' -> propId.T.equalNCS then 
                         checkInclude;
                         leave L
@@ -668,6 +764,27 @@ checker: Parser
                      // '%core' -> propId.T.equalNCS then
                      // '%OSDvisibility' -> propId.T.equalNCS then
                      // '%ID' -> propId.T.equalNCS then
+                        (*'**** %ID: ' -> puttext; dopt -> putline;*)
+                        scanSons
+                        (# T: ^Text
+                        do (*current.dopt -> puttext; ' ' -> put;*)
+                           (if not isFirst then
+                               current.dopt -> T[];
+                               (2,T.length) -> T.sub -> T[];
+                               (*' notFirst: "' -> puttext;
+                               T[] -> puttext; '"'->put;*)
+                               (if 'object' -> T.equalncs then
+                                   (*' **** check %ID: ' -> puttext;
+                                   current.dopt -> putline;*)
+                                else
+                                   (*' *** dont check %ID: '  -> puttext;
+                                   current.dopt -> putline;*)
+                                   leave L
+                           if)if)
+                        #);
+                        newline;
+                        (*do not check identifications in %ID *)
+                        (*leave L*)
                      else
                         this(NewProperty)[] -> warning
                         (#
@@ -675,20 +792,39 @@ checker: Parser
                            propId.T[] -> msg
                         #)
                     if);
-                    scanSons(#do (none,basicScope[],none,true) -> current.check #);
+                    scanSons
+                    (#do (none,basicScope[],none,true) -> current.check #)
                  #)
             #);
+          checkRequires::
+            (#
+            do (if '%ID' -> propId.T.equalNCS then
+                   true -> done
+               if)
+            #)
        #);
      NewPropertyArguments::<
-       (# setUpOrigin:: (#do scanSons(# do origin[] -> current.setupOrigin #)#);
+       (# setUpOrigin:: 
+            (#do scanSons(# do origin[] -> current.setupOrigin #)#);
           check::
             (# 
             do (if false then
                    '**** newPropArg:check: ' -> puttext; dopt -> putline
                if);
                scanSons
-               (# INV: ^Invocation; MI: ^ModuleItem
-               do (none,basicScope[],none,true) -> current.check;
+               (# INV: ^Invocation; MI: ^ModuleItem; ap: ^Apl
+               do (if false then
+                      '**   NPargs: ' -> puttext; current.dopt -> puttext;
+                      ' ' -> put; inModulePropX -> putboolean; newline;
+                      (*
+                      (if basicScope[] = none then
+                          ' basicScope is none' -> putline
+                       else newline;
+                          basicScope.dopt -> puthead;
+                      if);*)
+                  if);
+                  inModulePropX -> (current[]->ap[]).inModulePropX;
+                  (none,basicScope[],none,true) -> current.check;
                   current[] -> INV[];
                #)
             #)
@@ -1427,7 +1563,7 @@ checker: Parser
             #);
           desc::<
             (# elm:: items
-            do (if traceCheck then
+            do (if false and traceCheck then
                    '**** Pattern:desc:'->putline;
                      dopt -> puthead
                if);
@@ -2231,11 +2367,13 @@ checker: Parser
                            ' ' -> put; rec.dopt -> puttext;
                            ' label: ' -> puttext; current.label -> putline
                        if)
-                    #)
+                    #);
+                  ap: ^Apl
                do i + 1 -> i; i = 1 -> isFirst;
                   (if true then
                       (if i > 1 then i - 1 -> emit if)
                   if);
+                  inModulePropX -> (current[] -> ap[]).inModulePropX;
                   (rec[],basicScope[],argScope[],isFirst,OGS[]) 
                     -> current.checkOI
                     -> (basicScope[],OGS[]);
@@ -2268,7 +2406,7 @@ checker: Parser
           checkOI::
             (# BS: ^Items
             do (if (trx) or traceCheck then
-                   '**** ObjectInvocation:checkOI: '->puttext; dopt -> puthead
+                   '**** ObjectInvocation:checkOI: '->puttext; dopt->puthead
                if);
                (rec[],basicScope[],argScope[],isFirst) 
                  -> check 
@@ -2296,7 +2434,8 @@ checker: Parser
                                   E.args.scanArgs(#do current[] -> OG[] #);
                                   (if OG[] <> none then 
                                       OG.super.last-> OI[];
-                                      (OI.ATd[]->ptn[]).OG.IS[] -> basicScope[]
+                                      (OI.ATd[]->ptn[]).OG.IS[] 
+                                        -> basicScope[]
                       if)if)if)if);
                       (args[],argScope[]) -> argBuf.add;
                       current[] -> pred[];
@@ -2391,16 +2530,16 @@ checker: Parser
                              *    ind : var intEEger
                              * where intEEger is not declared
                              *)
-                            (if true or (*(dcl[]<>none) and*) dcl.isDataItem then 
+                            (if true or dcl.isDataItem then 
                                 dcl.OG.IS[] -> scp[]; 
                                 ptnId.T[] -> scp.localSearch -> (ATd[],pn);
                     if)if)if)
                  #);
                org: ^Items; OGq: ^ObjectGenerator; done: @boolean;
-               ptn: ^Pattern; MD: ^Module; 
+               ptn: ^Pattern; MD: ^Module; MI: ^ModuleItem;
                OS: ^objectSpecification;
             do (if trx or traceCheck then
-                   '**** ObjectInvocation:check: ' -> puttext; dopt->putline;
+                   '**** ObjectInvocation:check: '->puttext; dopt->putline;
                    ptnID.T[] -> putline;
                    (*('scope',basicScope[]) -> putPT*)
                if);
@@ -2411,10 +2550,6 @@ checker: Parser
                        (ptnId[],on,pn,ATd[]) -> found;
                        ATd[] -> ptnId.ATd[];
                        (none,ATd.origin[],ATd.origin[],true) -> ATd.check;
-                       (if false then
-                           ('IO:rec',rec[]) -> putPT;
-                           dopt -> putline
-                       if)
                     else
                        (if false then
                            '**** OI:check:notFound: ' -> puttext;
@@ -2456,6 +2591,47 @@ checker: Parser
                    'ObjectInvocation:check: scope is none: '->puttext; 
                    dopt -> putline
                if);
+            #);
+          checkRequires::
+            (# MI: ^ModuleItem
+            do (if false then
+                   '**** OI:checkRequires: ' -> puttext;
+                   dopt -> puttext; ' ' -> put;
+                   father.father.father.dopt -> putline;
+               if);
+               (if ATd[] = none then
+                   '!!!! OI:checkRequires:NONE ' -> puthead;
+                   true -> done;
+                   leave checkRequires;
+               if);
+               (if ATd.isModuleitem then
+                   ATd[] -> MI[];
+                   (if checkInModule then
+                       (if false then
+                           '**** Got:moduleItem: ' -> puttext;
+                           ptnId.dopt -> puttext;
+                           ' ' -> put;
+                           inModulePropX -> putboolean;
+                           newline;
+                           father.father.father.dopt -> puthead;
+                           (theModule).requires.print
+                       if);
+                       
+                       (if not inModulePropX then
+                           (if MI.MD[]->(theModule).requires.has
+                               then  
+                               (*'**** In %module.requires!' -> putline;*)
+                            else
+                               this(objectInvocation)[] -> warning
+                               (#
+                               do 'The module "' -> msg;
+                                  ptnId.T[] -> msg;
+                                  '" is not visible through '
+                                  ' a %module property' -> msg
+                               #)
+                           if)
+               if)if)if);
+               true -> done
             #);
           mustBeObject::
             (# error:
@@ -3410,8 +3586,9 @@ checker: Parser
      rootModule.check;
      (none,main.origin[],main.origin[],true) -> main.check;
      main.MarkInModuleProp;
-
      argBuf.check;
+
+
      
      (if semanticErrors then
          '\n***** Semantic errors: compilation stops' -> putline;

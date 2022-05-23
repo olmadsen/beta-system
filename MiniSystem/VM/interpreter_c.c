@@ -53,7 +53,7 @@ typedef void *FILE;
 #include "freertos/semphr.h"
 
 #define BLINK_GPIO 23 // CONFIG_BLINK_GPIO - compiler complains!? 
-#endif
+#endif  
 
 #ifdef __arm__
 #else
@@ -1780,14 +1780,11 @@ int newId(Block *ctx) {
 
 void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
 #ifdef TRACE
-  fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
+  fprintf(ctx->trace,"\n\tFROM %s(descNo:%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
   ctx->origin = origin;
   ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,vInxSize,rInxSize);
   origin = ctx->origin;
-#ifdef TRACE
-  fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
-#endif
   rPush(ctx->callee,ctx->thisObj); 
   rPush(ctx->callee,ctx->thisStack);
   rPush(ctx->callee,origin); // OBS - cf invokeObj
@@ -1802,7 +1799,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
-  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
+  fprintf(ctx->trace,"\tALLOC %s(descNo:%i,gæsc:%i,adr:%i,BC:%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef EVENT
@@ -1814,16 +1811,13 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
   // OBS! for isXbeta calls of allocObj may have to be replaced by allocQObj
 #ifdef TRACE
-  fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
+  fprintf(ctx->trace,"\n\tFROM %s(descNo:%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
 #endif
 
   ctx->origin = origin;
   ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,vInxSize,rInxSize);
   origin = ctx->origin;
 
-#ifdef TRACE
-  fprintf(ctx->trace,"callee: %s %i \n",nameOf(ctx->callee),(int)ctx->callee);
-#endif
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
   if (isXbeta){
@@ -1843,7 +1837,7 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
-  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i)\n"
+  fprintf(ctx->trace,"\tALLOC %s(descNo:%i,%i,%i,%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef EVENT
@@ -1855,7 +1849,7 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
 void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
   // vInxSize and rInxSize = 0 - start using objSize
 #ifdef TRACE
-  fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
+  fprintf(ctx->trace,"\n\tFROM %s(descNo:%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
 
   ctx->callee = allocTemplate(ctx,newId(ctx),descNo,false,vInxSize,rInxSize);
@@ -1869,25 +1863,24 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 	putstr("\n");
 #endif
 #endif
-#ifdef TRACE
-  fprintf(ctx->trace,"callee: %s %i\n",nameOf(ctx->callee),(int)ctx->callee);
-#endif
   if (staticOff > 0) putR(ctx->thisObj,staticOff,ctx->callee);
   
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
 
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
-
+ 
   ctx->currentDescNo = descNo;
   ctx->thisObj = ctx->callee;
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
+#ifdef TRACE
   fprintf(ctx->trace,"isValObj: %i\n",isValObj);
   //if (isValObj) vPush(ctx->thisStack,thisValObjDescInx);
+#endif
   isValObj = false;
 #ifdef TRACE
-  fprintf(ctx->trace,"\n\tALLOC %s(%i,%i,%i,%i) staticOff = %i\n"
+  fprintf(ctx->trace,"\tALLOC %s(descNo:%i,%i,%i,%i) staticOff = %i\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc
 	  ,staticOff);
   StacksToOut(ctx->trace,ctx->thisObj,ctx->thisStack);  
@@ -2192,7 +2185,7 @@ void doCall(Block *ctx,bool withEnablingSuspend,bool updateS){
 #endif
     ctx->callee = rPop(ctx->thisStack);
 #ifdef TRACE
-    fprintf(ctx->trace,"\n\tFROM %s(%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
+    fprintf(ctx->trace,"\n\tFROM %s(descNo:%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)ctx->bc);
 #endif
     if (withEnablingSuspend) ctx->enablee = ctx->callee;
     cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
@@ -2291,7 +2284,7 @@ void doCall(Block *ctx,bool withEnablingSuspend,bool updateS){
    
 void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
 #ifdef TRACE
-  fprintf(ctx->trace," AT %s FROM %s(%i,%i,%s) "
+  fprintf(ctx->trace," AT %s FROM %s(descNo:%i,%i,%s) "
 	  ,nameOf(callee),nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,nameOf(ctx->thisStack));
   if (preemptive) fprintf(ctx->trace,"preemptive ");
 #endif
@@ -3014,7 +3007,7 @@ bool traceThreads = true;
 	arg2 = op2(bc,&glsc);
         arg3 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"invoke %i %i %i thisObj: %s",arg1,arg2,arg3,nameOf(thisObj));
+	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
 #endif
 #ifdef __arm__
 	//dumpVstack(trace,thisStack);
@@ -3966,7 +3959,7 @@ bool traceThreads = true;
 	arg1 = op2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"exeAlloc %i ",arg1);
-	fprintf(trace,"FROM %s(%i,%i) ", nameOf(thisObj),currentDescNo,glsc);
+	fprintf(trace,"FROM %s(descNo:%i,%i) ", nameOf(thisObj),currentDescNo,glsc);
 #endif
 	X = rPop(thisStack);
 	cSaveReturn(thisObj,currentDescNo,glsc);

@@ -6,6 +6,7 @@ INCLUDE '../VM/objectcode'
 ---lib:attributes--- 
 newOutGen: (#exit true #);
 coArg: (#exit false #);
+checkInModule: (# exit true #);
 putHead:
   (# T: ^text; n: @integer
   enter T[]
@@ -395,6 +396,15 @@ AbstractSyntaxTree: Tree
                inner
             exit(basicScope[],OGS[])
             #);
+          checkRequires:<
+            (# done: @boolean
+            do inner;
+               (if not done then
+                   scanSons(# do 
+                              (*'*** CR: ' -> puttext; current.dopt->puthead;*)
+                              current.checkRequires #)
+               if)
+            #);
           getUnitProp:<
             (# un: ^NewProperty
             do inner
@@ -652,7 +662,7 @@ AbstractSyntaxTree: Tree
                if)
             #);
           theModule::<
-            (#
+            (# ModulePtn :: Module
             do inner;
                (if md[] = none then 
                    (if father[] = none then
@@ -954,6 +964,72 @@ AbstractSyntaxTree: Tree
                #)
             exit main[]
             #);
+          requires: @
+            (* Modules required by this  module *)
+            (# L: [4] ^Module; top: @integer;
+               codeGenDone: @boolean;
+               init:< (# do 0 -> top; #);
+               add:
+                 (# M: ^module
+                 enter M[]
+                 do (if not (M[] -> has) then
+                        (if traceImports then
+                            'requires.add: ' -> puttext; 
+                            M.moduleName -> putline
+                        if);
+                        (if (top+1->top) > L.range then 
+                            L.range->L.extend if);
+                        M[] -> L[top][];
+                        (if not M.isChecked then 
+                            (none,M.origin[],M.origin[],true) -> M.check;
+                            true -> M.isChecked
+                        if);
+                        (* So if module M is required, we apprenly also
+                         * require all enclosing modules! 
+                         * Is this what we maen?
+                         * *)
+                        addEnclosingModules
+                    if)
+                 #);
+               addEnclosingModules:
+                 (# org: ^Items; M: ^Module; 
+                 do (if origin[] <> none then
+                        (origin[] -> org[]).theModule -> M[];
+                        (if M[] <> none then
+                            (if false then
+                                '**** AddEnclosingModule: ' -> puttext; 
+                                M.moduleName -> putline;
+                            if);
+                            M[] -> M.requires.add
+                    if)if)
+                 #);
+               scan:
+                 (# current: ^module
+                 do (for i: top repeat
+                         L[i][] -> current[]; inner
+                 for)#);
+               has: BooleanValue
+                 (# M: ^Module
+                 enter M[]
+                 do L:
+                      scan
+                      (#
+                      do  (if (M[] = current[]) -> value then
+                              leave L
+                      if)#)
+                 #);
+               print:
+                 (#
+                 do '**** Module: "' -> puttext;
+                    moduleName -> puttext; 
+                    '" requires: ' -> puttext;
+                    scan
+                    (#
+                    do current.moduleName -> puttext; ' ' -> put
+                    #);
+                    newline
+                 #)
+            #);
           imports: @
             (# L: [4] ^module; top: @integer;
                init:< (# do 0 -> top;(* ' imports:init ' -> puttext; *) #);
@@ -961,7 +1037,8 @@ AbstractSyntaxTree: Tree
                  (# M: ^module; MI: ^ModuleItem
                  enter M[]
                  do (if (M.father[] -> MI[]) <> none then
-                        (*'***imports.addM: ' -> puttext; M.moduleName -> putline; *)
+                        (*'***imports.addM: ' -> puttext; 
+                         * M.moduleName -> putline; *)
                         MI[] -> add
                     if)
                  #);
@@ -1032,10 +1109,20 @@ AbstractSyntaxTree: Tree
           markInModuleProp:
             (# org: ^Items; M: ^Module; MI: ^ModuleItem
             do (if not InModuleProp then
+                   (if false then
+                       '**   markInModuleProp: ' -> puttext; 
+                       sig.dopt-> puttext;
+                   if);
                    true -> inModuleProp;
                    (if (origin[] <> none) and
-                       (((origin[] -> org[]).theModule -> M[]) <> none) then
+                       (((origin[]->org[]).theModule -> M[]) <> none) then
+                       (if false then
+                           ', markOrigin: ' -> puttext;
+                           M.sig.dopt -> putline;
+                       if);
                        M.markInModuleProp
+                    else
+                       (if false then 'origin is none' -> putline if);
                if)if)
             #);
           objDescEQ:: (# do DN -> OG.objDescEQ -> value #);
@@ -1086,7 +1173,7 @@ AbstractSyntaxTree: Tree
           isParsed: @boolean;
           myDesc:: (# do MD.desc -> OD[] #);
           copyAST::
-            (# do '\n!!! Copy of ModuleItme is not implemented' -> putline #);
+            (# do '\n!!! Copy of ModuleItem is not implemented' -> putline #);
           objDescEQ:: (# do DN -> MD.objDescEQ -> value #);
           replaceEntity::
             (#
@@ -1108,7 +1195,8 @@ AbstractSyntaxTree: Tree
                inner
             #);
           MD: ^Module; (* perhaps DataItem? *)
-          N:  ^Name
+          N:  ^Name;
+          inModuleProp: @boolean; (* true if this MI is in a %module prop *)
        enter(isConst,Name -> N[] -> append,MD[]->append)
        #);
      Items:< Scope 
@@ -1446,6 +1534,10 @@ AbstractSyntaxTree: Tree
                           N[] -> newBasicProp.globals[]
                        // '%requires' -> N.propID.T.equalNCS then
                           N[] -> newBasicProp.requires[]
+                       // '%module' -> N.propID.T.equalNCS 
+                       // '%modules' -> N.propID.T.equalNCS then
+                          (*'**** got modules:prop: ' -> puttext;
+                          N.dopt -> putline;*)
                        // '%unit' -> N.propID.T.equalNCS then
                           N[] -> newBasicProp.unit[];
                        // '%associations' -> N.propID.T.equalNCS then
@@ -1736,6 +1828,7 @@ AbstractSyntaxTree: Tree
             do NewPropertyArguments -> nAST[];
                scanSons(# do current.copyAST -> nAST.append #)
             #);
+          inModulePropX: @boolean
        #);
      Decl: Item
        (# PT::< 
@@ -3739,6 +3832,7 @@ AbstractSyntaxTree: Tree
           isSingularImplSuper (* where super is as in V:< foo{...}
                                * and not as in V: < A *)
           : @boolean; 
+          inModulePropX: @boolean;
           isThisBlockLevel: BooleanValue
             (#
             do (lgth <= 1) and (on = 0) -> value;
