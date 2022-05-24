@@ -27,21 +27,32 @@ checker: Parser
             (# 
             do origin[] -> sig.setUpOrigin; 
                origin[] -> OG.setUpOrigin; 
-               (*sig[] -> OG.sig[] - does not work: QUA-error - perhpas because
-                * we assume that sig[] = none ==> OG is part of a patter!?
+               (*sig[] -> OG.sig[] - does not work: QUA-error 
+                * perhaps because we assume that
+                *    sig[] = none ==> OG is part of a pattern!?
                 *)
             #);
           check::
-            (#
+            (# org: ^Items; M: ^Module
             do (if traceCheck then
                    '**** Module:check: ' -> puttext; sig.doPT -> putline;
-                   dopt -> puthead;
                if); 
+
+               (* check enclosing module *)
+               (if (origin[] <> none) 
+                   and not (origin[]->org[]).isChecked then
+                   (if false then
+                       '\n**** check:Module:origin: ' 
+                         -> puttext;
+                       org.encOG.OGid -> putline;
+                   if);
+                   (none,org[],none,true) -> ((org.theModule)-> M[]).check;
+               if);
+               this(Module)[] -> requires.add;
                (none,basicScope[],none,true) -> sig.check;
                (none,basicScope[],none,true) -> OG.check; 
                markInModuleProp;
                this(Module)[] -> imports.addM;
-               this(Module)[] -> requires.add
             #);
           alloc:: 
             (# 
@@ -59,7 +70,7 @@ checker: Parser
             (#
             do (if not OG.hasItems then 
                    OG.super.desc -> D[]
-                else
+                else  
                    OG.IS[] -> D[]
                if) 
             #);
@@ -88,6 +99,15 @@ checker: Parser
                (if false then
                    '**** MI:MD.isIncluded: ' -> puttext; sig.dopt->puttext;
                    ' ' -> put; done -> putboolean; newline
+               if)
+            #);
+          importRequires::
+            (#
+            do (if MD.isIncluded then
+                   (if false then
+                       '**** import: ' -> puttext; MD.sig.dopt -> putline;
+                   if);
+                   MD.requires.import
                if)
             #);
           alloc:: 
@@ -667,14 +687,13 @@ checker: Parser
                            #)
                     if)#)
                  #);
-               checkModule:
+               checkRequires:
                  (# NPA: ^NewPropertyArguments; org: ^Items
                  do (if false then
-                        '**** checkModuleProp: ' -> puttext; dopt->puttext;
+                        '**** checkRequiresProp: ' ->puttext; dopt->puttext;
                         ' in: ' -> puttext; 
                         (origin[]->org[]).encOG.OGid -> putline
-                    if);
-                    
+                    if);                    
                     scanSons
                     (# 
                     do (if false then
@@ -700,28 +719,27 @@ checker: Parser
                               (*'**   arg:' ->puttext; INV.doPT->putline;*)
                               (if INV.ATd.isModuleItem then 
                                   (*(if isFirst then
-                                      '**** checkModule:mark: ' -> puttext;
-                                   else
-                                      ',' -> put
-                                  if);
+                                        '**** checkRequires:mark: ' 
+                                        -> puttext;
+                                   else ',' -> put if);
                                    INV.dopt -> puttext; *)
                                   
-                                  (*(INV.ATd[]->MI[]).MD.markInModuleProp;
-                                  *)
+                                  (*(INV.ATd[]->MI[]).MD.markInModuleProp;*)
                                   (INV.ATd[]->MI[]).MD[]
                                     -> (theModule).requires.add;
                                   true -> (INV.ATd[]->MI[]).inModuleProp
                                else
                                   NPA[] -> SemanticError
                                   (#
-                                  do 'Argument of %module must be a Module: ' 
+                                  do 'Argument of %requires '
+                                     'must be a Module: ' 
                                        -> msg;
                                      current.doPT -> msg
                                   #)
                     if)#)if)#); 
                     (*newline;*)
                     (if false then
-                        '**** checkModule:done: ' -> puttext;
+                        '**** checkRequires:done: ' -> puttext;
                         dopt -> putline
                     if)
                  #);
@@ -736,7 +754,7 @@ checker: Parser
                         checkBasic
                      // '%module' -> propId.T.equalNCS 
                      // '%modules' -> propId.T.equalNCS then 
-                        checkModule;
+                        checkRequires;
                         leave L
                      // '%include' -> propId.T.equalNCS then 
                         checkInclude;
@@ -2339,8 +2357,9 @@ checker: Parser
             #)
        #);
      Invocation::<
-       (* INV = R.Q.X, where R,Q;X: exp and R,Q mauy be data-item or pattern *)
-       (# setupOrigin:: (#do scanSons(#do origin[] -> current.setUpOrigin #)#);
+       (* INV = R.Q.X, where R,Q,X: exp, R,Q may be data-item or patter*)
+       (# setupOrigin:: 
+            (#do scanSons(#do origin[] -> current.setUpOrigin #)#);
           check::
             (# E: ^Exp; OGS: ^OGsequence;
                emitUnits:
@@ -2368,7 +2387,7 @@ checker: Parser
                            ' label: ' -> puttext; current.label -> putline
                        if)
                     #);
-                  ap: ^Apl
+                  ap: ^Apl; MI: ^ModuleItem; OI: ^ObjectInvocation
                do i + 1 -> i; i = 1 -> isFirst;
                   (if true then
                       (if i > 1 then i - 1 -> emit if)
@@ -2382,9 +2401,19 @@ checker: Parser
                   if);
                   current[] -> rec[];
                   (if isLast then
-                      (* can be Exp with args or just a pattern name (#foo) *)
+                      (* can be Exp with args or a pattern name (#foo) *)
                       rec.ATd[] -> ATd[];
                       rec.on -> on;
+                      (* we need to keep track of the last MI:
+                       *    R.S.MI.foo
+                       * If R, S and MI are moduleItems, 
+                       * then MI must be %required.
+                       * R and S do not have to be required.
+                       *)
+                      (if (ATD[] <> none) and ATd.isModuleItem then
+                          ATd[] -> MI[];
+                          true -> (rec[]->OI[]).isModuleItem;
+                      if);
                       i -> lgth;
                       (if i > 1 then i -> emit if)
                if)#);               
@@ -2393,6 +2422,10 @@ checker: Parser
                do i + 1 -> i;
                   (i,(current[]->E[]),E.expUnit[]) -> emitUnits
                #)
+            #);
+          checkRequires::
+            (#
+            do
             #);
           alloc:: (# do scanSons(# do enclIT[] -> current.alloc #)#);
        #);
@@ -2600,11 +2633,11 @@ checker: Parser
                    father.father.father.dopt -> putline;
                if);
                (if ATd[] = none then
-                   '!!!! OI:checkRequires:NONE ' -> puthead;
+                   '!!!! OI:checkRequires:ATd:NONE ' -> puthead;
                    true -> done;
                    leave checkRequires;
                if);
-               (if ATd.isModuleitem then
+               (if isModuleItem then
                    ATd[] -> MI[];
                    (if checkInModule then
                        (if false then
@@ -2633,6 +2666,7 @@ checker: Parser
                if)if)if);
                true -> done
             #);
+          isModuleItem: @boolean;
           mustBeObject::
             (# error:
                  (#
