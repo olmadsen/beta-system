@@ -879,7 +879,7 @@ generator: variants
           #)              
        #);
      callInvoke:
-       (# theOG: ^ObjectGenerator; staticOff: @integer; fromStub: @boolean; 
+       (# theOG: ^ObjectGenerator; staticOff: @integer; fromStub: @boolean;
           T: ^text
        enter(theOG[],staticOff,fromStub)
        do cd.lcom(#do 'OGid:'->TT; theOG.OGid -> TT;
@@ -938,9 +938,9 @@ generator: variants
                  '\n**** invoke:stub ' -> puttext; T[] -> putline;
                  '** stack: ' -> puttext; cd.stack.print -> putline;
              if);
-             
-             (theOG[],theOG[]) -> storeOrigins;
-             
+             (if not newFeature then
+                 (theOG[],theOG[]) -> storeOrigins;
+             if);
              cd.lcom(#do 'topSuper:' -> TT; 
                        (theOG.IS.topSuper).newDescNo -> II; ' '->TT;
                        (theOG.IS.topSuper).encOG.OGidy -> TT
@@ -1044,17 +1044,34 @@ generator: variants
                if)if)
             #);
           classDef::
-            (#
+            (# org:^Items; orgId: ^text; orgDescNo: @integer
             do (if marked then
                    (if false then
-                       '**** classDef: ' -> puttext;  OGid -> puttext;
+                       '**** OG:classDef: ' -> puttext;  OGid -> puttext;
                        ' '->put; Is.isEmpty -> putBoolean; ' ' -> put;
                        hasVirtualArgs -> putboolean;  ' '->put;
                        Is.newDescNo -> putint; newline;
                    if);
                    (if (not IS.isEmpty or hasVirtualArgs)
                        and (IS.newDescNo > 0) then
-                       (OGid,IS.newDescNo,isValueObj) -> cd.classDef
+                       (if (origin[] -> org[]) <> none then
+                           org.encOG.OGid -> orgID[];
+                           org.newDescNo -> orgDescNo;
+                           (if false and (org.encOG.primNo = string_prim) then
+                               '**** String origin: ' -> puttext;
+                               orgID[] -> putline;
+                               'array' -> orgID[];
+                               1 -> orgDescNo
+                           if);
+                           (if IS.newOriginOff = 0 then
+                               none -> orgID[];
+                               0 -> orgDescNo
+                           if)
+                        else
+                           'Object' -> orgId[];
+                       if);                           
+                       (OGid,IS.newDescNo,isValueObj,orgID[],orgDescNo)
+                         -> cd.classDef
                        (#
                        do mkLLVMstruc
                           (# addRX:: (#do (off,OGid[]) -> addR #);
@@ -1387,11 +1404,10 @@ generator: variants
                     do (if current.isDataItem then
                            current[] -> DI[];
                            cd.com(#do DI.sig.dopt -> TT;
-                                    ' Basic: ' -> TT; DI.OG.isBasicValue->BB;
+                                    ' Basic:' -> TT; DI.OG.isBasicValue->BB;
                                     ' val: ' -> TT; DI.isValue -> BB;
-                                    ' valObj: ' -> TT; DI.OG.isValueObj ->BB;
+                                    ' valObj:' -> TT; DI.OG.isValueObj ->BB;
                                     ' Inx:' -> TT; DI.OG.IS.isIndexed -> BB;
-
                                  #);
                            (*'**   :emb: ' -> puttext; D
                             * I.sig.dopt -> puttext;
@@ -1456,6 +1472,7 @@ generator: variants
                    and (IS.superDesc[] <> objectDecl.desc) then
                    (if false then
                        '**   super: ' -> puttext; 
+                       IS.superDesc.encOG.OGid -> puttext; ' ' -> put;
                        IS.superDesc.sig.dopt -> puthead;
                        IS.superDesc.newOriginOff -> putint; newline;
                    if);
@@ -1481,7 +1498,13 @@ generator: variants
                        (if org.encOG.primNo = ifthen_prim then
                            org.origin[] -> org[]
                        if);
-                       (IS.newOriginOff,org.encOG.OGidy) -> addRX;
+                       (if false and (org.encOG.primNo = String_prim) then
+                           '>>>>>> Origin:is:string: ' -> puttext;
+                           org.encOG.OGidy -> putline;
+                           (IS.newOriginOff,'array$1') -> addRX;
+                        else
+                           (IS.newOriginOff,org.encOG.OGidy) -> addRX;
+                       if);
                        (if (origin[] -> IS.originIsValue) then
                            IS.newOriginOff + 1 -> addVX;
                            IS.newOriginOff + 2 -> addVX;
@@ -1656,7 +1679,7 @@ generator: variants
                                  mkStubName -> stubN[];
                                  '%' -> stubT[];
                                  stubN[] -> stubT.append;
-                                 stubT[] -> cd.filter -> stubT[];
+                                 stubT[] -> cd.doFilter -> stubT[];
                                  '$' -> stubT.put;
                                  dNo -> stubT.putint;
                                  '*' -> stubT.put;
@@ -1670,14 +1693,15 @@ generator: variants
                                      OG.getdescNo -> putint; 
                                      newline;
                                  if);
-                                 (stubN[],dNo,false) -> cd.classDef
+                                 (stubN[],dNo,false,'Object',0) 
+                                   -> cd.classDef
                                  (#
                                  do (2,OG.OGidx) -> addR
                                  #);
-                                 (OG.OGidx,OG.getDescNo,false)  
+                                 (OG.OGidx,OG.getDescNo,false,'Object',0)  
                                    -> cd.classDef;
                                  (stubN[],dNo,false,ptn.OG.IS.newDescNo
-                                 ,newOriginOff,0,false) 
+                                 ,newOriginOff ,'OriginOfVirtual',0,false) 
                                    -> cd.class;
                                  labelHandler.init; 
                                  restartLab.new;
@@ -1892,12 +1916,24 @@ generator: variants
                    if);
                    
                    OG.XaddB.copySuper;
-                   (# org: ^items; originDescNo: @integer
+                   (# org: ^items; originDescNo: @integer; orgId: ^text
                    do (if (origin[] -> org[]) <> none then
                           org.newDescNo -> originDescNo
                       if);
+                      (if newFeature then
+                          (if org[] <> none then 
+                              org.encOG.OGid -> orgID[]
+                           else
+                              'Object' -> orgId[]
+                          if);
+                          (if false then
+                              '**** class: ' -> puttext; N[] -> puttext;
+                              ' origin: ' -> puttext;
+                              orgID[] -> putline;
+                          if)
+                      if);
                       (N[],newDescNo,false,(topSuper).newDescNo
-                      ,newOriginOff, originDescNo,encOG.isValueObj)
+                      ,newOriginOff,orgId[], originDescNo,encOG.isValueObj)
                         -> cd.class;
                    #);
                    (* thisObj = the new instance of this class 
@@ -2188,9 +2224,20 @@ generator: variants
                if);
                cd.mkLLVMvirtualDefs
                (# vName::
-                    (# OGx: ^ObjectGenerator
+                    (# OGx: ^ObjectGenerator; org: ^Items
                     do dn -> QnewDesc.getOD -> OGx[];
-                       OGx.OGidy -> vN[]
+                       OGx.OGidy -> vN[];
+                       origin[] -> org[];
+                       (if org[] <> none then 
+                           org.encOG.OGidy -> orgOfVN[];
+                        else
+                           'Object$0' -> orgOfVN[] (* to be fixed! *)
+                       if);
+                       (if false then
+                           '**** vName: ' -> puttext; vN[] -> puttext;
+                           ' origin: ' -> puttext; 
+                           orgOfVN[] -> putline;
+                       if)
                     #)
                #);
                BindVirtuals;
@@ -4303,7 +4350,7 @@ generator: variants
        (# atD: ^Pattern; N: ^Text; 
           descNo,stubDescNo,superDescNo,originOff,originDescNo: @integer
        enter(atD[],N[],descNo,superDescNo,originOff,originDescNo)
-       do ('Stub',descNo,false,ATd.OG.IS.newDescNo,1,originDescNo,false) 
+       do ('Stub',descNo,false,ATd.OG.IS.newDescNo,1,'Object',originDescNo,false) 
             -> cd.class;
           cd.com(#do Atd.dopt -> TQ #);
           ATd.OG.iS.newDescNo -> cd.vdtTableCopy;
@@ -4462,7 +4509,7 @@ generator: variants
        (# genMain:
             (# restartLab,leaveLab: @LabelHandler.label;  
             do ObjectGenerator -> QnewDesc -> mDescNo;
-               ('main',mDescNo,false,1,0,0,false) -> cd.class;
+               ('main',mDescNo,false,1,0,'Object',0,false) -> cd.class;
                labelHandler.init; 
                restartLab.new;
                leaveLab.new;
@@ -4499,7 +4546,8 @@ generator: variants
           genThreadStub:
             (# descNo: @integer;
             do ObjectGenerator -> QnewDesc -> descNo;
-               ('ThreadStub',descNo,false,descNo,0,0,false) -> cd.class;
+               ('ThreadStub',descNo,false,descNo,0,'Object',0,false) 
+                 -> cd.class;
                (false,false) -> cd.actions;
                ('ThreadStub','D') -> cd.call;
                cd.stop;
@@ -4508,7 +4556,8 @@ generator: variants
           genEventProcessor:
             (# descNo: @integer;
             do ObjectGenerator -> QnewDesc -> descNo;
-               ('EventProcessor',descNo,false,1,0,0,false) -> cd.class;
+               ('EventProcessor',descNo,false,1,0,'Object',0,false) 
+                 -> cd.class;
                cd.stop; (* we should generate stop here and not in betaVM *)
                (1,false,0) -> CD.endClass;               
             #);                   
@@ -4530,6 +4579,7 @@ generator: variants
      emitLLVM,emitCom,traceLLVMcalls,dumpLLVMobjs: @boolean; ch: @integer
   do '**** GENERATOR ****' -> putline;      
      (if emitLLVM then
+         newFeature -> cd.newFeature;     
          (FN[],'.ll') -> mkAuxName -> BC.name;
          ('tmp.xbeta','.ll') -> mkAuxName -> BCllvm.name;
          BCllvm.openWrite;
