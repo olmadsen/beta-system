@@ -1662,7 +1662,191 @@ generator: variants
                var: ^Variant;
                T: @text; ptn: ^Pattern;
                vSuperDesc: ^Items;
-               enclosingOG,OG: ^ObjectGenerator;
+               OG: ^ObjectGenerator;
+               genSuperClass:
+                 (#
+                 do (if (superDesc[] <> none) then
+                        (* get the ptn decl for super: *)
+                        superDesc.father.father -> ptn[]; 
+                        (if superDesc.isPrimitive then
+                            (if superDesc.primNo 
+                             //object_prim //value_prim then
+                             else
+                                '**** superDesc.isPrimitive:'->puttext;
+                                ptn.dopt -> puthead;
+                                true -> superIsPrimitive
+                        if)if);
+                        (if (var[] <> none) and (var.thisVarNo > 0) then
+                            (* we should find the corresponding var in 
+                             * super; perhapsd use the same object?
+                             *)
+                            var[] 
+                              -> ptn.OG.Qvariants.findSuperVar 
+                              -> superVar[];
+                        if);                        
+                        (if (superVar[] <> none) and not superVar.genDone 
+                            or 
+                            (superVar[] = none) and not superDesc.done then
+                            (* the actual variant being generated must be
+                             * propagated to super possibly implying that 
+                             * a new variant of super must be generated;
+                             * we have actually propagated the actual var 
+                             * to the super, so should the propagation 
+                             * imply a codegen (on objTmpStack) or should 
+                             * we do it here?
+                             *)
+                            cd.com(#do 'genClass:super:'->TT; N[]->TT; nl;
+                                     super.dopt -> TQ;print
+                                  #);
+                            (* we should clean-up below such that 
+                             * genClass should not be duplicated here!?
+                             **********************************)
+                            (ptn.OG[],CC[],superVar[]) 
+                              -> superDesc.genClass;
+                            (* Perhaps vdtTableCopy below does not work
+                             * if we have not called genClass!?
+                             *)
+                    if)if)
+                 #);
+               AllocateSuper:
+                 (#
+                 do (if true (* perhaps hasRealSuper *)
+                     // (superDesc[] <> none) and not superDesc.isPrimitive
+                     // (superDesc[] <> none) 
+                        and 
+                        ((superDesc.primNo = stringDecl.primNo) 
+                        or (superDesc.primNo = immutable_prim))
+                        then
+                        (ptn.sig.id[],superDesc.newDescNo)  -> cd.super; 
+                        superDesc.newDescNo -> cd.vdtTableCopy;
+                       (if superDesc.innerInx > 0 then
+                           (superDesc.innerInx,newDescno,true) 
+                             -> cd.vdtTable;
+                       if);
+                       (* push super arguments *)                       
+                       (if super.isImplSuper then
+                           (if not (elimOrigin and globalRestrictionsInsuper) then
+                               (if super.isSingularImplSuper then
+                                   cd.pushThis;
+                                   ('iOrigin',newOriginOff) -> cd.rpushg;
+                                   (if (origin[] -> originIsValue) then
+                                       cd.pushThis;
+                                       (T[],newOriginOff + 1) -> cd.pushg;
+                                       cd.pushThis;
+                                       (T[],newOriginOff + 2) -> cd.pushg;
+                                   if)
+                                else
+                                   super.ATd[] -> ptn[]; 
+                                   (* snorf3:< koks3.foo3
+                                    * ...
+                                    * snorf3 ::
+                                    *    ...
+                                    * ptn = snorf3:< koks3.foo3
+                                    *)
+                                   (# E,rec: ^Exp; A: ^Address
+                                   do newOriginOff
+                                        -> Address
+                                        -> ptn.OG.super.computeAdr
+                                      (#do cd.com(#do 'no:addOG'->TT #)#)
+                                        -> (rec[],E[],A[]);
+                                   #)                             
+                           if)if)
+                        else
+                           (# E,rec: ^Exp; off: @integer; A: ^Address; 
+                              addOG:
+                                (# OGx: ^ObjectSpecification; off: @integer
+                                do (if OG.isArgofE[] <> none then
+                                       cd.com(#do 'addOG:'->TT #);
+                                       (if traceArgOG then
+                                           '**** OG inArgument: ' -> putline;
+                                           OG.dopt -> puthead;
+                                           '**   OG.isArgOfE:\n' -> puttext;
+                                           OG.isArgOfE.dopt -> putline;
+                                       if);
+                                       (if OG.isArgOfE.father.father##
+                                           = BracketedExp## then
+                                           OG.isArgOfE.father.father.father[]
+                                             -> OGx[];
+                                        else
+                                           OG.isArgOfE.father.father[] -> OGx[];
+                                       if);
+                                       OGx.IS.newOriginOff -> off;
+                                       (* We do get ObjectCall and off = 0 
+                                        * below!
+                                        * OG.isArgOfE.enclosingObjectGenerator
+                                        * and OG.isArgOfE.origin.father[]
+                                        * do not work, since they return
+                                        * the OG enclosing OGx.
+                                        * Must be understood!?
+                                        *)
+                                       (if (OGx## = ObjectCall##)
+                                           or (off = 0)  then
+                                           '**** OG in:argument: ' -> puttext;
+                                           OGx.label -> puttext; ' ' -> put;
+                                           off -> putint; newline
+                                       if);
+                                       (if traceArgOG then
+                                           OGx.dopt -> puthead;
+                                           '**   originOff:'->puttext; 
+                                           off->putint; newline;
+                                       if);
+                                       (if true and (off > 0) then
+                                           ('ArgOGs',off) -> cd.rpushg;
+                                       if)
+                                   if)
+                                #)
+                           do (if elimOrigin and globalRestrictionsInSuper then
+                                  super.scanSons
+                                  (#
+                                  do current[] -> E[];
+                                     (if not isLast then 
+                                         E[] -> rec[] 
+                                      else
+                                         (if isFirst then 
+                                             E[] -> rec[]
+                                  if)if)#)
+                               else 
+                                  (* super is searched in the origin of 
+                                   * this(OG); we must then have an 
+                                   * additional goOrigin from this(OG);
+                                   * this is handled by passing newOriginOff
+                                   * as an argument of Address - superAdj;
+                                   * adjustOrigin will generate this goOrigin
+                                   * if superAdj > 0
+                                   *)
+                                  newOriginOff
+                                    -> Address
+                                    -> super.computeAdr(#do addOG #)
+                                    -> (rec[],E[],A[]);
+                                  cd.com
+                                  (#do 'genClass:after:ComputeAdr:'-> TT; 
+                                     E.doPT -> TQ; A.print -> TT #);
+                              if);
+                              (* What goes on here?
+                               * Do we need staticOff below? *)
+                              (if sig[] = none then
+                                  cd.com(#do'super.sig:none:superAdj:'-> TT;
+                                           newOriginOff -> II #);
+                                  (newOriginOff,0,CC[]) -> E.loadArgs; 
+                               else
+                                  cd.com(#do'super.sig:not:none:superAdj:'->TT;
+                                           - newOriginOff -> II #);
+                                  (* go ON-1, use newOriginOff first time *)
+                                  (- newOriginOff,0,CC[]) -> E.loadArgs; 
+                              if);
+                              E.handleVargs
+                           #);
+                       if);
+                       (if noOfRefArgsInSuper > 0 then 
+                           noOfRefArgsInSuper -> cd.rswap 
+                       if);
+                       superDesc.newDescNo -> cd.toSuper;
+                       cd.markEnterE; 
+                    else
+                       (if objectDecl.OG.IS[] <> this(Items)[] then
+                           (1,newDescno,true) -> cd.vdtTable;
+                   if)if); 
+                 #);
                BindVirtuals:
                  (# handleVirtualDecl:
                       (# mkStubName:
@@ -1878,46 +2062,9 @@ generator: variants
                      #);
                (if not OG.Qvariants.isEmpty then if);
                2 -> labelhandLer.labCount;               
-               (if (superDesc[] <> none) then
-                   (* get the ptn decl for super: *)
-                   superDesc.father.father -> ptn[]; 
-                   (if superDesc.isPrimitive then
-                       (if superDesc.primNo //object_prim //value_prim then
-                        else
-                           '**** superDesc.isPrimitive:'->puttext;
-                           ptn.dopt -> puthead;
-                           true -> superIsPrimitive
-                   if)if);
-                   (if (var[] <> none) and (var.thisVarNo > 0) then
-                           (* we should find the corresponding var in super
-                            * perhaps we should use the same object?
-                            *)
-                           var[] 
-                             -> ptn.OG.Qvariants.findSuperVar 
-                             -> superVar[];
-                   if);
-
-                   (if (superVar[] <> none) and not superVar.genDone 
-                       or 
-                       (superVar[] = none) and not superDesc.done then
-                       (* the actual variant beging generated here must be
-                        * propagated to super possibly implying that a new
-                        * variant of super must be generated;
-                        * we have actually propagated the actual var to 
-                        * the super, so should the propagation imply a 
-                        * codegen (on objTmpStack) or should we do it here?
-                        *)
-                       cd.com(#do 'genClass:super:'->TT; N[] -> TT; nl;
-                                super.dopt -> TQ;print
-                             #);
-                       (* we should clean-up below such that 
-                        * genClass should not be duplicated here!?
-                        *)
-                       (ptn.OG[],CC[],superVar[]) -> superDesc.genClass;
-                       (* Perhaps vdtTableCopy below does not work
-                        * if we have not called genClass!?
-                        *)
-               if)if); (* end superDesc <> none *)
+               
+               genSuperClass;
+               
                var[] -> thisVar[];
                (if (var[] = none) and not done or 
                    (var[] <> none) and not var.genDone then
@@ -1940,6 +2087,7 @@ generator: variants
                    if);
                    
                    OG.XaddB.copySuper;
+                   
                    (# org: ^items; originDescNo: @integer; orgId: ^text
                    do (if (origin[] -> org[]) <> none then
                           org.newDescNo -> originDescNo
@@ -1957,7 +2105,7 @@ generator: variants
                           if)
                       if);
                       (N[],newDescNo,false,(topSuper).newDescNo
-                      ,newOriginOff,orgId[], originDescNo,encOG.isValueObj)
+                      ,newOriginOff,orgId[],originDescNo,encOG.isValueObj)
                         -> cd.class;
                    #);
                    (* thisObj = the new instance of this class 
@@ -1986,151 +2134,15 @@ generator: variants
                        (if (origin[] -> originIsValue) then
                            ('origin.valueOff',NewOriginOff + 2) -> cd.store;
                            ('origin.valueOff',NewOriginOff + 1) -> cd.store;
-                       if);
-
-                   if);
+                   if)if);
                    (if not OG.isValueObj then 
                        (if not ((superDesc[] <> none) 
                            and not superDesc.isPrimitive) then
                            true -> cd.allocEventQ
                    if)if);
                    
-                   (if true (* perhaps hasRealSuper *)
-                    // (superDesc[] <> none) and not superDesc.isPrimitive
-                    // (superDesc[] <> none) 
-                       and 
-                       ((superDesc.primNo = stringDecl.primNo) 
-                       or (superDesc.primNo = immutable_prim))
-                       then
-                       (ptn.sig.id[],superDesc.newDescNo)  -> cd.super; 
-                       superDesc.newDescNo -> cd.vdtTableCopy;
-                       (if superDesc.innerInx > 0 then
-                           (superDesc.innerInx,newDescno,true) 
-                             -> cd.vdtTable;
-                       if);
-                       (* push super arguments *)                       
-                       (if super.isImplSuper then
-                           (if not (elimOrigin and globalRestrictionsInsuper) then
-                               (if super.isSingularImplSuper then
-                                   cd.pushThis;
-                                   ('iOrigin',newOriginOff) -> cd.rpushg;
-                                   (if (origin[] -> originIsValue) then
-                                       cd.pushThis;
-                                       (T[],newOriginOff + 1) -> cd.pushg;
-                                       cd.pushThis;
-                                       (T[],newOriginOff + 2) -> cd.pushg;
-                                   if)
-                                else
-                                   super.ATd[] -> ptn[]; 
-                                   (* snorf3:< koks3.foo3
-                                    * ...
-                                    * snorf3 ::
-                                    *    ...
-                                    * ptn = snorf3:< koks3.foo3
-                                    *)
-                                   (# E,rec: ^Exp; A: ^Address
-                                   do newOriginOff
-                                        -> Address
-                                        -> ptn.OG.super.computeAdr
-                                      (#do cd.com(#do 'no:addOG'->TT #)#)
-                                        -> (rec[],E[],A[]);
-                                   #)                             
-                           if)if)
-                        else
-                           (# E,rec: ^Exp; off: @integer; A: ^Address; 
-                              addOG:
-                                (# OGx: ^ObjectSpecification; off: @integer
-                                do (if OG.isArgofE[] <> none then
-                                       cd.com(#do 'addOG:'->TT #);
-                                       (if traceArgOG then
-                                           '**** OG inArgument: ' -> putline;
-                                           OG.dopt -> puthead;
-                                           '**   OG.isArgOfE:\n' -> puttext;
-                                           OG.isArgOfE.dopt -> putline;
-                                       if);
-                                       (if OG.isArgOfE.father.father##
-                                           = BracketedExp## then
-                                           OG.isArgOfE.father.father.father[]
-                                             -> OGx[];
-                                        else
-                                           OG.isArgOfE.father.father[] -> OGx[];
-                                       if);
-                                       OGx.IS.newOriginOff -> off;
-                                       (* We do get ObjectCall and off = 0 
-                                        * below!
-                                        * OG.isArgOfE.enclosingObjectGenerator
-                                        * and OG.isArgOfE.origin.father[]
-                                        * do not work, since they return
-                                        * the OG enclosing OGx.
-                                        * Must be understood!?
-                                        *)
-                                       (if (OGx## = ObjectCall##)
-                                           or (off = 0)  then
-                                           '**** OG in:argument: ' -> puttext;
-                                           OGx.label -> puttext; ' ' -> put;
-                                           off -> putint; newline
-                                       if);
-                                       (if traceArgOG then
-                                           OGx.dopt -> puthead;
-                                           '**   originOff:'->puttext; 
-                                           off->putint; newline;
-                                       if);
-                                       (if true and (off > 0) then
-                                           ('ArgOGs',off) -> cd.rpushg;
-                                       if)
-                                   if)
-                                #)
-                           do (if elimOrigin and globalRestrictionsInSuper then
-                                  super.scanSons
-                                  (#
-                                  do current[] -> E[];
-                                     (if not isLast then 
-                                         E[] -> rec[] 
-                                      else
-                                         (if isFirst then 
-                                             E[] -> rec[]
-                                  if)if)#)
-                               else 
-                                  (* super is searched in the origin of 
-                                   * this(OG); we must then have an 
-                                   * additional goOrigin from this(OG);
-                                   * this is handled by passing newOriginOff
-                                   * as an argument of Address - superAdj;
-                                   * adjustOrigin will generate this goOrigin
-                                   * if superAdj > 0
-                                   *)
-                                  newOriginOff
-                                    -> Address
-                                    -> super.computeAdr(#do addOG #)
-                                    -> (rec[],E[],A[]);
-                                  cd.com
-                                  (#do 'genClass:after:ComputeAdr:'-> TT; 
-                                     E.doPT -> TQ; A.print -> TT #);
-                              if);
-                              (* What goes on here?
-                               * Do we need staticOff below? *)
-                              (if sig[] = none then
-                                  cd.com(#do'super.sig:none:superAdj:'-> TT;
-                                           newOriginOff -> II #);
-                                  (newOriginOff,0,CC[]) -> E.loadArgs; 
-                               else
-                                  cd.com(#do'super.sig:not:none:superAdj:'->TT;
-                                           - newOriginOff -> II #);
-                                  (* go ON-1, use newOriginOff first time *)
-                                  (- newOriginOff,0,CC[]) -> E.loadArgs; 
-                              if);
-                              E.handleVargs
-                           #);
-                       if);
-                       (if noOfRefArgsInSuper > 0 then 
-                           noOfRefArgsInSuper -> cd.rswap 
-                       if);
-                       superDesc.newDescNo -> cd.toSuper;
-                       cd.markEnterE; 
-                    else
-                       (if objectDecl.OG.IS[] <> this(Items)[] then
-                           (1,newDescno,true) -> cd.vdtTable;
-                   if)if); 
+                   AllocateSuper;
+                   
                    (if newDescNo = (markIncludes.topModule.desc).newDescno then
                        cd.pushThis;
                        cd.saveBETAworld
@@ -2239,9 +2251,7 @@ generator: variants
 
                    cd.bcPos -> endBCP
                if);
-               (if traceGeneric2 then
-                   (father[] -> enclosingOG[]).XaddB.display
-               if);
+               (if traceGeneric2 then encOG.XaddB.display if);
 
                (if innerInx > 0 then
                    (innerInx,0,true) -> cd.vdtTable; 
