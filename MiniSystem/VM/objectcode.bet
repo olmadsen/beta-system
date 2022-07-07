@@ -104,6 +104,11 @@ ObjectCode:
                ' ' -> S.put
             #);
           II: (# v: @integer enter v do v -> S.putint; ' ' -> S.put #);
+          BB: 
+            (# B: @Boolean 
+            enter B 
+            do (if B then 'true ' -> S.puttext else 'false ' -> S.puttext if)
+            #);
           S: ^text
        do (if true and not notLLVM then
               '   ;; ' -> S[];
@@ -586,10 +591,11 @@ ObjectCode:
           ')*' -> T.puttext
        exit T[]
        #);
+     ind: (# do '   ' -> out.puttext #);
      leag:
        (# off,rN: @integer; rnType: ^text
        enter off
-       do '   ' -> out.puttext;
+       do ind;
           allocReg -> rN -> emitRreg -> out.puttext;
           ' = getelementptr ' -> out.puttext; 
           stack.rType[stack.rTop][] 
@@ -598,13 +604,13 @@ ObjectCode:
           stack.rTop -> rReg -> out.puttext; 
           ', i32 0, i32 ' -> out.puttext; 
           off -> out.putint; 
-          '\n   ' -> out.puttext;
+          '\n' -> out.puttext;
        exit rN
        #);
      leaReg:
        (# reg,off,rN: @integer; rnType: ^text
        enter(reg,rnType[],off)
-       do '   ' -> out.puttext;
+       do ind;
           allocReg -> rN -> emitRreg -> out.puttext;
           ' = getelementptr ' -> out.puttext; 
           rnType[] -> out.puttext;  ',' -> out.put;
@@ -612,7 +618,7 @@ ObjectCode:
           reg -> emitRreg -> out.puttext; 
           ', i32 0, i32 ' -> out.puttext; 
           off -> out.putint; 
-          '\n   ' -> out.puttext;
+          '\n' -> out.puttext;
        exit rN
        #);
      iLoad:
@@ -708,7 +714,7 @@ ObjectCode:
      bitcast:
        (# rNs,rNd: @integer; srcT,dstT: ^text
        enter(rNs,srcT[],dstT[])
-       do '   ' -> out.puttext;
+       do ind;
           allocReg -> rNd -> emitRreg -> out.puttext; 
           ' = bitcast ' -> out.puttext; 
           srcT[] -> out.puttext; ' ' -> out.put;
@@ -731,19 +737,47 @@ ObjectCode:
      dumpObj:
        (# rN,rNx: @integer; type: ^text
        enter(rN,type[])
-       do allocReg -> rNx -> emitRreg -> out.puttext;
+       do ind;
+          allocReg -> rNx -> emitRreg -> out.puttext;
           ' = ptrtoint ' -> out.puttext; type[] -> out.puttext;
           '* ' -> out.puttext; rN -> emitRreg -> out.puttext;
           ' to i32\n' -> out.puttext;
-          'call i32 @dumpHex(i32 ' -> out.puttext;
+          '   call i32 @dumpHex(i32 ' -> out.puttext;
           rNx -> emitRreg -> out.puttext; 
           ',i32 1)\n' -> out.puttext;
        #);
+     putString:
+       (# id: ^text; range,sNo: @integer
+       enter(id[],range)
+       do '   %S' -> out.puttext; allocReg -> sNo -> out.putint;
+          '= getelementptr [' -> out.puttext;
+          range -> out.putint;
+          ' x i8], [' -> out.puttext;
+          range -> out.putint; 
+          ' x i8]* ' -> out.puttext; id[] -> out.puttext; 
+          ', i64 0, i64 0\n' -> out.puttext;
+          
+          '   call i32 @puts(i8* %S' -> out.puttext;
+          sNo -> out.putint;
+          ')\n' -> out.puttext
+       #);
+     dumpObjX:
+       (# rN,rNx,range: @integer; msg,type,id: ^text
+       enter(msg[],rN,type[])
+       do (if false then
+              '**** dumpObjX: ' -> puttext; msg[] -> puttext;
+              ' ' -> puttext; rn -> putint; ' ' -> put;
+              type[] -> putline;
+          if);
+          'object: ' -> (msg.copy).prepend -> mkTextConst -> putString;
+          (rN,type[]) ->  dumpObj
+       #);
+     
      thisClassDescNo: @integer; 
      thisClassId,        (* className$descNo *)
      thisClassN,         (* %thisClassId     *)
      PthisClassN: ^Text; (* thisClassN*      *)
-     isValueObject: @boolean;
+     isValueObject,isVstubObject: @boolean;
 
 
      doFilter: (* should be eliminated *)
@@ -837,10 +871,11 @@ ObjectCode:
           N,orgId: ^text; 
           descNo,topDescNo,originOff,originDescNo: @integer;
           procE: @boolean; (* mark start as proc-entry and enter-entry *)
-          isValueObj: @boolean;
+          isValueObj,isVstub: @boolean;
           first: @boolean;
           T,S: ^Text
-       enter(N[],descNo,procE,topDescNo,originOff,orgId[],originDescNo,isValueObj)
+       enter(N[],descNo,procE,topDescNo,originOff,orgId[],originDescNo
+          ,isValueObj,isVstub)
        do (if descNo = 0 then
               dumpClass;
               ' is ZERO!' -> putline
@@ -849,11 +884,14 @@ ObjectCode:
           (if notLLVM then
               '\nclass ' -> out.puttext; N[] -> out.puttext; ' ' ->out.put; 
               descNo -> out.putint; ' ' -> out.put;
-              originOff -> out.putint; ' ' -> out.put;
-              originDescNo -> out.putint; 
+              originOff -> out.putint; ' ' -> out.put; orgId[] -> out.puttext;
+              ' ' -> out.put; originDescNo -> out.putint; 
               (if isValueObj then
                   ' isValueObj' -> out.puttext;
               if);
+              (if isVstub -> isVstubObject then
+                  ' isVstub' -> out.puttext;
+              if);  
               out.newline; 
               (N[],descNo,originOff,originDescNo,isValueObj,out[]) 
                 -> descs.setCurrent;
@@ -917,11 +955,15 @@ ObjectCode:
                   '\ndefine ' -> out.puttext; thisClassN[] -> out.puttext; 
                   '* @' -> out.puttext; N[] -> out.puttext;      
                   '$' -> out.put; descNo -> out.putint;
-                  '(' -> out.put; 
-                  thisClassN[] -> out.puttext;
-                  (*'%' -> (N.copy).prepend -> out.puttext;*)
-                  ' *%R0' -> out.puttext;
-                  (if isValueObject then
+                  '(' -> out.put; thisClassN[] -> out.puttext;
+                  '* %R0' -> out.puttext;
+                  (if true
+                   // isVstub then
+                      ',' -> out.put;
+                      orgId[] -> mkLLVMstructName -> out.puttext;
+                      allocReg; (* alloc R1 for origin *)
+                      '* %R1' -> out.puttext;
+                   //  isValueObject then
                       ', i32 %off' -> out.puttext
                    else
                       (if newFeature then
@@ -948,7 +990,7 @@ ObjectCode:
                   '   call i32 @puts(i8* %S)\n' -> out.puttext;
               if);
               (if dumpLLVMobjs and not ('main' -> N.equal) then
-                  (0,thisClassN[]) -> dumpObj;
+                  (thisClassN[],0,thisClassN[]) -> dumpObjX;
               if);              
               '   %V0 = add i32 0, 0' -> out.putline; (* just a dummy *)
           if)
@@ -988,6 +1030,11 @@ ObjectCode:
               'DO:'->out.putline;
               descs.markDoE;
               (if genDoEvent then doEventQ if);
+           else 
+              ';; do:' -> out.putline;
+              (if dumpLLVMobjs then
+                  ('DO:',0,thisClassN[]) -> dumpObjX
+              if)
           if)
        #);
      mvStack:
@@ -1182,27 +1229,23 @@ ObjectCode:
               pn -> emit
            else
               stack.put;
-              (if true then
-                  '%vdt_type$' -> T[];
-                  (2,stack.rType[stack.rTop].length)
-                    ->stack.rType[stack.rTop].sub -> T.append;
-                  '*' -> T.put;
-                  0 -> leag -> rNx;
-                  (rNx, T[], 'i32*') -> bitCast -> rNy;
-                  'store i32 ' -> out.puttext;
-                  lab -> out.putint;
-                  ', i32* ' -> out.puttext;
-                  rNy -> emitRreg -> out.putline;
-                  
-                  (stack.rRegNo[stack.rTop]
-                  , stack.rType[stack.rTop][]
-                  ,PthisClassN[])
-                    -> bitCast -> rN;
-                  '   ret ' -> out.puttext; 
-                  PthisClassN[] -> out.puttext;
-                  ' '  -> out.put;
-                  rN -> emitRreg -> out.putline
-              if)
+              '%vdt_type$' -> T[];
+              (2,stack.rType[stack.rTop].length)
+                ->stack.rType[stack.rTop].sub -> T.append;
+              '*' -> T.put;
+              0 -> leag -> rNx;
+              (rNx, T[], 'i32*') -> bitCast -> rNy;
+              'store i32 ' -> out.puttext;
+              lab -> out.putint;
+              ', i32* ' -> out.puttext;
+              rNy -> emitRreg -> out.putline;
+              
+              (stack.rRegNo[stack.rTop],stack.rType[stack.rTop][],PthisClassN[])
+                -> bitCast -> rN;
+              '   ret ' -> out.puttext; 
+              PthisClassN[] -> out.puttext;
+              ' '  -> out.put;
+              rN -> emitRreg -> out.putline
           if)
        #);
      alloc: 
@@ -1340,7 +1383,7 @@ ObjectCode:
                              ' rtnType: ' -> TT; rtnType[] -> TT 
                           #);
               if)if);
-
+              ind;
               allocReg -> rNz -> emitRreg -> out.puttext;
               ' = call ' -> out.puttext; Ns[] -> out.puttext;
               '* @' -> out.puttext; N[] -> out.puttext; 
@@ -1371,10 +1414,10 @@ ObjectCode:
               allocReg -> normalRtnLab;
               allocReg -> breakLab;
               (* compare rtn = callee *)
-              '   ' -> out.puttext;
+              ind;
               allocReg -> vNx -> emitVreg -> out.puttext;
               ' = icmp eq '  -> out.puttext;
-              Ns[] -> out.puttext;
+              Ns[] -> out.puttext; ' ' -> out.put;
               rNz -> emitRreg -> out.puttext;
               ', ' -> out.puttext;
               rN -> emitRreg -> out.puttext;
@@ -1391,7 +1434,7 @@ ObjectCode:
               ':' -> out.put; out.newline;
               
               (rNz,Ns[],PthisClassN[])  -> bitCast -> rNq;
-              '   ' -> out.puttext;
+              ind;
               allocReg -> vN -> emitVreg -> out.puttext;
               ' = icmp eq ' -> out.puttext;
               PthisClassN[] -> out.puttext;
@@ -1421,13 +1464,13 @@ ObjectCode:
                   (rNz,'*'->(Ns.copy).put ->deref, '[0 x i32]*')
                     -> bitcast -> rN;
                   
-                  '   ' -> out.puttext;
+                  ind;
                   allocReg -> rNx -> emitRreg -> out.puttext;
                   ' = getelementptr [0 x i32], [0 x i32]* ' -> out.puttext;
                   rN -> emitRreg -> out.puttext;
                   ', i32 0, i32 0\n' -> out.puttext;
                   
-                  '   ' -> out.puttext;
+                  ind;
                   allocReg -> vN -> emitVreg -> out.puttext;
                   ' = load i32 ' -> out.puttext; 
                   ', i32* ' -> out.puttext; 
@@ -1440,7 +1483,7 @@ ObjectCode:
                   if);
                   
                   (if false then
-                      '   ' -> out.puttext;
+                      ind;
                       allocReg -> vNx -> emitVreg -> out.puttext;
                       ' = icmp slt i32 2, ' -> out.puttext;
                       vN -> emitVreg -> out.puttext; out.newline;
@@ -1483,7 +1526,7 @@ ObjectCode:
                   rNy -> emitRreg -> out.puttext;
                   '\n' -> out.puttext;
                   
-                  '   ' -> out.puttext;
+                  ind;
                   allocReg -> vNx -> emitVreg -> out.puttext;
                   ' = icmp eq i32 1, ' -> out.puttext;
                   vN -> emitVreg -> out.puttext; out.newline;
@@ -1605,7 +1648,7 @@ ObjectCode:
                 (N[],staticOff) -> typeInfo.lookup -> eType[];
                 lcom(#do 'eType: ' -> TT; eType[] -> TT #);
                 
-                '   ' -> out.puttext;
+                ind;
                 allocReg -> rN -> emitRreg -> out.puttext;
                 ' = tail call i32 * @allocIndexed(i32 ' -> out.puttext;
                 stack.vtop - 1 -> vRegInstack -> out.puttext;
@@ -1637,21 +1680,31 @@ ObjectCode:
           codes.send -> emit; inx -> emit;
        #);
      castStub:
-       (# stubN,OGid,stubT,OGt: ^text; dNo,rN: @integer
-       enter(stubN[],dNo,OGid[])
+       (# stubN,stubOrgN,OGid,stubT,OGt: ^text; stubDescNo,orgDno,rN: @integer
+       enter(stubN[],stubDescNo,stubOrgN[],orgDno,OGid[])
        do (if not notLLVM then
               '%' -> stubT[];
-              stubN[] -> stubT.append;
+              stubOrgN[] -> stubT.append;
               stubT[] -> doFilter -> stubT[];
               '$' -> stubT.put;
-              dNo -> stubT.putint;
+              orgDno -> stubT.putint;
               '*' -> stubT.put;
               '%' -> OGt[];
               OGid[] -> OGt.append;
               '*' -> OGt.put;
               lcom(#do 'cast: ' -> TT; stubT[] -> TT; ' ' -> TT; OGt[] -> TT #);
-              (0,stubT[],OGt[]) -> bitcast -> rN;
-              (rN,OGt[]) -> stack.rpushT
+              (1,stubT[],OGt[]) -> bitcast -> rN;
+              (rN,OGt[]) -> stack.rpushT;
+              stack.put;
+              stubOrgN[] -> puttext;  ' ' -> put; stubT[] -> puttext;
+              ' ' -> put; OGid[] -> puttext; 
+              '%' -> stubT[];
+              stubN[] -> stubT.append;
+              stubT[] -> doFilter -> stubT[];
+              '$' -> stubT.put;
+              stubDescNo -> stubT.putint;
+              '*' -> stubT.put;
+              ' ' -> put; stubT[] -> putline
           if)
        exit stubT[]
        #);
@@ -1659,15 +1712,16 @@ ObjectCode:
        (# N,T,elmType: ^text; recIsValueObj,useStb: @boolean;
           dinx,noOfRefArgs,rNx,rNy,rNz,rNv,rNw,rNq: @integer;
           originOff:<
-            (# off: @integer; type: ^text; useStub: @boolean
+            (# off: @integer; topSuperId,type: ^text; useStub: @boolean
             do inner;
                off -> orgOff; useStub -> useStb;
                '%' -> orgType[]; type[] -> orgType.append;
+               topsuperId[] -> topId[]
             exit(off ,type,useStub)
             #);
-          orgOff: @integer; orgType: ^text
+          orgOff: @integer; topId,orgType: ^text
        enter(N[],dinx,noOfRefArgs,recIsValueObj) 
-       do 'invokev ' -> emitOp; dinx -> out.putint; 
+       do 'invokev' -> emitOp; dinx -> out.putint; 
           ' ' -> out.put; noOfRefArgs -> out.putint;
           ' ' -> out.put; N[] -> out.puttext;  ' ' -> out.put;
           (if recIsValueObj then '1' -> out.put else '0' -> out.put if);
@@ -1685,6 +1739,7 @@ ObjectCode:
               (2,stack.rtype[stack.rtop].length)
                 -> stack.rtype[stack.rtop].sub -> T.append;
               lcom(#do 'type of vdt = ' -> TT; T[] -> TT #);
+              ind;
               allocReg -> rNy -> emitRreg -> out.puttext;
               ' = load ' -> out.puttext; T[] -> out.puttext; 
               ', ' -> out.puttext; T[] -> out.puttext; '* ' -> out.puttext; 
@@ -1696,71 +1751,141 @@ ObjectCode:
               (rNy,T[],dinx - 1) -> leaReg -> rNz;              
               '%vdt_ret$' -> T[]; N[] -> T.append; '*()*' -> T.append;
               
+              ind;
               allocReg -> rNv -> emitRreg -> out.puttext;
               ' = load ' -> out.puttext; T[] -> out.puttext;
               ', ' -> out.puttext; T[] -> out.puttext; '* ' -> out.puttext; 
-              rNz -> emitRreg -> out.puttext; '\n   ' -> out.puttext;
+              rNz -> emitRreg -> out.puttext; '\n' -> out.puttext;
               
               lcom(#do rNv -> emitRreg -> TT;
                      ' = obj.VDT[dinx] = [' -> TT; dinx - 1 -> II;  ']'->TT #);
               
               (*(rNv,T[]->deRef) -> dumpObj;*)      
-              
-              lcom(#do 'Call %vdt_ret' -> TT #);
-              '%vdt_ret$' -> T[]; N[] -> T.append; 
-              '   ' -> out.puttext;
-              allocReg -> rNw -> emitRreg -> out.puttext;
-              ' = call ' -> out.puttext; T[] -> out.puttext;
-              '* ' -> out.puttext;
-              rNv  -> emitRreg -> out.puttext;
-              '()\n' -> out.puttext;
-              
-              (*(rNw,T[]->deRef) -> dumpObj;*)
-              
-              lcom(#do 'Load  new virtual object' -> TT #);
-              (rNw,T[],0) -> leaReg -> rNq;              
-              allocReg -> rNx -> emitRreg -> out.puttext;
-              ' = load %' -> out.puttext;
-              N[] -> out.puttext; '*, %' -> out.puttext;
-              N[] -> out.puttext; '** ' -> out.puttext;
-              rNq -> emitRreg -> out.puttext;
-              '\n' -> out.puttext;
-              
-              lcom(#do rNx -> emitRreg -> TT; ' = new virtual object' -> TT #);
-              (if not newFeature then
-                  lcom(#do 'Store origin in virtual object - FIX it!'->TT #);
-                  originOff;
-              
-                  (*(rNx,'%' -> (N.copy).prepend) -> dumpObj;*)
-                  lcom(#do 'store origin:off:' -> TT; orgOff -> II; 
-                         ' orgType: ' -> TT; orgType[] -> TT #);
-                  stack.put;
-                  (if orgOff = 0 then
-                      '!!!! invokev:originOff = 0 :'  -> puttext;
-                      N[] -> putline;
-                      lcom(#do '!!!! originOff = 0 '  -> TT; N[] -> TT  #);
-                      1 -> orgOff (* a hack !? *)
-                  if);
-                  (rNx,'%'->(N.copy).prepend,orgOff) -> leaReg -> rNy;
-                  
+              originOff;
+              lcom(#do 'Call:VDT:' -> TT; T[] -> TT; 
+                     ' useStub:' -> TT; useStb -> BB #);
+              (if useStb then 
+                 (* (rNx,'%'->(N.copy).prepend,orgOff) -> leaReg -> rNy;
+                          
                   '   store ' -> out.puttext; 
                   stack.rType[stack.rTop][] -> out.puttext; 
                   stack.rTop -> rReg -> out.puttext;
                   ', ' -> out.puttext; 
                   stack.rType[stack.rTop][] -> out.puttext; 
                   '* ' -> out.puttext; rNy -> emitRreg -> out.putline;
-              if);
-              (if dumpLLVMobjs then
-                  (rNx,'%' -> (N.copy).prepend) -> dumpObj;
-              if);
-              
-              (if true then
-                  lcom(#do 'FIX: mustr VDT entry' -> TT #);
+                  *)
+                  '%vdt_ret$' -> T[]; N[] -> T.append; '*' -> T.append;
+                  
+                  ind;
+                  allocReg -> rNx -> emitRreg -> out.puttext;
+                  ' = call ' -> out.puttext; T[] -> out.puttext; ' '-> out.put;
+                  rNv -> emitRreg -> out.puttext;
+                  (*'()\n' -> out.puttext;*)
+                  '(' -> out.put; 
+                  (if false then
+                      stack.rType[stack.rTop][] -> out.puttext; 
+                      ' ' -> out.put;
+                      stack.rTop -> rReg -> out.puttext;
+                  if);
+                  ')\n' -> out.puttext;
                   stack.put;
-                  '   call %' -> out.puttext; N[] -> out.puttext;
+                  (rNx,T[]) -> stack.rPushT;      
+                  stack.put;
+               else
+                  '%vdt_ret$' -> T[]; N[] -> T.append; 
+                  ind;
+                  allocReg -> rNw -> emitRreg -> out.puttext;
+                  ' = call ' -> out.puttext; T[] -> out.puttext;
+                  '* ' -> out.puttext;
+                  rNv  -> emitRreg -> out.puttext;
+                  '()\n' -> out.puttext;
+                  
+                  lcom(#do 'Load  new virtual object' -> TT #);
+                  (rNw,T[],0) -> leaReg -> rNq;
+                  ind;
+                  allocReg -> rNx -> emitRreg -> out.puttext;
+                  ' = load %' -> out.puttext;
+                  N[] -> out.puttext; '*, %' -> out.puttext;
+                  N[] -> out.puttext; '** ' -> out.puttext;
+                  rNq -> emitRreg -> out.puttext;
+                  '\n' -> out.puttext;
+                  
+                  lcom(#do rNx->emitRreg-> TT; ' = new virtual object' -> TT #);
+                  (if not newFeature then
+                      lcom(#do 'Store origin in virtual object - FIX'->TT #);
+
+              
+                      lcom(#do 'store origin:off:' -> TT; orgOff -> II; 
+                             ' orgType: ' -> TT; orgType[] -> TT #);
+                      stack.put;
+                      (if orgOff = 0 then
+                          '!!!! invokev:originOff = 0 :'  -> puttext;
+                          N[] -> putline;
+                          lcom(#do '!!!! originOff = 0 '  -> TT; N[] -> TT  #);
+                          1 -> orgOff (* a hack !? *)
+                      if);
+                      (if not useStb then
+                          (rNx,'%'->(N.copy).prepend,orgOff) -> leaReg -> rNy;
+                          
+                          '   store ' -> out.puttext; 
+                          stack.rType[stack.rTop][] -> out.puttext; 
+                          stack.rTop -> rReg -> out.puttext;
+                          ', ' -> out.puttext; 
+                          stack.rType[stack.rTop][] -> out.puttext; 
+                          '* ' -> out.puttext; rNy -> emitRreg -> out.putline;
+                      if)
+                  if);
+                  (if dumpLLVMobjs then
+                      ('Virtual:' -> (N.copy).prepend,rNx,'%'->(N.copy).prepend)
+                        -> dumpObjX;
+                  if);
+                  
+                  (if true then
+                      lcom(#do 'FIX: mustr VDT entry' -> TT #);
+                      stack.put;
+                  
+                  (if useStb then
+                      (rNx,('%'->(N.copy).prepend).put,2) -> leaReg -> rNy;
+                      allocReg -> rNx -> emitRreg -> out.puttext;
+                      ' = load %' -> out.puttext;
+                      topId[] -> out.puttext; '*, %' -> out.puttext;
+                      topId[] -> out.puttext; '** ' -> out.puttext;
+                      rNy -> emitRreg -> out.puttext;
+                      '\n' -> out.puttext;                      
+                  if);
+                      (if false then
+                          (# T: ^text
+                          do 'Virtual:'->(N.copy).prepend -> T[];
+                             (if useStb then ' useStub' -> T.puttext if);
+                             (T[],rNx,'%'-> (topId.copy).prepend) 
+                               -> dumpObjX;
+                          #);
+                      if);
+                  (if false and  not (N[] -> topId.equal) then
+                      (rNx
+                      ,'*' -> ('%'->(N.copy).prepend).put
+                      ,'*' -> ('%'->(topId.copy).prePend).put)
+                      -> bitcast -> rNx
+                  if); 
+                
+                  '   call %' -> out.puttext; 
+                  (if true then
+                      topId[] -> out.puttext;
+                   else
+                      N[] -> out.puttext;
+                  if);
                   '* @' -> out.puttext;
-                  N[] -> out.puttext;
-                  '(%' -> out.puttext;  N[] -> out.puttext;
+                  (if true then
+                      topId[] -> out.puttext;
+                   else
+                      N[] -> out.puttext;
+                  if);
+                  '(%' -> out.puttext;  
+                  (if true then
+                      topId[] -> out.puttext;
+                   else
+                      N[] -> out.puttext;
+                  if);
                   '* ' -> out.puttext; rNx -> emitRreg -> out.puttext;
                   (if newFeature then
                       ',' -> out.put;
@@ -1770,27 +1895,51 @@ ObjectCode:
                           'NULL' -> out.puttext;
                   if)if);
                   ')\n' -> out.puttext;
-                  '%' -> T[]; N.copy -> T.append; '*' -> T.put;
+                  '%' -> T[]; 
+                  (if true then
+                      topId[] ->  T.append
+                   else
+                      N.copy -> T.append; 
+                  if);
+                  '*' -> T.put;
                   (rNx,T[]) -> stack.rPushT;
                else
+                  lcom (#do 'FIX:other: ' -> TT; topId[] -> TT#);
                   (rNw,T[],1) -> leaReg -> rNy;
-                  
+                  ind;
                   allocReg -> rNz -> emitRreg -> out.puttext;
                   ' = load %' -> out.puttext; N[] -> out.puttext;
                   '* (%' -> out.puttext;  N[] -> out.puttext;
                   '*)*, %' -> out.puttext; N[] -> out.puttext;
                   '* (%' -> out.puttext; N[] -> out.puttext;
                   '*)**' -> out.puttext;
-                  rNy -> emitRreg -> out.puttext;
-                  
-                  '\n   call %' -> out.puttext; N[] -> out.puttext;
+                  rNy -> emitRreg -> out.putline;
+                  (if not (N[] -> topId.equal) then
+                      (rNz,N[]->mkFuncPtr,topId[]->mkFuncPtr) 
+                        -> bitCast -> rNz;
+                      (rNx
+                      ,'*' -> ('%'->(N.copy).prepend).put
+                      ,'*' -> ('%'->(topId.copy).prePend).put)
+                      -> bitcast -> rNx
+                  if);
+                  '   call %' -> out.puttext;
+                  (if true then 
+                      topId[] -> out.puttext
+                   else
+                      N[] -> out.puttext;
+                  if);
                   '* ' -> out.puttext;
                   rNz -> emitRreg  -> out.puttext;
-                  '(%' -> out.puttext;  N[] -> out.puttext;
+                  '(%' -> out.puttext;  
+                  (if true then 
+                      topId[] -> out.puttext; 
+                   else
+                      N[] -> out.puttext; 
+                  if);
                   '* ' -> out.puttext; rNx -> emitRreg -> out.puttext;
                   ')\n' -> out.puttext
               if);
-          if);
+          if);if)
        #);
      exe: 
        (# N: ^text enter N[] 
@@ -2214,8 +2363,8 @@ ObjectCode:
               lcom(#do 'ET:'-> TT; elmType[] -> TT;
                      ' ST:' -> TT; stack.Rtype[stack.rtop][] -> TT; #);
               stack.put;
-
               off -> leag -> rN;
+              ind;
               allocReg -> rN2 -> emitRreg -> out.puttext;
               ' = load ' -> out.puttext; 
               elmType[] -> out.puttext;
@@ -2349,7 +2498,7 @@ ObjectCode:
                   'OBS! Constant >= 2^16 is not implemented' -> comment
               if);
            else
-              '   ' -> out.puttext;
+              ind;
               allocReg -> rN -> emitVreg -> out.puttext;
               ' = add i32 0, ' -> out.puttext; cst -> out.putint; 
               out.newline;
@@ -2505,7 +2654,7 @@ ObjectCode:
               '   ;; storeX ' -> out.puttext; N[] -> out.puttext;
               ' ' -> out.put; off -> out.putint; out.newline;
               stack.put;
-              
+              ind;
               allocReg -> rN -> emitRreg -> out.puttext;
               ' = getelementptr ' -> out.puttext; 
               N[] -> prepStruct -> out.puttext;
@@ -2643,6 +2792,7 @@ ObjectCode:
                   rN -> emitRreg -> out.putline
               if);
               (* leaReg -> rN = rstack[rTop] *)
+              ind;
               allocReg -> rN -> emitRreg -> out.puttext;
               ' = getelementptr ' -> out.puttext; 
               N[] -> prepStruct -> out.puttext;
@@ -2925,7 +3075,7 @@ ObjectCode:
           LLVMvOp:
             (# opT: ^text
             enter opT[]
-            do '   ' -> out.puttext;
+            do ind;
                allocReg -> rN -> emitVreg -> out.puttext;
                ' = ' -> out.puttext; opT[] -> out.puttext;
                ' i32 ' -> out.puttext; stack.vtop - 1 -> vRegInStack -> out.puttext;
@@ -2941,7 +3091,7 @@ ObjectCode:
           LLVMboolOp:
             (# opT: ^text
             enter opT[]
-            do '   ' -> out.puttext;
+            do ind;
                allocReg -> rN -> emitVreg -> out.puttext;
                ' = ' -> out.puttext; opT[] -> out.puttext;
                ' i1 ' -> out.puttext; stack.vtop - 1 -> vRegInStack -> out.puttext;
@@ -2950,7 +3100,7 @@ ObjectCode:
                rN -> stack.vPush;
                1 -> stack.Vtype[stack.vTop]
             #);
-           LLVMRefRElOp:
+           LLVMRefRelOp:
             (# opT: ^text; rN,rNx: @integer; rIsNull,lIsNull: @boolean
             enter opT[]
             do 
@@ -2969,7 +3119,7 @@ ObjectCode:
                          -> bitCast
                          -> rNx                   
                if)if);
-               '   ' -> out.puttext;
+               ind;
                allocReg -> rN -> emitVreg -> out.puttext;
                ' = ' -> out.puttext; opT[] -> out.puttext;
                ' ' -> out.puttext;
@@ -3274,8 +3424,11 @@ ObjectCode:
                if);
             #);
           mkVdtData:
-            (# orgOfVN,T: ^text; dM: @integer
-            do '\n@vdt_data$' -> out.puttext; thisClassId[] -> out.puttext;
+            (# orgOfVN,T,S: ^text; dM: @integer
+            do (if false then
+                   '**** mkVdtData: ' -> puttext; thisClassId[] -> putline;
+               if);
+               '\n@vdt_data$' -> out.puttext; thisClassId[] -> out.puttext;
                ' = global %vdt_type$' -> out.puttext;
                thisClassId[] -> filter -> out.puttext;
                ' {' -> out.puttext;
@@ -3285,9 +3438,8 @@ ObjectCode:
                         (if descs.current.isInner[i] then
                             (if newFeature then
                                 dN -> vName -> (T[],orgOfVN[]);
-                                '*' -> ('%' -> T.prepend).put -> T[];
-                                (T[],dN) -> funcPtrType -> out.puttext;
-                                
+                                '*' -> ('%' -> T.prepend).put -> S[];
+                                (S[],dN) -> funcPtrType -> out.puttext;
                              else
                                 '%' -> out.put;
                                 dN -> vName -> (T[],orgOfVN[]);
@@ -3319,7 +3471,10 @@ ObjectCode:
                     (if i < descs.current.vdtTop then
                         ',' -> out.put
                if)for);
-               '\n}\n' -> out.puttext
+               '\n}\n' -> out.puttext;
+               (if false then
+                   '**** mkVdtData:end: ' -> puttext; thisClassId[] -> putline;
+               if);
             #);
           mkVdtRet:
             (# T: ^Text
@@ -3367,11 +3522,14 @@ ObjectCode:
                thisClassId[] -> vdt_ret_type.append;
                
                (vdt_ret_type[],118,8) -> allocRTObj -> rNx;
+               (**** OBS! size of obj is 48 below - but is this correct?
+                * Probably n, we need the size of the binding
+                *)
                (thisClassN[],thisClassDescNo,48) -> allocQbetaObj -> rNy;
                
                (rNx,vdt_ret_type[],0) -> leaReg -> rNz;
 
-               'store ' -> out.puttext; 
+               '   store ' -> out.puttext; 
                PthisClassN[]  -> out.puttext;
                ' ' -> out.put;
                rNy -> emitRreg -> out.puttext;
@@ -3380,18 +3538,22 @@ ObjectCode:
                '* ' -> out.puttext;
                rNz -> emitRreg  -> out.putline;
                
-               (rNx,vdt_ret_type[],1) -> leaReg -> rNv;
-
-               (PthisClassN[],thisClassDescNo) -> funcPtrType -> funcPT[];
-               '\tstore ' -> out.puttext;
-               funcPT[] -> out.puttext; 
-               ' @' -> out.puttext; thisClassId[] -> out.puttext;
-               ', ' -> out.puttext;
-               
-               funcPT[] -> out.puttext;
-               '* ' -> out.puttext;
-               rNv -> emitRreg -> out.puttext;
-               
+               (if false then
+                   (* here we store the constructo the binding, 
+                    * but we dont use it - can be eliminated
+                    *)
+                   (rNx,vdt_ret_type[],1) -> leaReg -> rNv;
+                   
+                   (PthisClassN[],thisClassDescNo) -> funcPtrType -> funcPT[];
+                   '   store ' -> out.puttext;
+                   funcPT[] -> out.puttext; 
+                   ' @' -> out.puttext; thisClassId[] -> out.puttext;
+                   ', ' -> out.puttext;
+                   
+                   funcPT[] -> out.puttext;
+                   '* ' -> out.puttext;
+                   rNv -> emitRreg -> out.puttext;
+               if);
                '\n   ret %vdt_ret$' -> out.puttext;
                thisClassId[] -> out.puttext;
                '* ' -> out.puttext; rNx -> emitRreg -> out.puttext;
