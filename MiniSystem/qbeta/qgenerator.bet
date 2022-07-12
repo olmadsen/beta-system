@@ -785,27 +785,36 @@ generator: variants
        (# mainOG,thisOG,OGx: ^ObjectGenerator; ISx: ^items; 
           rec,E: ^Exp; A: ^Address;
           trace: (# exit false #);
-          fArgs: [10] ^DataItem; top: @integer; DI: ^DataItem
-       enter(mainOG[],thisOG[])
+          fArgs: [10] ^DataItem; top: @integer; DI: ^DataItem;
+          fromVDTalloc,orgIsVal: @boolean
+       enter(mainOG[],thisOG[],fromVDTalloc)
        do (if trace then
               '**** storeOrigins: ' -> puttext; thisOG.OGid -> puttext;
               ' originOff: ' -> puttext; thisOG.IS.newOriginOff -> putint;
+              ' orgIsValObj: ' -> puttext; 
+              thisOG.origin[] -> thisOG.IS.originisValue -> putboolean;
+              newline
           if);
           cd.lcom(#do 'storeOrigins:main: ' -> TT; mainOG.OGidWdNo->TT;
                     ' this: ' -> TT; thisOG.OGidWdNo -> TT;
                     ' originOff: ' -> TT; thisOG.IS.newOriginOff -> II
                  #);
-
           (if thisOG.IS.newOriginOff > 0 then
               (if thisOG.super.ATd[] <> none then
                   cd.lcom(# do 'rdup src' -> TT #);
                   (if true then -1 -> cd.rdouble if)
               if);
+              (if fromVDTalloc and 
+                  (thisOG.origin[] -> thisOG.IS.originisValue -> orgIsVal) then
+                  cd.lcom(#do 'OBS! we need the correct off'-> TT;
+                            'of value object in holder object'->TT; #);
+                  4 -> cd.pushConst;
+                  4 -> cd.pushConst;
+              if);
               (* rstack = [..., obj,callee], store obj in callee.origin *)
               (mainOG.OGidWdNo,thisOG.IS.newOriginOff
               ,thisOG.origin[] -> thisOG.IS.originisValue
-              ) 
-                -> cd.rstoreX;
+              ) -> cd.rstoreX;
               (* rstack = [..., callee]; ... *)
            else
               cd.lcom(#do 'no origin:newOriginOff=0' -> TT #)
@@ -819,7 +828,7 @@ generator: variants
                        '**   origin: ' -> puttext; 
                        (ISx.encOG->OGx[]).OGid -> putline
               for)if);
-              cd.lcom(#do 'Before:computeAdr: ' -> TT; thisOG.OGid ->TT#);
+              cd.lcom(#do 'Before:computeAdr: ' -> TT; thisOG.OGid ->TT #);
               cd.stack.put;
               cd.rswap;
               thisOG.super[] -> goOriginAdr -> E[];
@@ -827,7 +836,8 @@ generator: variants
               (if E[] <> none then 
                   cd.lcom(#do 'before:E.loadArgs:' -> TT; E.dopt -> TT #);
                   (0,0,none) -> E.loadArgs;
-                  (if (E.args[] <> none) and (E.args.noOfSons > 0) then
+                  (if not fromVDTalloc 
+                      and (E.args[] <> none) and (E.args.noOfSons > 0) then
                       E.Atd.OG.IS.scanNonBoundItemArgs
                       (#
                       do (if currentArg.isDataItem then
@@ -856,7 +866,7 @@ generator: variants
               cd.lcom(#do thisOG.super.ATd.OG.OGid -> TT; ' ' -> TT;
                         thisOG.super.ATd.OG.IS.newOriginOff -> II #);
               cd.rswap;
-              (mainOG[],thisOG.super.ATd.OG[]) -> storeOrigins;
+              (mainOG[],thisOG.super.ATd.OG[],fromVDTalloc) -> storeOrigins;
            else
               (if trace then newline if)
           if);
@@ -938,7 +948,7 @@ generator: variants
                  '** stack: ' -> puttext; cd.stack.print -> putline;
              if);
              (if not newFeature then
-                 (theOG[],theOG[]) -> storeOrigins;
+                 (theOG[],theOG[],false) -> storeOrigins;
              if);
              cd.lcom(#do 'topSuper:' -> TT; 
                        (theOG.IS.topSuper).newDescNo -> II; ' '->TT;
@@ -1312,7 +1322,12 @@ generator: variants
                            display
                if)if)if);
                (* Move IS.genclass to here? *)
-               (this(ObjectGenerator),CC[],var[]) -> IS.genClass
+               (if false and (primNo > 0) then
+                   '****genclass: isPrimitive: ' -> puttext;
+                   OGid -> putline
+               else
+                   (this(ObjectGenerator),CC[],var[]) -> IS.genClass
+               if)
             #);
           XaddB: @ XaddBptn;
           XaddBptn::
@@ -1508,7 +1523,10 @@ generator: variants
                        (if (origin[] -> IS.originIsValue) then
                            IS.newOriginOff + 1 -> addVX;
                            IS.newOriginOff + 2 -> addVX;
-               if)if)if);
+                       if)
+                    else
+                       (IS.newOriginOff,objectDecl.OG.OGidWdNo) -> addRX;
+               if)if);
                IS.scanSons
                (# DI: ^DataItem; M: ^Module; MI: ^ModuleItem
                do (if current.isDataItem then
@@ -2185,7 +2203,18 @@ generator: variants
                    father.father.dopt -> puthead;
                if);
                cd.mkLLVMvirtualDefs
-               (# vName::
+               (# handleOrigins::
+                    (#
+                    do cd.lcom(#do 'handleOrigins:NEW: ' -> TT; OG.OGid ->TT #);
+                       (if (OG.IS.newOriginOff > 0) then
+                           (if OG.primNo 
+                            // object_prim // vAssign_prim then
+                            else
+                               (OG[],OG[],true) -> storeOrigins;
+                               cd.lcom(#do 'handleOrigin:END: ' -> TT #)
+                       if)if)
+                    #);
+                  vName::
                     (# OGx: ^ObjectGenerator; org: ^Items
                     do dn -> QnewDesc.getOD -> OGx[];
                        OGx.OGidWdNo -> vN[];

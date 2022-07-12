@@ -619,6 +619,34 @@ ObjectCode:
           out.newline
        exit rNx
        #);
+     LLVMget:
+       (# rNoSrc,rNoDst,off,rN: @integer; srcType,dstType,T: ^text
+       enter(rNoSrc,srcType[],off,rNoDst,dstType[])
+       do allocReg -> rN -> emitRreg -> T[];
+          ' = getelementptr ' -> T.puttext; 
+          srcType[] -> T.append;
+          ', ' -> T.puttext;
+          
+          srcType[] -> T.append;
+          '* ' -> T.append;
+          
+          rNoSrc -> emitRreg -> T.append;
+          
+          ', i32 0, i32 ' -> T.puttext; 
+          off -> T.putint; 
+          '\n   ' -> T.puttext;
+          
+          rNoDst -> emitRreg -> T.append;
+          ' = load ' -> T.append;
+          dstType[] -> T.append;
+          '*, ' -> T.append;
+          dstType[] -> T.append;
+          '** ' -> T.append;
+          rN -> emitRreg -> T.append
+          
+       exit T[]
+       #);
+     
      allocObj:
        (# objId: ^text; 
           descNo,size,rNx,rNy,rNz: @integer
@@ -762,7 +790,7 @@ ObjectCode:
           (rN,type[]) ->  dumpObj
        #);
      
-     thisClassDescNo,thisClassOrgDescNo: @integer; 
+     thisClassDescNo,thisClassOrgDescNo,thisClassOriginOff: @integer; 
      thisClassId,        (* className$descNo *)
      thisClassN,         (* %thisClassId     *)
      PthisClassN,        (* thisClassN*      *)
@@ -923,6 +951,7 @@ ObjectCode:
               '*' -> (thisClassN.copy -> PthisClassN[]).put;
               orgId[] -> thisClassOrgId[];
               originDescNo -> thisClassOrgDescNo;
+              originOff -> thisClassOriginOff;
               (if traceLLVMcalls then
                   '\n@S.' -> out.puttext; N[] -> out.puttext; 
                   '$' -> out.put; descNo -> out.putint;               
@@ -1778,16 +1807,6 @@ ObjectCode:
               lcom(#do 'Call:VDT:' -> TT; T[] -> TT; 
                      ' useStub:' -> TT; useStb -> BB #);
               (if useStb then 
-                 (* (rNx,'%'->(N.copy).prepend,orgOff) -> leaReg -> rNy;
-                          
-                  '   store ' -> out.puttext; 
-                  stack.rType[stack.rTop][] -> out.puttext; 
-                  stack.rTop -> rReg -> out.puttext;
-                  ', ' -> out.puttext; 
-                  stack.rType[stack.rTop][] -> out.puttext; 
-                  '* ' -> out.puttext; rNy -> emitRreg -> out.putline;
-                  *)
-                  
                   '%vdt_ret$' -> T[]; N[] -> T.append; '*' -> T.append;
                   
                   ind;
@@ -1806,11 +1825,14 @@ ObjectCode:
                   stack.put;
                   (rNx,T[]) -> stack.rPushT;      
                   stack.put;
+                  (rNx,T[]->deRef,0,allocReg->rNy,N[]-> mkLLVMstructName) 
+                    -> LLVMget -> out.putline;
                   
-                  (rNx,T[],'*'->(topId[]-> mkLLVMstructName).put)
+                  (rNy,N[]->mkTypePtrX,'*'->(topId[]-> mkLLVMstructName).put)
                     -> bitCast -> rNx;
                   (topId[],topId[],rNx,allocReg) -> LLVMcall -> out.putline
                   
+
 
                else
                   '%vdt_ret$' -> T[]; N[] -> T.append; 
@@ -2815,10 +2837,11 @@ ObjectCode:
               (N[],off) -> typeInfo.lookup -> srcT[];
               '   ;; lookup:  ' -> out.puttext;  srcT[] -> out.putline;
               stack.put;
-              
               (if isValueObjectOrigin then
                   '   ;; store origin being value object' ->out.putline;
                   off + 1 -> leag -> rN;   (* offSet in holder *)
+
+                  (* OBS! Why vTop -1 below? What is in vTop? *)
                   'store i32 ' -> out.puttext;
                   stack.vRegNo[stack.vtop - 1] -> emitVreg -> out.puttext;
                   ', i32* ' -> out.puttext;
@@ -2827,7 +2850,7 @@ ObjectCode:
                   'store i32 ' -> out.puttext;
                   stack.vRegNo[stack.vtop] -> emitVreg -> out.puttext;
                   ', i32* ' -> out.puttext;
-                  rN -> emitRreg -> out.putline
+                  rN -> emitRreg -> out.putline;
               if);
               (* leaReg -> rN = rstack[rTop] *)
               ind;
@@ -2845,7 +2868,7 @@ ObjectCode:
                   '   ;; rstoreX: stack.rtop < 2' -> out.putline;
                   leave rstoreX
               if);
-              (*'ccc'->putline;     stack.print;         *)
+              stack.print;        
               (if not (srcT[] -> stack.Rtype[stack.rTop - 1].equal) then
                   (rN,'*' -> (srcT.copy).put
                   ,'*' -> (stack.Rtype[stack.rTop - 1].copy).put
@@ -2860,10 +2883,14 @@ ObjectCode:
               stack.Rtype[stack.rTop - 1][]  -> out.puttext; 
               '* ' -> out.puttext;
               rN -> emitRreg -> out.putline;
+              (if false then
+                  ('rstorex:',stack.rRegNo[stack.rTop], N[] -> prepStruct) 
+                    -> dumpObjX;
+              if);
               rswap;
               stack.put;
               1 -> stack.rPop;
-              stack.put
+              stack.put;
           if)
        #);
      rstoreg: 
@@ -3399,6 +3426,11 @@ ObjectCode:
                if)for);
                inner; (* check if inner *)
             #);
+          handleOrigins:<
+            (# descNo: @integer
+            enter descNo
+            do inner 
+            #);
           vName:< 
             (# dn: @integer; vN,orgOfVN: ^text 
             enter dn
@@ -3557,7 +3589,7 @@ ObjectCode:
                if)
             #);
           mkVDTalloc:
-            (# rNx,rNy,rNz,rNv: @integer; vdt_ret_type,funcPT: ^text
+            (# rNx,rNy,rNz,rNv: @integer; vdt_ret_type,funcPT,T: ^text
             do (if traceLLVMcalls then
                    (thisClassId[],'vdt_ret$') -> defTraceString -> out.puttext
                if);
@@ -3616,13 +3648,39 @@ ObjectCode:
                    '* ' -> out.puttext;
                    rNv -> emitRreg -> out.puttext;
                if);
-               '\n   ret %vdt_ret$' -> out.puttext;
+               (if false and not isValueObject and (thisClassOriginOff > 0) then
+                   lcom(#do 'store origin: ' -> TT; thisClassOriginOff -> II #);
+                   (rNy,thisClassN[],thisClassOriginOff) -> leaReg  -> rNz;
+                   
+                   '   store ' -> out.puttext;
+                   (if isVstubObject  then
+                       thisClassOrgId[]
+                         -> mkTypePtrX -> T[]  -> out.puttext;
+                    else
+                       (thisClassOrgId[],thisClassOrgDescNo) 
+                         -> mkTypePtr -> T[]  -> out.puttext;
+                   if);
+                   ' %R1, ' -> out.puttext; 
+                   T[] -> out.puttext; 
+                   '* ' -> out.puttext;
+                   rNz -> emitRreg -> out.putline;
+               if);
+
+               (1,(thisClassOrgId[],thisClassOrgDescNo)-> mkTypePtr)
+                 -> stack.rpushT;
+               (rNy,thisClassN[]) -> stack.rpushT;
+               stack.put;
+               thisClassDescNo -> handleOrigins;
+               '   ret %vdt_ret$' -> out.puttext;
                thisClassId[] -> out.puttext;
                '* ' -> out.puttext; rNx -> emitRreg -> out.puttext;
                '\n}\n' -> out.puttext;
             #);
           dn: @integer
        do (if not notLLVM then
+              (if false then
+                  '**** mkLLVMVirtualDefs: ' -> puttext; thisClassN[] ->putline
+              if);
               (if true or hasVDTorInner then
                   '   ;; vdt:vdtTop: ' -> out.puttext;
                   descs.current.vdtTop -> out.putint; ' ' -> out.put;
@@ -3643,7 +3701,10 @@ ObjectCode:
               if);
               mkVdtRet;
               mkVDTalloc;
-              false -> isValueObject
+              false -> isValueObject;
+              (if false then
+                  '**** mkLLVMvDefs:end: ' -> puttext; thisClassN[] -> putline
+              if)
           if)
        #);
      close:
