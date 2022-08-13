@@ -3666,6 +3666,14 @@ bool traceThreads = true;
 	    float2 = sqrt(float1);
 #endif
 	    fPush(thisStack,float2);
+	    break;
+	  case 144: // lsqrt
+	    float1 = fPop(thisStack);
+#ifdef __arm__
+#else
+	    float2 = sqrt(float1);
+#endif
+	    fPush(thisStack,float2);
 	    break;	    
 	  default:
 	    RTE2("\n\n*** prim: missing case: ",arg1);

@@ -30,7 +30,7 @@ ObjectCode:
      comS: 
        (# II: (# enter Tx.putint do ' ' -> Tx.put #);
           TT: 
-            (# S: ^text; Q: @text; i: @integer; inText: @boolean;
+            (# S: ^text; Q: @text; i: @integer; inText,hasNL: @boolean;
                noSpace:< BooleanValue
             enter S[]
             do (if S[] <> none then
@@ -42,7 +42,11 @@ ObjectCode:
                             '"' -> Q.put;
                             not inText -> inText
                          // ascii.newline then
-                            ';' -> Q.put; ' ' -> Q.put 
+                            (if hasNL then
+                                ';' -> Q.put;
+                             else
+                                '{' -> Q.put; true -> hasNL
+                            if);
                          else
                             ch -> Q.put
                         if);
@@ -51,7 +55,8 @@ ObjectCode:
                             (if inText then '"'-> Q.put if);
                             leave L 
                         if)
-                     #)
+                     #);
+                   (if hasNL then '}' -> Q.put if)
                 else
                    '-none-' -> Tx.puttext
                if);
@@ -96,35 +101,6 @@ ObjectCode:
        do (if true and not notLLVM then
               inner;
               emit
-          if)
-       #);
-     lcomX:
-       (# TT: 
-            (# T: ^text 
-            enter T[] 
-            do (if T[] = none then
-                   'none' -> S.append
-                else
-                   T.scanAll
-                   (# 
-                   do (if  ch = ascii.newline then 
-                          '|' -> S.put 
-                       else 
-                          ch  -> S.put 
-               if)#)if);
-               ' ' -> S.put
-            #);
-          II: (# v: @integer enter v do v -> S.putint; ' ' -> S.put #);
-          BB: 
-            (# B: @Boolean 
-            enter B 
-            do (if B then 'true ' -> S.puttext else 'false ' -> S.puttext if)
-            #);
-          S: ^text
-       do (if true and not notLLVM then
-              '   ;; ' -> S[];
-              inner;
-              S[] -> out.putline
           if)
        #);
      emitOp:
@@ -397,7 +373,7 @@ ObjectCode:
             enter dn
             do (if true
                 // dn = 0 then
-                   '!!!!! TYpeInfo:exists: dn=0' ->  putline
+                   '!!!!! TypeInfo:exists: dn=0' ->  putline
                 // dn <= dsc.range then
                    dsc[dn][] <> none -> value
                if)
@@ -3724,29 +3700,30 @@ ObjectCode:
                '* ' -> out.puttext; rNx -> emitRreg -> out.puttext;
                '\n}\n' -> out.puttext;
             #);
+          printVDT:
+            (#
+            do '   ;; vdt:vdtTop: ' -> out.puttext;
+               descs.current.vdtTop -> out.putint; ' ' -> out.put;
+               (for i: descs.current.vdtTop repeat
+                    descs.current.vdtTable[i] -> out.putint;
+                    ':' -> out.put;
+                    (if descs.current.isInner[i] then
+                        'I' -> out.put
+                     else
+                        'V' -> out.put
+                    if);
+                    (if i < descs.current.vdtTop then ',' -> out.put if)
+               for);
+            #);
           dn: @integer
        do (if not notLLVM then
               (if false then
                   '**** mkLLVMVirtualDefs: ' -> puttext; thisClassT[] ->putline
               if);
-              (if true or hasVDTorInner then
-                  '   ;; vdt:vdtTop: ' -> out.puttext;
-                  descs.current.vdtTop -> out.putint; ' ' -> out.put;
-                  (for i: descs.current.vdtTop repeat
-                       descs.current.vdtTable[i] -> out.putint;
-                       ':' -> out.put;
-                       (if descs.current.isInner[i] then
-                           'I' -> out.put
-                        else
-                           'V' -> out.put
-                       if);
-                       (if i < descs.current.vdtTop then 
-                           ',' -> out.put
-                  if)for);
-                  mkVdtType;
-                  mkVdtData;
-                  inner;
-              if);
+              printVDT;
+              mkVdtType;
+              mkVdtData;
+              inner;
               mkVdtRet;
               mkVDTalloc;
               false -> isValueObject;
