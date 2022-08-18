@@ -3667,11 +3667,11 @@ bool traceThreads = true;
 #endif
 	    fPush(thisStack,float2);
 	    break;
-	  case 144: // lsqrt
+	  case 144: // cbrt
 	    float1 = fPop(thisStack);
 #ifdef __arm__
 #else
-	    float2 = sqrt(float1);
+	    float2 = sqrt(float1); // cbrt(float1) givs linker error!?
 #endif
 	    fPush(thisStack,float2);
 	    break;	    
