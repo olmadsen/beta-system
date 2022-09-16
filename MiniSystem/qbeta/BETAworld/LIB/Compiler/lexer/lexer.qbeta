@@ -1,0 +1,471 @@
+lexer: obj
+   %requires FileSys,symbols
+   maxInt: val 12345 -- not a correct maxint: 0x7f
+   XVarray:
+      in range: var integer
+      XV: ref Indexed(range,#char)
+      top: var integer      
+      put:
+         in V: var integer
+         in inx: var integer
+         XV.@put V :at inx
+      get:
+         in inx: var integer
+         out V: var integer
+         V := XV.@get inx
+      add:
+         in V: var integer
+         top := top + 1
+         if (top > range) :then
+             YV: obj Indexed(range *  2,#Char)
+             --"***extend: {I2S(range)}, ".print
+             for(1):to(top - 1):do
+                  YV.@put (XV.@get inx) :at inx
+             XV := YV
+             range := range * 2
+             --" range: {I2S(range)}\n".print
+         XV.@put V :at top
+      XV := Indexed(range,#char)
+      
+   init:< 
+      in FN: ref String
+      in SF: ref FileSys.File
+      srcFN := FN
+      srcF := SF
+      lexer.symbols.init
+      indent.init
+   srcFN: ref String
+   srcF: ref FileSys.File
+   hasLexError: var Boolean
+   ch: var char
+   token: var integer
+   tokenStr: ref String
+   buffer: obj XVarray(5000)
+   nextCh: obj
+      pos: var integer
+      linePos: var integer
+      onlyWhiteSpace: var Boolean
+      get: 
+         if (srcF.eof) :then 
+            ch := 255 
+         :else 
+            ch := srcF.get
+         if (ch <= 13) :then
+            linePos := 0
+            onlyWhiteSpace := true
+         :else
+             linePos := linePos + 1
+             if ((ch > ' ') && onlyWhiteSpace) :then
+                if ((ch = '-') ||  (ch = '§')) :then
+                   ch := ch
+                :else
+                   onlyWhiteSpace := false
+         --"nextCh: {C(ch)}\n".print
+         buffer.add(ch)
+         --"\nCH: {C(ch)}	   {I2S(CH)}   \n".print
+   printLines:
+      in n: var integer
+      "\nprintLines {I2S(n)}\n".print
+   readName: 
+      in cx: var char
+      isConst: var Boolean
+      sym: obj indexed(20,#char)     
+      prevCh: var char      
+      i: var integer
+      --"readName C = {C(cx)} ch = {C(ch)}\n".print
+      isConst := ascii.isDigit(ch)
+      if (cx > 0) :then
+         i := i + 1
+         sym.@put cx :at i
+      L: 
+         if ((ascii.isLetter(ch) || ascii.isDigit(ch) 
+              || (ch = '_') || (ch = '%') || (ch = '@'))) :then 
+            i := i + 1
+            sym.@put ch :at i
+            prevCh := ch
+            nextCh.get
+            restart(L)
+      L
+      tokenStr := sym.asString
+      switch(true)
+            case(isConst && (ch = '.'))
+               --"got float const:\n".print
+               i :=i + 1
+               sym.@put ch :at i  
+               nextCh.get
+               LL:
+                  if(ascii.isDigit(ch)):then
+                     i := i + 1
+                     sym.@put ch :at i
+                     prevCh := ch
+                     nextCh.get
+                     restart(LL)
+               LL
+               tokenStr := sym.asString
+               token := symbols.floatConst
+            case(prevCh = '%')
+               token := symbols.fatComma
+            case(isConst)
+               token := symbols.const
+            case(tokenStr = "var")
+               token:= lexer.symbols.varVal
+            case(tokenStr = "val")
+               --"gotVal\n".print 
+               token:= lexer.symbols.constVal
+            case(tokenStr = "ref")
+               --"gotRef\n".print 
+               token:= lexer.symbols.varRef
+            case(tokenStr = "obj")
+               --"gotObj\n".print 
+               token:= lexer.symbols.constRef
+            case(tokenStr = "in")
+               --"gotIn\n".print 
+               token:= lexer.symbols.inArg
+            case(tokenStr = "out")
+               --"gotOut\n".print 
+               token:= lexer.symbols.outArg
+            token := symbols.idf
+      --"readName: {tokenStr}\n".print
+   readString:
+      sym: obj indexed(200,#char)
+      i: var integer
+      --"readString {C(ch)} {I2s(sym.length) }".print      
+      nextCh.get
+      read:
+         --" next: {C(ch)} {I2S(i)}".print
+         switch(ch)
+            case('"')
+               -- end-of-string
+               leave(read)
+            case('\\')
+               i := i + 1
+               sym.@put ch :at i
+               nextCh.get
+               i := i + 1
+               sym.@put ch :at i
+               nextCh.get
+            case(ascii.nl)
+               "\n\n*** ERROR: end-of-line when parsing String\n".print
+               hasLexError := true
+               printLines(3)
+            case(('H','e','l','o'))   
+               i := i + 1
+               --put(' ')               --putint(i)               --put(' ')
+               sym.@put ch :at i
+               nextCh.get              
+            i := i + 1
+            --put(' ' )--putint(i)
+            sym.@put ch :at i
+            nextCh.get
+         restart(read)
+      read
+      token := lexer.symbols.stringSy
+      tokenStr := sym.asString  
+   comment: obj
+      theCom: ref String
+      i: var integer
+      sym: ref Indexed(500,#char)
+      skip:
+         i: var integer
+         putx:
+            in c: var char
+            i := i + 1
+            sym.@put c :at i
+         get:
+            "comment.get!\n".print
+         --@if theCom.length > 1 :then putx(ascii.nl)
+         sym := Indexed(500,#char)
+         if (nextCh.onlyWhiteSpace) :then
+             putx('<')
+         nextCh.get;
+         int2chars(nextCh.linePos)
+             i := i + 1
+             sym.@put ch :at i
+         putx('>')
+         putx(ch)
+         loop:
+            nextCh.get
+            --"ch: {C(ch)} {I2S(ch)}  {I2S(ascii.newline)} \n".print
+            if ((ch <= ascii.nl) || (ch = 255)) :then
+               ch := ch
+            :else
+                putx(ch)
+                restart(loop)
+         loop 
+         theCom := sym.asString
+         "-- {theCom} {C(ch)} {I2S(ch) }\n".print
+   parenthLevel: var integer
+   readNextToken: 
+      out hasComment: var Boolean
+      --"readNextToken: {C(ch)}\n".print
+      tokenStr := ""
+      switch(ch)
+         case(0)
+            nextCh.get
+            tokenStr := "--0-"
+         case('{')
+            token := symbols.begin
+            parenthLevel := parenthLevel + 1
+            nextCh.get
+         case('}')
+            token := symbols.end
+            parenthLevel := parenthLevel - 1
+            nextCh.get
+         case('(')
+            token := symbols.leftBrack
+            parenthLevel := parenthLevel + 1
+            nextCh.get
+         case(')')
+            token := symbols.rightBrack
+            parenthLevel := parenthLevel - 1
+            nextCh.get
+         case(':')
+            nextCh.get
+            switch(true)
+               case(ch = '=')
+                  symbols.readSpecial(':')
+               case(ch = '<')
+                  token := symbols.virtual
+                  nextCh.get
+               case(ch = ':')
+                  nextCh.get
+                  if (ch = '<') :then
+                      nextCh.get
+                      token := symbols.further
+                  :else
+                      token := symbols.final
+               case(ascii.isLetter(ch))
+                  --"read fat comma: {C(ch)}\n".print
+                  readName(':')
+                  token := symbols.fatComma
+               token := symbols.colon
+               tokenStr := ":"
+         case(('=','<','>','&','|'))
+            prevCh: var char
+            prevCh := ch
+            nextCh.get	 
+            symbols.readSpecial(prevCh)
+         case(',')
+              token := symbols.comma
+              nextCh.get
+         case(';')
+              token := symbols.semicolon
+              nextCh.get
+         case('.')
+              token := symbols.dot
+              nextCh.get
+         case('-')
+             nextCh.get
+             if (ch = '-') :then
+                comment.skip
+                hasComment := true
+             :else
+                symbols.readSpecial('-')
+         case('§')
+            comment.skip
+            hasComment := true
+         case(('@','#','%'))
+            prevCh: var char
+            prevCh := ch	 
+            nextCh.get
+            if(ascii.isLetter(ch)):then
+                readName(prevCh)
+            --"KW: ".print
+            --tokenStr.print --put(ch)--newline
+            token := symbols.keyword	    
+         case('\'')
+            sym: obj Indexed(3,#char)
+            i: var integer
+            nextCh.get
+            if(ch = '\\'):then
+                i := i + 1
+                sym.@put ch :at i
+                nextCh.get
+            i := i + 1
+            sym.@put ch :at i
+            nextCh.get
+            if (ch = '\'') :then
+                token := symbols.charSy
+                tokenStr := sym.asString
+            :else
+                token := symbols.illegalCh
+                tokenStr := "???"
+            nextCh.get
+         case('"')
+            readString
+            nextCh.get	    
+         case(255)
+            token := symbols.eos
+            tokenStr := "eos"
+         --"TTT: {C(ch)} {I2S(ch)}\nl".print
+         switch(true)
+            case(ascii.isLetter(ch) || ascii.isDigit(ch))
+               readName(0)
+            case(symbols.isSpecial(ch))
+               symbols.readSpecial(0)	    
+            "\nNo match for char: {C(ch)} {I2S(ch)}\n".print	
+   indent: obj 
+      init:
+          push(0)
+      dumpStack:
+          in inx: var integer
+          "\niStack: {I2S(inx)}: ".print
+          for(1):to(top):do
+              "{I2s(iStack.@get inx)} ".print
+          newline	      
+      skipBlanks: 
+         out inOut: var integer
+         i: var integer
+         i := 0
+         --"skipBlanks: {C(ch)}\n".print	 
+         if(ch = 0):then 
+            nextCh.get
+         skip: 
+            if(ch = 32) :then
+               i := i + 1 
+               nextCh.get
+               restart(skip)
+         skip
+         if (ch = '\\') :then
+             nextCh.get
+             skipToEol:
+                 if ((ch = ascii.nl) || (ch = ascii.cr)) :then
+                     nextCh.get
+                     restart(skipBlanks)
+                 :else -- chars after\ is a comment and may be skipped
+                    nextCh.get
+                    restart(skipToEol)
+             skipToEol
+         --".\nskipBlanks: {C(ch)} {I2s(ch)} i = {I2s(i)}\n".print--indent.dumpStack(top)
+         if (ch <= 13) :then
+            nextCh.get
+            if (parenthLevel = 0) :then
+                --"PL is zero\n".print
+                atStartOfLine := true
+            restart(skipBlanks)
+         :else
+            if (atStartOfLine) :then
+               --"\nStartOfLine: i={I2s(i)} {I2s(iStack.@get top)}\n".print
+               L:
+                 switch(true)
+                    case(i = iStack.@get top)
+                       inOut := 0
+                       inOut := maxInt
+                    case(i <  iStack.@get top)
+                       for(1):to(top - 1):do
+                          if ((i = iStack.@get (top - inx))):then
+                              inOut := (0 - inx)
+                              top := top - inx
+                              leave(L)
+                       printLines(3)
+                       "\n   The indentation of this line does not ".print
+                       "match any previous lines\n".print
+                       "   The level here is: {I2S(i)}.".print
+                       "   Previous lines are at: ".print
+                       for(1):to(top):do
+                            "{I2s(iStack.@get inx)}  ".print
+                       newline
+                       "   In file: {srcFN}\n".print
+                    case(i > iStack.@get top)
+                       --"C:{I2S(i)}\n".print
+                       if ((i - iStack.@get top) < 2) :then
+                           printLines(3)
+                           "\n   The indentation of this line is less".print
+                           " than 3 blanks\n".print
+                           "   It must be at least 3 blanks".print
+                       push(i)
+                       inOut := 1
+                    
+               L
+               atStartOfLine := false
+         atStartOfLine: var integer
+      iStack: obj Indexed(100,#integer)
+      top: var integer
+      push:
+            in V: var integer
+            top := top + 1
+            if (top > 100) :then
+                "\n!!! iStack overflow!".print
+            iStack.@put V :at top
+      revert:
+            in ind: var integer
+            top := top + ind            
+   nextTokens: 
+      inOut: var integer
+      inOut := indent.skipBlanks
+      --"nextTokens {I2S(inout)}\n".print
+      switch(inOut)
+         case(0) -- continue on current line
+            if (readNextToken) :then
+                restart(nextTokens)
+            tokenBuf.add(token,tokenStr)
+         case(1)
+            token := symbols.begin
+            tokenBuf.add(token,tokenStr)
+         case(maxInt)
+            if (readNextToken) :then
+                restart(nextTokens)
+            if (token <> symbols.fatComma) :then
+                tokenBuf.add(symbols.semiColon,"")
+            tokenBuf.add(token,tokenStr)
+         if (readNextToken) :then
+            indent.revert((0 - inOut))
+            restart(nextTokens)
+         if (inOut < 0) :then
+            for(1):to(0 -inOut):do
+               tokenBuf.add(symbols.end,"")
+            if (token <> symbols.fatComma) :then
+                tokenBuf.add(symbols.semicolon,"")
+            tokenBuf.add(token,tokenStr)
+   peekNext:
+     -- Not tested-- read and return next token; put token in tokenBuf-- keep current value of token, peeked tokenStr] should also be buffered
+     in n: var integer
+     out T: var integer
+     currentToken : var integer
+     currentTokenStr: ref String
+     currentToken := token
+     currentTokenStr := tokenStr
+     for(1):to(n) :do
+        nextTokens
+     T := tokenBuf.getTokenNo(n)
+     token := currentToken
+     tokenStr := currentTokenStr
+   tokenBuf: obj
+      B: obj Indexed(100,#integer)
+      --sy: obj IndexedRef(100,#string)
+      L: var integer
+      R: var integer
+      add:
+         in T: var integer
+         in S: var String
+         --put('E')	 
+         R := R + 1
+         B.@put T :at R
+         --sy.@put S :at R
+      get: 
+         out T: var integer
+         S: ref String	 
+         L := L + 1
+         --"tokenBuf.get: {I2S(L)}:{I2S(R)}\n".print		 
+         T := B.@get L	 
+         --S := sy.@get L
+         --S := "<string>"	 
+         inner(get)
+      getTokenNo:
+         in n: var integer
+         out T: var integer
+         T := B.@get (L + n)	 
+      isEmpty:
+         out B: var Boolean
+         if (L = R) :then
+             --":empty:".print	 
+             L := 0
+             R := 0
+             B := true	     
+   next:
+      if (tokenBuf.isEmpty.not) :then
+          token := tokenBuf.get--{tokenStr := S}
+      :else
+          nextTokens
+          token := tokenBuf.get --{tokenStr := S}
+   
