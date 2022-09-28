@@ -3099,12 +3099,14 @@ checker: Parser
        #); 
      BaseVector:
        (# theBase: [8] @integer;  (* [8] is Dimension, just technical*)
+          convFactor: @Real;
           add:
             (# BV: ^BaseVector
             enter BV[]
             do (for i: 7 repeat 
                     theBase[i] + BV.theBase[i] -> theBase[i]
-               for)
+               for);
+               BV.convFactor * convFactor -> convFactor
             #);
           minus:
             (# BV: ^BaseVector
@@ -3127,12 +3129,19 @@ checker: Parser
                for)
             #);
           equal: BooleanValue
-            (# BV: ^BaseVector
+            (# BV: ^BaseVector;
+               nonMatchingCV:< (# do inner #);
             enter BV[]
             do true -> value;
                (for i: 7 repeat 
                     (theBase[i] = BV.theBase[i]) and value -> value
-               for)
+               for);
+               (if false and (BV.convFactor <> convFactor) then
+                   '!!!! Conversion factors differ: ' -> putline;
+                   'source: ' -> puttext; BV.print -> putline;
+                   'destination: ' -> puttext; print -> putline;
+                   nonMatchingCV
+               if)
             #);
           rootN:
             (* In general we have a unit "u"^(left,right)
@@ -3168,7 +3177,8 @@ checker: Parser
             #);
           print:
             (# T: @text
-            do (for i: 7 repeat
+            do 'Cnv[' -> T.puttext; convFactor -> T.putReal; ']' -> T.put;
+               (for i: 7 repeat
                     (if i 
                      // TimeInx then 'Time[' -> T.puttext
                      // LengthInx then 'Lgth[' -> T.puttext
@@ -3204,7 +3214,7 @@ checker: Parser
                prop: ^NewProperty;
                baseInx: @integer; (* if base unit, index into baseVector *)
                decodeProp:
-                 (# n: @integer; dimN: ^text
+                 (# n: @integer; dimN: ^text; UT: ^UnitTree; BV: ^BaseVector
                  do prop.args.scanSons
                     (# INV: ^Invocation; 
                     do current[] -> INV[];
@@ -3219,15 +3229,47 @@ checker: Parser
                            // current.isConstLiteral then
                               n + 1 -> n;
                               C.T.setPos; C.T.getReal -> convFactor
-                       if)#)
-                    #);
+                    if)#)#);
                     (if traceUE then
                         UStop -> putint; ' ' -> put; n -> putint;
                     if);
+                    (* a base dimension has a form like
+                     *    %unit "m", i.e only one unit
+                     * a derived dimension has a form like
+                     *    %unit "MpS", "m*s^-1", "m/s", 1
+                     *        i.e. also a defintion in the form of other units 
+                     *        and a conversitaion factor of 1 (one)
+                     *)
                     UStop = 1 -> isBaseDim;
                     (if traceUE and isBaseDim then
                         ' base dimension '->puttext if);
-                    convFactor = 0 -> isBaseUnit;
+                    (if isBaseDim then
+                        (if convFactor = 0 then
+                            true -> isBaseUnit;
+                            1.0 -> convFactor
+                         else
+                            (* non base unit of base dim *)
+                        if)
+                     else 
+                        (if convFactor = 1 then
+                              (* for derived dimensions, we must set a 
+                               * conversion factor of 1 (one) for the base unit
+                               *)
+                              true -> isBaseUnit
+                         else
+                            (* best to compute here, but some of the dimensions
+                             * and units have not yet been added to the table; 
+                             * a seperate scan is necessary
+                             * Now we jusyt compute it when needed below
+                             '**** Derived dim: '
+                             'compute conv factor of non base unit: ' 
+                             -> puttext; US[2][] -> putline;
+                             prop.dopt -> putline;
+                             US[2][] -> parseUnit -> UT[]; UT.print->putline;
+                             UT[] -> mkBaseVector -> BV[];
+                             BV.print
+                             *)
+                    if)if);
                     dim.sig.dopt -> dimN[];
                     (if traceUE then 
                         ' baseDim:'->puttext; dimN[] -> putline if);
@@ -3265,7 +3307,8 @@ checker: Parser
                         'Derived Dimension: "' -> puttext; 
                     if);
                     dim.sig.dopt -> puttext;
-                    (if convFactor = 0 then
+                    (if (convFactor = 1.0) 
+                        or isBaseDim and (convFactor = 0.0) then
                         '" base unit: "' -> puttext;
                          unit.sig.dopt -> puttext;
                         '" ' -> puttext;
@@ -3508,26 +3551,53 @@ checker: Parser
               if)
            // idf then
               (if traceUE then
-                  'MBK:idf: '->puttext; T.op[] -> putline; 
+                  '**   MBK:idf: '->puttext; T.op[] -> putline; 
               if);
               T.op[] -> unitTable.find
-              (# theDim: ^text
+              (# theDim: ^text; UT: ^UnitTree; BV: ^BaseVector
               do current.dim.sig.dopt -> theDim[];
                  (if traceUE then
                      '**   MBK:idf:thedim: ' -> puttext; theDim[] ->putline
                  if);
                  (if current.isBaseDim then
                      &BaseVector[] -> BVl[];
-                     1 -> BVl.theBase[current.baseInx]
-                  else
+                     1 -> BVl.theBase[current.baseInx];
+                     current.convFactor -> BVL.convFactor;
+                     (if (current.convFactor = 0) 
+                         and not current.isBaseUnit then
+                         '**** convFactor is zero:'->putline;
+                         current.print
+                     if);
+                  else (* Derived dimension *)
                      (if traceUE then
                          '**** Derived dimension: ' -> puttext; 
                          theDim[] -> puttext;
                          ' ' -> put; current.US[2][] -> putline;
+                         (*current.print*)
                      if);
                      current.US[2][] 
                        -> parseUnit 
-                       -> mkBaseVector -> BVl[]
+                       -> mkBaseVector -> BVl[];
+                     (if current.isBaseUnit then
+                         (if current.convFactor <> 1.0 then
+                             '**** derived base unit wrong convFactor:'
+                               ->puttext;
+                             current.convFactor -> putreal; newline;
+                             current.print
+                         if);
+                         current.convFactor -> BVL.convFactor;
+                      else
+                         (if false then
+                             '**** compute convFactor from: ' -> puttext;
+                             current.US[2][] -> putline;
+                             current.print;
+                             current.US[2][] -> parseUnit -> UT[]; 
+                             UT.print->putline;
+                             UT[] -> mkBaseVector -> BV[];
+                             BV.print -> putline;
+                             BV.convFactor -> BVl.convFactor
+                         if)
+                     if);
                  if);
               #);
               (if BVl[] = none then 
