@@ -268,7 +268,9 @@ enum {
   fovstoreg = 119,
   mkVindexed = 128,
   mkRindexed = 129,
-  pushValId = 130
+  pushValId = 130,
+  rshiftup = 131,
+  rshiftdown = 132
 };
 
 

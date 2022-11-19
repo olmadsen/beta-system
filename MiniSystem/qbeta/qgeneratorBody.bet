@@ -116,66 +116,23 @@ do (# doPrimElse: BooleanValue
                   (* if receiver is constant, then only one variant *)
                   rec.ATd[] -> OG.Qvariants.computeVariantX -> var[];
                else 
-                  (* receiver and rec.atd is module or pattern (as in foo(e).bar) 
+                  (* receiver and rec.atd is module or pattern 
+                   * (as in foo(e).bar) 
                    * but receiver is actually the return value of foo *)
                   og.qvariants.computeVariantX -> var[];
                   cd.com(#do 'rec:module or pattern:'-> tt; sig.id[] -> tq;
                            ' descno: ' -> tt; og.is.newdescno -> ii;
-                           ' top: ' -> tt; og.qvariants.top -> ii; og.dopt->tq
+                           ' top: ' -> tt; og.qvariants.top -> ii; 
+                           og.dopt->tq
                         #);
           if)if);
           
           (# DI: ^dataItem; ptn: ^Pattern; 
              isValue,isStatic,returnsValueObj,recIsValObj:  @boolean; 
              org: ^Items;
-             C: @integer;
-             noOfObjArgs:
-               (# IS: ^Items; c: @integer
-               enter IS[]
-               do (if (IS.superDesc[] <> none)
-                      and (IS.superDesc[] <> objectDecl.desc) then
-                      IS.scanAllDecls
-                      (# DI: ^DataItem
-                      do (if currentDcl.isInArg and currentDcl.isDataItem then
-                             (if not (currentDcl[] -> DI[]).isValue then
-                                 C + 1 -> C
-                         if)if)
-                  #)if)
-               exit C
-               #);
-             noOfObjArgsX:
-               (# IS: ^Items; c: @integer
-               enter IS[]
-               do IS.scanAllDecls
-                  (# DI: ^DataItem
-                  do (if currentDcl.isInArg and currentDcl.isDataItem then
-                         (if not (currentDcl[] -> DI[]).isValue then
-                             C + 1 -> C
-                         if)
-                  if)#)
-               exit C
-               #);             
+             noOfRefArgs: @integer;            
              vObjId: ^text
-          do 
-             OG.IS[] -> noOfObjArgs -> C;
-             (if c > 1 then 
-                 '\n!!!! WARNING: noOfObjArgs > 1: ' -> puttext;
-                 c -> putint;
-                 ' for pattern: "' -> puttext; E.dopt -> puttext;
-                 '"\n     The compiler may generate wrong code!\n' 
-                   -> putline
-             if);
-             (if ptnkind // virtualptn // furtherptn // finalptn then
-                 (*'**** invoke:virtual:\n '->puttext; dopt -> putline;
-                 '***  rec: ' -> puttext; 
-                 rec.doPT -> putline;
-                 '***  E: ' -> puttext; E.doPT -> putline;
-                 '***  father: ' -> puttext; rec.father.label -> putline;
-                 '***  father.father: ' -> puttext; 
-                 rec.father.father.label -> putline;
-                 '***  father.father.father: ' -> puttext; 
-                 rec.father.father.father.label -> putline;*)
-                 
+          do (if ptnkind // virtualptn // furtherptn // finalptn then
                  (if true
                   // 'var' -> (rec.father.father.father.label).equal
                   // 'val' -> (rec.father.father.father.label).equal then
@@ -183,7 +140,7 @@ do (# doPrimElse: BooleanValue
                      true -> isStatic -> isValue;
                      rec.father.father.father[] -> DI[];
                      (if false then
-                         '***** DataItem:alloc: V: var TTT:off:' -> puttext;
+                         '***** DataItem:alloc: V: var TTT:off:'->puttext;
                          DI.newOff -> putint; newline;
                          DI.doPT -> putline;
                      if);
@@ -193,10 +150,7 @@ do (# doPrimElse: BooleanValue
                      DI.OG.isValueObj or DI.isConst -> isStatic;
                   // rec.ATd.isPattern then
                      (if rec[] <> e[] then (* we should eliminate rec=e *)
-                         (* 'rec: ispattern:'->puttext; rec.dopt->putline;*)
                          rec.ATd[] -> ptn[]; 
-                         (*ptn.sig.dopt -> putline; e.dopt -> putline;*)
-                         
                          (ptn.getReturnOG).isValueObj 
                          or
                          (ptn.og.primno = indexedget_prim) -> isstatic
@@ -216,7 +170,15 @@ do (# doPrimElse: BooleanValue
                                -> cd.invoke
                      if)if)
                   else
-                     OG.IS[] -> noOfObjArgsX -> C;                     
+                     (* OG may have ref-args that will be above the
+                      * obj-ref to be dispatched.
+                      * S is the obj-ref and x, y and z are obj-args
+                      * The noOfRefArgs is passed to invokeV
+                      * ------------      ------------
+                      * |...|S|x|y|z  ==> |...|x|y|z|S
+                      * ------------      ------------
+                      *)
+                     OG.IS.noOfObjArgs -> noOfRefArgs;
                      (if true then
                          (if OG.IS.theDescNo = 0 then
                              'thexDescNo=0 ' -> puttext; 
@@ -264,8 +226,8 @@ do (# doPrimElse: BooleanValue
                              if);
                              OG.OGidWdNo->vObjId[];
                          if);
-                         cd.lcom(#do 'invokeV:before:'->TT; vObjId[] -> TT #);
-                         (vObjId[],off,c,recIsValObj)
+                         cd.lcom(#do 'invokeV:before:'->TT;vObjId[]->TT #);
+                         (vObjId[],off,noOfRefArgs,recIsValObj)
                            -> cd.invokeV
                          (# originOff::
                               (# ISx: ^Items
@@ -274,12 +236,14 @@ do (# doPrimElse: BooleanValue
                                      '**** originOff:of: ' -> puttext;
                                      vObjId[] -> puttext;
                                      ' top: ' -> puttext; 
-                                     (OG.IS.topSuper).encOG.OGidWdNo -> putline;
+                                     (OG.IS.topSuper).encOG.OGidWdNo 
+                                       -> putline;
                                  if);
                                  (OG.IS.topSuper).encOG.OGidWdNo 
                                    -> topSuperId[];
 
-                                 (OG.origin[]->ISx[]).encOG.OGidWdNo -> type[];
+                                 (OG.origin[]->ISx[]).encOG.OGidWdNo 
+                                   -> type[];
                                  (if false then
                                      type[] -> puttext; 
                                      ' useStub: ' -> puttext;
@@ -296,7 +260,7 @@ do (# doPrimElse: BooleanValue
                          (OG[],vObjId[]) -> pushOut
                          (* callee is on rtop of rStack *)
                       else
-                         (sig.id[],off,C,false) -> cd.invokeV
+                         (sig.id[],off,noOfRefArgs,false) -> cd.invokeV
                      if);
                  if)
               else 

@@ -1435,8 +1435,30 @@ void rswapIndexed(Btemplate *stack,int inx){
   Btemplate *obj; int i;
   obj = stack->rstack[stack->rtop - inx];
   for (i = 1; i <= inx; i++)
-    stack->rstack[stack->rtop - i] = stack->rstack[stack->rtop - i + 1];
+    //stack->rstack[stack->rtop - i] = stack->rstack[stack->rtop - i + 1];
+    stack->rstack[stack->rtop - inx + i - 1]
+      = stack->rstack[stack->rtop - inx + i];
   stack->rstack[stack->rtop] = obj;
+}
+void rshift(Btemplate *stack,int inx, bool up){
+  Btemplate *obj;
+  int i;
+  //printf("\nrshift: %i %d\n",inx,up);
+  if (up) {
+    obj = stack->rstack[stack->rtop - inx];
+    for (i = 1; i <= inx; i++) {
+      stack->rstack[stack->rtop - inx + i - 1]
+	= stack->rstack[stack->rtop - inx + i];
+    }
+    stack->rstack[stack->rtop] = obj;
+  }else{
+    obj = stack->rstack[stack->rtop];
+    for (i = 1; i <= inx; i++) {
+      stack->rstack[stack->rtop - i + 1]
+	= stack->rstack[stack->rtop - i];
+    }
+    stack->rstack[stack->rtop - inx] = obj;
+  }
 }
 void lscPush(Btemplate *stack,int V){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
@@ -2875,6 +2897,20 @@ bool traceThreads = true;
 	rPush(thisStack,X);
 	rPush(thisStack,Y);
 	}
+	break;
+      case rshiftup:
+	arg1 = op1(bc,&glsc); 
+#ifdef TRACE
+        fprintf(trace,"rshiftup %i\n",arg1);
+#endif
+	rshift(thisStack,arg1,true);
+	break;
+      case rshiftdown:
+	arg1 = op1(bc,&glsc); 
+#ifdef TRACE
+        fprintf(trace,"rshiftdown %i\n",arg1);
+#endif
+	rshift(thisStack,arg1,false);
 	break;
       case rtn:
 	arg1 = op1(bc,&glsc);

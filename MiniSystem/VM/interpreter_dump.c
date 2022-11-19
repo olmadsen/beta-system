@@ -153,6 +153,12 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case _rswap:
 	fprintf(trace,"rswap %i",op1(bc,&glsc));
 	break;
+      case rshiftup:
+	fprintf(trace,"rshiftup %i",op1(bc,&glsc));
+	break;	
+      case rshiftdown:
+	fprintf(trace,"rshiftdown %i",op1(bc,&glsc));
+	break;
       case rtn:
 	fprintf(trace,"rtn %c ",op1(bc,&glsc));
 	break;
