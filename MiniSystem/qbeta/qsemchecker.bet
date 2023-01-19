@@ -704,11 +704,26 @@ semchecker: UnitHandler
                     if)if)if)if)
                  #);
                getOGsequenceOfArg:
+                 (* foo:
+                  *    fArgs[inx] = R: ref T
+                  *               = S: obj T { ...}
+                  *               = ...
+                  * current = exp = ObjectInvocation, const, ...
+                  * Given foo: { in R: ref V; W:< T }, and
+                  *    X: ...; foo(S,#TT)
+                  * we must get qual as if
+                  *    X: ...; foo(S,#TT).R; foo(S,#TT).W
+                  * This includes computing the OGSequence of the argument
+                  * And then calling getVqual
+                  *)
                  (# OGs,OGSx: ^OGsequence; orgS: ^Scope;
                     aplOG,dclOG,superOG: ^ObjectGenerator;
                     pn: @integer
-                 enter OGS[]
-                 do (theOI.ATd.OG[]) -> OGsequence -> OGSx[];
+                 enter OGS[] (* the savedOGS for theOI *)
+                 do theOI.ATd.OG[] -> OGsequence -> OGSx[];
+                    OGS[] -> OGSx.pred[];
+                    true -> OGSx.isNest;
+                    OGSx[] -> OGS[];
                     <<SLOT sem_encOG:descriptor>>;
                     theOI.ATd.OG[] -> aplOG[];
                     (fArgs[inx].origin[]->orgS[]).encOG[] -> dclOG[];
@@ -723,9 +738,8 @@ semchecker: UnitHandler
                     findDclOG:
                       (if aplOG[] = dclOG[] then
                           (if false then
-                              '*** Bingo: pn:' -> puttext;
-                              pn -> putint;
-                              newline;
+                              '*** FoundDclOG:pn:' -> puttext;
+                              pn -> putint; newline;
                           if)
                        else
                           aplOG.IS.superDesc.encOG[] -> aplOG[];
@@ -737,12 +751,47 @@ semchecker: UnitHandler
                           pn + 1 -> pn;
                           restart findDclOG
                       if);
-                    <<SLOT sem_OGS_pn:descriptor>>;
-                    OGS[] -> OGSx.pred[];
-                    true -> OGSx.isNest;
-                    OGSx[] -> OGS[];
+                    <<SLOT sem_OGS_pn:descriptor>>;                   
                     (for pn repeat OGS.PRE -> OGS[] for);
                  exit OGS[]
+                 #);
+               checkForGenericUnit:
+                 (* Given M := sqrt(A), 
+                  * srcQual = A.qual and dstQual = sqrt.outQual
+                  * see decl of arg1Qual in abstractSyntaxTree.bet
+                  *)
+                 (# current,srcQual,dstQual: ^ObjectGenerator;
+                 enter(current[],srcQual[],dstQual[])
+                 do (if hasGenericUnit then
+                        srcQual[] -> dstQual[];                          
+                        srcQual[] 
+                          -> (theOI.enclosingObjectGenerator).arg1Qual[];
+                        current.getExpUnit 
+                            -> (theOI.enclosingObjectGenerator).arg1Unit[]
+                    if)
+                 exit(srcQual[],dstQual[])
+                 #);
+               checkForLocalsConflict:
+                 (# current,srcQual,dstQual: ^ObjectGenerator;
+                 enter(current[],srcQual[],dstQual[])
+                 do (origin[]->org[]).scanLocals
+                    (# OBS:
+                         (#
+                         do actualArgs[] -> warning
+                            (#
+                            do '*** locals conflict:\n' -> msg;
+                               current.dopt -> msg;  '\n' -> msg;
+                               fArgs[inx].dopt -> msg
+                            #)
+                         #)
+                    do <<SLOT semC6:descriptor>>;
+                       (if true
+                        // srcQual[] -> current.inSuper then
+                           (if not (dstQual[] -> current.inSuper) then obs if)
+                        // dstQual[] -> current.inSuper then
+                           (if not (srcQual[] -> current.inSuper) then obs if)
+                       if)
+                    #);
                  #);
                org: ^Items
             do <<SLOT semC1:descriptor>>;
@@ -755,8 +804,8 @@ semchecker: UnitHandler
                #);            
                0 -> inx;
                actualArgs.scanArgs
-               (# srcQual,dstQual: ^ObjectGenerator; 
-                  E: ^ObjectCall; OGS: ^OGsequence;
+               (# E: ^ObjectCall; OGS: ^OGsequence; 
+                  srcQual,dstQual: ^ObjectGenerator; 
                do inx + 1 -> inx; 
                   <<SLOT semC2:descriptor>>;
                   (if inx > top then
@@ -773,62 +822,20 @@ semchecker: UnitHandler
                        * calling this pattern
                        *)
                       <<SLOT semC3:descriptor>>;
-                      (* foo:
-                       *    fArgs[inx] = R: ref T
-                       *               = S: obj T { ...}
-                       *               = ...
-                       * current    = exp = ObjectInvocation, const, ...
-                       * Given foo: { in R: ref V; W:< T }, and
-                       *    X: ...; foo(S,#TT)
-                       * we must get qual as if
-                       *    X: ...; foo(S,#TT).R; foo(S,#TT).W
-                       * This includes computing the OGSequence of the argument
-                       * And then calling getVqual
-                       *)
                       (* After making getOGsequenceOfArg, the prints in
                        * the trace slots may not be meaningful
                        *)
                       theOI.savedOGS[] -> getOGsequenceOfArg -> OGS[];
-                    
                       <<SLOT sem_before_getVqual:descriptor>>;
                       (encOG[],false,OGS[]) 
                         -> fArgs[inx].getVqual 
                         -> (OGS[],dstqual[]);                      
                       <<SLOT semC4:descriptor>>;
                       (none,encOG[]) -> current.semcheck -> srcQual[];
-                      (if hasUnitVar then
-                          (* Given M := sqrt(A), 
-                           * srcQual = A.qual and dstQual = sqrt.outQual
-                           * see decl of arg1Qual in abstractSyntaxTree.bet
-                           *)
-                          srcQual[] -> dstQual[];                          
-                          srcQual[] 
-                            -> (theOI.enclosingObjectGenerator).arg1Qual[];
-                          current.getExpUnit 
-                            -> (theOI.enclosingObjectGenerator).arg1Unit[]
-                      if);
+                      (current[],srcQual[],dstQual[])
+                        -> checkForGenericUnit -> (srcQual[],dstQual[]);
                       <<SLOT semC5:descriptor>>;
-                      (origin[]->org[]).scanLocals
-                      (# OBS:
-                           (#
-                           do actualArgs[] -> warning
-                              (#
-                              do '*** locals conflict:\n' -> msg;
-                                 current.dopt -> msg;  '\n' -> msg;
-                                 fArgs[inx].dopt -> msg
-                              #)
-                           #)
-                      do <<SLOT semC6:descriptor>>;
-                         (if true
-                          // srcQual[] -> current.inSuper then
-                             (if not (dstQual[] -> current.inSuper) then
-                                 obs
-                             if)
-                          // dstQual[] -> current.inSuper then
-                             (if not (srcQual[] -> current.inSuper) then
-                                 obs
-                         if)if)
-                      #);
+                      (current[],srcQual[],dstQual[]) -> checkForLocalsConflict;
                       (current[],srcQual[],dstQual[],true) 
                         -> fArgs[inx].checkQual;
                   if);
