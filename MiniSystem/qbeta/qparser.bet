@@ -2,6 +2,7 @@ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qlexer';
 INCLUDE 'qabstractSyntaxTree';
 INCLUDE 'qprimitives';
+INCLUDE 'qsyntaxErrorMessages'
 ---lib:attributes---
 (************************ Grammar **********************************
  * Module ::= DataItem
@@ -145,6 +146,100 @@ parser: AbstractSyntaxTree
           (if ((OG.super.doPT).length = 0) and (OG.IS.isEmpty) then
               118 -> SynTaxError
           if)
+       #);
+     pVarRefType:
+       (# isConst,isValue: @boolean;
+          rightB: @integer;
+          sig: ^Signature;
+          typeId: ^Text;
+          E: ^Exp;
+          IV: ^Invocation;
+          IS: ^Items;
+          OG: ^ObjectSpecification;
+          DI: ^SuperDataItem;
+
+          special: @boolean; 
+          (*avoid adding () to typeId for XV: ref Indexed(range,#char) *)
+       enter(isConst,isValue,sig[])
+       do (*'**** pVarRefType: ' -> puttext;
+           lex.symb -> lex.symbols.asText -> putline;*)
+          
+          next:
+          (if lex.symb = lex.symbols.idf then
+              (*':idf:'->puttext;*)
+              lex.sym[] -> typeId[];
+              lex;
+              L:
+              (if lex.symb
+               // lex.symbols.leftBrack 
+               // lex.symbols.leftSquare
+               // lex.symbols.begin then
+                  lex.symb + 1 -> rightB;
+                  lex;
+                  L:
+                    (#
+                    do pExp;
+                       (if lex.symb = lex.symbols.comma then
+                           lex;
+                           true -> special;
+                           restart L
+                    if)#);
+                  (if lex.symb = rightB then
+                      (if not special then
+                          '()' -> typeId.append -> typeId[];
+                      if);
+                      lex;
+                      (if lex.symb = lex.symbols.fatComma then
+                          lex.sym[] -> typeId.append -> typeId[];
+                          lex;
+                          restart L
+                       else;
+                          (*(if lex.symb = lex.symbols.dot then
+                              lex;
+                              restart next
+                          if)*)
+                      if)
+                   else
+                      120 -> syntaxError
+                  if)
+               else
+                  (*(if lex.symb = lex.symbols.dot then
+                      lex;
+                      restart next
+                  if)*)
+              if);
+           else
+              119 -> syntaxError
+          if);
+       exit typeId[]
+       #);
+     pVarRefDI:
+       (# E: ^Exp; IV: ^Invocation;
+          IS: ^Items;
+          OG: ^ObjectSpecification;
+          DI: ^SuperDataItem;
+          
+          isConst,isValue: @boolean; sig: ^Signature; typeId: ^Text
+       enter(isConst,isValue,sig[])
+       do Invocation -> IV[];
+          next:
+          (if true then
+              (isConst,isValue,sig[]) -> pVarRefType -> typeId[];         
+              Items -> IS[]; true -> IS.isEmpty -> IV.isEmpty;
+              (typeId[],Arguments) -> unaryGen -> E[] -> IV.append;
+              (if lex.symb = lex.symbols.dot then
+                  lex;
+                  restart next
+          if)if);
+          (IV[],IS[]) -> ObjectGenerator -> OG[];
+          (isConst,isValue,sig[],OG[]) -> DataItem -> DI[];
+          (if false then 
+              newline;
+              '**** DI:with:VarRefType: ' -> putline;
+              DI.dopt -> putline;
+              newline
+          if)
+       exit DI[]
        #);
      pLabelDecl:
        (# OG: ^ObjectSpecification;
@@ -474,8 +569,19 @@ parser: AbstractSyntaxTree
                        (true,false,sig[]) -> pDataItem -> D[];
                        leave L
                     // lex.symbols.varRef then
-                       lex;
-                       (false,false,sig[]) -> pDataItem -> D[];
+                       lex; 
+                       (if pNewFatCommaFile then
+                           (*'**** varRef:('->puttext; sig.dopt -> puttext;
+                           ' ' -> put;*)
+                           (false,false,sig[]) -> pVarRefDI -> D[];
+                           (*(# di: ^dataitem
+                           do ')' -> putline; D[] -> di[];
+                              (if (DI.OG.super.last).isEmpty then 
+                                  'kuk' -> putline
+                           if)#);*)
+                        else
+                           (false,false,sig[]) ->pDataItem -> D[];
+                       if);
                        leave L
                     // lex.symbols.constVal then 
                        lex;
@@ -862,6 +968,7 @@ parser: AbstractSyntaxTree
        do (* '\npExp: ' -> puttext; lex.symb -> lex.symbols.print; 
            *  ' ' -> put; lex.sym[] -> puttext;
            *)
+          L:
           (if lex.symb 
            // lex.symbols.const then
               lex.sym[] -> Const -> E[];
@@ -877,8 +984,16 @@ parser: AbstractSyntaxTree
               lex;
            // lex.symbols.idf then 
               lex.sym[] -> sym[];
-              lex;
+             (* lex;*)
               (if pNewFatCommaFile then
+                  (if '#' = (1 -> sym.inxGet) then
+                      (*'Got # '->puttext; sym[] -> putline;*)
+                      ((false,false,Signature) -> pVarRefType, Arguments)
+                        -> UnaryGen ->  E[];
+                      (*newline; lex.symb -> lex.symbols.asText -> putline;*)
+                      leave L
+                  if);
+                  lex;
                   (if lex.symb
                    // lex.symbols.leftBrack 
                    // lex.symbols.leftSquare
@@ -896,7 +1011,8 @@ parser: AbstractSyntaxTree
                    else (*unary *)
                       (sym[],arguments) -> UnaryGen -> E[]
                   if)
-              else              
+               else     
+                  lex;
                   (if lex.symb 
                    // lex.symbols.leftBrack then
                       lex;
@@ -920,7 +1036,7 @@ parser: AbstractSyntaxTree
               pBracketedExp -> E[]
           (* // lex.symbols.begin then
               pMainPart -> ObjectGeneratorExp -> E[]*)
-           else 
+           else
               Exp -> E[]; 
               true -> E.isEmpty
           if);
@@ -992,6 +1108,14 @@ parser: AbstractSyntaxTree
                      else
                         pObjectSpec -> args.append;
                     if)
+                 else
+                    (if pNewFatCommaFile then
+                        'Hovsa: "'->puttext;
+                        sig[] -> puttext; '"  "' -> puttext; 
+                        lex.symb -> lex.symbols.asText ->  puttext;
+                        '"'->putline;
+                        121 -> syntaxError
+                    if);
                 if);
                 (if lex.symb 
                  // lex.symbols.comma // lex.symbols.semiColon then
@@ -1041,7 +1165,7 @@ parser: AbstractSyntaxTree
               #)
           if);
           (if isFatComma then
-              (sig[],args[]) -> KeyWordgen -> F[]
+              (sig[],args[]) -> KeyWordgen -> F[];
            else
               (sy[],args[]) -> KeyWordgen -> F[]
           if)
@@ -1441,7 +1565,9 @@ parser: AbstractSyntaxTree
        enter n
        do '\nSyntax error: '-> puttext; n -> putint; 
           ' ' -> put; lex.symb -> lex.symbols.print;
-          newline;
+          (if lex.fileName[] <> none then
+              ' file:\n   ' -> puttext; lex.fileName[] -> putline
+          if);
           3 -> lex.printlines;
           newline;
 
@@ -1458,6 +1584,7 @@ parser: AbstractSyntaxTree
           ' expected symbols: ' -> lex.errorStream.puttext;          
           '?' -> lex.errorStream.put; (* temporary *)
           lex.errorStream.newLine;
+          n -> syntaxErrMsg -> lex.errorStream.putline;
           skip:
             (#
             do lex; 
