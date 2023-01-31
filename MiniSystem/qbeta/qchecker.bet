@@ -973,13 +973,40 @@ checker: Parser
                        (#do (none,basicScope[],none,true) -> current.check #)
                if)if)
             #);
+          search::
+            (# org: ^Items
+            do NA.T[] -> localSearch -> (ATd[],pn);
+               (if ATd[] = none then
+                   (NA[],isFirst) -> (origin[]->org[]).search -> (ATd[],on,pn)
+               if)
+            #);
           localSearch:
-            (# CS: ^Text; ATd: ^Decl; pn: @integer
+            (# CS: ^Text; ATd,D: ^Decl; pn: @integer
             enter CS[]
-            do (if false then
+            do (if traceSearch then
                    '**** signature:localSearch:'->puttext; CS[] -> puttext;
                    ' in: ' -> puttext; dopt -> putline
-               if)
+               if);
+               L:
+               scanSons
+               (#
+               do (*current.dopt -> putline;*)
+                  (if current## <= Decl## then 
+                      current[] -> D[];
+                      (if false then
+                          '**** try:CS: ' ->  puttext;
+                          CS[] -> puttext; ' sig: ' -> puttext;
+                          D.sig.id[] -> puttext; ' ' -> put;
+                          D.dopt -> putline;
+                      if);
+                      (If CS[] -> D.sig.id.equalNCS then
+                          (if false then
+                              '**** signature:localSearch: found: ' -> puttext;
+                              CS[] -> putline;
+                          if);
+                          D[] -> ATd[];
+                          leave L
+               if)if)#)
             exit(ATd[],pn)
             #);
           alloc:: 
@@ -1846,7 +1873,8 @@ checker: Parser
      ObjectGenerator::<
        (# setUpOrigin::
             (#
-            do origin[] -> super.setUpOrigin;                    
+            do origin[] -> super.setUpOrigin;  
+               true -> super.isSuper;
                origin[] -> IS.setUpOrigin;
                this(ObjectGenerator)[] -> IS.encOG[];
                sig[] -> IS.sig[];
@@ -1912,10 +1940,9 @@ checker: Parser
                    (if sig[] = none (*isSingular*) then
                        (*(if not isSingularX then
                            '\n*** Inconsistency isSingular: ' -> putline;
-                           (if IS.isEmpty then '-TT- '->puttext else '--FF-- ' -> puttext if);
-                           (if hasVirtualArgs then '-TT- '->puttext else '--FF-- ' -> puttext if);
-                           father.doPt -> putline; 
-                           doPP -> putline
+                           IS.isEmpty -> putBoolean;
+                           hasVirtualArgs -> putBoolean;
+                           father.doPt -> putline; doPP -> putline
                        if);*)
                        (* A singular statement:
                         *     bar(a,...) { ... }
@@ -1934,7 +1961,16 @@ checker: Parser
                         * where
                         *     super = bar(a,...) 
                         *)
-                       (none,basicScope[],basicScope[](*sig[]*),true) -> super.check
+                       (if false then
+                           (* pNewFatCommaFile cannot be used to test
+                            * of this module is qbeta, since we parse all files
+                            * before checking; a boolean is need for each module
+                            *)
+                           '**** checkSuper:sig<>none: '->puttext; 
+                           super.dopt -> puttext; ' sig: ' -> puttext;
+                           sig.dopt -> putline
+                       if);
+                       (none,basicScope[],(*basicScope[]*)sig[],true) -> super.check
                    if);   
  
                    (if traceCheck then
@@ -1965,7 +2001,7 @@ checker: Parser
                     else
                        IS.superDesc.dopt -> putline;
                if)if)
-            #);                    
+            #);
           check::
             (# 
             do (if traceCheck then
@@ -2471,6 +2507,10 @@ checker: Parser
                do i + 1 -> i; i = 1 -> isFirst;
                   (if i > 1 then i - 1 -> emit if);
                   inModulePropX -> (current[] -> ap[]).inModulePropX;
+                  (* Given: X: {...; R.foo(e1).bar(e2).x; ...}
+                   * the scope for foo is R, but the scope for e1 is X
+                   * the scope for bar is foo, but X for e2
+                   *)
                   (rec[],basicScope[],argScope[],isFirst,OGS[]) 
                                      (**********)
                     -> current.checkOI
@@ -2516,12 +2556,12 @@ checker: Parser
                origin[] -> args.setUpOrigin
             #);
           checkOI::
-            (# BS: ^Items
+            (# BS: ^Scope
             do (if (trx) or traceCheck or traceGetVqual then
                    '**** ObjectInvocation:checkOI: '->puttext; 
                    dopt->puthead
                if);
-               (rec[],basicScope[],argScope[],isFirst) 
+               (rec[],basicScope[],none(*argScope[]*),isFirst) 
                  -> check 
                  -> basicScope[];
                (if ATd.primNo 
@@ -2530,7 +2570,7 @@ checker: Parser
                    (# A: ^Item
                    do args.scanArgs(# do current[] -> A[] #);
                       (if true then
-                          (none,basicScope[],basicScope[],true) -> A.check;
+                          (none,basicScope[],none(*basicScope[]*),true) -> A.check;
                        else
                           (none,argScope[],argScope[],true) -> A.check;
                       if);
@@ -2554,6 +2594,9 @@ checker: Parser
                                       (OI.ATd[]->ptn[]).OG.IS[] 
                                         -> basicScope[]
                       if)if)if)if);
+                      (* here we must use argScope - else semantioc errors
+                       * and BS does neither work
+                       *)
                       (args[],argScope[]) -> argBuf.add;
                       current[] -> pred[];
                       (if isFirst then
@@ -2585,10 +2628,44 @@ checker: Parser
                     *)
                    (* Calling this(ObjectInvocation).getV_ qual *)
                    basicScope[] -> BS[];
-                   (# encOG,qual: ^ObjectGenerator; org: ^Scope
-                   do (if isFirst then
-                          (if true then 
-                              (origin[]->org[]).encOG[] -> encOG[]
+                   (# encOG,qual: ^ObjectGenerator; org: ^Scope; 
+                      ptn: ^Pattern; isArgToSuper: @Boolean
+                   do (if false then
+                          '**   checkOI:BS:' -> puttext; BS.label -> puttext;
+                          ' origin: ' -> puttext; origin.label -> puttext;
+                          ' origin.father: ' -> puttext; 
+                          origin.father.label -> putline; 
+                          '**   ATd: ' -> puttext; ATd.dopt -> putline;
+                          '**   ATd.origin: ' -> puttext; 
+                          ATd.origin.label -> putline;
+                          ATD.origin.dopt -> putline;
+                          ATD.origin.father.dopt -> putline;
+                      if);
+                      (if 'Signature' -> (ATd.origin.label).equalNCS then
+                          ATd.origin.father[] -> ptn[];
+                          (*ptn.OG.super.dopt -> putline;*)
+                          ptn.OG.super.scanSons
+                          (# E: ^Exp;
+                          do current[] -> E[];
+                             (if E.args[] <> none then 
+                                 E.args.scanArgs
+                                 (#
+                                 do (if current[] = this(ObjectInvocation).father.father[] then
+                                        (if false then
+                                            '**   OI:checkOI:found:arg: ' 
+                                              -> puttext; 
+                                            current.dopt -> putline;
+                                        if);
+                                        true -> isArgToSuper;
+                      if)#)if)#)if);                  
+                      
+                      (if isFirst then
+                          (if true then
+                              (if isArgToSuper then
+                                  ptn.OG[] -> encOG[]
+                               else
+                                  (origin[]->org[]).encOG[] -> encOG[];
+                              if);
                            else
                               origin.father[] -> encOG[]
                           if)
@@ -2660,7 +2737,7 @@ checker: Parser
                             ptnId.T[] -> scp.localSearch -> (ATd[],pn);
                     if)if)
                  #);
-               org: ^Items; OGq: ^ObjectGenerator; done: @boolean;
+               org: ^Scope; OGq: ^ObjectGenerator; done: @boolean;
                ptn: ^Pattern; MD: ^Module; MI: ^ModuleItem;
                OS: ^objectSpecification;
             do (if trx or traceCheck then
@@ -2669,6 +2746,8 @@ checker: Parser
                    (*('scope',basicScope[]) -> putPT*)
                if);
                (if basicScope[] <> none then (* ad hoc *)
+                   (*'**** S: '-> puttext; ptnId.T[] -> puttext; ' in:'->putline;
+                   basicScope.dopt ->puthead;*)
                    (ptnId[],isFirst) -> basicScope.search -> (ATd[],on,pn);
                    (if ATd[] <> none then
                        on -> ptnId.on; (* just for debugging *)
@@ -2681,7 +2760,9 @@ checker: Parser
                            ptnId.dopt -> putline;
                            basicScope.doPt -> putline;
                        if);
-                       basicScope[] -> checkIfOneBasic;
+                       (if basicScope## = Items## then
+                           basicScope[] -> checkIfOneBasic;
+                       if);
                        (if ATd[] <> none then
                           (* '**** found: ' -> putline;
                            ATd.doPT -> putline*)
