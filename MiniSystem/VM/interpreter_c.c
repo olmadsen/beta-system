@@ -1483,11 +1483,20 @@ void cSaveReturn(Btemplate *obj,int descNo, int lsc){
 
 void dumpLscStack(FILE *trace,Btemplate * obj){
   int i;
+#ifdef __arm__
+#else
   fprintf(trace,"\tlscStack:top: %i [", obj->lscTop);
+#endif
   for (i = 0; i < obj->lscTop; i++){
+#ifdef __arm__
+#else
     fprintf(trace, "%i: %i, ",i, obj->lscStack[i]);
+#endif
   }
+#ifdef __arm__
+#else  
   fprintf(trace,"]\n");
+  #endif
 }
 int cRestoreReturn(Btemplate * obj){
   //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
@@ -3926,8 +3935,11 @@ bool traceThreads = true;
 	
 	switch(isValObj){
 	  case true:
+#ifdef __arm__
+#else	    
 	    fprintf(trace,"\ninvokev: isValObj\n");
 	    StacksToOut(trace,thisObj,thisStack);//,thisBlock);
+#endif
 	    //arg3 = vdtTable(trace,thisBlock->origin,vTopElm(thisStack,0));
 	    //arg3 = vdtTable(trace,thisValObjDesc,arg1);
 	    arg3 = desc_getInt4(thisValObjDesc,vdtTable_index + (arg1 - 1) * 4);
@@ -3935,7 +3947,10 @@ bool traceThreads = true;
 	    break;
 	default:
 	  if (arg3 == 1){
+#ifdef __arm__
+#else
 	    fprintf(trace,"\ninvokev: origin:isValObj");
+#endif
 	    arg3 = desc_getInt4(getDesc(vTopElm(thisStack,0))
 				     ,vdtTable_index + (arg1 - 1)* 4);
 	  }else
