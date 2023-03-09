@@ -132,7 +132,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   else
     {putstr("OBS! Did not get lock 1st!\n");}
   */
-  
+  /*
   putstr("Try cmpAndSwap\n");
   X = 0;
   V = cmpAndSwap((int)&X,0,1);
@@ -143,7 +143,7 @@ void kernel_main( unsigned int r0, unsigned int r1, unsigned int atags )
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
   putstr("Hmm!?\n");
-  
+  */
   //beta_fork(l);
   //start1();
   /*
