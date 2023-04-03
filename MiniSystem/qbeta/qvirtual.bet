@@ -32,7 +32,7 @@ OGsequence: SuperOGsequence
        do (if traceGetVqual then '*** pathToSuper:DOG:' -> puttext;
               DOG.doPT -> puthead;
               (if innerDOG[] <> none then
-                  '**   innerDOG: ' -> putline; innerDOG.doPT -> puthead
+                  '**   innerDOG: ' -> puttext; innerDOG.doPT -> puthead
           if)if);
           (if not DOG.isChecked then
               (* this happens*) (*'!!! DOG is not checked' -> putline*)
@@ -103,8 +103,7 @@ OGsequence: SuperOGsequence
               ':isRemote:'->puttext; isR->putboolean;
               ':DOG.super.pn='-> puttext; DOG.super.pn -> putint;
               ':isVirtual=' -> puttext; ptn.isVirtual -> putBoolean; 
-              '\n**   ptn:\n' -> puttext;
-              ptn.doPT -> puthead;
+              '\n**   ptn:' -> puttext; ptn.doPT -> puthead;
               print
           if);
        exit(OGsuper[],on,pn,isR)
@@ -175,7 +174,7 @@ OGsequence: SuperOGsequence
        enter(superDOG[],DOGx[],S[])
        do (if traceGetVqual then 
               ('**** RemoteX:',0) -> S.print;
-              '**   DOGx: '->putline; DOGx.dopt -> puthead; 
+              '**   DOGx: '->puttext; DOGx.dopt -> puthead; 
           if);
           L: 
           DOGx.super.scanSons
@@ -183,7 +182,7 @@ OGsequence: SuperOGsequence
           do current[] -> E[]; 
              (if E.ATd.OG[] = superDOG[] then (* move to if not isLast below*)
                  (if traceGetVqual then
-                     '**** remoteX:got:superDOG:' -> putline;
+                     '**** remoteX:got:superDOG:' -> puttext;
                      superDOG.dopt -> puthead;
                      S.print;
                  if);
@@ -220,7 +219,7 @@ OGsequence: SuperOGsequence
                  Sx[] -> S.pred[]
              if);
           #);
-          (if traceGetVqual then ('**** remote:END',0) -> S.print if)
+          (if traceGetVqual then ('**** remoteX:END',0) -> S.print if)
        exit S[]
        #);     
      Remote:
@@ -333,6 +332,128 @@ OGsequence: SuperOGsequence
           (if traceGetVqual then ('**   end:PRE',0) -> S.print if)
        exit S[]
        #);
+     newFindBinding::
+       (# OGx: ^ObjectGenerator
+       do (if traceGetVqual then
+              '**** newFindBinding: ' -> puttext;
+              vDcl.dopt -> puthead;
+          if);
+          vDcl[] -> searchBinding -> qual[];
+          (if false then
+              '**** newFindBinding:end: ' -> puttext;
+              vDcl.dopt -> puthead;
+          if);
+          (if qual[] = none then
+              (if traceGetVqual then
+                  '!!!! No binding found in OGsequence! Use: '->puttext;
+                  vDcl.doPT -> puthead
+              if);
+              vDcl.OG[] -> qual[];
+           else
+              (if traceGetVqual then
+                  '**** newFindBinding:found: ' -> puttext; qual.dopt -> puthead
+              if)
+          if)
+       #);
+     searchBinding:
+       (# vDcl: ^Pattern; qual: ^ObjectGenerator
+       enter vDcl[] 
+       do (if traceGetVqual then
+              '**** searchBinding: ' -> puttext; vDcl.dopt -> puthead; print;
+          if);
+          (if isNest or (pred[] = none) then
+           else
+              vDcl[] -> pred.searchBinding -> qual[]
+          if);
+          (if qual[] = none then
+              (vDcl[],DOG[]) -> checkDOG -> qual[]
+          if)
+       exit qual[]
+       #);
+     checkDOG:
+       (* check for binding of vDcl in DOG *)
+       (# vDcl: ^Pattern; DOG,qual: ^ObjectGenerator;
+       enter(vDcl[],DOG[])
+       do (if traceGetVqual then
+              '**   checkDOG: ' -> puttext; DOG.OGid-> puttext; ' ' -> put;
+              dog.doPT -> puthead;
+              'father.'->puttext;
+              DOG.father.dopt -> puthead
+          if);
+          checkForBinding:
+            (# Ex:^Exp; OGs: ^ObjectGenerator; argNo: @integer
+            do DOG.IS.scanDecls
+               (# ptn,P: ^Pattern
+               do (if currentDcl.isPatternDecl then
+                      currentDcl[] -> ptn[];
+                      (if ptn.isVirtual then
+                          (if traceGetVqual then
+                              '**   try: ' -> puttext; ptn.dopt -> puthead
+                          if);
+                          ptn[] -> P[];
+                          loop: 
+                            (if vDcl[] = P[] then
+                                (if traceGetVqual then
+                                    '\n ==== FOUND BINDING: =====' -> putline;
+                                    ptn.dopt -> puthead;
+                                if);
+                                (if ptn.OG.IS.isEmpty then
+                                    (if ptn.beingChecked then
+                                        ptn.OG.super.scanSons
+                                        (# OI: ^ObjectInvocation
+                                        do (current[]->OI[]).ptnID[]
+                                             -> DOG.IS.doSearch -> ptn[];
+                                        #)
+                                     else
+                                        ptn.OG.super.ATd[] -> ptn[]
+                                if)if);
+                                ptn.OG[] -> qual[];
+                                leave checkForBinding
+                             else
+                                (* probably check ptn.vDcl recursively *)
+                                (if (P.vDcl[] -> P[]) <> none then
+                                    restart loop
+               if)if)if)if)#);
+               (* check possible binding in arguments of DOG.super.last *)
+               LLL:
+                 (if DOG.IS.superDesc[] <> none then
+                     DOG.super.last -> Ex[];
+                     DOG.IS.superDesc.father[] -> OGs[];
+                     (if traceGetVqual then
+                         '**   Ex: ' -> puttext; Ex.dopt -> puttext;
+                         '**   Ex.OGs.super:'->putline;
+                         OGs.dopt -> puthead;
+                     if);
+                     (if (Ex.args[] <> none) and (Ex.args.noOfSons > 0) then
+                         OGs.IS.scanNonBoundItemArgs
+                         (# 
+                         do argNo + 1 -> argNo;
+                            (if traceGetVqual then
+                                '**   currentArg: ' -> puttext;
+                                currentArg.dopt->puthead;
+                            if);
+                            (if currentArg[] = vDcl[] then
+                                Ex.args.scanArgs
+                                (# i: @integer
+                                do i + 1 -> i;
+                                   (if i = argNo then
+                                       (if traceGetVqual then
+                                           '**   superArg: ' -> puttext; 
+                                           current.label -> puttext;
+                                           ' '->put; current.dopt-> putline;
+                                       if);
+                                       (if traceGetVqual then
+                                           '\n==== FOUND BINDING IN ARG: ' 
+                                             -> putline;
+                                           current.dopt -> puthead;
+                                       if);
+                                       current.getQual -> qual[];
+                                       leave LLL
+                                if)#)
+                 if)#)if)if)
+            #)
+       exit qual[]
+       #);
      getOGstart:: 
        (* Return the start OG of this OGsequence from where a virtual binding
         * has to be searched. For a simple OGs with no nesting:
@@ -356,7 +477,7 @@ OGsequence: SuperOGsequence
           if)if);
           (if traceGetVqual then
               '**** getOGstart:isNest: ' -> puttext; isNest -> putboolean;
-              ' qual: ' -> putline; qual.doPT -> puthead;
+              ' qual: ' -> puttext; qual.doPT -> puthead;
           if)
        #);     
      printShort:
@@ -430,9 +551,9 @@ findBinding:
   (# vDcl: ^pattern; OGx: ^ObjectGenerator; qual: ^ObjectGenerator
   enter(vDcl[],OGx[])
   do (if traceGetVqual then
-         '****  findBindingOf:vDcl:\n' -> puttext; vDcl.doPT -> puthead;
-         '**    in: ' -> putline;
-         OGx.doPT -> puthead
+         '****  findBindingOf:vDcl:' -> puttext; vDcl.doPT -> puthead;
+         '**    in: ' -> puttext; OGx.doPt -> puthead;
+         '**    father: ' -> puttext; OGx.father.dopt -> puthead;
      if);
      L:
        (# P: ^Pattern
