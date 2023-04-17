@@ -111,6 +111,7 @@ hypervisor_dropout:
 
 init_memory:
         // Initialize the memory system - set up caches and MMU
+        // Core number is in r3
 
 	// Initialize TTBCR.
 	mov r0, #0 		  // Use short descriptor.
@@ -132,7 +133,11 @@ init_memory:
 	mov r1, #0x2b  		  // The translation table walk is normal, inner
 	orr r1, r0, r1 		  // and outer cacheable, WB WA, and inner
 	mcr p15, 0, r1, c2, c0, 0 // shareable.
-	
+
+        // Core 0 will set up a translation table, which will be shared among all.
+        cmp r3, #0
+        bne 3f
+        
 	// Set up translation table entries in memory
 	ldr r4, =0x00100000       // Increase 1MB address each time.
 
@@ -170,13 +175,14 @@ init_memory:
 
 
         // SMP is implemented in the CPUECTLR register.
-	mrrc p15, 1, r0, r1, c15  // Read CPUECTLR.
+3:      mrrc p15, 1, r0, r1, c15  // Read CPUECTLR.
 	orr r0, r0, #(0x1 << 6)   // Set SMPEN.
 	mcrr p15, 1, r0, r1, c15  // Write CPUECTLR.
 	
         // Enable caches and the MMU.
 	mrc p15, 0, r1, c1, c0, 0 // Read SCTLR.
 	orr r1, r1, #(0x1 << 2)   // The C bit (data cache).
+	orr r1, r1, #(0x1 << 11)  // The Z bit (branch prediction).
 	orr r1, r1, #(0x1 << 12)  // The I bit (instruction cache).
 	orr r1, r1, #0x1          // The M bit (MMU).
 	mcr p15, 0, r1, c1, c0, 0 // Write SCTLR.
