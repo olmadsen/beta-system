@@ -1833,9 +1833,59 @@ generator: variants
                              *)
                     if)if)
                  #);
+               mkClassDef:
+                 (# org: ^items; originDescNo: @integer; orgId: ^text
+                 do (if (origin[] -> org[]) <> none then
+                        org.encOG.OGid -> orgID[];
+                        org.newDescNo -> originDescNo;
+                     else
+                        objectDecl.OG.OGid ->orgId[];
+                        objectDecl.OG.IS.newDescNo -> originDescNo;
+                    if);
+                    (N[],newDescNo,false,(topSuper).newDescNo
+                    ,newOriginOff,orgId[],originDescNo,encOG.isValueObj,false)
+                      -> cd.class;
+                 #);
+               StoreArguments:
+                 (#
+                 do (if not emitLLVM then
+                       cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
+                       scanItemArgsReverse(#do true -> currentArg.store #)
+                   if);
+                 #);
+               StoreOrigin:
+                 (#
+                 do (if globalRestrictionsInMain and elimOrigin then
+                        (if traceNoGlobals then
+                            cd.com(#do 'No globals,no origin'->TT; dopt->TT#)
+                        if)
+                     else
+                        (if (noOfRefArgsInSuper -> rArgsInSuper) > 0 then
+                            (* if super has ref args, 
+                             * then these are on the stack above origin
+                             * Here S = origin and x,y,z are 3 ref args
+                             * rShift moves S to top of rStack
+                             * ------------      ------------
+                             * |...|S|x|y|z  ==> |...|x|y|z|S
+                             * ------------      ------------
+                             *)                           
+                            rArgsInSuper -> cd.rShiftUp
+                        if);
+                        cd.tstOriginIsNone;
+                        ('origin',newOriginOff) -> cd.rstore;
+                        (if (origin[] -> originIsValue) then
+                            ('origin.valueOff',NewOriginOff + 2) -> cd.store;
+                            ('origin.valueOff',NewOriginOff + 1) -> cd.store;
+                   if)if)
+                 #);
                AllocateSuper:
                  (#
-                 do (if true (* perhaps hasRealSuper *)
+                 do (if not OG.isValueObj then 
+                        (if not ((superDesc[] <> none) 
+                            and not superDesc.isPrimitive) then
+                            true -> cd.allocEventQ
+                    if)if);
+                    (if true (* perhaps hasRealSuper *)
                      // (superDesc[] <> none) and not superDesc.isPrimitive
                      // (superDesc[] <> none) 
                         and 
@@ -1980,6 +2030,90 @@ generator: variants
                            (1,newDescno,true,'innerM') -> cd.vdtTable;
                    if)if)
                  #);
+               genAttributes:
+                 (#
+                 do scanSons
+                    (# I: ^Item; MP: ^Module
+                    do current[] -> I[];
+                       (if true
+                        // I.isDecl and (I## <> LabelDecl##) then
+                           (if not I.isPattern or I.isVirtual then
+                               (false,0,0) -> current.Qgen -> MP[];
+                               (if MP[] <> none then
+                                   MP[] -> mainPathModule[];
+                               if)
+                            else
+                               (if I[] = StringDecl[] then
+                                   (false,0,0) -> current.Qgen if) 
+                           if)
+                        // I.isNewProp then
+                           (false,0,0) -> current.Qgen -> MP[];
+                           (if MP[] <> none then
+                               MP[] -> mainPathModule[];
+                           if)
+                    if)#);
+                    (if mainPathModule[] <> none then
+                        (false,0,0) -> mainPathModule.Qgen;
+                        none -> mainPathModule[]
+                    if);
+                    (if innerInx > 0 then innerInx -> cd.innerA if);
+                    (if (superDesc[] <> none) and not superDesc.isPrimitive then
+                        (if true then  
+                            (* just preliminary: to ensure that AllocE code 
+                             * in sub is executed; but should be improved *)
+                            (if not OG.isValueObj then
+                                (if doHasCode then 
+                                    1 -> cd.rtnEventQ 
+                                 else
+                                    0 -> cd.rtnEventQ 
+                        if)if)if);
+                        'A' -> cd.rtnInner 
+                     else
+                        (if not OG.isValueObj then
+                            (if doHasCode then 
+                                1 -> cd.rtnEventQ 
+                             else
+                                0 -> cd.rtnEventQ 
+                    if)if)if);
+                 #);
+               genActionPart:
+                 (#
+                 do(not OG.isValueObj and 
+                   not ((superDesc[] <> none) and not superDesc.isPrimitive )
+                   ) -> cd.actions;
+                   (if not OG.isValueObj then cd.mvStack if);
+                   restartLab -> cd.defLab;
+                   scanSons
+                   (# I: ^Item; superHasNewInner: @boolean
+                   do current[] -> I[];
+                      (if not I.isDecl or (I## = LabelDecl##) then 
+                          cd.com(#do 'genclass:stmt:'->TT; current.doPT->TQ#);
+                          (if isLast then
+                              (if super.ATd[] <> none then
+                                  super.ATd.OG.IS.newInner[] <> none
+                                    -> superHasNewInner
+                          if)if);
+                          (superHasNewInner,0,0) -> current.Qgen 
+                   if)#);
+                   leaveLab -> cd.defLab;
+                   (if (superDesc[] <> none) and not superDesc.isPrimitive then
+                       'M' -> cd.rtnInner
+                    else
+                       (if not OG.isValueObj then 0 -> cd.rtnEventQ if);
+                       cd.com(#do 'pushReturn: ' -> TT; 
+                                (if sig[] <> none then sig.id[] -> TQ if)#);
+                       (if encOG.isValueObj then
+                           (if sig[] <> none then
+                               encOG.pushReturnValues
+                           if);
+                           cd.rtnV
+                        else
+                           cd.setThisStack;
+                           cd.pushThis
+                       if);
+                       'D' -> cd.rtn (* also for value object?  *)
+                   if);
+                 #);
                BindVirtuals:
                  (# E: ^Exp;
                     args: [6]^ObjectGenerator(*Specification*); top,i: @integer;
@@ -2046,7 +2180,31 @@ generator: variants
                            (this(Items)[],P.off) -> P.OG.mkVirtualBinding
                     if)#);
                     newDescNo -> cd.endNewVirtDefs;
-                 #);   
+                 #);  
+               handleLLVMvirtuaDefs:
+                 (#
+                 do cd.mkLLVMvirtualDefs
+                    (# handleOrigins::
+                         (#
+                         do cd.lcom(#do 'handleOrigins:NEW:'->TT; OG.OGid->TT#);
+                            (if (OG.IS.newOriginOff > 0) then
+                                (if OG.primNo 
+                                 // object_prim // vAssign_prim then
+                                 else
+                                    (OG[],OG[],true) -> storeOrigins;
+                                    cd.lcom(#do 'handleOrigins:END: ' -> TT #)
+                         if)if)#);
+                       vName::
+                         (# OGx: ^ObjectGenerator; org: ^Items
+                         do dn -> QnewDesc.getOD -> OGx[];
+                            OGx.OGidWdNo -> vN[];
+                            origin[] -> org[];
+                            (if org[] <> none then 
+                                org.encOG.OGidWdNo -> orgOfVN[];
+                             else
+                                'Object$0' -> orgOfVN[] (* to be fixed! *)
+                    if)#)#)
+                 #);
                mainPathModule: ^Module;     
                CC: ^CallChain; superVar: ^Variant;
                superIsPrimitive: @boolean;
@@ -2091,55 +2249,14 @@ generator: variants
                    
                    OG.XaddB.copySuper;
                    
-                   (# org: ^items; originDescNo: @integer; orgId: ^text
-                   do (if (origin[] -> org[]) <> none then
-                          org.encOG.OGid -> orgID[];
-                          org.newDescNo -> originDescNo;
-                       else
-                           objectDecl.OG.OGid ->orgId[];
-                           objectDecl.OG.IS.newDescNo -> originDescNo;
-                      if);
-                      (N[],newDescNo,false,(topSuper).newDescNo
-                      ,newOriginOff,orgId[],originDescNo,encOG.isValueObj,false)
-                        -> cd.class;
-                   #);
+                   mkClassDef;
                    (* thisObj = the new instance of this class 
                     * thisStack = caller
                     * Possible arguments on callerStack
                     *)
                    cd.bcPos -> beginBCP;
-                   (if not emitLLVM then
-                       cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
-                       scanItemArgsReverse(#do true -> currentArg.store #)
-                   if);
-                   (if globalRestrictionsInMain and elimOrigin then
-                       (if traceNoGlobals then
-                           cd.com(#do 'No globals,no origin'->TT; dopt->TT#)
-                       if)
-                    else
-                       (if (noOfRefArgsInSuper -> rArgsInSuper) > 0 then
-                           (* if super has ref args, 
-                            * then these are on the stack above origin
-                            * Here S = origin and x,y,z are 3 ref args
-                            * rShift moves S to top of rStack
-                            * ------------      ------------
-                            * |...|S|x|y|z  ==> |...|x|y|z|S
-                            * ------------      ------------
-                            *)                           
-                           rArgsInSuper -> cd.rShiftUp
-                       if);
-                       cd.tstOriginIsNone;
-                       ('origin',newOriginOff) -> cd.rstore;
-                       (if (origin[] -> originIsValue) then
-                           ('origin.valueOff',NewOriginOff + 2) -> cd.store;
-                           ('origin.valueOff',NewOriginOff + 1) -> cd.store;
-                   if)if);
-                   (if not OG.isValueObj then 
-                       (if not ((superDesc[] <> none) 
-                           and not superDesc.isPrimitive) then
-                           true -> cd.allocEventQ
-                   if)if);
-                   
+                   StoreArguments;
+                   StoreOrigin;
                    AllocateSuper;
                    
                    (if newDescNo = (markIncludes.topModule.desc).newDescno then
@@ -2148,91 +2265,15 @@ generator: variants
                    if);
                    (if isStringModule then cd.saveStringOrigin if);
                    (if (superDesc[] <> none) and not superDesc.isPrimitive  then
-                    else (if not OG.isValueObj then cd.mvStack
+                    else 
+                       (if not OG.isValueObj then 
+                           cd.mvStack
                    if)if);
                    (if sig[] <> none then
                        (*(false,0,0) -> sig.Qgen *)
                    if);
-                   scanSons
-                   (# I: ^Item; MP: ^Module
-                   do current[] -> I[];
-                      (if true
-                       // I.isDecl and (I## <> LabelDecl##) then
-                          (if not I.isPattern or I.isVirtual then
-                              (false,0,0) -> current.Qgen -> MP[];
-                              (if MP[] <> none then
-                                  MP[] -> mainPathModule[];
-                              if)
-                           else
-                              (if I[] = StringDecl[] then
-                                  (false,0,0) -> current.Qgen if) 
-                          if)
-                       // I.isNewProp then
-                          (false,0,0) -> current.Qgen -> MP[];
-                           (if MP[] <> none then
-                               MP[] -> mainPathModule[];
-                           if)
-                   if)#);
-                   (if mainPathModule[] <> none then
-                       (false,0,0) -> mainPathModule.Qgen;
-                       none -> mainPathModule[]
-                   if);
-                   (if innerInx > 0 then innerInx -> cd.innerA if);
-                   (if (superDesc[] <> none) and not superDesc.isPrimitive then
-                       (if true then  
-                           (* just preliminary: to ensure that AllocE code 
-                            * in sub is executed; but should be improved *)
-                           (if not OG.isValueObj then
-                               (if doHasCode then 
-                                   1 -> cd.rtnEventQ 
-                                else
-                                   0 -> cd.rtnEventQ 
-                       if)if)if);
-                       'A' -> cd.rtnInner 
-                    else
-                       (if not OG.isValueObj then
-                           (if doHasCode then 
-                               1 -> cd.rtnEventQ 
-                            else
-                               0 -> cd.rtnEventQ 
-                   if)if)if);
-                   
-                   (* Code for action part *)
-                   (not OG.isValueObj and 
-                   not ((superDesc[] <> none) and not superDesc.isPrimitive )
-                   ) -> cd.actions;
-                   (if not OG.isValueObj then cd.mvStack if);
-                   restartLab -> cd.defLab;
-                   scanSons
-                   (# I: ^Item; superHasNewInner: @boolean
-                   do current[] -> I[];
-                      (if not I.isDecl or (I## = LabelDecl##) then 
-                          cd.com(#do 'genclass:stmt:'->TT; current.doPT->TQ#);
-                          (if isLast then
-                              (if super.ATd[] <> none then
-                                  super.ATd.OG.IS.newInner[] <> none
-                                    -> superHasNewInner
-                          if)if);
-                          (superHasNewInner,0,0) -> current.Qgen 
-                   if)#);
-                   leaveLab -> cd.defLab;
-                   (if (superDesc[] <> none) and not superDesc.isPrimitive then
-                       'M' -> cd.rtnInner
-                    else
-                       (if not OG.isValueObj then 0 -> cd.rtnEventQ if);
-                       cd.com(#do 'pushReturn: ' -> TT; 
-                                (if sig[] <> none then sig.id[] -> TQ if)#);
-                       (if encOG.isValueObj then
-                           (if sig[] <> none then
-                               encOG.pushReturnValues
-                           if);
-                           cd.rtnV
-                        else
-                           cd.setThisStack;
-                           cd.pushThis
-                       if);
-                       'D' -> cd.rtn (* also for value object?  *)
-                   if);
+                   genAttributes;
+                   genActionPart;
                    encOG.computeGCinfo;
                    (objSize,isIndexed,newBasicProp.OSDvisibility) 
                      -> cd.endClass;
@@ -2244,26 +2285,8 @@ generator: variants
                    (innerInx,0,true,'innerX') -> cd.vdtTable; 
                if);
                BindVirtuals;
-               cd.mkLLVMvirtualDefs
-               (# handleOrigins::
-                    (#
-                    do cd.lcom(#do 'handleOrigins:NEW: ' -> TT; OG.OGid ->TT #);
-                       (if (OG.IS.newOriginOff > 0) then
-                           (if OG.primNo // object_prim // vAssign_prim then
-                            else
-                               (OG[],OG[],true) -> storeOrigins;
-                               cd.lcom(#do 'handleOrigins:END: ' -> TT #)
-                    if)if)#);
-                  vName::
-                    (# OGx: ^ObjectGenerator; org: ^Items
-                    do dn -> QnewDesc.getOD -> OGx[];
-                       OGx.OGidWdNo -> vN[];
-                       origin[] -> org[];
-                       (if org[] <> none then 
-                           org.encOG.OGidWdNo -> orgOfVN[];
-                        else
-                           'Object$0' -> orgOfVN[] (* to be fixed! *)
-               if)#)#);
+               handleLLVMvirtuaDefs;
+               
                cd.lcom(#do 'ObjStubStackX:gen' -> TT #);
                ObjStubStackX.gen;
             #);
