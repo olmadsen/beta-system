@@ -1846,21 +1846,33 @@ generator: variants
                     ,newOriginOff,orgId[],originDescNo,encOG.isValueObj,false)
                       -> cd.class;
                  #);
+               handleArgumentsAndOrigin:
+                 (# theIS: ^Items
+                 enter theIS[]
+                 do theIS[] -> storeArguments;
+                    theIS[] -> StoreOrigin;
+                    (if theIS.superDesc[] <> none then
+                        cd.com(#do 'hArgOrg:super:' -> TT #);
+                        theIS.superDesc[] -> handleArgumentsAndOrigin
+                    if)
+                 #);
                StoreArguments:
-                 (#
+                 (# theIS: ^Items
+                 enter theIS[]
                  do (if not emitLLVM then
                        cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
-                       scanItemArgsReverse(#do true -> currentArg.store #)
+                       theIS.scanItemArgsReverse(#do true -> currentArg.store #)
                    if);
                  #);
                StoreOrigin:
-                 (#
-                 do (if globalRestrictionsInMain and elimOrigin then
+                 (# theIS: ^Items
+                 enter theIS[]
+                 do (if theIS.globalRestrictionsInMain then
                         (if traceNoGlobals then
-                            cd.com(#do 'No globals,no origin'->TT; dopt->TT#)
+                            cd.com(#do 'No globals,no origin'->TT; theIS.dopt->TT#)
                         if)
                      else
-                        (if (noOfRefArgsInSuper -> rArgsInSuper) > 0 then
+                        (if (theIS.noOfRefArgsInSuper -> rArgsInSuper) > 0 then
                             (* if super has ref args, 
                              * then these are on the stack above origin
                              * Here S = origin and x,y,z are 3 ref args
@@ -1873,32 +1885,57 @@ generator: variants
                         if);
                         cd.tstOriginIsNone;
                         ('origin',newOriginOff) -> cd.rstore;
-                        (if (origin[] -> originIsValue) then
-                            ('origin.valueOff',NewOriginOff + 2) -> cd.store;
-                            ('origin.valueOff',NewOriginOff + 1) -> cd.store;
+                        (if (theIS.origin[] -> originIsValue) then
+                            ('origin.valueOff',theIS.NewOriginOff + 2) 
+                              -> cd.store;
+                            ('origin.valueOff',theIS.NewOriginOff + 1) 
+                              -> cd.store;
                    if)if)
                  #);
-               AllocateSuper: (* quite complicated *)
+               prepareSuper:
                  (#
+                 do
+                    (*************** only for main.super: factor out *)
+                    (ptn.sig.id[],superDesc.newDescNo) -> cd.super;
+                    superDesc.newDescNo -> cd.vdtTableCopy;
+                    (if superDesc.innerInx > 0 then
+                        (superDesc.innerInx,newDescno,true,'innerS')
+                          -> cd.vdtTable;
+                    if);
+                    (****** end-of-only for main.super **)
+                 #);
+               hasRealSuper: BooleanValue
+                 (#
+                 do (superDesc[] <> none) 
+                    and 
+                    (not superDesc.isPrimitive
+                        or (superDesc.primNo = stringDecl.primNo)
+                        or (superDesc.primNo = immutable_prim)
+                    ) -> value
+                 #);
+               AllocateSuper: 
+                 (* quite complicated
+                  * push origin of super
+                  * compute adr of super
+                  * push arguments of super
+                  * cd.toSuper
+                  *)
+                 (# theIS: ^Items
+                 enter theIS[]
                  do (if not OG.isValueObj then 
                         (if not ((superDesc[] <> none) 
                             and not superDesc.isPrimitive) then
                             true -> cd.allocEventQ
                     if)if);
-                    (if true (* perhaps hasRealSuper *)
+                    (if hasRealSuper (*true 
                      // (superDesc[] <> none) and not superDesc.isPrimitive
-                     // (superDesc[] <> none) 
+                     // (superDesc[] <> none)
                         and 
-                        ((superDesc.primNo = stringDecl.primNo) 
-                        or (superDesc.primNo = immutable_prim)) then
-                        (ptn.sig.id[],superDesc.newDescNo) -> cd.super;
-                        superDesc.newDescNo -> cd.vdtTableCopy;
-                        (if superDesc.innerInx > 0 then
-                            (superDesc.innerInx,newDescno,true,'innerS')
-                              -> cd.vdtTable;
-                        if);
-                        cd.com(#do 'push:super:args:'->TT#);
-                        (* push super arguments *)
+                        ((superDesc.primNo = stringDecl.primNo)
+                        or (superDesc.primNo = immutable_prim))*) then
+                        prepareSuper;
+                        cd.com(#do 'push:super.origin:'->TT#);
+                        (********* push super.origin *)
                         (if super.isImplSuper then
                             (if not (elimOrigin 
                                 and globalRestrictionsInsuper) then
@@ -2001,7 +2038,11 @@ generator: variants
                                      E.doPT -> TQ; A.print -> TT #);
                               if);
                               (* What goes on here?
-                               * Do we need staticOff below? *)
+                               * Do we need staticOff below? 
+                               ******** Push arguments of super
+                               * But why only in this case?
+                               * And what does sig[] = none imply?
+                               *)
                               (if sig[] = none then
                                   cd.com(#do'super.sig:none:superAdj:'-> TT;
                                            newOriginOff -> II #);
@@ -2012,8 +2053,7 @@ generator: variants
                                   (* go ON-1, use newOriginOff first time *)
                                   (- newOriginOff,0,CC[]) -> E.loadArgs; 
                               if);
-                               (*'**** E.handleVargs: ' -> puttext; 
-                                * E.dopt -> putline;*)
+                               (******* handle virtual args of super ***)
                                E.handleVargs
                            #);
                         if);
@@ -2251,8 +2291,12 @@ generator: variants
                     *)
                    cd.bcPos -> beginBCP;
                    
-                   StoreArguments;
-                   StoreOrigin;
+                   (if false then
+                       this(Items)[] -> handleArgumentsAndOrigin
+                    else
+                       this(Items)[] -> StoreArguments;
+                       this(Items)[] -> StoreOrigin;
+                   if);
                    (* store args and origin for possible super - recurively *)
                    AllocateSuper; 
                    (* AllocateSuper for possible super - recursively *)
