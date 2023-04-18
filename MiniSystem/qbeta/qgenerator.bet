@@ -1186,7 +1186,7 @@ generator: variants
                E: ^Exp; OI: ^ObjectInvocation;
                var: ^Variant;
                trace: (# exit false #);
-            do (if not genIsDone then
+            do (if not genIsDone or inlineAlloc then
                    (if primNo = inner_prim then
                        (*'TRYING code gen for inner'->putline*)
                    if);
@@ -1851,8 +1851,11 @@ generator: variants
                  enter theIS[]
                  do theIS[] -> storeArguments;
                     theIS[] -> StoreOrigin;
-                    (if theIS.superDesc[] <> none then
-                        cd.com(#do 'hArgOrg:super:' -> TT #);
+                    theIS[] -> AllocateSuper;
+                    (if theIS[] -> hasRealSuper then
+                        cd.com(#do 'hArgOrg:super:' -> TT; 
+                                 theIS.superDesc.encOG.OGid -> TT
+                              #);
                         theIS.superDesc[] -> handleArgumentsAndOrigin
                     if)
                  #);
@@ -1905,12 +1908,13 @@ generator: variants
                     (****** end-of-only for main.super **)
                  #);
                hasRealSuper: BooleanValue
-                 (#
-                 do (superDesc[] <> none) 
+                 (# theIS: ^Items
+                 enter theIS[]
+                 do (theIS.superDesc[] <> none) 
                     and 
-                    (not superDesc.isPrimitive
-                        or (superDesc.primNo = stringDecl.primNo)
-                        or (superDesc.primNo = immutable_prim)
+                    (not theIS.superDesc.isPrimitive
+                        or (theIS.superDesc.primNo = stringDecl.primNo)
+                        or (theIS.superDesc.primNo = immutable_prim)
                     ) -> value
                  #);
                addOG:
@@ -1985,43 +1989,48 @@ generator: variants
                       exit E[]
                       #);
                     handleSuperArgs:
-                      (#
-                      do(* What does sig[] = none imply? *)
-                        (if sig[] = none then
+                      (# theIS: ^Items; E: ^Exp
+                      enter(theIS[],E[])
+                      do cd.com(#do 'handleSuperArgs:E:'->TT; E.dopt->TQ;
+                                  'theIS:'->TT; theIS.dopt->TQ #);
+                         (* What does sig[] = none imply? *)
+                        (if theIS.sig[] = none then
                             cd.com(#do'super.sig:none:superAdj:'-> TT;
                                      newOriginOff -> II #);
-                            (newOriginOff,0,CC[]) -> E.loadArgs; 
+                            (theIS.newOriginOff,0,CC[]) -> E.loadArgs; 
                          else
                             cd.com(#do'super.sig:not:none:superAdj:'->TT;
                                      - newOriginOff -> II #);
                             (* go ON-1, use newOriginOff first time *)
-                            (- newOriginOff,0,CC[]) -> E.loadArgs; 
+                            (- theIS.newOriginOff,0,CC[]) -> E.loadArgs; 
                         if);
                         (******* handle virtual args of super ***)
                         E.handleVargs;
                       #);
                     theIS: ^Items; E: ^Exp; off: @integer; 
                  enter theIS[]
-                 do (if not OG.isValueObj then 
-                        (if not ((superDesc[] <> none) 
-                            and not superDesc.isPrimitive) then
+                 do (if not theIS.encOG.isValueObj then 
+                        (if not ((theIS.superDesc[] <> none) 
+                            and not theIS.superDesc.isPrimitive) then
                             true -> cd.allocEventQ
                     if)if);
-                    (if hasRealSuper then
+                    (if theIS[] -> hasRealSuper then
                         prepareSuper;
                         cd.com(#do 'push:super.origin:'->TT #);
                         (********* push super.origin *)
-                        (if super.isImplSuper then
-                            (if not globalRestrictionsInsuper then
-                                (if super.isSingularImplSuper then
+                        (if theIS.super.isImplSuper then
+                            (if not theIS.globalRestrictionsInsuper then
+                                (if theIS.super.isSingularImplSuper then
                                     cd.com(#do'isSingularImplSuper:'->TT#);
                                     cd.pushThis;
                                     ('iOrigin',newOriginOff) -> cd.rpushg;
-                                    (if (origin[] -> originIsValue) then
+                                    (if (theIS.origin[] -> originIsValue) then
                                         cd.pushThis;
-                                        (T[],newOriginOff + 1) -> cd.pushg;
+                                        (T[],theIS.newOriginOff + 1) 
+                                          -> cd.pushg;
                                         cd.pushThis;
-                                        (T[],newOriginOff + 2) -> cd.pushg;
+                                        (T[],theIS.newOriginOff + 2)
+                                          -> cd.pushg;
                                     if);
                                     (* For implicit super we may have
                                      * snorf::< {...}
@@ -2030,7 +2039,7 @@ generator: variants
                                     Exp -> E[] 
                                  else
                                     cd.com(#do'isNonSingularImplSuper:'->TT#);
-                                    super.ATd[] -> ptn[]; 
+                                    theIS.super.ATd[] -> ptn[]; 
                                     (* snorf:< foo    or
                                      * snorf:< koks.foo
                                      * ...
@@ -2041,20 +2050,21 @@ generator: variants
                                     ptn.OG.super[] -> pushAddress -> E[];
                             if)if)
                          else
-                            super[] -> pushAddress -> E[];
+                            theIS.super[] -> pushAddress -> E[];
                         if);
-                        handleSuperArgs;
+                        (theIS[],E[]) -> handleSuperArgs;
                         (if rArgsInSuper > 0 then 
                             (* Reverse of rShiftUp as described above
                              * See rShift in VM/objectImage
                              *)
                            rArgsInSuper -> cd.rShiftDown
                         if);
-                        (* only if no inline: *)
-                        superDesc.newDescNo -> cd.toSuper; 
+                        (if not inlineAlloc then
+                            theIS.superDesc.newDescNo -> cd.toSuper; 
+                        if)
                      else
-                        (if objectDecl.OG.IS[] <> this(Items)[] then
-                            (1,newDescno,true,'innerM') -> cd.vdtTable;
+                        (if objectDecl.OG.IS[] <> theIS[] then
+                            (1,theIS.newDescno,true,'innerM') -> cd.vdtTable;
                     if)if)
                  #);
                checkIfBetaWorldOrStringModule:
@@ -2074,8 +2084,16 @@ generator: variants
                     if)if)
                  #);
                genAttributes:
-                 (#
-                 do scanSons
+                 (# theIS: ^Items
+                 enter theIS[]
+                 do (if inlineAlloc then
+                        (if (theIS[] -> hasRealSuper)
+                            and (theIS.superDesc[] <> objectDecl.desc) then
+                            'aaa: '->puttext; theIS.superDesc.encOG.OGid -> putline;
+                            
+                            theIS.superDesc[] -> genAttributes
+                    if)if);
+                    theIS.scanSons
                     (# I: ^Item; MP: ^Module
                     do current[] -> I[];
                        (if true
@@ -2099,27 +2117,29 @@ generator: variants
                         (false,0,0) -> mainPathModule.Qgen;
                         none -> mainPathModule[]
                     if);
-                    (if innerInx > 0 then innerInx -> cd.innerA if);
-                    (if (superDesc[] <> none) and not superDesc.isPrimitive then
-                        (if true then  
-                            (* just preliminary: to ensure that AllocE code 
-                             * in sub is executed; but should be improved
-                             * in any case, a new bytecode should be used
-                             *)
-                            (if not OG.isValueObj then
+                    (if not inlineAlloc then
+                        (if theIS.innerInx > 0 then theIS.innerInx -> cd.innerA if);
+                        (if (theIS.superDesc[] <> none) and not theIS.superDesc.isPrimitive then
+                            (if true then  
+                                (* just preliminary: to ensure that AllocE code 
+                                 * in sub is executed; but should be improved
+                                 * in any case, a new bytecode should be used
+                                 *)
+                                (if not theIS.encOG.isValueObj then
+                                    (if doHasCode then 
+                                        1 -> cd.rtnEventQ 
+                                     else
+                                        0 -> cd.rtnEventQ 
+                            if)if)if);
+                            'A' -> cd.rtnInner 
+                         else
+                            (if not theIS.encOG.isValueObj then
                                 (if doHasCode then 
                                     1 -> cd.rtnEventQ 
                                  else
                                     0 -> cd.rtnEventQ 
-                        if)if)if);
-                        'A' -> cd.rtnInner 
-                     else
-                        (if not OG.isValueObj then
-                            (if doHasCode then 
-                                1 -> cd.rtnEventQ 
-                             else
-                                0 -> cd.rtnEventQ 
-                    if)if)if)
+                        if)if)if)
+                    if)
                  #);
                genActionPart:
                  (#
@@ -2280,22 +2300,21 @@ generator: variants
                     *)
                    cd.bcPos -> beginBCP;
                    
-                   (if false then
+                   (if inlineAlloc then
                        this(Items)[] -> handleArgumentsAndOrigin
                     else
+                       (* store args and origin for possible super *)
                        this(Items)[] -> StoreArguments;
                        this(Items)[] -> StoreOrigin;
+                       (* AllocateSuper for possible super - recursively *)
+                       this(Items)[] -> AllocateSuper; 
                    if);
-                   (* store args and origin for possible super - recurively *)
-                   AllocateSuper; 
-                   (* AllocateSuper for possible super - recursively *)
-                   
                    checkIfBetaWorldOrStringModule;
                    mvStack;
                    (if sig[] <> none then (*(false,0,0) -> sig.Qgen*) if);
                    (* genAttributes for possible super - recursively *)
                    cd.markEnterE; 
-                   genAttributes;
+                   this(Items)[] -> genAttributes;
                    (* goSuper *)
 
                    genActionPart;
