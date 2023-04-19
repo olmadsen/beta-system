@@ -1887,7 +1887,7 @@ generator: variants
                             rArgsInSuper -> cd.rShiftUp
                         if);
                         cd.tstOriginIsNone;
-                        ('origin',newOriginOff) -> cd.rstore;
+                        ('origin',theIS.newOriginOff) -> cd.rstore;
                         (if (theIS.origin[] -> originIsValue) then
                             ('origin.valueOff',theIS.NewOriginOff + 2) 
                               -> cd.store;
@@ -1906,16 +1906,6 @@ generator: variants
                           -> cd.vdtTable;
                     if);
                     (****** end-of-only for main.super **)
-                 #);
-               hasRealSuper: BooleanValue
-                 (# theIS: ^Items
-                 enter theIS[]
-                 do (theIS.superDesc[] <> none) 
-                    and 
-                    (not theIS.superDesc.isPrimitive
-                        or (theIS.superDesc.primNo = stringDecl.primNo)
-                        or (theIS.superDesc.primNo = immutable_prim)
-                    ) -> value
                  #);
                addOG:
                  (# OGx: ^ObjectSpecification; off: @integer
@@ -1978,7 +1968,7 @@ generator: variants
                       do (if globalRestrictionsInSuper then
                              super.last -> E[]
                           else
-                             newOriginOff
+                             theIS.newOriginOff
                                -> Address
                                -> super.computeAdr(#do addOG #)
                                -> (rec[],E[],A[]);
@@ -2023,7 +2013,7 @@ generator: variants
                                 (if theIS.super.isSingularImplSuper then
                                     cd.com(#do'isSingularImplSuper:'->TT#);
                                     cd.pushThis;
-                                    ('iOrigin',newOriginOff) -> cd.rpushg;
+                                    ('iOrigin',theIS.newOriginOff) -> cd.rpushg;
                                     (if (theIS.origin[] -> originIsValue) then
                                         cd.pushThis;
                                         (T[],theIS.newOriginOff + 1) 
@@ -2089,8 +2079,6 @@ generator: variants
                  do (if inlineAlloc then
                         (if (theIS[] -> hasRealSuper)
                             and (theIS.superDesc[] <> objectDecl.desc) then
-                            'aaa: '->puttext; theIS.superDesc.encOG.OGid -> putline;
-                            
                             theIS.superDesc[] -> genAttributes
                     if)if);
                     theIS.scanSons
@@ -2164,7 +2152,8 @@ generator: variants
                    (if (superDesc[] <> none) and not superDesc.isPrimitive then
                        'M' -> cd.rtnInner
                     else
-                       (if not OG.isValueObj then 0 -> cd.rtnEventQ if);
+                       (if not OG.isValueObj and not inlineAlloc
+                           then 0 -> cd.rtnEventQ if);
                        cd.com(#do 'pushReturn: ' -> TT; 
                                 (if sig[] <> none then sig.id[] -> TQ if)#);
                        (if encOG.isValueObj then
@@ -2316,6 +2305,10 @@ generator: variants
                    cd.markEnterE; 
                    this(Items)[] -> genAttributes;
                    (* goSuper *)
+                   (if inlineAlloc and (this(Items)[] -> hasRealSuper)
+                       (*(newDescNo <> (topSuper).newDescNo)*) then
+                       (realTopSuper).newDescNo -> cd.toSuper
+                   if);
 
                    genActionPart;
                    encOG.computeGCinfo;
@@ -4333,11 +4326,6 @@ generator: variants
           (stubN[],dNo,false,ptn.OG.IS.newDescNo
           ,encIS.newOriginOff ,encIS.encOG.OGidWdNo,encIS.newDescNo,false,true)
             -> cd.class;
-          (*
-          labelHandler.init; 
-          restartLab.new;
-          leaveLab.new;
-          restartLab -> cd.defLab;*)
           
           (* last arg is isValueObj, to be fixed!*)
           cd.com(#do 'Load origin:OG.isVirtualArg:'->TT; 
@@ -4367,7 +4355,6 @@ generator: variants
               (encIS.sig.id[],OG.getDescNo,OG.IS.objSize,0,true)
                 -> cd.invoke
           if);
-         (* leaveLab -> cd.defLab;*)
           
           (* move refTo thisObj to caller stack
            * This rstoreg seems odd/wrong? WHy?
@@ -4419,6 +4406,13 @@ generator: variants
             -> cd.class;
           cd.com(#do Atd.dopt -> TQ #);
           ATd.OG.iS.newDescNo -> cd.vdtTableCopy;
+          (if inlineAlloc then
+              cd.tstOriginIsNone;
+              ('sorigin',1) -> cd.rstore;
+              (* OBS! we assume that originOff = 1 for super!
+               * This needs to be validated!
+               *)
+          if);
           superDescNo -> cd.toSuper;
           'S' -> cd.rtnInner;
           (16,false,0) -> cd.endClass

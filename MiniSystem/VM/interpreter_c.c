@@ -3001,9 +3001,11 @@ bool traceThreads = true;
 #endif
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
-	glsc = getAllocE(getDesc(arg1));
-	//bc = (ObjDesc) getByteCode(getDesc(arg1));
-	//glsc = getAllocE(getDesc(arg1));             
+	if (true) {
+           glsc = getDoE(getDesc(arg1));
+	}else{
+           glsc = getAllocE(getDesc(arg1));
+	};
 #ifdef TRACE  
 	fprintf(trace," bc: %i glsc: %i\n",(int)bc,glsc);
 #endif
