@@ -2513,6 +2513,7 @@ bool traceThreads = true;
 	// digitalWrite(4,0);
       };
       cnt = cnt + 1;
+      //putstr("opCode: "); putint(opCode);putch(',');
       switch (opCode) {
       case pushthis:
 #ifdef TRACE
