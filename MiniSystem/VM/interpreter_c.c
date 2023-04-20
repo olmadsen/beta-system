@@ -13,13 +13,17 @@
 
 #elif defined __arm__
 //#warning "__arm__ is defined!"
-   #include "qb-arm/rpi-gpio.h"   
-   #include "qb-arm/armc-uart.c"
-   #include "qb-arm/led.c"
+//   #include "qb-arm/rpi-gpio.h"   
+//   #include "qb-arm/armc-uart.c"
+//   #include "qb-arm/led.c"
 #endif
 
 #ifdef __arm__
-typedef void *FILE; 
+typedef void *FILE;
+extern void putint(int V);
+extern void Bfork(void * interpreter, void * B, int coreNo);
+//extern int cmpAndSwap(int adr, int old, int new);
+
 #else
 #include <stdio.h> 
 #endif 

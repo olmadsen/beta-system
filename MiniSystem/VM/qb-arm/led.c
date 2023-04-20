@@ -5,7 +5,7 @@
 
 volatile unsigned int* gpio = (unsigned int*)GPIO_BASE;
 
-int pinMode(int pin, int val){
+void pinMode(int pin, int val){
   if (pin == 4){
     gpio[0] |= ( val << 12 );
   };
