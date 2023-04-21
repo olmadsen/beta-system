@@ -15,8 +15,7 @@ void putint(int V)
   for (i = 0; i < 8; i++) {putch(d[i]);}
 }
 
-int cmpAndSwap(int adr, int old, int new){
-}
+extern int cmpAndSwap(int adr, int old, int new);
 
 void Bfork(void * interpreter, void * B, int coreNo)
 { putstr("Bfork: ");
@@ -33,9 +32,28 @@ void Bfork(void * interpreter, void * B, int coreNo)
   }
 }
 void main(void *ftbBlob, unsigned int machType) {
-
+  static int X,V;
+  static int8_t CL = 0;
   putstr("qBeta main is here\n");
   putstr("Once again!\n");
+
+  putstr("Try lock\n");
+
+  lock_mutex(&CL);
+  putstr("Got lock\n");
+  unlock_mutex(&CL);
+  
+  putstr("Try cmpAndSwap\n");
+  X = 0;
+  V = cmpAndSwap((int)&X,0,1);
+  if (V) {putstr("Got lock 1st!\n");} else {putstr("Did not get lock 1st!\n");}
+  V = cmpAndSwap((int)&X,0,1);
+  if (V) {putstr("Got lock 2nd!\n");} else {putstr("Did not get lock 2nd!\n");}
+  V = 0; 
+  V = cmpAndSwap((int)&X,0,1);
+  if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
+  putstr("Hmm!?\n");
+  
   set_descs(BC);  
   run_interpreter(1); // isXB = 1 
   getEvent(true); 

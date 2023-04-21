@@ -402,6 +402,66 @@ put32:
 GET32:
 	ldr r0,[r0]
 	bx lr
+
+	.globl raw_putc
+	
+	.globl putNL
+putNL:
+	push {r0,r1,r2,r3,lr}
+	ldr r0,=#13
+	bl putch
+	pop {r0,r1,r2,r3,lr}
+	push {r0,r1,r2,r3,lr}
+	ldr r0,=#10
+	bl putch
+	pop {r0,r1,r2,r3,lr}
+	bx lr
+		
+.globl cmpAndSwap
+cmpAndSwap:	
+	// r0 = adr of mem loc
+	// r1 = old value
+	// r2 = new value
+	
+	push {r0,r1,r2,r3,lr}
+	bl puthex
+	pop {r0,r1,r2,r3,lr}
+
+	push {r0,r1,r2,r3,lr}	
+	bl putNL
+	pop {r0,r1,r2,r3,lr}
+	
+	ldr r3,[r0]
+
+	push {r0,r1,r2,r3,lr}
+	mov r0,r3
+	bl puthex
+	pop {r0,r1,r2,r3,lr}
+	bl putNL
+	
+	//mcr P15, 0, r0, C7, C10, 5
+	ldrex r4,[r0]
+
+	/*push {r0,r1,r2,r3,lr}
+	mov r0,r3
+	bl puthex
+	pop {r0,r1,r2,r3,lr}*/
+	
+	/*push {r0,r1,r2,r3,lr}
+	ldr r0,=#98
+	bl raw_putc
+	pop {r0,r1,r2,r3,lr}*/
+	
+	cmpne r1,r4
+	beq fail
+	strexne r3,r2,[r0]
+	cmpne r3,#1
+	beq fail
+	ldr r0, =#1
+	bx lr
+fail:
+	ldr r0, =#0
+	bx lr
 	
 	/* end added by OLM */
 	
