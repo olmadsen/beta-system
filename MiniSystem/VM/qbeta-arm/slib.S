@@ -395,37 +395,16 @@ child_core_entry:
 	
 .globl put32
 put32:
-    str r1,[r0]
-    bx lr
+	str r1,[r0]
+	bx lr
 
 .globl GET32
 GET32:
-    ldr r0,[r0]
-    bx lr
-
-
-.globl startCore
-startCore:
-	ldr r2,=start_cpu
-	mov r1,#0x40000000
-	str r2,[r1,r0]
+	ldr r0,[r0]
 	bx lr
-
-start_cpu:
-	//ldr sp, =(128 * 1024 * 1024)
-	mov r2,#0x60  // SP start
-	ldr sp,[r2]
-	push {lr}
-	ldr r0,=#97
-	bl raw_putc
-	pop {lr}
-	mov r2,#0x40 // adr of B
-	ldr r0,[r2]
-	mov r2,#0x50 // adr of interpreter
-	ldr r1,[r2]
-	blx r1 
-	bx lr
-
+	
+	/* end added by OLM */
+	
         // *******
         //
         //    MUTEX

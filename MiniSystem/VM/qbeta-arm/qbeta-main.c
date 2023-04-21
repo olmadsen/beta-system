@@ -1,6 +1,5 @@
 #include "header.h"
 extern unsigned char BC[];
-extern void put32(int adr, int val);
 
 #define IO_BASE 0x3f000000
 #define	GP_BASE (IO_BASE + 0x200000)
@@ -17,14 +16,12 @@ extern void put32(int adr, int val);
 #define GPPUD   (*(volatile unsigned *)(GP_BASE + 0x94))
 #define GPPUDCLK0   (*(volatile unsigned *)(GP_BASE + 0x98)))
 
-int cmpAndSwap(int adr, int old, int new){
-}
+
 void raw_putc(char c)
 { while (!(MU_LSR & 0x20))
     ;
   MU_IO = c;
 }
-extern int startCore(int adr);
 
 #include "../interpreter_c.c"
 
@@ -42,35 +39,22 @@ void putint(int V)
   for (i = 0; i < 8; i++) {putch(d[i]);}
 }
 
+int cmpAndSwap(int adr, int old, int new){
+}
 
 void Bfork(void * interpreter, void * B, int coreNo)
-{ put32(0x50,(int)interpreter);
-  put32(0x40,(int) B);
-  raw_putc(100+coreNo);
-  switch (coreNo)
-    {
-    case 1:
-      putstr("Bfork core1\n");
-      put32(0x60,128000000);
-      //startCore(0x9C);
-      if (start_core(interpreter, B, 1)) {
+{ putstr("Bfork: ");
+  putint(coreNo);
+  putch('\n');
+  if ((0 < coreNo) && (coreNo < 4)){
+      if (start_core(interpreter, B, coreNo)) {
          putstr("Failed startcore ");
-         putch('0'+ 0 );
+         putch('0'+ coreNo );
          putch('\n');
       }
-      break;
-    case 2:
-      put32(0x60,256000000);
-      startCore(0xAC);
-      break;
-    case 3:
-      put32(0x60,384000000);
-      startCore(0xBC);
-      break;
-    default:
-      putstr("coreNo not in 1,2,3\n");
-      break;
-    }
+  }else{
+    putstr("coreNo not in 1,2,3\n");
+  }
 }
 void main(void *ftbBlob, unsigned int machType) {
 
