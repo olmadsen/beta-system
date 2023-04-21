@@ -32,7 +32,7 @@ void Bfork(void * interpreter, void * B, int coreNo)
   }
 }
 void main(void *ftbBlob, unsigned int machType) {
-  static int X,V;
+  volatile static int X,V;
   static int8_t CL = 0;
   putstr("qBeta main is here\n");
   putstr("Once again!\n");
@@ -47,6 +47,9 @@ void main(void *ftbBlob, unsigned int machType) {
   X = 0;
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 1st!\n");} else {putstr("Did not get lock 1st!\n");}
+  putstr("X: ");
+  putint(X);
+  putch(10);
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 2nd!\n");} else {putstr("Did not get lock 2nd!\n");}
   V = 0; 

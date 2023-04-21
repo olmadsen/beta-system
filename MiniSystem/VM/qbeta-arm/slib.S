@@ -424,27 +424,41 @@ cmpAndSwap:
 	// r2 = new value
 	
 	push {r0,r1,r2,r3,lr}
+	bl puthex	
+	bl putNL
+	pop {r0,r1,r2,r3,lr}
+	
+	push {r0,r1,r2,r3,lr}
+	mov r0,r1
 	bl puthex
+	bl putNL
 	pop {r0,r1,r2,r3,lr}
 
 	push {r0,r1,r2,r3,lr}	
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
-	
-	ldr r3,[r0]
-
-	push {r0,r1,r2,r3,lr}
-	mov r0,r3
+	mov r0,r2
 	bl puthex
-	pop {r0,r1,r2,r3,lr}
 	bl putNL
-	
-	//mcr P15, 0, r0, C7, C10, 5
+	pop {r0,r1,r2,r3,lr}
+
 	ldrex r4,[r0]
 
-	/*push {r0,r1,r2,r3,lr}
-	mov r0,r3
+	/*
+	push {r0,r1,r2,r3,r4,lr}
+	ldr r0,=#100
+	bl putch
+	bl putNL
+	pop {r0,r1,r2,r3,r4,lr}
+
+	push {r0,r1,r2,r3,r4,lr}
+	mov r0,r1
 	bl puthex
+	bl putNL
+	pop {r0,r1,r2,r3,r4,lr}
+	
+	push {r0,r1,r2,r3,lr}
+	mov r0,r4
+	bl puthex
+	bl putNL
 	pop {r0,r1,r2,r3,lr}*/
 	
 	/*push {r0,r1,r2,r3,lr}
@@ -452,14 +466,52 @@ cmpAndSwap:
 	bl raw_putc
 	pop {r0,r1,r2,r3,lr}*/
 	
-	cmpne r1,r4
-	beq fail
-	strexne r3,r2,[r0]
-	cmpne r3,#1
-	beq fail
+	cmp r1,r4
+	bne fail
+	/*
+	push {r0,r1,r2,r3,lr}
+	ldr r0,=#97
+	bl putch
+	bl putNL
+	pop {r0,r1,r2,r3,lr}
+
+	push {r0,r1,r2,r3,lr}
+	mov r0,r2
+	bl puthex
+	bl putNL
+	pop {r0,r1,r2,r3,lr}
+
+	push {r0,r1,r2,r3,lr}
+	bl puthex
+	bl putNL
+	pop {r0,r1,r2,r3,lr}*/
+	
+	strex r3,r2,[r0]  // conditionally store r2 in [r0], succes/fail r3
+
+	push {r0,r1,r2,r3,lr}
+	mov r0,r3
+	bl puthex
+	bl putNL
+	pop {r0,r1,r2,r3,lr}
+	
+	cmp r3,#0
+	bne fail
+
+	push {r0,r1,r2,r3,lr}
+	ldr r0,=#98
+	bl putch
+	pop {r0,r1,r2,r3,lr}
+	
 	ldr r0, =#1
+	dmb
 	bx lr
 fail:
+	push {r0,r1,r2,r3,lr}
+	ldr r0,=#99
+	bl putch
+	bl putNL
+	pop {r0,r1,r2,r3,lr}
+	
 	ldr r0, =#0
 	bx lr
 	
