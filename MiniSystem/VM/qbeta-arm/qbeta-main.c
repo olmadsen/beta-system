@@ -52,10 +52,11 @@ void main(void *ftbBlob, unsigned int machType) {
   putch(10);
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 2nd!\n");} else {putstr("Did not get lock 2nd!\n");}
-  V = 0; 
+  V = 0;
+  X = 0;
   V = cmpAndSwap((int)&X,0,1);
   if (V) {putstr("Got lock 3rd!\n");} else {putstr("Did not get lock 3rd!\n");}
-  putstr("Hmm!?\n");
+  putstr("Great!\n");
   
   set_descs(BC);  
   run_interpreter(1); // isXB = 1 

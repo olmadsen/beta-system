@@ -3137,11 +3137,11 @@ bool traceThreads = true;
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
-	  putstr("digitalWrite: ");
+	  /* putstr("digitalWrite: ");
 	  puthex(arg2);
 	  putstr(",");
 	  puthex(arg3);
-	  putstr("\n");
+	  putstr("\n");*/
 	  //dumpVstack(trace,thisStack);
 	  //arg3 = set_led();
 	  arg3 = digitalWrite(arg2,arg3);
