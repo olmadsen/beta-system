@@ -1989,7 +1989,7 @@ Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, i
     if (rangee > 132) {
       runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
     };
-    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,0,rangee + 2);
+    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,rangee + 2,0);
   };
   origin = ctx->origin;
   putR(ctx->callee,1,origin); // store origin
@@ -2007,12 +2007,23 @@ Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, i
 
 void mkIndexed(int descInx,bool isRef,Block *ctx) {
   int length,size,i;
-  Btemplate *X;
+  Btemplate *X, *R;
   length = vPop(ctx->thisStack);
   size = 1;
-  X = QallocIndexed(ctx,0,descInx,1,1,length,0);
-  for (i = 1; i <= length; i++) {
-    X->vfields[1 +  length - i + 1 + newAllocOff] = vPop(ctx->thisStack);
+  X = QallocIndexed(ctx,0,descInx,1,1,length,isRef);
+  if (isRef){
+    R = rPop(ctx->thisStack); // QallocIndexed push X
+    for (i = 1; i <= length; i++) {
+      R = rPop(ctx->thisStack);
+      X->vfields[1 +  length - i + 1 + newAllocOff] = (int)R;
+      dumpObj(ctx->trace,"string:",R);
+    };
+    rPush(ctx->thisStack,X);
+    dumpObj(ctx->trace,"mkRindexed:",X);
+  }else{
+    for (i = 1; i <= length; i++) {
+      X->vfields[1 +  length - i + 1 + newAllocOff] = vPop(ctx->thisStack);
+    }
   }
 }
 void allocStrucRefObj(Block *ctx, Btemplate *origin,int inx, bool isVirtual){
@@ -2513,7 +2524,7 @@ bool traceThreads = true;
 	// digitalWrite(4,0);
       };
       cnt = cnt + 1;
-      //putstr("opCode: "); putint(opCode);putch(',');
+      // printf("opCode: %i ",opCode);
       switch (opCode) {
       case pushthis:
 #ifdef TRACE
@@ -2696,7 +2707,11 @@ bool traceThreads = true;
 	X = rPop(thisStack); 
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
+	fprintf(trace,"xrpushg: %i %i\n",arg1,arg2);
+	dumpObj(trace,"xrpushg:X",X);
 	Y = getR(X,arg1 + arg2 + newAllocOff); // need range check - do we adjust for range?
+	fprintf(trace,"after: %i\n",(int)Y);
+	dumpObj(trace,"xrpushg:Y",Y);
 #ifdef TRACE
 	fprintf(trace,"xrpushg %s[%i+%i] = %s/%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
@@ -3080,6 +3095,9 @@ bool traceThreads = true;
 	break;
       case mkRindexed:
 	arg1 = op2(bc,&glsc);
+#ifdef TRACE
+	fprintf(trace,"mkRindexed %i ", arg1);
+#endif	
 	saveContext();
 	mkIndexed(arg1,true,thisBlock);
 	restoreContext();
@@ -4332,7 +4350,7 @@ bool traceThreads = true;
 	//printf("fpushg %i %x %x\n",off,arg1,arg2);
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg2);
-	break;
+	break; 
       case i2f:
 	//printf("i2f\n");
 	arg1 = vPop(thisStack);
