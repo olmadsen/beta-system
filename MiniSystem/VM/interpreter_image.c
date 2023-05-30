@@ -270,7 +270,8 @@ enum {
   mkRindexed = 129,
   pushValId = 130,
   rshiftup = 131,
-  rshiftdown = 132
+  rshiftdown = 132,
+  vEq = 150
 };
 
 

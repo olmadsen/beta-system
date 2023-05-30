@@ -2799,6 +2799,27 @@ bool traceThreads = true;
 	dumpObj(trace,"dest",Y);
 #endif
 	break;
+      case vEq:
+	arg1 = op1(bc,&glsc);   // size, mode?
+#ifdef TRACE
+	fprintf(trace,"vEq %i\n",arg1);
+#endif
+	int R[10]; int di,mode; int B = 1;
+	mode = vPop(thisStack);
+	for (i = 1; i <= arg1; i++){
+	  R[arg1 - i + 1] = vPop(thisStack);
+	};
+	di = vPop(thisStack);
+	X = rPop(thisStack); // leftside object holding value object
+	off = vPop(thisStack);
+	for (i = 1; i <= arg1; i++) {
+	  if (X->vfields[off + i - 1] != R[i]){
+	    B = 0;
+	    break;
+	  }
+	};
+	vPush(thisStack,B);
+	break;
       case rstoreg:   
 	arg1 = op1(bc,&glsc);
 	X = rPop(thisStack);
