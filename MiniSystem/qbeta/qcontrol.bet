@@ -1,0 +1,230 @@
+ORIGIN '~beta/guienv/guienvsystemenv';
+INCLUDE '~beta/guienv/guienv';
+INCLUDE '../compiler_IF/directoryComponents';
+INCLUDE 'qgenerator';
+INCLUDE '../VM/betaVM';
+BODY 'qdumpObj'; 
+---program:descriptor---
+SystemEnv
+(# compile: @generator;
+   VM: @ betaVM
+     (# putCH:: (# do ch -> put #);
+        getCh:: (# do get -> ch #);
+        putTop::
+          (# N,P: ^compile.Node;
+          do descInx -> compile.getObjectDesc -> P[]; 
+             lsc -> P.findNodeAtBCpos -> N[];
+             '!!   in module: "' -> T.puttext;
+             (P.theModule).moduleName -> T.puttext; 
+             '" at: '  -> T.putline;
+             N[] -> compile.mkContextLines -> T.putline;
+          #);
+        (*errorEvent:: (# do msg[] -> putline; done #);*)
+        scanEvent::
+          (#  IS: ^compile.Items; 
+          do '\nscanEvent: ' -> puttext; 
+             (obj.myObjDesc).descInx -> compile.getObjectDesc -> IS[];
+             IS.doPT -> putline
+          #);
+        dumpObjEvent:: (# <<SLOT dumpObj:doPart>> #);
+        done:: 
+          (# descInx,objId,lsc: @integer; IS: ^compile.Items
+          do (if VM.stopErrors[] <> none then
+                 0 -> stopErrors.setPos;
+                 stopErrors.getInt -> descInx;
+                 stopErrors.getInt -> objId;
+                 stopErrors.getInt -> lsc;
+                 stopErrors.getLine;
+                 newline;
+                 stopErrors.scan(#do ch -> put #);
+                 newline;
+                 descInx -> compile.getObjectDesc -> IS[];
+                 '**** at:\n       ' -> puttext;
+                 IS.father.doPT -> putline; newline;
+             if);
+             stop 
+          #)
+     #);
+   setWindowEnv:: (# do myWindowEnv[] -> theWindowEnv[]#);
+   myWIndowEnv: @ guienv;
+   printArgHelp:
+     (#
+     do '**** Valid arguments: ' -> putline;
+        '\t-L, --LLVM\n\t\t generate LLVM code' -> putline;
+        '\t--showUnits\n\t\t print possible unit for each invoation' -> putline;
+        '\t--help\n\t\t print this text' -> putline;
+        '\t-H, --HTML\n\t\t generate HTML files' -> putline;
+        '\t-c\n\t\t use C-based interpreter' -> putline;
+        '\t-C\n\t\t save byte code imgae for C-based interpreter' -> putline;
+        '\t-N\n\t\t new fat comma if(e):then ...' -> putline;
+        newline
+     #);
+   
+   readLongArg:
+     (# arg: ^Text; LA: @Text
+     enter arg[]
+     do (for i: arg.length - 2 repeat
+             (i + 2) -> arg.inxGet -> LA.put
+        for);
+        (if true 
+         // 'showUnits' -> LA.equalNCS then
+            true -> compile.showUnits;
+            'show units'->putline
+         // 'help' -> LA.equalNCS then    
+            printArgHelp
+         // 'LLVM' -> LA.equalNCS then        
+            true -> compile.emitLLVM
+         // 'HTML' -> LA.equalNCS then        
+            true -> compile.printHTMLfile
+         else
+            '\n\n**** Invalid argument: ' -> puttext; arg[] -> putline;
+            printArgHelp
+        if)
+     #);
+   readArguments:
+     (# arg: ^text
+     do run_Beta_INT -> runMode;
+        (for i: noOfArguments - 2 repeat
+             i + 1 -> arguments -> arg[];
+             (if true
+              // ('-x' -> arg.equalNCS) then      
+                 ' ' -> put;
+                 true -> compile.onlyLex
+              // ('-c' -> arg.equal) then   
+                 run_C_INT -> runMode;
+              // ('-C' -> arg.equal) then   
+                 save_BC_Image -> runMode;
+              // ('-v' -> arg.equalNCS) then   
+                 true -> compile.verbose
+              // ('-t' -> arg.equalNCS) then
+                 true -> compile.traceEmbedding
+              // ('-f' -> arg.equal) then
+                 true -> compile.toFix
+              // ('-F' -> arg.equal) then
+                 true -> compile.newFeature
+              // '-l' -> arg.equalNCS then
+                 true -> compile.emitLLVM
+              // '-a' -> arg.equalNCS then
+                 true -> compile.emitCom  
+              // '-d' -> arg.equal then
+                 true -> compile.traceLLVMcalls
+              // '-D' -> arg.equal then
+                 true -> compile.traceLLVMcalls -> compile.dumpLLVMobjs
+              // '-N' -> arg.equal then
+                 true -> newFatComma
+              // '-H' -> arg.equal then
+                 true -> compile.printHTMLfile
+              // (arg.length > 2) and ('--'-> ((1,2)->arg.sub).equalNCS) then
+                 arg[] -> readLongArg
+              // (arg.length > 2) and ('-d'-> ((1,2)->arg.sub).equalNCS) 
+                 then
+                 '\n**** debug:'->puttext; arg[] -> puttext;
+                 (for i: arg.length - 2 repeat
+                      (if (i + 2) -> arg.inxGet
+                       // 'c' then 
+                          ':checker' -> puttext; true -> compile.traceCheck
+                       // 's' then 
+                          ':search'->puttext; true -> compile.traceSearch
+                       // 'u' then 
+                          ':unit'->puttext; true -> compile.traceUnit
+                       // 'g' then 
+                          ':generator'-> puttext
+                       // 'p' then true -> compile.mainPT
+                       // 'P' then true -> compile.mainPP
+                       // 'q' then true -> compile.traceGetVqual
+                       else
+                          ':invalid argument: '->puttext; 
+                          (i + 2) -> arg.inxGet -> put;
+                          newline
+                 if)for);
+                 newline
+              else
+                 '\n\n**** Invalid argument: ' -> puttext; 
+                 arg[] -> putline;
+                 printArgHelp
+             if);             
+        for);
+        noOfArguments  -> arguments -> FN[];
+     #);
+   linkLLVM:
+     (# llvmLib,cmd: ^text; res: @integer;
+        system: external
+          (# cmd: [0] @char; res: @integer
+          enter cmd
+          do callC
+          exit res
+          #)
+     do BetaLib -> llvmLib[];
+        (*compile.dirCh*) 
+        '/MiniSystem/VM/qbeta_llvm_lib.c' -> llvmLib.append;
+        (* Note! clang is a link to clang-8, but system can apparently 
+         * not handle links - we thus use clang-8 directly
+         *)
+        'clang-8 ' -> cmd[];
+        (FN[],'.ll') -> mkAuxName -> cmd.append;
+        ' '  -> cmd.put;
+        llVmlib[] -> cmd.putline;
+        cmd[] -> putline;
+        cmd -> system -> res
+     #);
+   runMode: @integer;
+   FN,FNx: ^text;
+   F: @file
+     (# NoSuchFileError ::< (# do true -> continue; false -> OK #); 
+     #);
+   OK,newFatComma: @boolean; srcExt,altSrcExt: ^Text
+do 'qBETA COMPILER: ' -> puttext; 
+   readArguments;
+   (if true -> newFatComma then
+       ('/MiniSystem/qbeta/BETAworld/'
+       ,'.qbeta' -> srcExt[],'.xbeta' -> altSrcExt[]) 
+         -> compile.initDirectoryModules;
+       true -> compile.newFatComma
+    else
+       (* we assume no files with extension '.nbeta' - preliminary *)
+       ('/MiniSystem/qbeta/BETAworld/','.xbeta','.nbeta') 
+         -> compile.initDirectoryModules;
+   if);
+   FN[] -> compile.fixExtension_xbeta -> FN[] -> putline;
+   FN[] -> F.name;
+   true -> OK;
+   F.openRead;
+   (if not OK then
+       (if newFatComma then
+           FN[] -> FNx[];
+           altSrcExt[] -> ((1,FN.length - 6) -> FN.sub).append -> FN[];
+           'Trying alternative file: ' -> puttext; FN[] -> putline;
+           FN[] -> F.name;
+           true -> OK -> compile.altParser;
+           F.openRead;
+       if);
+       (if not ok then
+           (if newFatComma then 
+               '\n!!!! No such file: ' -> puttext; FNx[] -> putline;
+               '!!   or : ' -> puttext; FN[] -> putline;
+            else
+               '\n!!!! No such file: ' -> puttext; FN[] -> putline;
+           if);
+           stop
+       if)
+   if);
+   
+   (none,false,none,FN[]) -> compile; 
+   
+   (if compile.emitLLVM then
+       linkLLVM;
+       stop
+    else
+       (runMode,true) -> VM.init;
+       (if not compile.onlyLex 
+           and not compile.hasSyntaxError
+           and not compile.semanticErrors 
+           then
+           (compile.runtimeDescs,compile.mainDescNo,FN[],runMode) 
+             -> VM.execute.init;
+           VM.execute[] -> fork;
+        else
+           stop
+       if)
+   if)
+#)
