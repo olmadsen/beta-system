@@ -273,6 +273,7 @@ AbstractSyntaxTree: Tree
           isSignature:< BooleanValue;
           isObjectGenerator:< BooleanValue;
           isObjectInvocation:< BooleanValue;
+          isNameLiteral:< BooleanValue;
           isConstLiteral:< BooleanValue;
           isStringLiteral:< BooleanValue;
           isInteger:< BooleanValue;
@@ -2272,8 +2273,17 @@ AbstractSyntaxTree: Tree
                    '**** arguments:PT: ' -> puttext; 
                    'isBinary: ' -> puttext; isBinary -> putboolean;
                    ' isKeyWord: ' -> puttext; isKeyword -> putboolean;
-                   'isFunction: ' -> puttext; isKeyword -> putboolean;
+                   ' isFunction: ' -> puttext; isKeyword -> putboolean;
                    ' ' -> put; newline;
+
+                   scanSons
+                   (# N: ^Name
+                   do current.label -> putline;
+                      (if current## <= lexem## then
+                          current[] -> N[];
+                          N.T[]->putline
+                      if);
+                   #); '---'->putline;
                if);
                (if true
                 // isBinary then
@@ -2290,7 +2300,7 @@ AbstractSyntaxTree: Tree
                 // isKeyWord then
                    (if not isNewKeyWord or true then
                        scanSons
-                       (# 
+                       (#
                        do (pos,break) -> current.PT; 
                           (if not isLast then ' ' -> lx.put if) 
                        #);
@@ -3901,12 +3911,23 @@ AbstractSyntaxTree: Tree
                    leave mkOG
                if);
                E.args.scanSons
-               (# i: @integer
+               (# i: @integer; OGisMet: @boolean
                do (if i + 1 -> i
                    // 1 then current[] -> id[]
                    // 2 then 
-                   // 3 then (current[] -> OGa[]).IS[] -> IS[]
-                   // 4 then current[] -> rB[]
+                   else
+                      (if current## = ObjectGenerator## then
+                          (if OGisMet then
+                              '**** mkOG: OG met twice in arguments:'->putline;
+                              E.dopt -> putline
+                          if);
+                          (current[] -> OGa[]).IS[] -> IS[]
+                      if);
+                      true -> OGisMet;
+                      (*
+                       // 3 then (current[] -> OGa[]).IS[] -> IS[]
+                       // 4 then current[] -> rB[]
+                       *)
                   if)
                #);
                Invocation -> IV[];
@@ -4280,62 +4301,57 @@ AbstractSyntaxTree: Tree
                PP:: (# do Label -> lx.append #);
                PT:: 
                  (# 
-                 do (* first element in sons is receiver - may be empty *)
-                    (if false then
-                    args.scanSons
-                    (# no: @integer; even: @boolean; n: ^Name
-                    do no + 1 -> no;
-                       (if true
-                        // no = 1 then (* first keyword *)
-                           current[] -> N[];
-                           (if (1->N.T.inxGet) = '%' then
-                               (*N.T[] -> puttext; ' ' -> put;*)
-                               ('@',1) -> N.T.inxPut;
-                               (*N.T[] -> puttext; ',' -> put;*)
-                           if);
-                        // (no > 1) and not even then (* 2,3, ... keyword *)
-                           current[] -> N[];
-                           (if (1->N.T.inxGet) = '%' then
-                               (*N.T[] -> puttext; ' ' -> put;*)
-                               (':',1) -> N.T.inxPut;
-                               (1,N.T.length - 1) -> N.T.sub -> N.T[];
-                               (*N.T[] -> puttext; ',' -> put;*)
-                           if);
-                       if);
-                       not even -> even
-                    #)if);
-                    (if (pos + length) < lineWidth then  
+                 do (if (pos + length) < lineWidth then  
                         (* 'KW: < lineWidth: pos: '-> puttext; pos -> putint;
                          ' length: ' -> puttext; length -> putint ; newline;*)
                         (pos,false,false) -> args.PT
-                     else                            
-                        (* 'KW: > lineWidth:pos: ' -> puttext; pos -> putint;
-                        ' length: '->puttext; length -> putint; newline;*)
+                     else (* We should not do args.scanSons ... here; just
+                           * (...) -> args.doPT
+                           *)
                         args.scanSons
-                        (# no: @integer; even: @boolean; doBreak: @boolean
+                        (# no: @integer; even: @boolean; doBreak: @boolean;
+                           N: ^Name;
+                           skipBrace:
+                             (# go: @Boolean
+                             do true -> go;
+                                (if current.isNameLiteral then
+                                    current[] -> N[];
+                                    (if true
+                                     // '{' -> N.T.equal 
+                                     // '}' -> N.T.equal then
+                                        false -> go
+                                if)if);
+                                (if go then inner if)
+                             #);
                         do no + 1 -> no; 
                            (*current.label -> puttext; ' ' -> put;*)
                            (*pos -> lx.putint;':'->lx.put;*)
+                           (if false and (current## = Name##) then
+                               current[] -> N[];
+                               N.T[]->puttext; ' '->put; no -> putint; newline
+                           if);
                            (if true
                             // no = 1 then 
                                (* first keyword: 
                                 *    if '@foo:' then ':' is not printed by name.doPT
                                 * we should perhaps avoid the ':' in '@foo:'!?
                                 *)
+                               
                                (pos,false) -> current.PT;
                             // (no > 1) and not even then (* 2,3, ... keyword *)
                                (if not doBreak then
                                    pos > lineWidth -> doBreak
                                if);
                                (pos,doBreak) -> mkBreak0;
-                               (pos,true) -> current.PT;
+                               skipBrace(#do (pos,true) -> current.PT #);
                                (*true -> doBreak; 
                                 * OLM: 22.03.2023, fix for newFatComma*)
                             else (* arguments *)
                                (* (pos ,true) -> mkBreak0;*)
-                               (pos,doBreak) -> current.PT;
+                               skipBrace(#do(pos,doBreak) -> current.PT; #)
                            if);
                            (if not isLast then ' ' -> lx.put if);
+                           (* even not needed anmore? *)
                            not even -> even
                         #);
                         (*newline*)
@@ -4649,7 +4665,8 @@ AbstractSyntaxTree: Tree
                    T[] -> lx.append;
                if)
             #);
-          copyAST:: (#do T.copy -> Name -> nAST[] #)
+          copyAST:: (#do T.copy -> Name -> nAST[] #);
+          isNameLiteral:: TrueValue
        #);
      Const:< Lexem
        (# PT:: (# do T[] -> lx.append; PU  #);
