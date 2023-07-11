@@ -1,7 +1,7 @@
 //#define _GNU_SOURCE define __ARDIUNO__ // just my attempt;-) define
-//#usewinsock2 define usekbhit
+//#usewinsock2 define usekbhit 
 #ifdef linux
-//#warning "linux is defined!"
+//#warning "linux is defined!" 
 #include <unistd.h> // to get sleep function for linux
 
 #elif defined  __CYGWIN__
@@ -10,7 +10,7 @@
    #endif
    #include <windows.h>
    //#include <ws2tcpip.h>
-
+ 
 #elif defined __arm__
 //#warning "__arm__ is defined!"
 //   #include "qb-arm/rpi-gpio.h"   

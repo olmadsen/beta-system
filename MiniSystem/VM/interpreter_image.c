@@ -13,7 +13,7 @@
    28: no of Object descriptors
    32: ObjDesc1
    ...: ...
-    
+
    Format of ObjDesc:
    0: index of name in stringtable
    2: descNo 
