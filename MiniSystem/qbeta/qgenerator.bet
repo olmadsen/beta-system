@@ -1910,6 +1910,66 @@ generator: variants
                     ,newOriginOff,orgId[],originDescNo,encOG.isValueObj,false)
                       -> cd.class;
                  #);
+               new: (#exit false #);
+               handleArgumentsAndOriginX:
+                 (# theIS: ^Items
+                 enter theIS[]
+                 do theIS[] -> storeArgumentsX;
+                    theIS[] -> StoreOriginX;
+                    theIS[] -> AllocateSuper;
+                    (if theIS[] -> hasRealSuper then
+                        cd.com(#do 'hArgOrg:super:' -> TT; 
+                                 theIS.superDesc.encOG.OGid -> TT
+                              #);
+                        theIS.superDesc[] -> handleArgumentsAndOrigin
+                    if)
+                 #);
+               StoreArgumentsX:
+                 (# theIS: ^Items
+                 enter theIS[]
+                 do (if not emitLLVM then
+                       cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
+                       theIS.scanItemArgsReverse(#do true -> currentArg.store #);
+                        (if theIS[] -> hasRealSuper then
+                            theIS.superDesc[] -> storeArgumentsX
+                    if)if)
+                 #);
+               StoreOriginX:
+                 (# theIS: ^Items
+                 enter theIS[]
+                 do (if theIS.globalRestrictionsInMain then
+                        (if traceNoGlobals then
+                            cd.com(#do 'No globals,no origin'->TT; theIS.dopt->TT#)
+                        if)
+                     else
+                        (if (theIS.noOfRefArgsInSuper -> rArgsInSuper) > 0 then
+                            (* if super has ref args, 
+                             * then these are on the stack above origin
+                             * Here S = origin and x,y,z are 3 ref args
+                             * rShift moves S to top of rStack
+                             * ------------      ------------
+                             * |...|S|x|y|z  ==> |...|x|y|z|S
+                             * ------------      ------------
+                             *)                           
+                            rArgsInSuper -> cd.rShiftUp
+                        if);
+                        cd.tstOriginIsNone;
+                        ('origin',theIS.newOriginOff) -> cd.rstore;
+                        (if false and (theIS.newDescNo = 78) then
+                            '**** StoreOrigin:before:originISValue:'->putline;
+                            dopt -> puthead
+                        if);
+                        (if (theIS.origin[] -> originIsValue) then
+                            ('origin.valueOff',theIS.NewOriginOff + 2) 
+                              -> cd.store;
+                            ('origin.valueOff',theIS.NewOriginOff + 1) 
+                              -> cd.store;
+                        if);
+                        (if theIS[] -> hasRealSuper then
+                            theIS.superDesc[] -> storeOriginX
+                        if)
+                    if)
+                 #); 
                handleArgumentsAndOrigin:
                  (# theIS: ^Items
                  enter theIS[]
@@ -1922,7 +1982,7 @@ generator: variants
                               #);
                         theIS.superDesc[] -> handleArgumentsAndOrigin
                     if)
-                 #);
+                 #);               
                StoreArguments:
                  (# theIS: ^Items
                  enter theIS[]
@@ -2375,7 +2435,11 @@ generator: variants
                    cd.bcPos -> beginBCP;
                    
                    (if inlineAlloc then
-                       this(Items)[] -> handleArgumentsAndOrigin
+                       (if new then
+                           this(Items)[] -> handleArgumentsAndOriginX
+                        else
+                           this(Items)[] -> handleArgumentsAndOrigin
+                       if)
                     else
                        (* store args and origin for possible super *)
                        this(Items)[] -> StoreArguments;
