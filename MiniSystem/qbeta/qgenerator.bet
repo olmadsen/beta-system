@@ -1914,10 +1914,10 @@ generator: variants
                handleArgumentsAndOriginX:
                  (# theIS: ^Items
                  enter theIS[]
-                 do theIS[] -> storeArgumentsX;
+                 do theIS[] -> StoreArgumentsX;
                     theIS[] -> StoreOriginX;
-                    theIS[] -> AllocateSuper;
-                    (if theIS[] -> hasRealSuper then
+                    (*theIS[] -> AllocateSuper;*)
+                    (if false and (theIS[] -> hasRealSuper) then
                         cd.com(#do 'hArgOrg:super:' -> TT; 
                                  theIS.superDesc.encOG.OGid -> TT
                               #);
@@ -1929,13 +1929,39 @@ generator: variants
                  enter theIS[]
                  do (if not emitLLVM then
                        cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
-                       theIS.scanItemArgsReverse(#do true -> currentArg.store #);
-                        (if theIS[] -> hasRealSuper then
+                       theIS.scanArgsReverse(#do true -> currentArg.store #);
+                        (if theIS[] -> hasRealSuper then 
+                            theIS[] -> handleSuperArgsX;
                             theIS.superDesc[] -> storeArgumentsX
                     if)if)
                  #);
                StoreOriginX:
-                 (# theIS: ^Items
+                 (# pushAddress:
+                      (* super is searched in the origin of 
+                       * this(OG); we must then have an 
+                       * additional goOrigin from this(OG);
+                       * this is handled by passing newOriginOff
+                       * as an argument of Address - superAdj;
+                       * adjustOrigin will generate this goOrigin
+                       * if superAdj > 0
+                       *)
+                      (# super: ^Invocation; E,rec: ^Exp; A: ^Address;
+                      enter super[]
+                      do (if globalRestrictionsInSuper then
+                             super.last -> E[]
+                          else
+                             theIS.newOriginOff
+                               -> Address
+                               -> super.computeAdr(#do addOG #)
+                               -> (rec[],E[],A[]);
+                             cd.com
+                             (#do 'genClass:after:pushAddress:'-> TT; 
+                                E.doPT -> TQ; A.print -> TT #);
+                         if)
+                      exit E[]
+                      #);
+                    
+                    theIS: ^Items
                  enter theIS[]
                  do (if theIS.globalRestrictionsInMain then
                         (if traceNoGlobals then
@@ -1966,10 +1992,36 @@ generator: variants
                               -> cd.store;
                         if);
                         (if theIS[] -> hasRealSuper then
+                            super[] -> pushAddress;
                             theIS.superDesc[] -> storeOriginX
-                        if)
-                    if)
+                        if);
+                    if);                        
+                    (if not theIS.encOG.isValueObj then 
+                        (if not ((theIS.superDesc[] <> none) 
+                            and not theIS.superDesc.isPrimitive) then
+                            true -> cd.allocEventQ
+                    if)if)
                  #); 
+               handleSuperArgsX:
+                 (# theIS: ^Items; E: ^Exp
+                 enter theIS[]
+                 do cd.com(#do 'handleSuperArgs:E:'->TT; E.dopt->TQ;
+                             'theIS:'->TT; theIS.dopt->TQ #);
+                    super.last -> E[];
+                    (* What does sig[] = none imply? *)
+                    (if theIS.sig[] = none then
+                        cd.com(#do'super.sig:none:superAdj:'-> TT;
+                                 newOriginOff -> II #);
+                        (theIS.newOriginOff,0,CC[]) -> E.loadArgs; 
+                     else
+                        cd.com(#do'super.sig:not:none:superAdj:'->TT;
+                                 - newOriginOff -> II #);
+                        (* go ON-1, use newOriginOff first time *)
+                        (- theIS.newOriginOff,0,CC[]) -> E.loadArgs; 
+                    if);
+                    (******* handle virtual args of super ***)
+                    E.handleVargs;
+                 #);
                handleArgumentsAndOrigin:
                  (# theIS: ^Items
                  enter theIS[]
@@ -1987,8 +2039,12 @@ generator: variants
                  (# theIS: ^Items
                  enter theIS[]
                  do (if not emitLLVM then
-                       cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
-                       theIS.scanItemArgsReverse(#do true -> currentArg.store #)
+                        cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
+                        (* Should this be scannonBoundItemArhs? *)
+                        theIS.scanItemArgsReverse(#do 
+                                                    cd.com(#
+                                                          do currentArg.dopt -> TT #);
+                                                    true -> currentArg.store #)
                    if);
                  #);
                StoreOrigin:
@@ -2436,7 +2492,10 @@ generator: variants
                    
                    (if inlineAlloc then
                        (if new then
-                           this(Items)[] -> handleArgumentsAndOriginX
+                           (if this(Items)[] -> hasRealSuper then
+                               prepareSuper;
+                           if);
+                           this(Items)[] -> handleArgumentsAndOriginX;
                         else
                            this(Items)[] -> handleArgumentsAndOrigin
                        if)
@@ -3518,8 +3577,7 @@ generator: variants
                            * or sendv
                            *)
                           cd.com(#do 'computeAdr:orgIsValue:'->TT; 
-                                   E.dopt -> TQ; E.label ->TQ; E.ATd.primNo->II;
-                                   print  #);
+                                   E.dopt->TQ; E.label ->TQ; E.ATd.primNo->II#);
                           (if E.ATd.primNo
                            //  string_prim // inner_prim then
                            else
