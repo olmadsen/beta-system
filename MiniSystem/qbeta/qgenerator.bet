@@ -605,7 +605,6 @@ generator: variants
                if)if)if)
             #);
           store::
-            (* Called from Signature::StoreParameters *)
             (# gdb::(#do ',newOff:'->TT; newOff -> II;
                        ',isVirtualObject:' -> TT; isVirtualObject -> BB #);
                
@@ -633,13 +632,44 @@ generator: variants
                 // OG.isValueObj then
                    (* is the order of src and dest objs on the stack correct? *)
                    (if true then
-                       (# L1, L2: @labelHandler.label
+                       (# L1, L2: @labelHandler.label; out: ^text; 
+                          E: ^Invocation; OGs: ^OGsequence;
+                          qual: ^objectGenerator
                        do L1.new; L2. new;
                           (0,L1) -> cd.jmpFalse;
                           cd.pushThis;
                           newOff -> cd.pushConst;
-                          (OG.objSize,0) -> cd.vassign;
-
+                          (if false then
+                              (* attemtp to handle Cvalue with 
+                               * in V: var ThisValue
+                               * but does not work, since we dont know the
+                               * size of thisValue
+                               *)
+                              '**** bingo:'->puttext; og.objsize->putint; 
+                              ' ' -> PUT; OG.dopt -> putheadN;
+                              '**   DI:'->puttext; dopt ->putheadN;
+                              (if OG.IS.isEmpty then
+                                  '**** OG.IS.isEmpty: ' -> puttext;
+                                  OG.super.dopt -> putline;
+                              if);
+                              '**   mainIS:'->puttext; mainIS.dopt -> putheadN;
+                          if);
+                          sig.dopt -> parseInv->(out[],E[]);
+                          mainIS[] -> E.father[];
+                          mainIS[] -> E.setUpOrigin;
+                          (none,mainIS[],mainIs[],true) -> E.check;
+                          (mainIS.encOG,true,mainIS.encOG -> OGsequence)
+                            -> E.getVqual -> (OGs[],qual[]);
+                          (if false then 
+                              E.dopt->putline;
+                              qual.doPT -> puthead;
+                              qual.objSize -> putint; newline;
+                          if);
+                          (if false and (qual.objSize > OG.objSize) then
+                              (qual.objSize,0) -> cd.vassign;
+                           else
+                              (OG.objSize,0) -> cd.vassign;
+                          if);
                           L2 -> cd.jmp;
                           L1 -> cd.defLab;            
                           (if true then
@@ -678,15 +708,11 @@ generator: variants
        (# markForCodegen::
             (#
             do (if encOG[] <> none then
-                   (*'**** Signature:markForCodgen: ' -> puttext; 
-                    dopt -> putline;*)
+                   (* '**** Signature:markForCodgen: ' -> puttext; dopt -> putline *)
                    scanSons(#do current.markForCodeGen #);
                if)
             #);
-          Qgen::
-            (#
-            do
-            #)
+          Qgen:: (##)
        #);
      Arguments:: (##);
      ObjectCall::
@@ -1921,7 +1947,7 @@ generator: variants
                         cd.com(#do 'hArgOrg:super:' -> TT; 
                                  theIS.superDesc.encOG.OGid -> TT
                               #);
-                        theIS.superDesc[] -> handleArgumentsAndOrigin
+                        theIS.superDesc[] -> handleArgumentsAndOriginX
                     if)
                  #);
                StoreArgumentsX:
@@ -1929,7 +1955,8 @@ generator: variants
                  enter theIS[]
                  do (if not emitLLVM then
                        cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
-                       theIS.scanArgsReverse(#do true -> currentArg.store #);
+                        theIS.scanArgsReverse
+                        (#do (true,theIS[]) -> currentArg.store #);
                         (if theIS[] -> hasRealSuper then 
                             theIS[] -> handleSuperArgsX;
                             theIS.superDesc[] -> storeArgumentsX
@@ -2023,29 +2050,92 @@ generator: variants
                     E.handleVargs;
                  #);
                handleArgumentsAndOrigin:
-                 (# theIS: ^Items
-                 enter theIS[]
-                 do theIS[] -> storeArguments;
+                 (* mainIS was introduced in order to handle virtual
+                  * valueObjs as in eq (=) for Cvalue, but does not work;
+                  * we dont know the size of in V: var thisValue
+                  *)
+                 (# mainIS,theIS: ^Items; vArgsInSuper: @integer
+                 enter(mainIS[],theIS[])
+                 do (mainIS[],theIS[]) -> storeArguments -> vArgsInSuper;
                     theIS[] -> StoreOrigin;
-                    theIS[] -> AllocateSuper;
+                    (theIS[],vArgsInSuper) -> AllocateSuper;
                     (if theIS[] -> hasRealSuper then
                         cd.com(#do 'hArgOrg:super:' -> TT; 
                                  theIS.superDesc.encOG.OGid -> TT
                               #);
-                        theIS.superDesc[] -> handleArgumentsAndOrigin
+                        (mainIS[],theIS.superDesc[]) -> handleArgumentsAndOrigin
                     if)
                  #);               
                StoreArguments:
-                 (# theIS: ^Items
-                 enter theIS[]
+                 (# mainIS,theIS: ^Items; N: @integer; org: ^Items; DI: ^DataItem;
+                    emit:
+                      (#
+                      do '**** StoreArguments:origin:isValueObj:'->puttext;
+                         theIS.encOg.dopt -> putheadn;
+                      #)
+                 enter(mainIS[],theIS[])
                  do (if not emitLLVM then
                         cd.com(#do 'Store itemArgs:' -> TT; dopt -> TT #);
-                        (* Should this be scannonBoundItemArhs? *)
-                        theIS.scanItemArgsReverse(#do 
-                                                    cd.com(#
-                                                          do currentArg.dopt -> TT #);
-                                                    true -> currentArg.store #)
-                   if);
+                        (* Should this be scanNonBoundItemArgs? *)
+                        theIS.scanItemArgsReverse
+                        (#
+                        do cd.com(#do currentArg.dopt -> TT #);
+                           (true,mainIS[]) -> currentArg.store 
+                        #);
+                        (if (theIS.origin[]<>none)
+                            and (theIS.origin->org[]).encOG.isValueObj then
+                            true -> theIS.scanNonBoundItemArgs
+                            (# DI: ^DataItem
+                            do (if false and currentArg.isDataItem then
+                                   (if false and (N = 0) then emit if);
+                                   currentArg[]  -> DI[];
+                                   (if true 
+                                    // DI.OG.isBasicValue then
+                                       N + 1 -> N;
+                                    // DI.OG.isValueObj then
+                                       N +  DI.OG.objSize + 1 -> N
+                                    else
+                                       '???' ->putline
+                                   if);
+                                   (if false then
+                                       '**   objSize: ' -> puttext;
+                                       DI.OG.objSize -> putint;
+                                       ' basicValue: ' -> puttext;
+                                       DI.OG.isBasicValue -> putboolean;
+                                       ' valueObj: '-> puttext;
+                                       DI.OG.isValueObj -> putboolean;
+                                       ' ' -> put;
+                                       currentArg.dopt -> putline;
+                                   if);
+                                   (# out: ^text; E: ^Invocation;
+                                      OGs: ^OGsequence; qual: ^ObjectGenerator
+                                   do DI.sig.dopt -> parseInv->(out[],E[]);
+                                      theIS[] -> E.father[];
+                                      theIS[] -> E.setUpOrigin;
+                                      (none,theIS[],theIs[],true) -> E.check;
+                                      (theIS.encOG,true,theIS.encOG ->OGsequence)
+                                        -> E.getVqual -> (OGs[],qual[]);
+                                      (if false then
+                                          E.dopt->putline;
+                                          qual.doPT -> puthead;
+                                          qual.objSize -> putint; 
+                                          ' valueObj: ' -> puttext;
+                                          qual.isValueObj -> putboolean;
+                                          newline;
+                                      if);
+                                      qual.objSize -> N;
+                                      (if qual.isValueObj then N + 1 -> N  if)
+                                   #);
+                               if)
+                            #);
+                            (if N > 0 then
+                                (*N -> putint; newline; *)
+                                N + 1 -> cd.vShiftUp;
+                                N + 1 -> cd.vShiftUp;
+                            if)
+                        if)
+                    if)
+                 exit N
                  #);
                StoreOrigin:
                  (# theIS: ^Items
@@ -2175,8 +2265,8 @@ generator: variants
                          (******* handle virtual args of super ***)
                          E.handleVargs;
                       #);
-                    theIS: ^Items; E: ^Exp; off: @integer; 
-                 enter theIS[]
+                    theIS: ^Items; E: ^Exp; vArgsInSuper,off: @integer; 
+                 enter(theIS[],vArgsInSuper)
                  do (if not theIS.encOG.isValueObj then 
                         (if not ((theIS.superDesc[] <> none) 
                             and not theIS.superDesc.isPrimitive) then
@@ -2219,6 +2309,10 @@ generator: variants
                             if)if)
                          else
                             theIS.super[] -> pushAddress -> E[];
+                        if);
+                        (if vArgsInSuper > 0 then
+                            vArgsInSuper + 1 -> cd.vShiftDown;
+                            vArgsInSuper + 1 -> cd.vShiftDown;
                         if);
                         (theIS[],E[]) -> handleSuperArgs;
                         (if rArgsInSuper > 0 then 
@@ -2497,14 +2591,14 @@ generator: variants
                            if);
                            this(Items)[] -> handleArgumentsAndOriginX;
                         else
-                           this(Items)[] -> handleArgumentsAndOrigin
+                           (this(Items)[],this(Items)[]) -> handleArgumentsAndOrigin
                        if)
                     else
                        (* store args and origin for possible super *)
-                       this(Items)[] -> StoreArguments;
+                       (this(Items)[],this(Items)[]) -> StoreArguments;
                        this(Items)[] -> StoreOrigin;
                        (* AllocateSuper for possible super - recursively *)
-                       this(Items)[] -> AllocateSuper; 
+                       (this(Items)[],0) -> AllocateSuper; 
                    if);
                    checkIfBetaWorldOrStringModule;
                    mvStack;
@@ -3573,20 +3667,19 @@ generator: variants
                            * be a subpatttern of the one we are generating
                            * code for here.
                            * The actual descNo is saved by a subsequent 
-                           * invokeVal nd pushed by a possible invoke
+                           * invokeVal and pushed by a possible invoke
                            * or sendv
                            *)
-                          cd.com(#do 'computeAdr:orgIsValue:'->TT; 
-                                   E.dopt->TQ; E.label ->TQ; E.ATd.primNo->II#);
+                          cd.com
+                          (#do 'computeAdr:orgIsValue:'->TT; E.dopt->TQ; 
+                             E.label->TQ; E.ATd.primNo->II#);
                           (if E.ATd.primNo
                            //  string_prim // inner_prim then
                            else
-                              (* Perhaps better with virtual E.pushValId *)
+                              (* Perhaps virtual E.pushValId is better? *)
                               cd.pushValId;
+                              (* push const 1 & thisValObjDescInx *)
                           if);
-                          (* descNo supplied by invokeVal, invoke, sendv 
-                           * as mentioned above 
-                           *)
                       if);
                       (A.superAdj,none) 
                         -> E.loadOrigin -> (rec[],E[],orgIsVal);
