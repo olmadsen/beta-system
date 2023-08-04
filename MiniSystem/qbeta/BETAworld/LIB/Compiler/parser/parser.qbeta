@@ -6,20 +6,15 @@ parser: obj
       sig: ref Signature:args
       out DI: ref SuperDataItem:OG
       OG: ref ObjectGenerator:Items
+      trace("pModule")
       if(lexer.token = lexer.symbols.idf):then
           sig := pSignature
-          _put('A')	  
           if (lexer.token = lexer.symbols.colon) :then
              lexer.next
-             _put('B')	  	     
              if (lexer.token = lexer.symbols.constRef) :then
                 lexer.next
-                _put('C')	  		
                 OG := pSuperDataItem
                 DI := Module(sig):OG(OG);
-                --DI.setSigOg(sig,OG)
-                DI.sig := sig
-                DI.OG := OG
              :else
                 syntaxError(1)
           :else
@@ -29,8 +24,8 @@ parser: obj
    pSuperDataItem:
       --in pSuperDataItem:< Object
       out OG: ref ObjectGenerator:Items
+      trace("pSuperDataItem")
       OG := pObjectGenerator
-      --pSuperDataItem
    pSignature:
       out sig: ref Signature:args
       tokenStr: ref String
@@ -42,20 +37,20 @@ parser: obj
              case((lexer.symbols.begin
                    ,lexer.symbols.leftBrack
                    ,lexer.symbols.leftSquare))
-                _put('Q')
                 prevToken := lexer.token
                 lexer.next
+                -- missing save of return value
                 pSigArgs(tokenStr):leftB(prevToken)
-             "unarySig: ".print
-             tokenStr.print
-             newline
+             trace("pSignature:unarySig")
              sig := Signature(tokenstr):args(Arguments)
    pSigArgs(tokenStr: ref String):leftB(leftB: var integer):
-      tokenStr.print
+      -- incomplete
+      trace("pSigArgs")
    pObjectGenerator:
       out OG: ref ObjectGenerator:items
       IV: ref Invocation
       IS: ref Items
+      trace("pObjectGenerator")
       IV := pInvocation
       IS := pMainPart
       OG := ObjectGenerator(IV):Items(IS)
@@ -63,15 +58,25 @@ parser: obj
       out IV: ref Invocation
       E: ref Exp
       i: var integer
+      trace("pinvocation")
       IV := Invocation
       loop:
+         trace("pInvocation:loop")
          i := i + 1
          E := pExp;
          IV.append(E)
-	 
+         switch((lexer.token))
+            case((lexer.symbols.dot))
+               trace("pInvocation:special")
+               lexer.next
+               restart(loop)
+            case((lexer.symbols.special))
+               trace("pInvocation:special")
+               restart(loop)
       loop
    pMainPart:
       out IS: ref Items
+      trace("pMainPart")
       if (lexer.token = lexer.symbols.begin) :then
          lexer.next
          IS := pItems
@@ -80,23 +85,29 @@ parser: obj
                  lexer.next
             SyntaxError(4)
       :else
+         trace("pMainPart:IS.isEmpty")
          IS := Items
          IS.isEmpty := true
    pItems:
       out IS: ref Items
       D: ref Decl:OG
-      "items:".print
+      OG: ref ObjectGenerator:Items
+      trace("pItems:")
       IS := Items
+      trace("pItems:loop")
       Loop: do
          if (lexer.token = lexer.symbols.idf) :then
             switch(lexer.peekNext(1))
                case((lexer.symbols.colon))
                    D := pDecl
-                   IS.append(D)		
-               pObjectGenerator
+                   IS.append(D)
+               trace("pItems:before:pObjectGenerator")		   
+               OG := pObjectGenerator
+               IS.append(OG)
          if (lexer.token = lexer.symbols.semicolon) :then
-            lexer.next	 
-            @restart Loop
+            lexer.next
+            trace("pItems:after:semicolon:next")
+            restart(Loop)
    pDecl:
        out D: ref Decl:OG
        sig: ref Signature:args
@@ -105,19 +116,18 @@ parser: obj
           lexer.next       
           switch(lexer.token)
              case(lexer.symbols.constRef)
-                 "obj\n".print
                  lexer.next
                  D := pDataItem(sig):isConst(true):isValue(false)
              case(lexer.symbols.varRef)
-                 "ref\n".print
+                 trace("pDecl:ref")
                  lexer.next
                  D := pDataItem(sig):isConst(false):isValue(false)
              case(lexer.symbols.constVal)
-                 "val\n".print
+                 trace("pDecl:val")
                  lexer.next
                  D := pDataItem(sig):isConst(true):isValue(true)
              case(lexer.symbols.varVal)
-                 "var\n".print
+                 trace("pDecl:var")
                  lexer.next
                  D := pDataItem(sig):isConst(false):isValue(true)
              syntaxError(5)
@@ -130,22 +140,42 @@ parser: obj
    pExp:
       out E: ref Exp
       symb: ref String
+      trace("pExp")
       switch(lexer.token)
+         -- missing, const,floatConst,string,charSy
+         case((lexer.symbols.const))
+            C: ref Const
+            C := Const
+            C.T := lexer.TokenStr
+            E := C	    
+            lexer.next
          case(lexer.symbols.idf)
-             lexer.tokenstr.print
+             -- incomplete
+             trace("pExp:idf")
              symb:= lexer.tokenStr
              lexer.next
-             E := OI_Generator(symb,Arguments)	-- should be UnaryGen    
-             	     
-         "pExp:noMatch==>empty\n".print
-         E := Exp	 
+             trace("pExp:idf:next")
+             E := OI_Generator(symb,Arguments)	-- should be UnaryGen
+         case((lexer.symbols.special))
+             symb := lexer.tokenStr
+             lexer.next
+             E := pBinary(symb)
+         trace("pExp:empty")
+         E := Exp
+   pBinary(op: ref String):
+      out B: ref Exp
+      args: ref Arguments
+      args := Arguments
+      args.isBinary := true
+      args.append(pObjectGenerator)
+      B := BinaryGen(op,args)
    genTokenStream: 
       ind: var integer
       lexer.next
       --"Got: {I2S(lexer.token)} {lexer.tokenStr}\n".print
       switch(lexer.token)
          case(0)
-            "-Z-".print
+            trace("genTokenStream:eof")
          case(lexer.symbols.begin)
             newline
             ind := ind + 2   
@@ -190,6 +220,16 @@ parser: obj
       "\nsyntax error: ".print
       putint(no)
       newline
+   trace(msg: ref String):
+      if (false) :then
+         msg.print
+         put(':')
+         putint(lexer.token)
+         put(' ' )
+         lexer.symbols.asText(lexer.token).print
+         put(' ')
+         lexer.tokenStr.print
+         newline
    go:
       out N: ref Node
       --genTokenStream
