@@ -47,9 +47,11 @@ AbstractSyntaxTree: Tree
   (# <<SLOT astlib:attributes>>;
      newFeature, (* true if we are implementing a new feature but need to
                   * be able to test without it; set by switch -F  *)
+     stringAsVal,
      traceCheck,
      traceGetVqual,
      traceUnit,
+     traceGen,
      toFix, (* if true then print warnings at places where the code 
              * must be fixed; can be set via option qbeta -f
              *)
@@ -279,6 +281,7 @@ AbstractSyntaxTree: Tree
           isDataItem:< BooleanValue;
           isArguments:< BooleanValue;
           isSignature:< BooleanValue;
+          isItems:< BooleanValue;
           isObjectGenerator:< BooleanValue;
           isObjectInvocation:< BooleanValue;
           isNameLiteral:< BooleanValue;
@@ -1359,6 +1362,7 @@ AbstractSyntaxTree: Tree
                #)
             #);
           OGofScope:: (# do father[] -> OGs[] #);
+          isItems:: TrueValue;
           scanDecls:
             (# currentDcl: ^decl;
             do (if sig[] <> none then
@@ -1591,11 +1595,17 @@ AbstractSyntaxTree: Tree
              * the ones in main are not counted.
              * Used in code gen for alloc super
              *)
-            (# N: @integer
+            (# N: @integer; org: ^Items
             do true -> scanNonBoundItemArgs
                (# DI: ^DataItem
                do (if currentArg.isDataItem 
-                      and not (currentArg[]->DI[]).isValue then
+                      and not (currentArg[]->DI[]).isValue
+                      or
+                      stringAsVal
+                      and
+                      ((origin[]->org[]) <> none)
+                            and (org.primNo = String_prim)
+                      then
                       N + 1 -> N;
                   if)
                #)
@@ -2083,7 +2093,7 @@ AbstractSyntaxTree: Tree
             exit isResume
             #);
           getAdr:< 
-            (# gdb:< debug(#do '>getAdr:'-> TT; inner #); 
+            (# gdb:< debug(#do '>Decl:getAdr:'-> TT; inner #); 
                A: ^superAdr; loadRec: @boolean
             enter A[] do gdb; inner exit(loadRec,A[] )
             #);
@@ -2351,6 +2361,8 @@ AbstractSyntaxTree: Tree
                                 // '}' -> N.T.equal then
                                    (pos,true) -> mkBreak0;
                                    false -> go
+                                // (1->N.T.inxGet) = '@' then
+                                   true -> blankAfter
                            if)if);
                            (if go then inner if)
                         #);
@@ -3094,7 +3106,7 @@ AbstractSyntaxTree: Tree
             do inner
             exit U[]
             #);
-         checkNumberConvert:
+          checkNumberConvert:
             (# I2F:< (# do inner #);
                F2I:< (# do inner #);
                D: ^DataItem; 
@@ -3344,14 +3356,16 @@ AbstractSyntaxTree: Tree
             #);
           primNo:: 
             (# 
-            do (*'**** OG:primNo: ' -> puttext;
-                IS.primNo -> putint;; newline;*)
+            do (*'**** OG:primNo: ' -> puttext; IS.primNo -> putint;*)
                (if (IS[] <> none) then
                    (if ((IS.primNo -> value) > 0) then
                if)if);
                (if value = 0 then
-                   super.primNo -> value
-               if)
+                   super.primNo -> value;
+                   (if false and (value = 0) and (IS.superDesc[]<> none) then
+                       IS.superDesc.primNo -> value
+                   if)
+               if);
             #);
           isSingularX: BooleanValue
             (#
@@ -3974,7 +3988,7 @@ AbstractSyntaxTree: Tree
             do scanSons
                (# E: ^Exp
                do (if isLast then
-                      current[] -> E[]; 
+                      current[] -> E[];
                       (if E.ATD[] <> none then E.ATd.primNo-> value if);
                   if)
                #);
@@ -4219,7 +4233,7 @@ AbstractSyntaxTree: Tree
             do gdb; inner 
             #);
           getAdr:<
-            (# gdb:< debug(# do '>getAdr:'->lx.puttext; inner #);
+            (# gdb:< debug(# do '>Exp:getAdr:'->lx.puttext; inner #);
                adr: ^SuperAdr; loadRec: @boolean
             enter adr[]
             do gdb; inner
@@ -5041,6 +5055,7 @@ AbstractSyntaxTree: Tree
             do (* CWD = .../beta/.../MiniSystem/.../BETAworld/.../XXX *)
                dirCh -> CWD.put;
                CWD.setPos;
+               L:
                CWD.scanAll
                (# pos: @integer; N: ^text
                do pos + 1 -> pos; 
@@ -5057,6 +5072,9 @@ AbstractSyntaxTree: Tree
                            // 'MiniBeta' -> N.equalNCS then
                               '**** MiniBeta on path:'->putline;
                               true -> aMiniBetaModule;
+                              top -> worldPos;
+                              pos -> worldPosInCWD;
+                              leave L
                           if)
                       if);
                       pos -> last;
@@ -5074,7 +5092,11 @@ AbstractSyntaxTree: Tree
                (if trace then
                    'pathToWorld: ' -> puttext; topPath[] -> putline;
                if);
-               'BETAworld.xbeta' -> topPath.append;
+               (if aMiniBetaModule then
+                   'MiniBeta.qbeta' -> topPath.append;
+                else
+                   'BETAworld.xbeta' -> topPath.append;
+               if);
                (if trace then
                    'Module: ' -> puttext; 
                    (last+1,CWD.length) -> CWD.sub -> putline;
