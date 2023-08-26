@@ -28,8 +28,11 @@ parser: obj
       OG := pObjectGenerator
    pSignature:
       out sig: ref Signature:args
+      args: ref Arguments
       tokenStr: ref String
       prevToken: var integer
+      id: ref String
+      trace("pSignature:")
       if(lexer.token = lexer.symbols.idf):then
          tokenStr := lexer.tokenStr
          lexer.next
@@ -39,13 +42,69 @@ parser: obj
                    ,lexer.symbols.leftSquare))
                 prevToken := lexer.token
                 lexer.next
+                trace("pSignature:brack")
                 -- missing save of return value
-                pSigArgs(tokenStr):leftB(prevToken)
+                args := pSigArgs(tokenStr):leftB(prevToken)
+                sig := SIgnature(tokenStr):args(args)
              trace("pSignature:unarySig")
-             sig := Signature(tokenstr):args(Arguments)
-   pSigArgs(tokenStr: ref String):leftB(leftB: var integer):
+             sig := Signature(tokenstr):args(args)
+   pSigArgs(tokenStr: ref String):leftB(leftB: var char):
+      out args: ref Arguments
+      id: ref String
+      D: ref Decl:OG
+      rightB: var char
+      brackAsText(sy: var integer):
+         out T: ref String
+         switch(sy)
+            case((lexer.symbols.leftBrack))
+               T := "("
+            case((lexer.symbols.rightBrack))
+               T := ")"
+            case((lexer.symbols.begin))
+               T := "{"
+            --case((lexer.symbols.end)) -- gives ref none in xbeta
+            --   T := "}"               also in symbols
+            case((lexer.symbols.leftSquare))
+               T := "["
+            case((lexer.symbols.rightSquare))
+               T := "]"
+            if (sy =lexer.symbols.end) :then
+               T := "]"
+            :else
+               T := "?"    
       -- incomplete
       trace("pSigArgs")
+      rightB := leftB + 1
+      args := Arguments
+      args.append(Name(lexer.tokenStr))    -- foo in foo(...)
+      args.append(Name(brackAsText(leftB)))-- ( in foo(...)
+      pSigArg: do
+         D := pDecl
+         args.append(D)
+         switch(lexer.token)
+             case(rightB)
+                trace("pSigargs:rightB")			     
+                lexer.next
+                if(lexer.token = lexer.symbols.fatComma) :then
+                   -- check what we append ')' :foo '('
+                   -- or '):foo('		   
+                   args.append(Name(brackAsText(rightB))) -- correct?
+                   lexer.next
+                   switch(lexer.token)
+                        case((lexer.symbols.leftBrack
+                             ,lexer.symbols.leftSquare
+                             ,lexer.symbols.begin))
+                             leftB := lexer.token
+                             rightB := leftB + 1
+                             args.append(name("fat"))
+                             restart(pSigArg)
+                        syntaxError(111)
+                :else
+                   trace("pSigargs:else")		
+                   args.append(Name(brackAsText(rightB)))
+             case(lexer.symbols.comma)
+                 lexer.next
+                 restart(pSigArg)
    pObjectGenerator:
       out OG: ref ObjectGenerator:items
       IV: ref Invocation
@@ -104,6 +163,11 @@ parser: obj
                     ,lexer.symbols.final))		    
                    D := pDecl
                    IS.append(D)
+               case(lexer.symbols.leftBrack)
+                  switch (lexer.peekNext(3))
+                      case((lexer.symbols.colon,lexer.symbols.virtual))
+                          IS.append(pDecl)
+                  IS.append(pObjectGenerator)			  
                trace("pItems:before:pObjectGenerator")
                OG := pObjectGenerator
                IS.append(OG)
@@ -116,7 +180,9 @@ parser: obj
        sig: ref Signature:args
        OD: ref ObjectGenerator:Items
        ptnKind: var integer
+       trace("pDecl:")
        sig := pSignature
+       sig.dopt(true)
        L: do       
           switch(lexer.token)
              case(lexer.symbols.colon)
@@ -181,8 +247,8 @@ parser: obj
          -- missing, const,floatConst,string,charSy
          case((lexer.symbols.const))
             C: ref Const
-            C := Const
-            C.T := lexer.TokenStr
+            C := Const(lexer.TokenStr)
+            --C.T := lexer.TokenStr
             E := C
             lexer.next
          case(lexer.symbols.idf)
