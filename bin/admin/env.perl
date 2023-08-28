@@ -124,6 +124,9 @@ if (-e "c:\\") {
     if ($MIASDK ne "gnu") {
         $USE_GNUC="no";
     }
+     if (($ENV{'TERM'} eq 'xterm') && ($ENV{'TERM_PROGRAM'} eq 'mintty')) {
+	$ENV{'TERM'}="cygwin";
+    }
     $cygwin = ($ENV{'TERM'} eq 'cygwin');
 } elsif (-e "/etc") {
     # UNIX
