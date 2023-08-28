@@ -119,7 +119,7 @@ void RTE2(char *msg, int errNo){
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
 // perhaps use malloc to initialize heap?
 
-int heapTop;
+int heapTop = 0;
 
 #ifdef linux
 pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER; 
