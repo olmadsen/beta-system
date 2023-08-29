@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 $dst=$ENV{'DST'};
 $target=$ENV{'TARGET'};

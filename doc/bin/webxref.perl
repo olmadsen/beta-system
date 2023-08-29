@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 # Note: Webxref now is a Perl5 script, let the author know 
 # if this is a problem.
 

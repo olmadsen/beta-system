@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 # Generates (on stdout) an HTML page which tells the user that
 # a page has been deleted.

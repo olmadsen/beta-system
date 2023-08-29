@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 print<<EOT
 Can't figure out how to make linklint do this. 

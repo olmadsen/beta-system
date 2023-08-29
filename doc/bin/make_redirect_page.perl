@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 # Generates (on stdout) an HTML page which automatically
 # redirect browsers to the URL specified as argument.

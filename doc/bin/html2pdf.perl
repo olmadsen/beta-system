@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -s
+#!/usr/bin/perl -s
 
 # How to use:
 # 1. Currently only possible at UNIX Sparc (because I only installed the

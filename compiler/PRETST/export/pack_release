@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -s
+#!/usr/bin/perl -s
 $BETALIB=$ENV{'BETALIB'};
 $BETALIB=~s%\\%/%g;
 push(@INC, $ENV{'BETALIB'} . "/bin/admin");

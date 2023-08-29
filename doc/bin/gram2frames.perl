@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -s -w
+#!/usr/bin/perl -s -w
 
 # Create HTML file on stdout for the xxx-meta.gram file
 # specified as argument 1.
