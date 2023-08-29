@@ -1122,7 +1122,8 @@ void *heapAlloc(Block *ctx,int size) {
     if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
     //printf("heapTop after: %i size: %i",heapTop,size);
     if ((heapTop + size) > (heapMax - 8)) {
-	// (heapTop - 8) since we need space for a free block at the end
+      // (heapTop - 8) since we need space for a free block at the end
+      printf("\n\n!!!! Heap overflow: doBGC\n");
       lastFreeInHeap =(Btemplate *)&heap[heapTop];
       doBGC(ctx,mainObj);
       //runTimeError("\n\n*** Heap overflow");
@@ -1184,7 +1185,7 @@ int hSize = 0;
 Btemplate *getR(Btemplate *obj,int inx){ 
   checkInHeap(obj);
   if (newAlloc){
-    if ((0 <= inx) && (inx <= 64)) {
+    if ((0 <= inx) && (inx <= 1024)) {
       return (Btemplate *)obj->vfields[inx];
     } else {
 #ifdef __arm__
@@ -1200,7 +1201,7 @@ Btemplate *getR(Btemplate *obj,int inx){
 void putR(Btemplate *obj,int inx, Btemplate *X){
   checkInHeap(obj);
   if (newAlloc) {
-    if ((0 <= inx) && (inx <= 64)) {
+    if ((0 <= inx) && (inx <= 1024)) {
       obj->vfields[inx] = (int)X;
     }else{
 #ifdef __arm__
@@ -2710,9 +2711,9 @@ bool traceThreads = true;
 	fprintf(trace,"xrpushg: %i %i\n",arg1,arg2);
 	dumpObj(trace,"xrpushg:X",X);
 	Y = getR(X,arg1 + arg2 + newAllocOff); // need range check - do we adjust for range?
+#ifdef TRACE
 	fprintf(trace,"after: %i\n",(int)Y);
 	dumpObj(trace,"xrpushg:Y",Y);
-#ifdef TRACE
 	fprintf(trace,"xrpushg %s[%i+%i] = %s/%i)\n",nameOf(X),arg1,arg2,nameOf(Y),(int)Y);
 #endif
 	rPush(thisStack,Y); 
