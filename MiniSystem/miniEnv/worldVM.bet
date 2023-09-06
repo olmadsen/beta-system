@@ -65,13 +65,14 @@ worldWithVM: World
      
      WorldVM::
        (# selectCode::
-            (# trace: (# exit true #);
+            (* Select the calling location in caller *)
+            (# 
             do (# desc: ^Tree.TopNode;
-                  descNo, lsc,beginPos,endPos: @integer;
-               do (if trace then
-                      '\n**** WorldVM:SelectCode:' -> puttext;
+                  descNo, lsc,beginPos,endPos: @integer; llx: ^text; i: @integer
+               do (if traceSelect then
+                      '\n**** WorldVM:SelectCode:caller:' -> puttext;
                       caller.myName -> puttext;
-                      ' caller.descInx:' -> puttext; caller.myDescInx-> putint; 
+                      ' descInx:' -> puttext; caller.myDescInx-> putint; 
                       ' lsc:'->puttext; 
                       (if caller.myLscTop > 0 then 
                           caller.myLsc -> putint else '?'->put;
@@ -82,33 +83,39 @@ worldWithVM: World
                           (* do we need this *)
                           caller.myDescInx -> descNo;
                           caller.myLsc -> lsc
-                       else 
+                       else
+                          (* descNo of caller and lsc of return point *)
                           caller.topReturn -> (descNo,lsc)
                       if);
-                      (if trace then
+                      (if traceSelect then
                           ' return:DescNo:' -> puttext; descNo -> putint; 
                           ' return:lsc:' -> puttext; lsc -> putint; 
                       if);
                       descNo -> compile.getObjectDesc -> desc[];
-                      (if trace then
+                      (if traceSelect then
                           '\nlabel: ' -> puttext; desc.label -> puttext;
                           ' beginBCP:' -> puttext; desc.beginBCP -> putint;
                           ' endBCP:' -> puttext; desc.endBCP -> putint; newline;
-                          desc.scanSons
-                          (#
-                          do current.label -> puttext; ' '-> put;
-                             current.beginBCP -> putint; ' ' -> put;
-                             current.endBCP -> putint; newline;
-                          #);
+                          (if false then
+                              L:
+                                desc.scanSons
+                                (# i: @integer
+                                do (if (i + 1 -> i) > 5 then
+                                       '...\n'->puttext; leave L if);
+                                   current.label -> puttext; ' '-> put;
+                                   current.beginBCP -> putint; ' ' -> put;
+                                   current.endBCP -> putint; newline;
+                          #)if);
                           desc.doPT -> putheadN
                       if);
                       true -> desc.doPT; 
                       (if desc.father[] <> none then
-                          true -> desc.father.doPT;
+                          (* OBS! true is needed to update charPos in desc *)
+                          true -> desc.father.doPT -> llx[];
                        else
                           '**** desc.father is none'->putline
                       if);
-                      (* OBS! true is needed to update charPos in desc *)
+
                       lsc 
                         -> desc.doMapBCposToCharRange 
                         -> (beginPos,endPos);
@@ -121,18 +128,35 @@ worldWithVM: World
                             -> (desc[],beginPos,endPos);
                           desc.getDescNo -> descNo
                       if);
-                      (if trace then
-                          ' Pos: ' -> puttext; beginpos -> putint; 
-                          ',' -> put; endPos -> putint; newline;
-                          ' new:descNo: ' -> puttext; descNo -> putint;
-                          ' pos: ' -> puttext;
-                          beginPos -> putint; ','->put; endPos -> putint;  
-                          newline
-                      if);
+                      (if traceSelect then
+                          '**** CharRange:Pos: ' -> puttext; beginpos -> putint;
+                          ',' -> put; endPos -> putint; 
+                          ' new:descNo: ' -> puttext; descNo -> putint;  
+                          newline;
+                          '**** selection: ' -> puttext;
+                          (if (beginPos > 0) and (llx.length > endPos) then
+                              beginPos -> i;
+                              L:
+                                (if i <= endPos then
+                                    i -> llx.inxget -> put; i + 1 -> i;
+                                    restart L
+                                if);
+                              newline;
+                           else
+                              '**** beginPos/endPos are not within llx!'
+                                ->putline
+                      if)if);
+                      (* Select and highlight calling location in caller!
+                       * selectDesc also calls doMapBCposToCharRange as above
+                       * so some kind of redundancy!?
+                       *)
                       (caller[], descNo,&intList[], desc[], lsc)
                         -> THIS(World).selectDesc;
                   if);
                #);
+               (if traceSelect then
+                   '**** worldVM:selectCode:end:'->putline
+               if)
             #);
           putCh:: (# do ch -> execution.put #);
           getCh:: (# do execution.get -> ch #);
@@ -171,12 +195,16 @@ worldWithVM: World
                if);
             #);
           allocEvent::
+            (* caller invokes thisObj with origin org
+             * bcPos is the adr. of the allocEventQ byte code 
+             * and not of the the point in caller invoking thisObj
+             *)
             (#
             do (*(if thisObj.OSDvisibility > 0 then true -> doDumpEvents if);*)
                ('alloc',caller[],thisObj[],org[],bcpos,isObj,isIndexed)
                  -> dumpEvent;
-               (if true or ((caller[],thisObj[],org[],bcpos,isObj,isIndexed) 
-                     -> execution.onAlloc) then
+               (if ((caller[],thisObj[],org[],bcpos,isObj,isIndexed) 
+                     -> execution.onAlloc) or true then
                    (* '**** AllocEvent:Pause' -> putline;*)
                    caller[] -> selectCode;
                    doPause;
@@ -191,9 +219,9 @@ worldWithVM: World
 
                (if (caller[], thisObj[], org[], bcpos, preemptive) 
                      -> execution.onDo then
-                   (*'**** doEvent:Pause' -> putline;*)
+                   '**** doEvent:Pause' -> putline;
                    caller[] -> selectCode;
-                   (*'** after selectCode' -> putline;*)
+                   '**** doEvent:after:selectCode' -> putline;
                    doPause;
                 else
                    (*'**** doEvent:noPause'->putline;*)
