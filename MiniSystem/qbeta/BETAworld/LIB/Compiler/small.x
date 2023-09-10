@@ -1,4 +1,5 @@
 small: obj
+   %basic 1, "small"
    x: var integer
    y: val 14
    R: obj TTT
