@@ -18,7 +18,11 @@ small: obj
    b.V
    fisk(n: var integer, m: var integer):
       n := n + 1 * m
-   put(V: var integer):at[inx: var integer]:until{go:< object}:
+   putGo(V: var integer):at[inx: var integer]:until{go:< object}:
        V := inx
-       go       
-   
+       go
+   put(V: var integer):at[inx: var integer]:
+       V := inx
+       go        
+   fisk(x,17)
+   put(117):at[12]
