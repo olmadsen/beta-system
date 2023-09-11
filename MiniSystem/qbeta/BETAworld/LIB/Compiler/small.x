@@ -5,6 +5,7 @@ small: obj
    R: obj TTT
    S: ref TTT
    xx := 117
+   %public
    go: do
       q: var integer
    foo:
