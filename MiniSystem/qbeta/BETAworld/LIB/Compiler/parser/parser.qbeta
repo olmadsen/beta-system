@@ -167,6 +167,9 @@ parser: obj
       trace("pItems:loop")
       Loop: do
          switch (lexer.token)
+            case((lexer.symbols.inArg,lexer.symbols.outArg))
+               "in/out arg".print	    
+               IS.append(pDecl)	    
             case(lexer.symbols.idf)
                switch(lexer.peekNext(1))
                   case((lexer.symbols.colon
@@ -186,23 +189,28 @@ parser: obj
             case(lexer.symbols.special)
                  "pItems:got:special\n".print
                  lexer.next
-            case(lexer.symbols.StringSy)
-                "pItems:got:special\n".print
-                lexer.next
             case(lexer.symbols.property)
                 propId: ref String
                 propId :=  lexer.tokenStr
                 lexer.next
                 IS.append(pProperty(propId))
-            case(lexer.symbols.const)
-                "pItems:got:const\n".print
-                lexer.next
-            case(lexer.symbols.floatConst)
-                "pItems:got:floatConst\n".print
-                lexer.next
-            case(lexer.symbols.charSy)
+            case(lexer.symbols.leftBrack)
+                lexer.next	    
+                IS.append(pObjectGenerator) -- should be bracketedExp
+                if (lexer.token = lexer.symbols.rightBrack) :then
+                    lexer.next
+                :else		    
+                    "Syntax error - missign brackets\n".print
+            case(lexer.symbols.StringSy)
+                "pItems:got:special\n".print
+                --IS.append(StringSy(lexer.TokenStr))		
+                --lexer.next
+                IS.append(pObjectGenerator)
+            case((lexer.symbols.const           -- are these meaningful?
+                 ,lexer.symbols.floatConst
+                 ,lexer.symbols.charSy))
                 "pItems:got:charSy\n".print
-                lexer.next
+                IS.append(pObjectGenerator)
 
          if (lexer.token = lexer.symbols.semicolon) :then
             lexer.next
@@ -224,12 +232,49 @@ parser: obj
                      trace("propArg:next")
                      restart(parseArgs)
       P := Property(Name(propId)):args(args)
+         
+   pVarRefDI(sig: Ref Signature:args):isConst(isConst: var boolean):isValue(isValue: var Boolean):
+      out DI : ref SuperDataItem:OG
+      IV: ref Invocation
+      typeid: Ref String
+      E: ref Exp
+      OG: ref ObjectGenerator:Items
+      IV := Invocation
+      next: do
+         typeId :=pVarRefTypeNoBrack(sig):isConst(isConst):isValue(isValue)
+         E := unaryGen(typeId,Arguments)
+         IV.append(E)	 
+         if (lexer.token = lexer.symbols.dot) :then
+            lexer.next
+            restart(next)
+      OG := ObjectGenerator(IV):Items(Items)	    
+      DI := DataItem(isConst):isValue(isValue):sig(sig):OG(OG)
+      
+   pVarRefTypeNoBrack(sig: Ref Signature:args):isConst(isConst: var boolean):isValue(isValue: var Boolean):
+      out typeId: ref String
+      if (lexer.token = lexer.symbols.idf) :then
+         typeId := lexer.tokenStr
+         lexer.next
+         L: do
+            if (lexer.token = lexer.symbols.fatComma) :then	 
+               typeId := typeId + lexer.tokenStr
+               lexer.next
+               restart(L)	       
    pDecl:
        out D: ref Decl:OG
        sig: ref Signature:args
        OD: ref ObjectGenerator:Items
+       isInArg: var Boolean
+       isOutArg: var Boolean
        ptnKind: var integer
        trace("pDecl:")
+       switch(lexer.token)
+          case(lexer.symbols.inArg)
+              lexer.next	  
+              isInArg := true
+          case(lexer.symbols.outArg)
+              lexer.next	  
+              isOutArg := true
        sig := pSignature
        sig.dopt(true)
        L: do       
@@ -244,7 +289,9 @@ parser: obj
                    case(lexer.symbols.varRef)
                        trace("pDecl:ref")
                        lexer.next
-                       D := pDataItem(sig):isConst(false):isValue(false)
+                       --D := pDataItem(sig):isConst(false):isValue(false)
+                       -- OBS unfinished business!		       
+                       D := pVarRefDI(sig):isConst(false):isValue(false)
                        leave(L)
                    case(lexer.symbols.constVal)
                        trace("pDecl:val")  
@@ -331,9 +378,10 @@ parser: obj
          trace("pExp:empty")
          E := Exp
    pExpArgs(tokenStr: ref String):leftB(leftB: var integer): pArgs(tokenStr):leftB(leftB)
-      E: ref Exp;
-      E := pExp;
-      args.append(E)
+      --E: ref Exp;
+      --E := pExp;
+      OGx: ref ObjectGenerator:Items
+      args.append(pObjectGenerator)
    pBinary(op: ref String):
       out B: ref Exp
       args: ref Arguments
