@@ -42,4 +42,4 @@ small: obj
       :else
           xx := 8
    :else
-      xx := xx - 1
+      xx := xx - 13
