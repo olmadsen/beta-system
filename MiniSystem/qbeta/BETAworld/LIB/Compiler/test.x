@@ -5,10 +5,10 @@ test: obj
    c: var char
    foo: {v:< object; y: var boolean };
    bar: foo{v:: text};
-   fisk: foo{v::< #record};
+   fisk: foo{v::< record};
    x := 119;
    -- hello there!
-   x := 3.14;
+   x := 3.14
    @if (x = 17) && (x <> 0) :then
        put (x)
    S := "Hello";
@@ -19,3 +19,4 @@ test: obj
    hest:
       kuk: var  integer
       kuk := 117      
+   x: -> y
