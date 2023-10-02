@@ -866,7 +866,12 @@ parser: AbstractSyntaxTree
                       true -> sig.isNewFatCommaSig;
                       (if false then
                           '**** pSignature: ' -> puttext; sig.dopt -> puttext;
-                          ' id: ' -> puttext; id[] -> putline
+                          ' id: ' -> puttext; id[] -> putline;
+                          'Args: '->puttext;
+                          args.scanSons(# do current.dopt -> puttext;' '->put#);
+                          '\nSig: ' -> puttext;
+                          sig.scanSons(#do current.dopt -> puttext;' ' ->put#);
+                          newline
                       if)
                    else
                       (sym[],arguments,false) -> UnarySigGen -> sig[]
@@ -957,7 +962,6 @@ parser: AbstractSyntaxTree
        enter(sym[],leftB)
        do leftB + 1 -> rightB;
           sym.copy -> comma[]; 
-          
           sym[] -> name -> D[] -> D1[];
           inner pSigArgs;
           (if true then
@@ -1026,13 +1030,36 @@ parser: AbstractSyntaxTree
                    if)
                 // lex.symbols.comma then
                    ',' -> comma[] -> name -> D[];
-                   ',' -> id.append;
+                   (*',' -> id.append;*)
+                   (*'**** psigArgs: ' -> puttext; id[]->putline;*)
                    inner pSigArgs;
                    lex;
                    restart Loop
                if)
             #)
        exit id[]
+       #);
+     pArgumentsNew:
+       (# args: ^Arguments; rightB: @integer; lastArg: ^Node
+       enter(args[],rightB)
+       do args.scanSons(#do current[] -> lastArg[] #);
+          Arguments -> args[];
+          true -> args.isFunction; false -> args.isKeyword;
+          lastArg[] -> args.append;
+          getArgs:
+            (#
+            do lex;
+               (if lex.symb <> rightB then
+                   inner pArgumentsNew;
+                   (if lex.symb
+                    // lex.symbols.comma then
+                       restart getArgs
+                    // rightB then
+                       lex
+                    else
+                       200 -> syntaxError
+            if)if)#)
+       exit args[]
        #);
      pArgument:
        (# D: ^Decl; P: ^Pattern
@@ -1273,7 +1300,7 @@ parser: AbstractSyntaxTree
                if)
             exit T[]
             #);
-          N: ^Node
+          N: ^Node; gotComma: @boolean
        enter(sy[],leftB)
        do (if false then
               'pNFCX: ' -> puttext; sy[] -> puttext; ' ' -> put;
@@ -1311,12 +1338,16 @@ parser: AbstractSyntaxTree
                 if);
                 (if lex.symb 
                  // lex.symbols.comma // lex.symbols.semiColon then
-                    ',' -> sig.put;
-                    ',' -> comma[];
-                    lex;
-                    restart loop
+                    true -> gotComma;
+                    (args[],rightB) -> pArgumentsNew
+                    (#
+                    do pObjectSpec -> args.append;
+                    #) -> args[];
+                    (sig[],args[]) -> functionGen -> F[]
                  // rightB then
-                    rightB -> asCh -> Name -> args.append;
+                    (if not gotComma then
+                        rightB -> asCh -> Name -> args.append;
+                    if);
                     '' -> comma[];
                     lex;
                     (if lex.symb = lex.symbols.fatcomma then
@@ -1348,7 +1379,7 @@ parser: AbstractSyntaxTree
                     if)
                  else
                     117 -> syntaxError
-                if)      
+                if)    
             if);
           (if leftB = lex.symbols.begin then
               true -> args.inBraces;              
@@ -1367,8 +1398,11 @@ parser: AbstractSyntaxTree
           (if isFatComma then
               (sig[],args[]) -> KeyWordgen -> F[];
            else
-              (sy[],args[]) -> KeyWordgen -> F[]
-          if)
+              (if gotComma then
+                  (*(sy[],args[]) -> FunctionGen -> F[]*)
+               else
+                  (sy[],args[]) -> KeyWordgen -> F[]
+          if)if)
        exit F[]
        #);
      pFunction:
