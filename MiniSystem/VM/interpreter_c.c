@@ -1255,6 +1255,10 @@ void StacksToOut(FILE *trace,Btemplate *thisObj, Btemplate *thisStack)//, Block 
 
 void dumpObj(FILE *trace,char *name,Btemplate *X){
   int i;
+  if (X == NULL) {
+    fprintf(trace,"Object: %s = NULL \n",name);
+    return;
+  }
   fprintf(trace,"Object: %s %s\n",name,nameOf(X));
 
   fprintf(trace,"Fields: ");
@@ -2084,6 +2088,9 @@ void QallocTextObject(Block *ctx,int litInx){
     char ch = getLiteral(X, litInx + i + 1);
     ctx->callee->vfields[dinx + 1 + i + newAllocOff] = ch;
   }
+#ifdef TRACE
+  dumpObj(ctx->trace,"QallocTextObject:",ctx->callee);
+#endif
   /* printf("\nQallocTextObject:  range = %i ", rangee);
      for (i = 0; i < 40; i++) printf(" i: %i",getV(ctx->callee,i));
      printf("\n"); */
@@ -2502,7 +2509,9 @@ bool traceThreads = true;
 	}
       }
 #ifdef TRACE
-      fprintf(trace,"%i:\t",glsc);
+      fprintf(trace,"%s:%i:\t",nameOf(thisObj),glsc + 1);
+      // we add one to glsc to have same numbering as in foo..s and code.s
+      // Beta arrays starts with 1, C arrays with 0 
 #endif
       opCode = bc[glsc]; glsc = glsc + 1;
       /*if (gcInProgress) {
@@ -2653,7 +2662,9 @@ bool traceThreads = true;
 	rPush(thisStack,Y);
 #ifdef TRACE
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
+	dumpObj(trace,"rpushg",Y);
 #endif
+	
 	break;
       case xpush:
 	arg1 = op1(bc,&glsc); // off
