@@ -2,12 +2,35 @@ BasicSystem: obj
    %module Containers, LIB.StringLib,LIB.containers.QueueLib
    %include Containers,LIB.StringLib
    %public
+   Lock: 
+      %globals
+      %Public	 
+      in id: ref String
+      %private
+      free_M: var integer
+      init: 
+         free_M := 0
+      get: 
+         res: var integer
+         i: var integer
+         loop: obj 
+            --disable
+            res := free_M.cmpAndSwap(1)
+            @if res = 1 :then 
+               --enable
+               --sleep(50)
+               i := i + 1
+               @if i > 10000 :then 
+                  (id + " not free after 10000 attempts").print
+                  i := 0
+               @restart loop
+      free: 
+         free_M := 0
+
    BasicSystem: 
       %public
       Lock: 
          %globals
-         dummy: var integer
-         bbb: var integer
          free_M: var integer
          %Public	 
          id: ref String
@@ -18,7 +41,6 @@ BasicSystem: obj
             i: var integer
             loop: obj 
                --disable
-               res := 17
                res := free_M.cmpAndSwap(1)
                @if res = 1 :then 
                   --enable
@@ -31,19 +53,36 @@ BasicSystem: obj
          free: 
             free_M := 0
          id := "Lock"
-      BasicProcess:
+      BasicProcess: GeneralProcess
+         --in id: ref String
+         mkActive::<
+            status := p_status.ACTIVE	 
+            SQS.insert(this(BasicProcess)) -- also done in MonitorSystem     
          %Public      
-         in id: ref String
-         status: var integer
-         start:<  -- need id as argument
+         --status: var integer
+         start::<  -- need id as argument
             status := p_status.ACTIVE
             inner(start)
+         addWaiting::<
+            --put('Q')	 
+            SQS.addWaiting
+            --put('W')
+            status := P_status.WAITING
+            --put('E')	    
+         dcrWaiting::<
+            SQS.dcrWaiting
+         display::<
+             "\n---BP:---\n".print	 
+         --(id + ":A:").print	 
          (this(BasicProcess)).suspend
+         --(id + ":B:").print	 	 
          inner(BasicProcess)
          status := P_status.TERMINATED
-      Scheduler: 
+      Scheduler: SuperScheduler
+         thisScheduler::< Scheduler
+         ProcessType::< BasicProcess
          %Public
-         active: ref BasicProcess
+         --active: ref BasicProcess
          %Private	 
          dummyB: var Boolean
          inScheduler: var Boolean
@@ -52,33 +91,37 @@ BasicSystem: obj
             loop: obj 
                inScheduler := 1
                active := SQS.removeNext
+               --newline	       
+               --put('1')
                @if active =/= none :then 
+                  --put('2')
                   active.status := P_status.ACTIVE
                   inScheduler := 0
                   active.attach(50)
+                  --put('7') 
                   inScheduler := 1
-                  @if active.status = P_status.ACTIVE :then 
+                  @if active.status = P_status.ACTIVE :then
+                     --put('8') 		  
                      SQS.insert(active)
-               @if SQS.isEmpty :then 
-                  @if SQS.hasWaiting :then 
+               @if SQS.isEmpty :then
+                  --put('3')	       
+                  @if SQS.hasWaiting :then
+                     --put('4')		  
                      sleep(100)
-                     @restart Loop
+                     @restart Loop 
                   sch.dcr
-                  @if sch.running :then 
+                  @if sch.running :then
+                     --put('5')
                      sleep(50)
                      sch.add
                      @restart loop 
-               :else 
+               :else
+                  --put('6')
                   @restart Loop
          (this(Scheduler)).suspend
          sch.add
          go
-      thisCore:
-         -- BasicSystem:: Core should be mved to here!
-         %basic 17
-         out C: ref core
-         C := core
-      Core:
+      Core: SuperCore
          -- should be moved to BETA,
          -- but depends on Scheduler
          -- could perhaps just be Object?
@@ -86,9 +129,9 @@ BasicSystem: obj
          -- perhaps a super scheduler should be defined in BETA.xbeta
          -- main: ref BasicProces, thus also BasicProcess in BETA
          -- or perhaps thisCore here?
-         %core 16
+         --%core 16
          %Public
-         main: ref Scheduler
+         --main: ref Scheduler
          attach: 
             in M: ref Scheduler
             main := M
@@ -118,19 +161,19 @@ BasicSystem: obj
             S: ref Scheduler
             C1 := Core
             fork(C1)
-            C2 := Core
-            fork(C2)
-            C3 := Core
-            fork(C3)
-            C4 := Core
-            fork(C4)
+            --C2 := Core
+            --fork(C2)
+            --C3 := Core
+            --fork(C3)
+            --C4 := Core
+            --fork(C4)
             S := Scheduler
             C1.attach(S)
-            S := Scheduler
-            C2.attach(S)
-            S := Scheduler
-            C3.attach(S)
-            C4.attach(Scheduler)
+            --S := Scheduler
+            --C2.attach(S)
+            --S := Scheduler
+            --C3.attach(S)
+            --C4.attach(Scheduler)
       P_status: obj 
          %globals
          %Public	 
