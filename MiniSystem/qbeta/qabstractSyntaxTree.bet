@@ -4,6 +4,7 @@ INCLUDE 'qlexer';
 INCLUDE '../compiler_IF/compiler_IF';
 INCLUDE '../VM/objectcode'
 ---lib:attributes--- 
+nameListInDcL: (#exit false #);
 inlineAlloc: (#exit true #);
 coArg: (#exit false #);
 putHead:
@@ -304,7 +305,7 @@ AbstractSyntaxTree: Tree
                      (#
                      do (if current.isNewProp then
                             current[] -> prop[];
-                            (if '%Domain_boundary' -> prop.propId.T.equalNCS then
+                            (if '%Domain_boundary' ->prop.propId.T.equalNCS then
                                 (if false then
                                     'Found domain_boundary: ' -> puttext; 
                                     MD.sig.dopt -> puttext; ' ' -> put;
@@ -318,7 +319,7 @@ AbstractSyntaxTree: Tree
                          (if false then
                              'Default domain: ' -> puttext; 
                              MD.sig.dopt -> puttext; ' ' -> put;
-                 if)if)if)
+                 if)if)if);
             exit MD[]
             #);
           enclosingObjectGenerator:
@@ -2151,6 +2152,38 @@ AbstractSyntaxTree: Tree
           isImmutable:< BooleanValue;
        do inner
        #);
+     NameDecl:< Decl
+       (# PT:: (#do T[] -> lx.append #);
+          label:: (# do 'NameDecl'-> lab[] #);
+          off: @integer;
+          T: ^text;
+          ATd: ^Decl
+       enter T[]
+       #);
+     NameList:< Node
+       (# Ns: [3] ^NameDecl; top: @integer;
+          PT::
+            (#
+            do scan
+               (# i: @integer 
+               do (if (i + 1 -> i) > 1 then','->lx.put if);
+                  (pos,break) -> current.PT
+               #)
+            #);
+          label:: (# do 'NameList'-> lab[] #);
+          add:
+            (# N: ^text
+            enter N[]
+            do (if (top + 1 -> top) > Ns.range then Ns.range -> Ns.extend if);
+               N[] -> NameDecl -> Ns[top][]
+            exit this(NameList)[]
+            #);
+          scan:
+            (# current: ^NameDecl
+            do (for i: top repeat Ns[i][] -> current[]; inner scan for)
+            #)
+               
+       #);
      Signature:< Scope
        (* In xbeta and qbeta, Signature have subpatterns UnarySignature, etc.
         * For all sub of Signature, arguments are in-declarations in Items.
@@ -2241,7 +2274,7 @@ AbstractSyntaxTree: Tree
                PT:: (# do id[] -> lx.puttext #);
                copyAST::
                  (#
-                 do (id[],args[],isKeyWord) -> UnarySigGen -> nAST[]
+                 do (id[],names[],args[],isKeyWord) -> UnarySigGen -> nAST[]
                  #);
             #);
           Binary:< SigType
@@ -2253,7 +2286,7 @@ AbstractSyntaxTree: Tree
                  #);
                copyAST::
                  (#
-                 do (id[],args[],isKeyWord) -> BinarySigGen -> nAST[]
+                 do (id[],names[],args[],isKeyWord) -> BinarySigGen -> nAST[]
                  #);               
             #);
           Function:< SigType
@@ -2261,7 +2294,7 @@ AbstractSyntaxTree: Tree
                PT:: (#do id[] -> lx.puttext; (pos,break,inDecl) -> args.PT #);
                copyAST::
                  (#
-                 do (id[],args[],isKeyWord) -> FunctionSigGen -> nAST[]
+                 do (id[],names[],args[],isKeyWord) -> FunctionSigGen -> nAST[]
                  #);               
             #);
           KeyWord:< SigType
@@ -2269,7 +2302,7 @@ AbstractSyntaxTree: Tree
                PT:: (#do (pos,break,inDecl) -> args.PT #);
                copyAST::
                  (#
-                 do (id[],args[],isKeyWord) -> KeywordSigGen -> nAST[]
+                 do (id[],names[],args[],isKeyWord) -> KeywordSigGen -> nAST[]
                  #);               
             #);
           copyAST::<
@@ -2284,18 +2317,23 @@ AbstractSyntaxTree: Tree
           isSignature:: TrueValue;
           args: ^Arguments;
           id: ^text; (* should be a Name *)
+          names: ^NameList;
           isKeyWord,isNewFatCommaSig: @boolean;
           (*encOG: ^ObjectGenerator;*)
           init:
             (# 
-            enter(id[],args[],isKeyWord)
+            enter(id[],names[],args[],isKeyWord)
             do (if false then
                    '**** Signature: "' -> puttext; id[] -> puttext; 
                    '" args: "' -> puttext; args.dopt -> puttext;
                    '" isKW=' -> puttext; isKeyWord -> putboolean; newline;
                if);
                (if not isKeyWord then
-                   id[] -> Name -> Append
+                   (if nameListInDcl then 
+                       (if names[] <> none then names[] -> append if)
+                    else
+                       id[] -> Name -> Append;
+                   if)
                 else 
                    true -> args.isKeyword;
                    (*this(Signature)[] -> args.father[]*)
@@ -2311,9 +2349,10 @@ AbstractSyntaxTree: Tree
            *)
        #);     
      Sig_Generator:
-       (# id: ^Text; args: ^Arguments; isKeyword: @boolean; sig: ^Signature
-       enter(id[],args[],isKeyWord)
-       do (id[],args[],isKeyWord) -> Signature -> sig[];
+       (# id: ^Text; names: ^NameList; args: ^Arguments; 
+          isKeyword: @boolean; sig: ^Signature
+       enter(id[],names[],args[],isKeyWord)
+       do (id[],names[],args[],isKeyWord) -> Signature -> sig[];
           inner;
        exit sig[]
        #);
@@ -3125,7 +3164,7 @@ AbstractSyntaxTree: Tree
           checkNumberConvert:
             (# I2F:< (# do inner #);
                F2I:< (# do inner #);
-               D: ^DataItem; 
+               D: ^Decl(*DataItem*); 
                srcOG: ^ObjectSpecification
             enter D[]
             do super.ATd.OG[] -> srcOG[];

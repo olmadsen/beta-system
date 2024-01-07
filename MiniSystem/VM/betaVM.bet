@@ -82,6 +82,7 @@ betaVM:
      (* Note! There is no common super for all VMevents
       * And there is no trace for valueEvent opEvent, etc.
       *)
+     eventNest: @integer;
      VMevent: 
        (# caller,thisObj,org: ^ObjDesc.runTimeObject; 
           descNo,bcPos: @integer;
@@ -113,22 +114,27 @@ betaVM:
                     (for i: 5 - (event).length repeat ' ' -> T.put for)
                  #);
                T: @text
-            do '\nVMevent:' -> T.puttext; putEvent; ':' -> T.put;
+            do (for i: eventNest repeat '.' -> put for);
+               'VMevent:' -> T.puttext; putEvent; ':' -> T.put;
                (' caller:',caller[]) -> dump;
                (' this:',thisObj[]) -> dump;
                (' org:',org[]) -> dump;
                ' bcPos:' -> T.puttext; bcPos -> T.putint;
                T.newline;
             exit T[]
-            #)
+            #);
+          before:< object;
+          after:< object;
        enter(caller[],thisObj[],org[],descNo,bcPos)
        do (if thisObj[] <> none then 
               (if trace then
+                  before;
                   (if true then
                       mkTrace -> puttext;
                    else
                       mkTrace -> out.puttext
-                  if)
+                  if);
+                  after
               if);
               inner;
               (*' descNo:'-> out.puttext; thisObj.myDescInx -> out.putint; 
@@ -154,13 +160,15 @@ betaVM:
      allocEvent:< VMevent
        (# isObj,isIndexed: @boolean;
           event:: (# do 'alloc'->tx[] #);
+          before:: (# do eventNest + 1 -> eventNest #);
        enter(isObj,isIndexed) 
        do inner; 
-          allocLevel + 1 -> allocLevel; 
+          allocLevel + 1 -> allocLevel
        #);
      doEvent:< VMevent
        (# event:: (# do 'do'->tx[] #);
           preemptive: @boolean;
+          before:: (# do eventNest + 1 -> eventNest #);
        enter preemptive
        do (*(thisCode.descInx,glsc) -> thisObj.saveReturn;*)
           inner ;
@@ -174,6 +182,7 @@ betaVM:
        #);
      rtnEvent:< VMevent
        (# event:: (# do 'rtn'->tx[] #);
+          after:: (# do eventNest - 1 -> eventNest #);
        do (descNo,bcPos) (*thisCode.descInx,glsc*) -> caller.saveReturn;
           inner;
           caller.restoreReturn (* we just pop the stack *)
@@ -2376,7 +2385,7 @@ betaVM:
                         (if not isXbeta then
                             X[] -> thisStack.rpush; 
                         if);
-                        (if inx = 'A' then
+                        (if inx // 'A' // 'D' then
                             (if thisObj[] <> X[] then
                                 (thisObj[],X[],X.myOrigin,thisCode.descInx,glsc) -> rtnEvent;
                             if);
@@ -2477,8 +2486,8 @@ betaVM:
                         (thisObj.myObjDesc).vdtTable[dinx] -> descInx -> out.putint; out.newline; 
                         (if descInx > 0 then
                             (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                            (*'\ninner: ' -> puttext; thisCode.descInx -> putint;
-                             ' ' -> put; glsc -> putint; newline;*)
+                            '\ninner: ' -> puttext; thisCode.descInx -> putint;
+                             ' ' -> put; glsc -> putint; newline;
                             descs.OD[descInx].BC[] -> thisCode[];
                             thisCode.doE -> glsc
                         if)
