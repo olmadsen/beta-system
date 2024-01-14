@@ -55,12 +55,12 @@ do (# doPrimElse: BooleanValue
         (# exNo: @integer;
            selectPrimitiveOrCompoundEQ:
              (# OGx: ^ObjectGenerator; DI: ^DataItem
-             do rec.ATd.OG[] -> OGx[];
+             do (rec.ATd.asDecl).OG[] -> OGx[];
                 (if (OGx.getReturnDecl -> DI[]) <> none then
                    DI.OG[] -> OGx[]; 
                 if);
                 (if OGx.primNo = 0 then
-                    rec.ATd.OG.objSize -> cd.vEq
+                    (rec.ATd.asDecl).OG.objSize -> cd.vEq
                  else
                     (* we assume a primitive value *)
                     OG.primNo -> cd.op
@@ -87,7 +87,7 @@ do (# doPrimElse: BooleanValue
                    (if true then
                        selectPrimitiveOrCompoundEQ
                     else
-                       (if rec.ATd.OG.primNo = 0 then
+                       (if (rec.ATd.asDecl).OG.primNo = 0 then
                            (* must check primNo of possible return value *)
                            (* We assume a compound value - perhaps a bit fragile! *)
                            rec.ATd.OG.objSize -> cd.vEq
@@ -130,7 +130,8 @@ do (# doPrimElse: BooleanValue
            cd.mvStack;
            cd.rtn;
         #);
-      N:^ Node; di: ^DataItem; var: ^Variant; isVal,isObj: @boolean
+      N:^ Node; di: ^DataItem; var: ^Variant; isVal,isObj: @boolean;
+      ATdx: ^Decl
    do (if doPrimElse then
           (* Cases: E is an invocation of a pattern as in E, rec.E, R.rec.E, .
            * (a)The receiver, rec, may be a constant or variable dataItem
@@ -161,10 +162,11 @@ do (# doPrimElse: BooleanValue
            * situations below where computeVarints(X) is called
            *)
           (if rec[] = E[] then
-           else                
-              (if rec.ATd## = dataItem## then 
+           else
+              rec.ATd.asDecl -> ATdx[];
+              (if ATdx## = dataItem## then 
                   (* if receiver is constant, then only one variant *)
-                  rec.ATd[] -> OG.Qvariants.computeVariantX -> var[];
+                  ATdx[] -> OG.Qvariants.computeVariantX -> var[];
                else 
                   (* receiver and rec.atd is module or pattern 
                    * (as in foo(e).bar) 
@@ -195,12 +197,12 @@ do (# doPrimElse: BooleanValue
                          DI.doPT -> putline;
                      if);
                      DI.newOff -> staticOff; 
-                  // rec.ATd.isDataItem then 
-                     rec.ATd[] -> DI[];
+                  // (rec.ATd.asDecl).isDataItem then 
+                     rec.ATd.asDecl -> DI[];
                      DI.OG.isValueObj or DI.isConst -> isStatic;
-                  // rec.ATd.isPattern then
+                  // (rec.ATd.asDecl).isPattern then
                      (if rec[] <> e[] then (* we should eliminate rec=e *)
-                         rec.ATd[] -> ptn[]; 
+                         rec.ATd.asDecl -> ptn[]; 
                          (ptn.getReturnOG).isValueObj 
                          or
                          (ptn.og.primno = indexedget_prim) -> isstatic
@@ -303,7 +305,8 @@ do (# doPrimElse: BooleanValue
                                  if);
                                  OG.IS.newOriginOff -> off;
                                  (if OG.IS.isEmpty then
-                                     OG.super.ATd.OG.IS.newOriginOff -> off
+                                     (OG.super.ATd.asDecl).OG.IS.newOriginOff 
+                                       -> off
                                  if)
                               #)                       
                          #);
@@ -368,9 +371,10 @@ do (# doPrimElse: BooleanValue
                              (* check if E is a const ref that must be marked
                               * as an object.
                               * A clean-up is needed - also for virtuals above *)
-                             (if (rec.ATd.father.father.father[] 
+                             (if ((rec.ATd.asDecl).father.father.father[] 
                                    -> N[]).isDataItem then
-                                 rec.ATd.father.father.father[] -> DI[];
+                                 (rec.ATd.asDecl).father.father.father[] 
+                                   -> DI[];
                                  DI.isConst -> isObj;
                                  cd.com(#do 'bingo:DI:'->TT; DI.dopt->TQ #)
                          if)if);
@@ -432,12 +436,12 @@ do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;
                           *)
    do cd.com(#do 'AssignPtn:invoke:rec: '-> TT; rec.doPt -> TQ; 
                'from: '->TT; E.doPT->TQ #);
-      (if rec.ATd.isPattern then 
+      (if (rec.ATd.asDecl).isPattern then 
           cd.com(#do 'Assign to pattern - %this ' -> TT; print #)
        else
           E.args.scanArgs(#do current[] -> arg[] #); 
           (* Only one argument since assign *)
-          rec.ATd[] -> dstDI[];
+          rec.ATd.asDecl -> dstDI[];
           cd.com(#do 'assign:dstDI :' -> TT; dstDI.doPT -> TQ; 
                    'isUnitValueObj: ' -> TT; dstDI.OG.isUnitValueObj -> BB #);
           cd.com(#do 'assign:arg: '->TT; arg.doPT->TQ; 
@@ -475,8 +479,9 @@ do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;
           (if true
            // dstDI.OG.isBasicValue // dstDI.OG.primNo = value_prim 
            // dstDI.OG.isUnitValueObj and 
-              (arg.super.ATd.OG.isUnitValueObj or arg.super.ATd.isFloat 
-              or arg.super.ATd.isInteger) then
+              ((arg.super.ATd.asDecl).OG.isUnitValueObj 
+              or (arg.super.ATd.asDecl).isFloat 
+              or (arg.super.ATd.asDecl).isInteger) then
               (* arg.super.ATd.isPattern and arg.isFloat then *)
               (* dstDI.OG.primNo = value_prim for handling _v: var Value 
                * in integer, char and boolean *)
@@ -526,13 +531,13 @@ do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;
                * but this is not the case!
                *)           
               (if true
-               // arg.super.ATd.isPattern then 
-                  (arg.super.ATd[] -> ptn[]).getReturnDecl -> srcDI[];
+               // (arg.super.ATd.asDecl).isPattern then 
+                  (arg.super.ATd.asDecl -> ptn[]).getReturnDecl -> srcDI[];
                   (if not ((srcDI[] <> none) and srcDI.OG.isValueObj) then
                       (if ptn.OG.primNo <> indexedGet_prim then 
                           ptn.OG.IS.newDescno -> adr.descNo;
                   if)if)
-               // arg.super.ATd.isDataItem then
+               // (arg.super.ATd.asDecl).isDataItem then
                   arg.inValueObj -> adr.srcIsVal
               if);
               2 -> asgKind
@@ -618,12 +623,13 @@ do
                     E.origin[] -> ISx[];
                     (for i: ON -1 repeat
                          (if ISx.super[] <> none then
-                             (if ISx.super.ATd[] = dcl[] then
+                             (if ISx.super.ATd.asDecl = dcl[] then
                                 (* '\n**** Break to super pattern: on: ' 
                                    -> puttext; i -> putint;
                                  newline;*)
                                  i -> ONs;
-                                 ISx.super.ATd.OG.IS.newDescNo -> descNoS;
+                                 (ISx.super.ATd.asDecl).OG.IS.newDescNo 
+                                   -> descNoS;
                                  ISx[] -> IS[];
                                  leave labInSuper;
                               else
@@ -637,14 +643,14 @@ do
                 L:
                   (if ISx.super.ATd[] <> none then
                       noOfSuper + 1 -> noOfSuper;
-                      (if ISx.super.ATd[] = Dcl[] then
+                      (if ISx.super.ATd.asDecl = Dcl[] then
                           (if false then
                               '*** found super in break: ' -> puttext;
                               noOfSuper -> putint; newline;
                               dcl.dopt -> putline
                           if)
                       else 
-                          ISx.super.ATd.OG.IS[] -> ISx[];
+                          (ISx.super.ATd.asDecl).OG.IS[] -> ISx[];
                           restart L
                       if)
                   if)
@@ -656,7 +662,7 @@ do
                 L:
                   (if ISx.super.ATd[] <> none then
                       pn + 1 -> pn;
-                      ISx.super.ATd.OG.IS[] -> ISx[];
+                      (ISx.super.ATd.asDecl).OG.IS[] -> ISx[];
                       ISx.newDescNo -> dns;
                       restart L
                   if)
@@ -716,7 +722,7 @@ do
                (Ex.super.last->OI[]).ptnId.on -> ON -> putint;
                
                newline;
-               Ex.super.ATd[] -> dcl[]; (* is dcl for the case where we leave a
+               Ex.super.ATd.asDecl -> dcl[]; (* is dcl for the case where we leave a
                                          * super as in L: P{ ...; leave P}
                                      * It seems that this might be a doubtfull
                                      * case that we should not support!
@@ -791,7 +797,7 @@ do
 ---IndexPattern_invoke:doPart---
 do (# getIndexedArgs:
         (# D: ^DataItem; isRef: @boolean; isValueObj,size: @integer
-        do rec.ATd[] -> D[];           
+        do rec.ATd.asDecl -> D[];           
            1 -> size; (* Apparently scan below does not work for
                        * %put V: ?^ elm %at% inx: ?^ integer:
                        * implies size = 0
@@ -845,7 +851,7 @@ do (# getIndexedArgs:
                  ('inx',1) -> cd.xrstoreg
               else                 
                  (if false and (rec[] <> none) then 
-                     (rec.ATd.OG.super.last).args.scanArgs
+                     ((rec.ATd.asDecl).OG.super.last).args.scanArgs
                      (# i: @ integer; OG: ^ObjectSpecification
                      do (if (i + 1 -> i) = 2 then
                             current[] -> OG[];
@@ -860,7 +866,7 @@ do (# getIndexedArgs:
        // indexedGet_prim then
           (* check if rec is value or ref indexed *)
           (# isRef: @boolean; isValueObj,size: @integer
-          do (if rec.ATd.primNo = indexedGet_prim then
+          do (if (rec.ATd.asDecl).primNo = indexedGet_prim then
                  (* The case for indexed::length *) 
                  ('inx',1,0,1) -> cd.xpushg
               else
@@ -1009,7 +1015,7 @@ do (if OG.primNo
        cd.suspendd;
        (if coArg then
        (# vn,rn: @integer
-       do (if rec.ATd.OG.primNo = this_prim then
+       do (if (rec.ATd.asDecl).OG.primNo = this_prim then
               (*'**** suspend:this: ' -> puttext; rec.dopt -> putline*)
               (* we should get the argument of @this foo
                * and scan the formal parameters of foo
@@ -1030,7 +1036,7 @@ do (if OG.primNo
                * At one point we tried using scanNonBoundItemArgs below
                * but this is wrong
                *)
-              rec.ATD.OG.IS.scanItemArgs
+              (rec.ATd.asDecl).OG.IS.scanItemArgs
               (# DI: ^DataItem; 
               do (if currentArg## = DataItem## then
                      currentArg[] -> DI[];
@@ -1059,7 +1065,7 @@ do (if OG.primNo
            rec.ATd.dopt -> putline;
        if);
        (# vn,rn: @integer
-       do rec.ATD.OG.IS.scanItemArgs
+       do (rec.ATD.asDecl).OG.IS.scanItemArgs
        (# DI: ^DataItem; 
        do (* currentArg.dopt -> putline ;*)
           (if currentArg## = DataItem## then
