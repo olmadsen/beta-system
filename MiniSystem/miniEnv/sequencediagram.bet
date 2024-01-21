@@ -14,6 +14,7 @@ INCLUDE 'SuperSequenceDiagram';
 SequenceDiagram: SuperSequenceDiagram
   (# LOGGING: (# exit false #); 
      OLD_visibility: (# exit false #);
+     USE_PROVIDED_ORIGIN: (# exit true #);
      rrc: @integer;
      L: ^Object; (* apparenly L: @Log from worldwindow *)
      lines: @Composite;
@@ -1255,7 +1256,7 @@ SequenceDiagram: SuperSequenceDiagram
                        receiver[] -> nodes.append;
                    if);
                if);
-               y + 22 -> y;
+               y + 30 -> y;
                makeShape -> addShape;
             #);
           makeShape::
@@ -1678,7 +1679,7 @@ SequenceDiagram: SuperSequenceDiagram
             (#
             do (if shouldPause then
                    true -> doPause;
-                   (*'*** VMevent:pause:' -> putline;*)
+                   '*** VMevent:pause:' -> putline;
                    refreshExecution;
                if);
             #);
@@ -1737,7 +1738,7 @@ SequenceDiagram: SuperSequenceDiagram
           bc: @integer;
           isObj: @boolean;
           isIndexed: @boolean;
-          trace: (#exit true #);
+          trace: (# exit true #);
        enter (caller[], self[], origin[], bc, isObj, isIndexed)
        do (# shape: ^ObjectShape;
              receiver: ^ObjectShape;
@@ -1792,7 +1793,6 @@ SequenceDiagram: SuperSequenceDiagram
                  top[] -> theInvocation.return[];
                  theInvocation[] -> allocating;
              if);
-             (*pause *)
           #);
        #);
      onDo: VMEvent
@@ -1856,7 +1856,11 @@ SequenceDiagram: SuperSequenceDiagram
                  if);
                  
                  (if NOT skip then
-                     self[] -> objectOriginOf -> actual[];
+                     (if USE_PROVIDED_ORIGIN then
+                         origin[] -> actual[];
+                     else
+                         self[] -> objectOriginOf -> actual[];
+                     if);
                      self[]
                        -> reflection
                        -> objectShapeForTarget
@@ -1931,6 +1935,97 @@ SequenceDiagram: SuperSequenceDiagram
           if);
        #);
      onReturn: VMEvent
+       (# caller: ^ObjDesc.RunTimeObject;
+          self: ^ObjDesc.RunTimeObject;
+          origin: ^ObjDesc.RunTimeObject;
+          bc: @integer;
+          isSkipping: @boolean;
+       enter (caller[], self[], origin[], bc)
+       do (#
+          do (if false then
+                 ('Return',caller[], self[], origin[]) -> display
+                 (#
+                 do ' allocating: ' -> puttext; allocating <> none ->putBoolean
+             #)if);
+             (if allocating <> NONE then
+                 (if self[] -> (allocating).match then
+                     top.flush;
+                     (# act: ^PrepareCall;
+                        common: ^ObjDesc.RunTimeObject;
+                        trace: (# exit false #);
+                     do &PrepareCall[] -> act[];
+                        act.init;
+                        (allocating).return.receiver[] -> act.sender[];
+                        (allocating).receiver[] -> act.receiver[];
+                        act[] -> top.push;
+                        (if act.receiver.isObject OR showValues then
+                            (if OLD_visibility then
+                                (if not (self.OSDvisibility 
+                                    = OSDvisibility_Disguised) then
+                                    pause;
+                                if)
+                             else
+                                (if (caller[],self[]) 
+                                      ->  NEW_callerOrSelf_isDisguised 
+                                    then
+                                    (if trace then
+                                        '**** NEW:onReturn:disguised:dont show'
+                                          -> putline
+                                    if)
+                                 else
+                                    (caller[], self[]) 
+                                      -> commonOrigin -> common[];
+                                    (if trace then
+                                        '** commonOrigin:(' -> puttext;
+                                        caller.myName -> puttext;
+                                        ',' -> put; self.myName -> puttext;
+                                        '): ' -> puttext;
+                                        (if common[] <> none then
+                                            common.myName -> putline;
+                                         else 
+                                            'none' -> putline
+                                    if)if);
+                                    (if (common[] -> isSkipInternal) then
+                                        (if trace then
+                                            '**** NEW:onReturn:skipInternal' 
+                                              -> putline
+                                        if)
+                                     else
+                                        (if trace then
+                                            '**** NEW:onReturn:Show:' 
+                                              -> putline
+                                        if);
+                                        pause
+                                    if)
+                                if)
+                        if)if)
+                     #);
+                     NONE -> allocating;
+                 if);
+              else
+                 (if mode = SearchingMode then
+                     (if LOGGING then
+                         'step-over cancel-search' -> putline;
+                     if);
+                     NormalMode -> mode;
+                 if);
+                 (if self[] -> top.match then
+                     top.isSkipping -> isSkipping;
+                     (if top[] = skippingOver[] then
+                         NONE -> skippingOver[];
+                         (if mode = SkipOverMode then
+                             SkipOneMode -> mode;
+                         if);
+                     if);
+                     popInvocation;
+                     (if NOT isSkipping then
+                         pause;
+                     if);
+                 if);
+             if);
+          #);
+       #);
+     onReturnAlloc: VMEvent
        (# caller: ^ObjDesc.RunTimeObject;
           self: ^ObjDesc.RunTimeObject;
           origin: ^ObjDesc.RunTimeObject;
