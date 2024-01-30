@@ -757,7 +757,6 @@ SequenceDiagram: SuperSequenceDiagram
           self: ^ObjDesc.RunTimeObject;
           message: ^ObjectShape;
           common: ^ObjDesc.RunTimeObject;          
-          allocating: ^Invocation;
           allocation: @boolean;
           isAllocation: @boolean;
           isObj: @boolean;
@@ -1280,21 +1279,6 @@ SequenceDiagram: SuperSequenceDiagram
      skipAllocations: @boolean;
      showValues: @boolean;
      showOrigins: @boolean;
-     allocating_: ^Invocation;
-     allocating:
-       (# set:
-            (# value: ^Invocation;
-            enter value[]
-            do value[] -> top.allocating[];
-            #);
-          get:
-            (# value: ^Invocation;
-            do top.allocating[] -> value[];
-            exit value[]
-            #);
-       enter set
-       exit get
-       #);
      skippingOver: ^Invocation;
      mode: @integer;
      
@@ -1636,11 +1620,7 @@ SequenceDiagram: SuperSequenceDiagram
        (# stack: ^ObjDesc.RunTimeObject;
           result: @boolean;
        enter stack[]
-       do (if allocating = NONE then
-              stack[] -> top.matchAny -> result;
-           else
-              false -> result;
-          if);
+       do stack[] -> top.matchAny -> result;
        exit result
        #);
      
@@ -1754,7 +1734,7 @@ SequenceDiagram: SuperSequenceDiagram
              isObj -> shape.isObject;
              shape.refresh; (* redraw shape *)
              isObj -> self.isObj;
-             (if not skipAllocations then
+             (if isObj AND (not skipAllocations) then
                 (# theInvocation: ^Invocation;
                 do &Invocation[] -> theInvocation[];
                    theInvocation.init;
@@ -1768,70 +1748,6 @@ SequenceDiagram: SuperSequenceDiagram
                 pause;
              if);
           #)
-       #);
-     onAllocVersion1: VMEvent
-       (# caller: ^ObjDesc.RunTimeObject;
-          self: ^ObjDesc.RunTimeObject;
-          origin: ^ObjDesc.RunTimeObject;
-          bc: @integer;
-          isObj: @boolean;
-          isIndexed: @boolean;
-          trace: (# exit false #);
-       enter (caller[], self[], origin[], bc, isObj, isIndexed)
-       do (# shape: ^ObjectShape;
-             receiver: ^ObjectShape;
-             theInvocation: ^Invocation;             
-          do              
-             (if false then
-                 ('sequenceDiagram:onAlloc',caller[], self[], origin[])
-                   -> display
-                 (#
-                 do' allocating: ' -> puttext; allocating <> none -> putBoolean
-             #)if);
-             (* Set visibility of self to visibility of enclosing module!
-              * Elim of this imp makes qbeta/Formater work
-              * Test of this also works for minienv
-              * However, OSDvisibility should work for objects in general,
-              * not just for object modules
-              * So perhaps we should find enclosing object with a defined
-              * OSDvisibility!? 
-              * What if several objects in a nesting has OSDvisibility defined?
-              * Do we take innermost, outermost or most restricted, 
-              * whatever that is? Perhaps:
-              * self < ... < Dx < ... < Dy < ... < Dz < ...
-              * (1) no enclosing OSDvisibility => open = 0
-              * (2) all Dx, Dy Dz skipInternal => skipInternal = 1
-              * (3) exists Dy = disguised => disguised = 2
-              *)
-             (if OLD_visibility then
-                 self.myObjDesc -> visibilityOf -> self.OSDvisibility;
-             if);
-             self[]
-               -> reflection
-               -> objectShapeForTarget (* lookup of create objectShape *)
-               -> shape[];
-             isObj -> shape.isObject;
-             shape.refresh; (* redraw shape *)
-             isObj -> self.isObj;
-             
-             (if (allocating = NONE) then
-                 (if isIndexed then
-                     top.pop;
-                     top.pop;
-                 if);
-                 top.pop;    
-                 shape[] -> receiver[];
-
-                 &Invocation[] -> theInvocation[];
-                 theInvocation.init;
-                 self[] -> theInvocation.self[];
-                 true -> theInvocation.allocation;
-                 isObj -> theInvocation.isObj;
-                 receiver[] -> theInvocation.receiver[];
-                 top[] -> theInvocation.return[];
-                 theInvocation[] -> allocating;
-             if);
-          #);
        #);
      onDo: VMEvent
        (# caller: ^ObjDesc.RunTimeObject;
@@ -1980,30 +1896,23 @@ SequenceDiagram: SuperSequenceDiagram
           isSkipping: @boolean;
        enter (caller[], self[], origin[], bc)
        do (#
-          do (if allocating <> NONE then
-                 (if self[] -> (allocating).match then
-                     top.flush;
-                     NONE -> allocating;
+          do (if mode = SearchingMode then
+                 (if LOGGING then
+                     'step-over cancel-search' -> putline;
                  if);
-              else
-                 (if mode = SearchingMode then
-                     (if LOGGING then
-                         'step-over cancel-search' -> putline;
+                 NormalMode -> mode;
+             if);
+             (if self[] -> top.match then
+                 top.isSkipping -> isSkipping;
+                 (if top[] = skippingOver[] then
+                     NONE -> skippingOver[];
+                     (if mode = SkipOverMode then
+                         SkipOneMode -> mode;
                      if);
-                     NormalMode -> mode;
                  if);
-                 (if self[] -> top.match then
-                     top.isSkipping -> isSkipping;
-                     (if top[] = skippingOver[] then
-                         NONE -> skippingOver[];
-                         (if mode = SkipOverMode then
-                             SkipOneMode -> mode;
-                         if);
-                     if);
-                     popInvocation;
-                     (if NOT isSkipping then
-                         pause;
-                     if);
+                 popInvocation;
+                 (if NOT isSkipping then
+                     pause;
                  if);
              if);
           #);
@@ -2018,42 +1927,6 @@ SequenceDiagram: SuperSequenceDiagram
              popInvocation;
              pause;
           if);
-       #);
-     onReturnAllocVersion1: VMEvent
-       (# caller: ^ObjDesc.RunTimeObject;
-          self: ^ObjDesc.RunTimeObject;
-          origin: ^ObjDesc.RunTimeObject;
-          bc: @integer;
-          isSkipping: @boolean;
-       enter (caller[], self[], origin[], bc)
-       do (#
-          do (if allocating <> NONE then
-                 (if self[] -> (allocating).match then
-                     top.flush;
-                     NONE -> allocating;
-                 if);
-              else
-                 (if mode = SearchingMode then
-                     (if LOGGING then
-                         'step-over cancel-search' -> putline;
-                     if);
-                     NormalMode -> mode;
-                 if);
-                 (if self[] -> top.match then
-                     top.isSkipping -> isSkipping;
-                     (if top[] = skippingOver[] then
-                         NONE -> skippingOver[];
-                         (if mode = SkipOverMode then
-                             SkipOneMode -> mode;
-                         if);
-                     if);
-                     popInvocation;
-                     (if NOT isSkipping then
-                         pause;
-                     if);
-                 if);
-             if);
-          #);
        #);
      onBreak: VMEvent
        (# caller: ^ObjDesc.RunTimeObject;
