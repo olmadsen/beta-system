@@ -2,46 +2,90 @@ ORIGIN 'qcontrol'
 ---dumpObj:doPart---
 do (# trace: (#exit false #);
       length: IntegerValue
-        (# lengthOfDcl: integerValue
-             (# D: ^compile.DataItem; 
-             enter D[]
-             do value 
-                + D.sig.id.length + 1 (* sig.id + zero *)
-                + 4 (* off, kind, size, descNo *)
-                  -> value;
-                (if D.OG.isValueObj then
-                    (if D.OG.IS.isEmpty then
-                        (if D.OG.primNo 
-                         // integer_prim
-                         // char_prim
-                         // boolean_prim 
-                         // value_prim then
-                            value + 1 -> value
+        (# lengthOfDcl:integerValue
+             (# lengthOfDcl_single: integerValue
+                  (# D: ^compile.DataItem; 
+                  enter D[]
+                  do value 
+                     + D.sig.id.length + 1 (* sig.id + zero *)
+                     + 4 (* off, kind, size, descNo *)
+                       -> value;
+                     (if D.OG.isValueObj then
+                         (if D.OG.IS.isEmpty then
+                             (if D.OG.primNo 
+                              // integer_prim
+                              // char_prim
+                              // boolean_prim 
+                              // value_prim then
+                                 value + 1 -> value
+                              else
+                                 ((D.OG.superPtn).OG.IS[] -> length) + value 
+                                   -> value
+                             if)
+                          else
+                             (D.OG.IS[] -> length) + value -> value
+                         if)
+                      else
+                         value + 1 -> value
+                     if);
+                     (if trace then
+                         'lengthOf: ' -> puttext; D.doPT -> puttext; ' ' -> put;
+                         value -> putint; newline
+                     if)
+                  #);
+                lengthOfDcl_nameList: integerValue
+                  (# D: ^compile.DataItem; 
+                  enter D[]
+                  do D.sig.names.scan
+                     (#
+                     do value 
+                        + current.T.length + 1 (* sig.id + zero *)
+                        + 4 (* off, kind, size, descNo *)
+                          -> value;
+                        (if D.OG.isValueObj then
+                            (if D.OG.IS.isEmpty then
+                                (if D.OG.primNo 
+                                 // integer_prim
+                                 // char_prim
+                                 // boolean_prim 
+                                 // value_prim then
+                                    value + 1 -> value
+                                 // float_prim then
+                                    value + 2 -> value
+                                 else
+                                    ((D.OG.superPtn).OG.IS[] -> length) + value 
+                                      -> value
+                                if)
+                             else
+                                (D.OG.IS[] -> length) + value -> value
+                            if)
                          else
-                            ((D.OG.superPtn).OG.IS[] -> length) + value 
-                              -> value
+                            value + 1 -> value
+                        if);
+                        (if trace then
+                            'lengthOf: ' -> puttext; current.doPT ->puttext;
+                            ' '->put; value -> putint; newline
                         if)
-                     else
-                        (D.OG.IS[] -> length) + value -> value
-                    if)
+                  #)#); 
+                D: ^compile.DataItem; 
+             enter D[]
+             do (if nameListInDcl then
+                    D[] -> lengthOfDcl_nameList -> value
                  else
-                    value + 1 -> value
-                if);
-                (*'lengthOf: ' -> puttext; D.doPT -> puttext; ' ' -> put;
-                 value -> putint; newline*)
-             #);
-           
-           IS: ^compile.Items; ptn: ^compile.Pattern
+                    D[] -> lengthOfDcl_single -> value
+                if)
+             #);     
+           IS: ^compile.Items; ptn: ^compile.Pattern; ATdx: ^compile.Decl
         enter IS[]
-        do 
-           (if false and IS.encOG.isSubOfBasicValue then
+        do (if false and IS.encOG.isSubOfBasicValue then
                (* add $1 length = 2 + 1 + 4 + 1 = *)
                8 -> value;
            if);
-           (if IS.super.ATd[] <> none then
+           IS.super.ATd[] -> ATdx[];
+           (if ATdx[] <> none then
                (if true
-                // IS.super.ATD.isPattern then
-                   IS.super.ATd[] -> ptn[];
+                // ATdx.isPattern then
+                   ATdx[] -> ptn[];
                    (ptn.OG.IS[] -> length) + value -> value
            if)if);
            (* get possible declarations in signature*)
@@ -75,7 +119,8 @@ do (# trace: (#exit false #);
         (# decodeDcl:
              (# D: ^compile.DataItem; size,kind: @integer
              enter D[]
-             do (if false then 
+             do (if trace then 
+                    '**** decodeDcl:'->dumpT;
                     D.newOff -> putint; ':' -> put;
                     D.objSize -> size;
                     (if size = 0 then 1 -> size if);
@@ -89,71 +134,133 @@ do (# trace: (#exit false #);
                      // D.OG.isValueObj then ' value' -> puttext;
                      else ' ref' -> puttext;
                     if);
-                    ' descNo:' -> puttext;
-                    D.OG.IS.newDescNo -> putint;
+                    ' descNo:' -> puttext; (* need to go super is IS.isEmpty*)
+                    D.OG.IS.newDescNo -> putint; (* see below *)
                     newline;
                 if);
-                (for i: D.sig.id.length repeat 
-                     i -> D.sig.id.inxGet -> add
-                for);
-                0 -> add;
-                D.newOff -> add;
-                D.objSize -> size;
-                (if (size = 0) then 1 -> size if);
-                size -> add;
-                (if true
-                 // D.OG.isPrimitive and (D.primNo <> indexed_prim) then 
-                    (if D.isConst then 
-                        0 -> kind -> add
-                     else 
-                        1 -> kind -> add;
-                    if);
-                 // D.OG.isValueObj then
-                    (if D.isConst then 
-                        2 -> kind -> add
-                     else 
-                        3 -> kind -> add;
-                    if)
+                (if nameListInDcl then
+                    D.sig.names.scan
+                    (#
+                    do (for i: current.T.length repeat 
+                            i -> current.T.inxGet -> add
+                       for);
+                       0 -> add;
+                       current.newOff -> add;
+                       D.objSize -> size;
+                       (if (size = 0) then 1 -> size if);
+                       size -> add;
+                       (if true
+                        // D.OG.isPrimitive and (D.primNo <> indexed_prim) then 
+                           (if D.isConst then 
+                               0 -> kind -> add
+                            else 
+                               1 -> kind -> add;
+                           if);
+                        // D.OG.isValueObj then
+                           (if D.isConst then 
+                               2 -> kind -> add
+                            else 
+                               3 -> kind -> add;
+                           if)
+                        else
+                           (if D.isConst then 
+                               4 -> kind -> add
+                            else 
+                               5 -> kind -> add;
+                           if);
+                       if);
+                       (* the code below is a quick fix: there should be a virtual
+                        * getNewDescNo or similar, that handles this:
+                        *)
+                       (# Dx: ^Compile.Decl
+                       do D[] -> Dx[];
+                          L:
+                            (if Dx.OG.IS.isEmpty then
+                                Dx.OG.super.ATd.asDecl -> Dx[];
+                                restart L
+                             else
+                                Dx.OG.IS.newDescNo -> add; (* May not be ok, 
+                                                            * since we changed
+                                                            * from calling descNo 
+                                                            * in qvariants
+                                                            *)
+                       if)#);
+                       (if kind // 2 // 3 then
+                           (if D.OG.IS.isEmpty then
+                               (D.OG.superPtn).OG.IS[] -> decode;
+                            else
+                               D.OG.IS[] -> decode;
+                           if)
+                        else
+                           0 -> add
+                       if);
+                    #)
                  else
-                    (if D.isConst then 
-                        4 -> kind -> add
-                     else 
-                        5 -> kind -> add;
-                    if);
-                if);
-                (* the code below is a quick fix: there should be a virtual
-                 * getNewDescNo or similar, that handles this:
-                 *)
-                (# Dx: ^Compile.Decl
-                do D[] -> Dx[];
-                   L:
-                     (if Dx.OG.IS.isEmpty then
-                         Dx.OG.super.Atd[] -> Dx[];
-                         restart L
-                      else
-                         Dx.OG.IS.newDescNo -> add; (* May not be ok, 
-                                                     * since we changed
-                                                     * from calling descNo 
-                                                     * in qvariants
-                                                     *)
-                if)#);
-                (if kind // 2 // 3 then
-                    (if D.OG.IS.isEmpty then
-                        (D.OG.superPtn).OG.IS[] -> decode
+                    (for i: D.sig.id.length repeat 
+                         i -> D.sig.id.inxGet -> add;
+                    for);
+                    0 -> add;
+                    D.newOff -> add; 
+                    D.objSize -> size;
+                    (if (size = 0) then 1 -> size if);
+                    size -> add;
+                    (if true
+                     // D.OG.isPrimitive and (D.primNo <> indexed_prim) then 
+                        (if D.isConst then 
+                            0 -> kind -> add
+                         else 
+                            1 -> kind -> add;
+                        if);
+                     // D.OG.isValueObj then
+                        (if D.isConst then 
+                            2 -> kind -> add
+                         else 
+                            3 -> kind -> add;
+                        if)
                      else
-                        D.OG.IS[] -> decode; 
-                    if)
-                 else
-                    0 -> add
+                        (if D.isConst then 
+                            4 -> kind -> add
+                         else 
+                            5 -> kind -> add;
+                        if);
+                    if);
+                    (* the code below is a quick fix: there should be a virtual
+                     * getNewDescNo or similar, that handles this:
+                     *)
+                    (# Dx: ^Compile.Decl
+                    do D[] -> Dx[];
+                       L:
+                         (if Dx.OG.IS.isEmpty then
+                             Dx.OG.super.ATd[] -> Dx[];
+                             restart L
+                          else
+                             Dx.OG.IS.newDescNo -> add; (* May not be ok, 
+                                                         * since we changed
+                                                         * from calling descNo 
+                                                         * in qvariants
+                                                         *)
+                    if)#);
+                    (if kind // 2 // 3 then
+                        (if D.OG.IS.isEmpty then
+                            (D.OG.superPtn).OG.IS[] -> decode;
+                         else
+                            D.OG.IS[] -> decode;
+                        if)
+                     else
+                        0 -> add
+                    if);                    
                 if);
              #);
            IS: ^compile.Items; ptn: ^compile.pattern
         enter IS[]
-        do (if IS.super.ATd[] <> none then
+        do (if trace then 
+               '**** decode:' -> putline
+           if);
+           (if IS.super.ATd[] <> none then
                (if true
-                // IS.super.ATD.isPattern then
-                   IS.super.ATd[] -> ptn[];
-                   ptn.OG.IS[] -> decode
+                // (IS.super.ATd.asDecl).isPattern then
+                   IS.super.ATd.asDecl -> ptn[];
+                   ptn.OG.IS[] -> decode;
            if)if);
            (* get possible declarations in signature *)
            (if (IS.sig[] <> none) then
@@ -170,7 +277,7 @@ do (# trace: (#exit false #);
            if);
            IS.scanSons
            (# 
-           do (if current.isDataItem then
+           do (if current.isDataItem then 
                   current[] -> decodeDcl;         
               if)
            #);
@@ -178,8 +285,10 @@ do (# trace: (#exit false #);
       IS: ^compile.Items; 
    do (if trace then '\ndumpObjEvent:'->putline; if);
       (obj.myObjDesc).descInx -> compile.getObjectDesc -> IS[];
-      (*IS.doPT -> putline; '---' -> putline;*)
+      (if false and trace then
+          IS.doPT -> putline; '---' -> putline;
+      if);
       IS[] -> length -> items.new;
-      IS[] -> decode
+      IS[] -> decode; 
    #)
    
