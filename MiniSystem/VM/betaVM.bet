@@ -25,6 +25,16 @@ putBoolean:
   (# B: @boolean 
   enter B do (if B then 'True' -> puttext else 'False'->puttext if)
   #);
+intPair2Float:
+  (* v1 and v2 are two 32-bit words of a 64-bit float.
+   * Combine v1 and v2 to a float in fValue
+   *)
+  (# v1,v2: @integer; fVal: @Real
+  enter(v1,v2)
+  do v1 %putLongAT (@@fVal);
+     v2 %putLongAt (@@fVal + 4);
+  exit fVal
+  #);
 event: data
   (# type: @integer;
      caller,thisObj,org: @integer;
@@ -221,15 +231,20 @@ betaVM:
           isIndexed: @boolean;
           inx,descNo,bcPos: @integer;
           doPause: (# do suspend #);
-          trace: (# exit true #);
-          mkTrace:
+          mkTrace:<
             (# T: ^Text
-            do (*'\nvalueEvent' -> T[]*)
+            do event -> T[]; ':'->T.put;
+               inner mkTrace
             exit T[]
             #);
        enter(caller[],from[],popRstack,to[],off,isIndexed,inx,descNo,bcPos)
        do (descNo,bcPos) (*(thisCode.descInx,glsc)*) -> caller.saveReturn;
-          (if trace then mkTrace -> out.puttext if);
+          (if false then 
+              (if false then
+                  mkTrace -> putline
+               else
+                  mkTrace -> out.puttext 
+          if)if);
           inner;
           caller.restoreReturn (* we just pop the stack *)
        #);
@@ -238,19 +253,27 @@ betaVM:
         * to: a stack in the form of an object
         *)
        (# 
-       do
-          inner
+       do inner
        #);
      vPushEvent:< pushEvent
        (# event::(#do 'vPush'-> tx[] #);
+          mkTrace:: (#do value -> T.putint #);
           value: @integer
        enter value
        do inner
        #);
      rPushEvent:< pushEvent
        (# event::(#do 'rPush'-> tx[] #);
+          mkTrace:: (#do '@ref' -> T.puttext #);          
           refValue: ^ObjDesc.template
        enter refValue[]
+       do inner
+       #);
+     fPushEvent:< pushEvent
+       (# event::(#do 'fPush'-> tx[] #);
+          mkTrace:: (#do fValue -> T.putReal #);          
+          fValue: @Real
+       enter fValue
        do inner
        #);
      storeEvent: valueEvent
@@ -258,18 +281,27 @@ betaVM:
         * to: an object/activation where the value is stored
         *)
        (# 
-       do 
-          inner
+       do inner
        #);
      vStoreEvent:< storeEvent
-       (# value: @integer
+       (# event::(#do 'vStore'-> tx[] #);
+          mkTrace:: (#do value -> T.putint #);          
+          value: @integer
        enter value
        do inner
        #);
      rStoreEvent:< storeEvent
        (# event::(#do 'rStore'-> tx[] #);
+          mkTrace:: (#do '@ref' -> T.puttext #);
           refValue: ^ObjDesc.template
        enter refValue[]
+       do inner
+       #);
+     fStoreEvent:< storeEvent
+       (# event::(#do 'fStore'-> tx[] #);
+          mkTrace:: (#do fValue -> T.putReal #);                    
+          fValue: @integer
+       enter fValue
        do inner
        #);
      opEvent:
@@ -1689,8 +1721,9 @@ betaVM:
                         off + 1-> X.get -> top2 -> thisStack.vpush;
                         (X[],off,top1,top2) -> FtoOut;
                         (thisObj[],X[],true,thisStack[],off,false,0
-                        ,thisCode.descInx,glsc,thisStack.vTopElm) 
-                          -> vPushEvent                        
+                        ,thisCode.descInx,glsc
+                        ,(top1,top2) -> intPair2float)
+                          -> fPushEvent                        
                      // codes.ovpushg then
                         (* Object X on stack
                          * with object P embedded at offset inx in X
@@ -1935,7 +1968,8 @@ betaVM:
                         if);
                         (off,value) -> X.put;
                         (X[],off,value) -> VtoOut;
-                        (thisObj[],thisStack[],true,X[],off,false,0,thisCode.descInx,glsc,value) 
+                        (thisObj[],thisStack[],true,X[],off,false,0
+                        ,thisCode.descInx,glsc,value) 
                           -> vStoreEvent
                      // codes.fstoreg  then
                         'fstoreg' -> exe;
@@ -1951,8 +1985,10 @@ betaVM:
                         (off,top1) -> X.put;
                         (off + 1,top2) -> X.put;
                         (X[],off,top1,top2) -> FtoOut;
-                        (thisObj[],thisStack[],true,X[],off,false,0,thisCode.descInx,glsc,value) 
-                          -> vStoreEvent                        
+                        (thisObj[],thisStack[],true,X[],off,false,0
+                        ,thisCode.descInx,glsc
+                        ,(top1,top2)->intPair2Float)
+                          -> fStoreEvent                        
                      // codes.ovstoreg then
                         'ovstoreg'-> exe; op1 -> off; 
                         thisStack.vpop -> value;
