@@ -307,16 +307,22 @@ betaVM:
      opEvent:
        (# event:< (# tx: ^text do inner exit tx[] #);
           operator: ^text; to: ^ObjDesc.template; 
-          value,descNo,bcPos: @integer
-       enter(operator[],to[],value,descNo,bcPos)
+          descNo,bcPos: @integer
+       enter(operator[],to[],descNo,bcPos)
        do (thisCode.descInx,glsc) -> to.saveReturn;
           inner;
           to.restoreReturn (* we just pop the stack *)
        #);
-     binOpEvent:< opEvent(# event::(#do 'binOP'-> tx[] #) do inner #);
-     unOpEvent:< opEvent(# event::(#do 'unOP'-> tx[] #) do inner #);
-     jmpGTevent:< opEvent(# event::(#do 'jmpGT'-> tx[] #) do inner #);
-     popEvent:< opEvent(# event::(#do 'pop'-> tx[] #) do inner #);
+     iOpEvent: opEvent(# value: @integer enter value do inner #);
+     
+     binOpEvent:< iOpEvent(# event::(#do 'binOP'-> tx[] #) do inner #);
+     unOpEvent:< iOpEvent(# event::(#do 'unOP'-> tx[] #) do inner #);
+     jmpGTevent:< iOpEvent(# event::(#do 'jmpGT'-> tx[] #) do inner #);
+     popEvent:< iOpEvent(# event::(#do 'pop'-> tx[] #) do inner #);
+     
+     fOpEvent: opEvent(# fValue: @real enter fValue do inner #);
+     fBinOpEvent:< fOpEvent(# event::(#do 'binOP'-> tx[] #) do inner #);
+     fUnOpEvent:< fOpEvent(# event::(#do 'unOP'-> tx[] #) do inner #);
      
      errorEvent:< 
        (# thisObj: ^ObjDesc.template; bcPos: @integer; msg: ^text
@@ -2615,7 +2621,8 @@ betaVM:
                             thisStack.vpop -> value -> putCh; 
                             value -> out.putint; ' ' -> out.put;
                             value -> out.put;
-                            ('put',thisStack[],1,thisCode.descInx,glsc) -> popEvent
+                            ('put',thisStack[],thisCode.descInx,glsc,1) 
+                              -> popEvent
                          // prim.get then
                             getCh -> thisStack.vPush;
                             (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisStack.vTopElm) 
@@ -2641,7 +2648,8 @@ betaVM:
                             thisObj.vpop -> value; 
                             value -> out.putint; ' '-> out.put;
                             stacksToOut;
-                            ('attach',thisStack[],1,thisCode.descInx,glsc) -> popEvent;
+                            ('attach',thisStack[],thisCode.descInx,glsc,1) 
+                              -> popEvent;
                             (*(if suspendEnabled then
                                 '\n***ERROR: attach suspendEnabled = true'->putline
                             if);*)
@@ -2790,7 +2798,8 @@ betaVM:
                          else
                             op2
                         if);
-                        ('jmpFalse',thisStack[],1,thisCode.descInx,glsc) -> popEvent
+                        ('jmpFalse',thisStack[],thisCode.descInx,glsc,1) 
+                          -> popEvent
                      // codes.jmpTrue then
                         'jmpTrue' -> exe;
                         (if thisStack.vpop <> 0 then
@@ -2798,7 +2807,8 @@ betaVM:
                          else
                             op2
                         if);
-                        ('jmpTrue',thisStack[],1,thisCode.descInx,glsc) -> popEvent
+                        ('jmpTrue',thisStack[],thisCode.descInx,glsc,1) 
+                          -> popEvent
                      // codes.jmpGT then
                         'jmpGT' -> exe;
                         thisStack.vpop -> top1;
@@ -2808,7 +2818,8 @@ betaVM:
                          else
                             op2
                         if);
-                        ('jmpGT',thisStack[],2,thisCode.descInx,glsc) -> popEvent
+                        ('jmpGT',thisStack[],thisCode.descInx,glsc,2) 
+                          -> popEvent
                      // codes.break then
                         'break' -> exe;
                         op1 -> on;
@@ -2865,7 +2876,8 @@ betaVM:
                         thisStack.vpop -> top2;
                         top2 -> out.putint; ' ' -> out.put; top1 -> out.putint;
                         top1 + top2 -> thisStack.vpush;
-                        ('+',thisStack[],thisStack.vTopElm,thisCode.descInx,glsc) -> binOpEvent
+                        ('+',thisStack[],thisCode.descInx,glsc,thisStack.vTopElm) 
+                          -> binOpEvent
                      // codes.minus then
                         '-'-> exe; 
                         (# l,r: @integer 
@@ -2874,22 +2886,26 @@ betaVM:
                            r -> out.putint; ' ' -> out.put; l -> out.putint;
                            r - l -> thisStack.vpush  
                         #);
-                        ('-',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent
+                        ('-',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                          -> binOpEvent
                      // codes.uminus then
                         'u-' -> exe;
                         - thisstack.vpop -> thisStack.vpush;  
-                        ('-',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> unOpEvent
+                        ('-',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                          -> unOpEvent
                      // codes.mult then
                         '*'-> exe;
                         thisStack.vpop * thisStack.vpop -> thisStack.vpush;
-                        ('*',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent
+                        ('*',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                          -> binOpEvent
                      // codes.modd then
                         'mod' -> exe; 
                         (# l,r: @integer 
                         do thisStack.vpop -> l;
                            thisstack.vpop -> r;
                            r mod l -> thisStack.vpush;
-                           ('mod',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent
+                           ('mod',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                             -> binOpEvent
                         #);
                      // codes.idiv then
                         'div' -> exe; 
@@ -2897,7 +2913,8 @@ betaVM:
                         do thisStack.vpop -> l;
                            thisstack.vpop -> r;
                            r div l -> thisStack.vpush;
-                           ('div',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent
+                           ('div',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                             -> binOpEvent
                         #);
                      // codes.eq then
                         '='-> exe;
@@ -2909,7 +2926,8 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('=',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent
+                        ('=',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                          -> binOpEvent
                      // codes.ne then
                         '<>'-> exe;
                         (if thisStack.vpop <> thisStack.vpop then 
@@ -2917,7 +2935,8 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('<>',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent
+                        ('<>',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) 
+                          -> binOpEvent
                      // codes.req then
                         '=[]'-> exe;
                         (if thisStack.rpop = thisStack.rpop then 
@@ -3007,7 +3026,8 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('>',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent
+                        ('>',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                          -> binOpEvent
                      // codes.ge then
                         '>='-> exe;
                         (if thisStack.vpop <= thisStack.vpop then 
@@ -3015,7 +3035,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('>=',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc)
+                        ('>=',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm)
                           -> binOpEvent
                      // codes.andd then
                         'and' -> exe;
@@ -3031,7 +3051,7 @@ betaVM:
                             'F' -> out.put
                         if);
                         stackstoOut;                        
-                        ('and',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) 
+                        ('and',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
                           -> binOpEvent
                      // codes.orr then
                         'or' -> exe;
@@ -3047,7 +3067,7 @@ betaVM:
                             0 -> thisStack.vpush;
                             'F' -> out.put
                         if);
-                        ('or',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) 
+                        ('or',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
                           -> binOpEvent
                      // codes.nott then
                         'not' -> exe;
@@ -3074,7 +3094,8 @@ betaVM:
                         
                         float1 -> thisStack.fpush;
                         
-                        ('fplus',thisStack[],thisStack.vTopElm,thisCode.descInx,glsc) -> binOpEvent                        
+                        ('fplus',thisStack[],thisCode.descInx,glsc,float1)
+                          -> fBinOpEvent                        
                      // codes.fminus then
                         'fminus' -> exe;
                         thisStack.fpop -> float2;
@@ -3089,7 +3110,9 @@ betaVM:
                         float1 - float2 -> float1;
                            
                         (if false then float1 -> putreal; newline if);
-                        float1 -> thisStack.fpush;
+                        float1 -> thisStack.fpush; 
+                        ('fminus',thisStack[],thisCode.descInx,glsc,float1)
+                          -> fBinOpEvent 
                      // codes.fmult // codes.rdiv then
                         'fmult' -> exe;
                         thisStack.fpop -> float2;
@@ -3105,7 +3128,9 @@ betaVM:
                         (if false then 
                             float1 -> putreal; newline;
                         if);
-                        float1 -> thisStack.fpush
+                        float1 -> thisStack.fpush;
+                         ('fmult',thisStack[],thisCode.descInx,glsc,float1)
+                          -> fBinOpEvent 
                      // codes.fdiv then
                         'fdiv' -> exe;
                         thisStack.fpop -> float2;
@@ -3120,7 +3145,9 @@ betaVM:
                         float1 / float2 -> float1;
                            
                         (if false then float1 -> putreal; newline; if);
-                        float1 -> thisStack.fpush 
+                        float1 -> thisStack.fpush;
+                        ('fdiv',thisStack[],thisCode.descInx,glsc,float1)
+                          -> fBinOpEvent                         
                      // codes.feq then
                         'feq'-> exe;
                         thisStack.fpop -> float2;
@@ -3142,7 +3169,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('flt',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent             
+                        ('flt',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) -> binOpEvent             
                      // codes.fle then
                         'fle'-> exe;
                         thisStack.fpop -> float2;
@@ -3153,7 +3180,8 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('fle',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent                                     
+                        ('fle',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                          -> binOpEvent                                     
                      // codes.fgt then
                         'fgt'-> exe;
                         thisStack.fpop -> float2;
@@ -3164,7 +3192,8 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('fgt',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent             
+                        ('fgt',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm) 
+                          -> binOpEvent             
                      // codes.fge then
                         'fge'-> exe;
                         thisStack.fpop -> float2;
@@ -3175,7 +3204,8 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('fge',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent                                     
+                        ('fge',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) 
+                          -> binOpEvent                                     
                      // codes.fne then
                         'fne'-> exe;
                         thisStack.fpop -> float2;
@@ -3186,7 +3216,8 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('fne',thisStack[],thisStack.vtopElm,thisCode.descInx,glsc) -> binOpEvent                                     
+                        ('fne',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm)
+                          -> binOpEvent                                     
                      // codes.pushFloatConst then
                         (#  L1,L2: @integer
                         do 'pushFloatConst' -> exe; op8 -> (float1,L1,L2);
@@ -3197,7 +3228,9 @@ betaVM:
                                L1 -> puthex; ' ' -> put; L2 -> puthex; newline;
                            if);
                            L1 -> thisStack.vpush;
-                           L2 -> thisStack.vpush                           
+                           L2 -> thisStack.vpush;
+                           (thisObj[],X[],true,thisStack[],off,false,0
+                           ,thisCode.descInx,glsc,float1) -> fPushEvent
                         #)
                      // codes.i2f then
                         'i2f' -> exe;
