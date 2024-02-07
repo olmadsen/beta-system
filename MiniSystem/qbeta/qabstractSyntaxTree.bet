@@ -4,7 +4,10 @@ INCLUDE 'qlexer';
 INCLUDE '../compiler_IF/compiler_IF';
 INCLUDE '../VM/objectcode'
 ---lib:attributes--- 
-nameListInDcL: (#exit false #);
+nameListInDcL: (#exit false #); (* Obs; for collectSimple and getEntries below
+                                 * the argument passed to qenv is a Decl;
+                                 * should be NameDecl
+                                 *)
 coArg: (#exit false #);
 putHead:
   (# T: ^text; n: @integer;
@@ -1665,31 +1668,66 @@ AbstractSyntaxTree: Tree
             (# off: @integer
             do scanAllDecls
                (# name: ^Text;
-                  off,kind: @integer
+                  off,kind: @integer;
+                  getKind:
+                    (# off,kind: @integer
+                    enter off
+                    do (if off > 0 then
+                           (if currentDcl.isFloat then
+                               FloatKind -> kind
+                            else
+                               (if currentDcl.isPrimitive then
+                                   SimpleKind -> kind
+                                else
+                                   (if currentDcl.isVirtual then
+                                       virtualKind -> kind
+                                    else
+                                       ReferenceKind -> kind
+                           if)if)if)
+                        else
+                           (* chef isIndexed -  see parser:collectSimple *)
+                           patternKind -> kind
+                       if);
+                    exit kind 
+                    #)
                do '???'-> name[];
-                  currentDcl.sig.ID[] -> name[];
-                  (if true then
-                      currentDcl.qoff[1] -> off
+                  (if nameListInDcl then
+                      currentDcl.sig.names.scan
+                      (#
+                      do current.off -> off -> getKind -> kind;
+                         (* OBS! addSimple has the Decl as argument;
+                          * should be the NameDecl;
+                          * Requires fix in qenv
+                          *)
+                         current.T[] -> name[];
+                         (name[],off,kind,currentDcl[]) -> addSimple
+                      #)
                    else
-                      currentDcl.off -> off;
-                  if);
-                  (if off > 0 then
-                      (if currentDcl.isFloat then
-                          FloatKind -> kind
+                      currentDcl.sig.ID[] -> name[];
+                      (if true then
+                          currentDcl.qoff[1] -> off
                        else
-                          (if currentDcl.isPrimitive then
-                              SimpleKind -> kind
+                          currentDcl.off -> off;
+                      if);
+                      (if off > 0 then
+                          (if currentDcl.isFloat then
+                              FloatKind -> kind
                            else
-                              (if currentDcl.isVirtual then
-                                  virtualKind -> kind
+                              (if currentDcl.isPrimitive then
+                                  SimpleKind -> kind
                                else
-                                  ReferenceKind -> kind
-                      if)if)if)
-                   else
-                      (* chef isIndexed -  see parser:collectSimple *)
-                      patternKind -> kind
+                                  (if currentDcl.isVirtual then
+                                      virtualKind -> kind
+                                   else
+                                      ReferenceKind -> kind
+                          if)if)if)
+                       else
+                          (* chef isIndexed -  see parser:collectSimple *)
+                          patternKind -> kind
+                      if);
+                      (name[],off,kind,currentDcl[]) -> addSimple
                   if);
-                  (if true then
+                  (if false then
                       'Collect: ' -> puttext; name[] -> puttext;
                       ' off:'  -> puttext; off -> putint;
                       ' kind:' -> puttext; kind -> putint;
@@ -1697,12 +1735,21 @@ AbstractSyntaxTree: Tree
                       (if currentDcl.isFloat then 'T'->put else 'F'->put if);
                       newline;
                   if);
-                  (name[],off,kind,currentDcl[]) -> addSimple
                #);
             #);
           getEntries:: 
             (# 
-            do scanDecls(# do (currentDcl.sig.id[],currentDcl[]) -> add #)
+            do (if nameListInDcl then
+                   scanDecls
+                   (#
+                   do currentDcl.sig.names.scan
+                      (#
+                      do (current.T[],currentDcl[]) -> add
+                         (* again we have currentDcl - should be nameDecl *)
+                   #)#)
+                else
+                   scanDecls(# do (currentDcl.sig.id[],currentDcl[]) -> add #)
+               if)
             #);
           doInsert::
             (#
