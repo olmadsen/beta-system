@@ -1,0 +1,337 @@
+ORIGIN '~beta/basiclib/betaenv'; 
+INCLUDE 'qvariants';
+BODY 'qcodegenmarkerBody';
+---lib:attributes---
+traceArgOG: (# exit false #);
+codeGenMarker: variants
+  (# traceModules: (# exit false #);
+     Module::<
+       (# markForCodeGen::
+            (# M: ^Module;
+            do (if traceModules then
+                   'MarkForCodeGen:module: ' -> puttext; 
+                   sig.dopt -> putline;
+               if);
+               (if (encModule -> M[]) <> none then
+                   M.markForCodeGen
+               if);
+               OG.markForCodeGen;
+            #);
+       #);
+     ModuleItem::<
+       (# markForCodeGen:: 
+            (#
+            do (if tracemodules then
+                   'MarkForCodeGen:moduleItem: isIncluded: ' -> puttext;
+                   MD.isIncluded -> putBoolean; ' ' -> put;
+                   MD.sig.dopt -> putline;
+               if);
+               (if MD.isIncluded then MD.markForCodeGen if)
+            #);
+       #);
+     DataItem::<
+       (# markForCodeGen::
+            (# 
+            do cd.com(#do 'DataItem:markForCodeGen:'->TT; sig.id[]->TQ;
+                        ':descNo:'->TT; OG.IS.newDescNo -> II; 
+                        ':OG.primNo:'->TT; OG.primno -> II;
+                     #);    
+               OG.markForCodeGen;
+               (if false then OG.checkvirtualSuper if)
+            #)          
+       #);
+     Signature::<
+       (# markForCodegen::
+            (#
+            do (if encOG[] <> none then
+                   scanSons(#do current.markForCodeGen #);
+               if)
+            #);
+       #);
+     markPrimElse: BooleanValue
+       (# primNo: @integer; sig: ^Signature; IS: ^Items
+       enter(primNo,sig[],IS[])
+       <<SLOT doMarkPrim:doPart>> 
+       #);     
+     ObjectCall::<
+       (# markForCodeGen::
+            (# ptn: ^Pattern
+            do (if not marked and ((primNo,sig[],IS[]) -> markPrimElse) then
+                   true -> marked;
+                   (if ((super.last).ATd.asDecl).isPattern then
+                       (super.last).ATd.asDecl -> ptn[];
+                       (if ptn[] <> objectDecl[] then
+                           cd.com(#do 'ObjCall:markSuper:'->TT; super.dopt->TQ #);
+                           super.markForCodeGen; 
+               if)if)if)
+            #)
+       #);
+     ObjectGenerator::<
+       (# isArgOfE: ^Exp;
+          markForCodeGen:: 
+            (# ptn: ^Pattern; dump: @boolean
+            do (if not marked and ((primNo,sig[],IS[]) -> markPrimElse) then
+                   (if primNo // Indexed_prim // rIndexed_prim then
+                       (*'**** indexed: '-> puttext; primNo -> dumpI;
+                       father.label -> dumpT; true -> dump; 
+                       ' isObjectDesc:'-> dumpT;
+                       isObjectDesc -> putboolean; newline*)
+                   if);
+                   (* Ex[] -> checkVirtualSuper;*)
+                   (if (Ex[] -> isArgOfE[]) <> none then
+                       (* enter Ex[] 
+                        * Called from Invocation E1.E2.E3(f1,f2,f3)
+                        * if one of f1,f2 and f3 is a (singular) OG and
+                        * the formal arg is not a virtual.
+                        * Then Ex[] = E3[]
+                        * We should probably also handle possible 
+                        * arguments of  E1 and E2.
+                        * E3.origin is not this(OG) which omplies 
+                        * that on does not count this(OG), but it must.
+                        * We this have to add an extra goorigin for 
+                        * attributes in Ex!
+                        *)
+                       (if traceArgOG then
+                           '**** OG is an argument:\n' -> puttext; 
+                           dopt -> puthead;
+                           father.father.father.dopt -> puthead
+                   if)if);
+                   (if false and (primNo = cEq_prim) then
+                       '**** markForCodegen: ' -> puttext; OGid -> puttext;
+                       ' ' -> put; newline;
+                   if);
+                   true -> marked;
+                   (if super[] = none then
+                       '*** super is none: ' -> puttext; dopt -> putline
+                   if);
+                   cd.com(#do 'OG:markForCodeGen:'-> TT; dopt -> TQ;nl;
+                            'isObjectDesc:'->TT; isObjectDesc -> BB;
+                            ' hasItems:'->TT; hasItems->BB; nl;
+                            ' super.hasVirtualArgs:'->TT;
+                            super.hasVirtualArgs -> BB;nl;
+                            ' super.isPrimitive:'->TT;
+                            super.isPrimitive->BB; nl;
+                            ' (super.last).isPrimitive:'->TT; 
+                            (if super.last <> none then
+                                (super.last).isPrimitive->BB;
+                             else
+                                'none'-> TT
+                            if);
+                            nl;
+                            super.dopt -> TQ; nl;
+                            super.scanSons
+                            (# E:^exp
+                            do (current[]->E[]).dopt->TQ;
+                               E.isPrimitive->BB; nl
+                         #)#);                      
+                   (if not super.isEmpty then
+                       (if (super.last).ATd[] = none then
+                           '!!!! super.last.ATd is none: ' -> putline;
+                           label -> putline; '--' -> putline; dopt -> putline; 
+                       if);
+                       (if not ((super.last).ATd.asDecl).isPattern then
+                           leave markForCodeGen
+                       if);
+                       (super.last).ATd.asDecl -> ptn[];
+                       (if ptn[] <> objectDecl[] then
+                           cd.com
+                           (#do 'OG:markSuper:'->TT ; super.dopt ->TQ #);
+                           super.markForCodeGen; 
+                   if)if);
+                   (* For isObjectDesc, in:
+                    * OG = S.exists({...}) && S.forAll({...}){}
+                    * OG.super = INV = (S exists(...) && (S.forAll(...))
+                    * exists has virtualArgs, and not isPrimitive.
+                    * But && isPrimitive and thus isObjectDesc = false
+                    * We thus try a revised version - see qchecker.
+                    * 2023.09.25: we may arrive here for an OG in
+                    *   ptn: OG; X: obj OG; R: ref OG; V: var OG; c: val OG
+                    * For ref OG, we should not make objTmpStack.add:
+                    *   OG.isEmpty is always true, but OG may have virtual args
+                    *   and this isObjDesc = true; we test for ref OG; 
+                    * Perhpas we shall also test for var and val!?
+                    *)
+                                
+                   (if isObjectDesc and not ('ref'-> (father.label).equal) then
+                       cd.com(#do 'OG:markIS:'->TT; doPT -> TQ #);
+                       (if dump then
+                           this(ObjectGenerator).dopt -> putheadN;
+                       if);
+                       (this(ObjectGenerator)[],computeVariant)
+                         -> objTmpStack.add;
+                       IS.markForCodeGen;
+                    else
+                       (if super.ATd[] <> none then
+                           (* may happen for R: ref IndexedRef(0,#Record) *)
+                           (if dump then
+                               '**** super: ' -> dumpT; 
+                               super.dopt->dumpTN;
+                               super.ATd.dopt -> putHead;
+                           if);
+                           (super.ATd.asDecl).OG.markForCodegen
+                       if);
+                       (* May happen for V:< Object, ... *)
+                       cd.com
+                       (#do 'not ObjDesc: '->TT; doPt -> TQ; 
+                          ' IS.isEmpty: '->TT; IS.isEmpty -> BB; 
+                       #)
+            if)if)#)
+       #);
+     items::<
+       (# markForCodeGen::
+            (#
+            do cd.com(#do 'items:markForCodeGen:'->TT; doPT -> TQ #);
+               scanSons
+               (# I: ^Item
+               do current[] -> I[];
+                  (if current.isDataItem then
+                      current.MarkForCodegen 
+                   else
+                      (if I.isDecl then
+                          (if not I.isPattern or I.isVirtual 
+                              or(I[] = StringDecl[]) then
+                              (if I[] = StringDecl[] then
+                                  cd.com(#do 'Items:markString'->TT; dopt->TT #)
+                              if);
+                              current.MarkForCodeGen 
+                          if)
+                       else
+                          cd.com(#do 'markItem:'->TT; current.doPT -> TQ; 
+                                   current.label -> TT #);
+                          current.MarkForCodeGen 
+            if)if)#)#);
+       #);
+     Pattern::<
+       (#  markForCodegen::
+            (#
+            do cd.com(#do 'Pattern:markForCodeGen:' -> TT; dopt -> TQ#);
+               sig.markForCodeGen;
+               OG.markForCodeGen
+            #);   
+       #);
+     Invocation::<
+       (# markForCodeGen::
+            (# ptn: ^Pattern; OGs: ^ObjectGenerator; E,rec: ^Exp;
+               fArgIsVirtual: [6] @boolean; top: @integer;
+            do cd.com(#do 'Invocation:markForCodeGen:'->TT; dopt -> TQ #);
+               scanSons
+               (#
+               do current[] -> E[]; 
+                  current.MarkForCodeGen;
+                  (if not isLast then E[] -> rec[] 
+                   else
+                      (if isFirst then E[] -> rec[]
+                  if)if);                  
+                  (* We only scan args of last exp? 
+                   * We may have r.foo(e1).bar(e2)
+                   * Should be fixed!
+                   *)
+                  (if (E.ATd.asDecl).isPattern then
+                      (if traceArgOG then
+                          E.dopt -> putline; E.Atd.label -> putline;
+                          '**** E.ATd: ' -> putline; E.ATd.dopt ->puthead
+                      if);
+                      (*0 -> top; ChemicalPlant fails if 0->top
+                       * But what is going on here?
+                       *)
+                      (* with new fatCoamma where super parameters must be bound
+                       * it seems that we scan bound parameters in super
+                       * and perhaps then get too many virtual parameters!?
+                       *)
+                      (E.ATd.asDecl).OG.IS.scanItemArgs
+                      (# 
+                      do (if (top + 1 -> top) > fArgIsVirtual.range then
+                             fArgIsVirtual.range -> fArgIsVirtual.extend
+                         if);
+                         currentArg.isVirtual -> fArgIsVirtual[top];
+                         (if traceArgOG then
+                             '*** argNo:' -> puttext; top -> putint; 
+                             ' ' ->put;
+                             fArgIsVirtual[top] -> putboolean; newline;
+                             currentArg.dopt -> puthead
+                         if)
+                      #);
+                      (if (E[] <> none) and (E.args[] <> none) then
+                          E.args.scanArgs
+                          (# n: @integer; OGx: ^ObjectGenerator
+                          do n + 1 -> n;
+                             cd.com(#do 'arg:' -> TT; ' '-> TT; 
+                                      current.dopt -> TQ #);
+                             (if ((E.ATd.asDecl).primNo <> vassign_prim) 
+                                 and current.isObjectGenerator then 
+                                 (if not (current[] -> OGx[]).IS.isEmpty 
+                                     or OGx.hasVirtualArgs
+                                     then
+                                     (if (*true or*) not fArgIsVirtual[n]
+                                         then
+                                         (if traceArgOG then
+                                             '**** marking arg:label:'
+                                               ->puttext; 
+                                             current.label -> putline;
+                                             current.dopt -> puthead;
+                                             '**   of:E:label:'->putline;
+                                             E.label -> putline;
+                                             E.dopt -> puthead;
+                                             '**   E.father.father.father:\n'
+                                               ->puttext; 
+                                             E.father.father.doPT 
+                                               -> puthead;
+                                         if);
+                                         E[] -> current.markForCodeGen
+                                      else
+                                         current.markForCodeGen
+                                     if);
+                                  else
+                                     current.markForCodeGen
+                                 if)
+                              else
+                                 current.markForCodeGen
+            if)#)if)if)#)#)
+       #);
+     ObjectInvocation::<
+       (# markForCodeGen::
+            (#
+            do cd.com
+               (#do 'ObjectInvocation:markForCodeGen:'-> TT; dopt -> TQ;
+                        ' ATd:' ->TT; ATd.dopt -> TQ #); 
+               (ATd.asDecl).markForCodeGen
+            #);          
+       #);
+     ObjTmpStackClass:<
+       (# add:<
+            (# OG: ^ObjectGenerator; var: ^Variant
+            enter(OG[],var[])
+            do inner
+            #);
+       #);
+     LabelDecl::<
+       (# markForCodeGen::
+            (#
+            do OG.markForCodegen
+            #);
+       #);
+     IfThen::<
+       (# markForCodeGen::
+            (#
+            do cond.markForCodeGen; thenPart.markForCodeGen;
+            #);
+       #);
+     IfThenElse::<
+       (# markForCodeGen::
+            (#
+            do cond.markForCodeGen; 
+               thenPart.markForCodeGen;
+               elsePart.markForCodeGen;
+            #);
+       #);     
+     BracketedExp::<
+       (# markForCodeGen:: (#do IV.markForCodeGen #);         
+       #);
+     StringObj::<
+       (# markForCodeGen:: (# do scanSons(#do current.markForCodeGen #)#);
+       #);
+     ObjTmpStack: @ ObjTmpStackClass;
+     
+  do (* markForCodeGen is called in qgenerator *)
+     inner
+  #)
