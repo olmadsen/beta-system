@@ -33,6 +33,6 @@ int main() {
     Speed s = 1.2_m / 0.5_s;
     printf("%f\n",s);
     SquareMeter a = 1.2_m * 1.2_m;
-    printf("%f\n",a);            
+    printf("%f\n",a);
     return 0;
 }
