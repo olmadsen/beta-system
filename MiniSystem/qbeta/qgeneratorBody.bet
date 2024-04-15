@@ -383,7 +383,39 @@ do (# doPrimElse: BooleanValue
       if);
    #);   
 ---AssignmentPattern_invoke:doPart--
-do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;  
+do (# isArgOfAssignI2IwithUniValArg: BooleanValue
+        (* for the case: a3 := 3 * a2 where a3 and a2 are UnitValueObj
+         * and * is int2int, typeOf('* a2') is unit and not int;
+         * at this place: this(pattern) = AssignmentPattern;
+         * rec: 'a3', E: ':= 3 * a2', arg = '3 * a2';
+         * we check if arg has the form '3 * a2' and decode into
+         * recx = '3' and argx = '* a2'
+         *)
+        (# arg: ^ObjectGenerator; recx,argx: ^Exp;  i: @integer
+        enter arg[]
+        do (if arg.IS.isEmpty then
+               arg.super.scanSons
+               (# 
+               do i + 1 -> i;
+                  (if i 
+                   // 1 then 
+                      current[] -> recx[]
+                   // 2 then
+                      current[] -> argx[]
+               if)#);
+               (if i = 2 then
+                   cd.fcom(#do 'recx:'->TT; recx.dopt->TQ; 
+                             'argx:'->TT; argx.dopt->TQ #);
+                   (recx[],argx[]) -> checkInt2IntWithUnitArg -> value;
+                   (if value then
+                       '**** special:E'->dumpT; E.dopt->dumpT;
+                       'arg:'->dumpT; arg.label -> dumpT; arg.dopt -> dumpT;
+                       'recx:'->dumpt; recx.dopt -> dumpT;
+                       'argx:'->dumpT; argx.dopt -> dumpTN
+           if)if)if)
+        #);
+      
+      dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;  
       ptn: ^Pattern; UT: ^text;
       asgKind: @integer; (* basic: 1
                           * value: 2 but not basic
@@ -450,7 +482,11 @@ do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;
               ((arg.super.ATd.asDecl).OG.isUnitValueObj 
               or (arg.super.ATd.asDecl).isFloat 
               or (arg.super.ATd.asDecl).isInteger) then 
-              (* arg.super.ATd.isPattern and arg.isFloat then *)
+              
+              (* 2024-04-15: we should make clear why we come here; the above
+               * condition is very complicated; 
+               *)
+              
               (* dstDI.OG.primNo = value_prim for handling _v: var Value 
                * in integer, char and boolean *)
               (* 1: X := Y - ok if X, Y are basic values
@@ -476,42 +512,18 @@ do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;
                * perhaps test for basic pattern?
                * The above comments are not up-to-date
                *)
-                               
               cd.com
               (#do'assign:simpleValue:arg:' -> TT; arg.dopt->TQ;
                  'dstDI:'->TT; dstDI.doPT -> TQ; 
                  'rec:'->TT; rec.dopt -> TT; 'E:'->TT; E.dopt->TQ #);
-              (* case: a3 := 3 * a2
-               * rec: a3, E: := 3 * a2
-               *)
-              (# OGx: ^ObjectGenerator; i: @integer; 
-                 recx,Ex: ^Exp; special: @boolean
-              do E.args.scanArgs(# do current[] -> OGx[] #);
-                 (if OGx[] <> none then
-                     cd.fcom(#do OGx.dopt -> TQ #);
-                     (if OGx.IS.isEmpty then
-                         OGx.super.scanSons
-                         (# 
-                         do i + 1 -> i;
-                            (if i = 1 then 
-                                current[] -> recx[]
-                             else 
-                                current[] -> Ex[] 
-                         if)#);
-                         (if i = 2 then
-                             cd.fcom(#do 'recx:'->TT; recx.dopt->TQ; 
-                                       'Ex:'->TT; Ex.dopt->TQ #);
-                             ((recx[],Ex[]) -> checkInt2IntWithUnitArg) 
-                               -> special
-                 if)if)if);
-                 (if not special then
-                     dstDI[] -> arg.checkNumberConvert
-                     (# I2F:: (#do cd.I2f #);
-                        F2I:: (# do cd.F2I #);
-                     #)
-                 if);
-                 1 -> asgKind
-              #)
+                            
+              (if not (arg[] -> isArgOfAssignI2IwithUniValArg) then
+                  dstDI[] -> arg.checkNumberConvert
+                  (# I2F:: (#do cd.I2f #);
+                     F2I:: (# do cd.F2I #);
+                  #)
+              if);
+              1 -> asgKind
            // dstDI.OG.isValueObj and not (dstDI.OG.primNo = String_prim) then 
               (* X: = Y where Y is a ValueObj that is not a unit 
                * - but yet not tested above!
@@ -558,15 +570,12 @@ do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;
                  '" to "' -> msg; dstDI.doPT -> msg; 
                  '",\n     the source is unique, but the the destination is not!' 
                    -> msg
-              #)
-          if);
-      if);
+          #)if)if);
       (if useRtnVal then
           (* assignment is last statement in main part
            * where super has redefined inner to return a value
            *)
-          (if false then '**** useRtnVal: ' -> puttext; 
-              dopt -> putline if);
+          (if false then '**** useRtnVal: ' -> puttext;  dopt -> putline if);
           (if asgKind
            // 1 (* basic value *) then cd.double
            // 2 (* compound value obj *) then
@@ -579,8 +588,7 @@ do (# dstDI,srcDI: ^Decl(*DataItem*); arg: ^ObjectSpecification;
            else
               '\n!!!! OBS! Mainpart returning unknown value!*' 
                 -> putline;
-          if)
-      if);
+      if)if);
       cd.com(# Ax: ^Address
             do 'assign:before:adr.store:E: ' -> TT; 
                (if E[] <> none then E.dopt -> TQ; if);
