@@ -1,0 +1,444 @@
+ORIGIN 'qunithandler';
+---BaseVectorLib:Attributes--
+add:
+  (# BV: ^BaseVector
+  enter BV[]
+  do (for i: noOfBaseUnits - 1 repeat 
+          theBase[i] + BV.theBase[i] -> theBase[i]
+     for);
+     BV.convFactor * convFactor -> convFactor
+  #);
+minus:
+  (# BV: ^BaseVector
+  enter BV[]
+  do (if false then
+         '**** BaseVector: left:' -> putline;
+         print;
+         '**   right: ' -> putline;
+         BV.print
+     if);
+     (for i: noOfBaseUnits - 1 repeat 
+          theBase[i] - BV.theBase[i] -> theBase[i]
+     for)
+  #);
+mult:
+  (# C: @integer
+  enter C
+  do (for i: noOfBaseUnits - 1 repeat 
+          theBase[i] * C -> theBase[i]
+     for)
+  #);
+rootN:
+  (* In general we have a unit "u"^(left,right)
+   * where left  = 1 and right is a positve integer
+   * like "m*m"^(1/2), "m*m*m"^(1/3) or similar
+   * 
+   * all base units in the vector must be a multiply
+   * of right or zero
+   *)
+  (# rootNerror:< 
+       (# M: ^text
+       enter M[]
+       do inner
+       #);
+     numerator,denumerator: @integer
+  enter(numerator,denumerator)
+  do (if true then
+         '**** baseVector:rootN:'->puttext;
+         numerator -> putint; ' ' -> put; denumerator -> putint;
+         newline;
+     if);
+     (if numerator <> 1 then
+         'numerator is not 1 (one)' -> rootNerror
+     if);
+     (for i: noOfBaseUnits - 1 repeat
+          (if (theBase[i] mod denumerator) = 0 then
+              theBase[i] div denumerator -> theBase[i]
+           else
+              'value of a base unit is not a multiply of the denumerator'
+                -> rootNerror
+     if)for);
+     (*print*)
+  #);
+---BaseVector_equal:doPart---
+do true -> value;
+   (for i: noOfBaseUnits - 1 repeat 
+        (theBase[i] = BV.theBase[i]) and value -> value
+   for);
+   (if false and (BV.convFactor <> convFactor) then
+       '!!!! Conversion factors differ: ' -> putline;
+       'source: ' -> puttext; BV.print -> putline;
+       'destination: ' -> puttext; print -> putline;
+       nonMatchingCV
+   if)
+---BaseVector_print:doPart---   
+do 'Cnv[' -> T.puttext; convFactor -> T.putReal; ']' -> T.put;
+   (for i: noOfBaseUnits - 1 repeat
+        (if i 
+         // TimeInx then 'Time[' -> T.puttext
+         // LengthInx then 'Lgth[' -> T.puttext
+         // MassInx then 'Mass[' -> T.puttext
+         // ElectInx then 'Elec[' -> T.puttext
+         // TempInx then 'Temp[' -> T.puttext
+         // SubstanceInx then 'Subs[' -> T.puttext
+         // LuminousInx then 'Lumn[' -> T.puttext
+         else
+            'Inx = ' -> T.puttext;  i -> T.putint; ':' -> T.put
+        if);
+        theBase[i] -> T.putint; ']' -> T.put
+   for);
+   T.newline
+---unitTableLib:attributes---
+checkIfSame:
+  (* NOT USED! *)
+  (# lU,rU: ^text; sameDim: @boolean;
+     lDim,rDim: ^Decl;
+     lCF,rCF: @real
+  enter(lU[],rU[])
+  do (if traceUE then
+         '**** unitTable:checkIfSame:lU: "' -> puttext; lU[]->puttext;
+         '" rU: "' -> puttext; rU[] -> puttext; '"' -> putline;
+     if);
+     lU[] -> FindInAll
+     (#
+     do current.dim[] -> lDim[]
+     #);
+     rU[] -> FindInAll
+     (#
+     do current.dim[] -> rDim[]
+     #); 
+     lDim[] = rDim[] -> sameDim;
+     (if traceUE then
+         '**   checkIfSame:sameDim: ' -> puttext; sameDim -> putBoolean;
+         newline
+     if)
+  exit sameDim
+  #);
+
+findU: find
+  (# isBase: @boolean; CF: @real
+  do current.isBaseDim -> isBase;
+     current.convFactor -> CF
+  exit(isBase,CF)
+  #);
+
+---unitTableAdd:doPart---
+do (if traceUE then
+       '**** prop: ' -> puttext; prop.dopt -> puttext;
+       ' in:sig: ' -> puttext;
+       (prop.enclosingObjectGenerator).sig.dopt ->puttext;
+       ' arg1: ' -> puttext; 
+       prop.getSArg1 -> puttext;
+       newline;
+   if);
+   (if '$' -> (prop.getSarg1).equal then
+       leave add
+   if);
+   (prop.enclosingObjectGenerator).enclosingObjectGenerator 
+     -> N[];
+   N.father[] -> DI[];   
+   (if traceUE then 
+       DI.sig.dopt ->putline;
+   if);
+   (prop.enclosingObjectGenerator).father[] -> P[]; 
+   (if (top + 1 -> top) > DU.range then DU.range -> DU.extend if);
+   (DI[],P[],prop[]) -> unitElm -> DU[top][];
+   DU[top].decodeProp
+---unitTable_unitElm_LIB:attributes---
+decodeProp:
+  (# n: @integer; dimN: ^text; UT: ^UnitTree; BV: ^BaseVector
+  do prop.args.scanSons
+     (# INV: ^Invocation; 
+     do current[] -> INV[];
+        INV.scanSons
+        (# C: ^lexem
+        do (*current.dopt -> puttext; ',' -> put;*)
+           current[] -> C[];
+           (if true 
+            // current.isStringLiteral then
+               UStop + 1 -> UStop;;
+               C.T.copy -> US[UStop][];
+            // current.isConstLiteral then
+               n + 1 -> n;
+               C.T.setPos; C.T.getReal -> convFactor
+     if)#)#);
+     (if traceUE then
+         UStop -> putint; ' ' -> put; n -> putint;
+     if);
+     (* a base dimension has a form like
+      *    %unit "m", i.e only one unit
+      * a derived dimension has a form like
+      *    %unit "MpS", "m*s^-1", "m/s", 1
+      *        i.e. also a defintion in the form of other units 
+      *        and a conversitaion factor of 1 (one)
+      *)
+     UStop = 1 -> isBaseDim;
+     (if traceUE and isBaseDim then
+         ' base dimension '->puttext if);
+     (if isBaseDim then
+         (if convFactor = 0 then
+             true -> isBaseUnit;
+             1.0 -> convFactor
+          else
+             (* non base unit of base dim *)
+         if)
+      else 
+         (if convFactor = 1 then
+             (* for derived dimensions, we must set a 
+              * conversion factor of 1 (one) for the base unit
+              *)
+             true -> isBaseUnit
+          else
+             (* best to compute here, but some of the dimensions
+              * and units have not yet been added to the table; 
+              * a seperate scan is necessary
+              * Now we just compute it when needed below
+              '**** Derived dim: '
+              'compute conv factor of non base unit: ' 
+              -> puttext; US[2][] -> putline;
+              prop.dopt -> putline;
+              US[2][] -> parseUnit -> UT[]; UT.print->putline;
+              UT[] -> mkBaseVector -> BV[];
+              BV.print
+              *)
+     if)if);
+     dim.sig.dopt -> dimN[];
+     (if traceUE then 
+         ' baseDim:'->puttext; dimN[] -> putline if);
+     (if isBaseDim then
+         (if true 
+          // 'Dimension' -> dimN.equalNCS 
+          // 'Unit' -> dimN.equalNCS then
+             8 -> baseInx
+          // 'Time' -> dimN.equalNCS then
+             1 -> baseInx
+          // 'length' -> dimN.equalNCS then
+             2 -> baseInx
+          // 'Mass' -> dimN.equalNCS then
+             3 -> baseInx
+          // 'ElectricCurrent' -> dimN.equalNCS then
+             4 -> baseInx                         
+          // 'ThermodynamicTemperature' -> dimN.equalNCS then
+             5 -> baseInx                         
+          // 'AmountOfSubstance' -> dimN.equalNCS then
+             6 -> baseInx
+          // 'LuminousImtenmsity' -> dimN.equalNCS then
+             7 -> baseInx
+          else
+             '!!!! OBS! no matching base unit: ' -> puttext;
+             dimN[] -> puthead;
+             prop.dopt -> putline;
+     if)if)
+  #);
+
+---unitTable_findInAll:doPart---
+do U.scanAll(#do (if ch // '(' // ')' then else ch -> U1.put if)#);
+   U1[] -> U[];
+   L:
+     scan
+     (# 
+     do (for i: current.UStop  repeat
+             (if U[] -> current.US[i].equalNCS then
+                 (if traceUE then
+                     '**   findInAll:found: "' -> puttext;
+                     U[] -> puttext; '" -> ' -> puttext;
+                     current.print;
+                 if);
+                 current[] -> this(findInAll).current[];
+                 inner findInAll;
+                 leave L
+        if)for)
+     #)
+---unitTable_find:dopart--
+do L:
+     scan
+     (# 
+     do (if U[] -> current.US[1].equalNCS then
+            (if traceUE then
+                '**   found: "' -> puttext;
+                U[] -> puttext; '" -> ' -> puttext;
+                current.print;
+            if);
+            current[] -> this(find).current[];
+            inner find;
+            leave L
+        if)
+     #)
+---unitTable_unitElm_print:descriptor---
+(#
+do (if isBaseDim then
+       'Base Dimension: "' -> puttext
+    else
+       'Derived Dimension: "' -> puttext; 
+   if);
+   dim.sig.dopt -> puttext;
+   (if (convFactor = 1.0) 
+       or isBaseDim and (convFactor = 0.0) then
+       '" base unit: "' -> puttext;
+       unit.sig.dopt -> puttext;
+       '" ' -> puttext;
+    else
+       '" not base unit: ' -> puttext;
+   if);
+   (for i: UStop repeat 
+        '"'->put; US[i][] -> puttext; '"'-> put; ' ' -> put 
+   for);
+   (if convFactor <> 0 then 
+       'convFac: ' -> puttext;
+       convFactor -> putReal
+   if);
+   (if false then
+       ' ' -> put; prop.dopt -> putline
+   if);
+   newline;
+#)
+---unitTable_findCheck:doPart---
+do (if traceUE then
+       '**** unitTable.findandCheck:lU: "'->puttext; lU[]->puttext;
+       '" rU: "' -> puttext; rU[] -> puttext; '"' -> putline
+   if);
+   lU[] -> findInAll
+   (#
+   do current.dim[] -> lDim[];
+      current.convFactor -> lCF
+   #);
+   rU[] -> findInAll
+   (#
+   do current.dim[] -> rDim[];
+      current.convFactor -> rCF
+   #);
+   lDim[] = rDim[] -> sameDim;
+   (if traceUE then
+       '**   sameDim: ' -> puttext; sameDim -> putBoolean;
+       newline
+   if)   
+---mkBaseVector:doPart---
+do (# getConstLiteral:
+        (# op: ^text; V: @integer; isNeg: @boolean
+        enter op[]
+        do (if traceUE then 
+               '**** getConstLiteral: ' -> puttext; op[] ->puttext if);
+           (if (1 -> op.inxGet) = '-' then
+               true -> isNeg; 
+               2 -> op.setpos;
+           if);
+           op[] -> readNumber -> V; (* readNumber makes op.setPos!
+                                     * So setPos above, is superflous!
+                                     **)
+        exit V
+        #);      
+   do (if traceUE then 
+          '**** mkBaseVector: ' -> puttext; true -> T.print -> putline;
+      if);
+      (if T.token
+       // mult then
+          T.left[] -> mkBaseVector -> BVl[];
+          T.right[] -> mkBaseVector -> BVr[];
+          BVr[] -> BVl.add
+       // divv then
+          T.left[] -> mkBaseVector -> BVl[];
+          T.right[] -> mkBaseVector -> BVr[];
+          BVr[] -> BVl.minus
+       // expT then 
+          T.left[] -> mkBaseVector -> BVl[];
+          (if traceUE then
+              '**   mkBaseVector:expT: ' -> puttext; T.print ->putline;
+              BVl.print  -> puttext;
+          if);
+          (if true then
+              (if traceUE then
+                  T.print -> putline;
+                  T.right.print->putline;
+                  T.right.op[]->putline;
+              if);
+              (if '/' -> T.right.op.equal then
+                  (* we assume T.right = (1/2) but should be checked *)
+                  (T.right.left.op[]->getConstLiteral
+                  ,T.right.right.op[] -> getConstLiteral)
+                    -> BVl.rootN
+                  (# rootnError::
+                       (#
+                       do '\n\n!!! WARNING:'-> puttext;
+                          M[] -> putline;
+                          '    in: '  -> puttext;
+                          T.print -> putline;
+                          '\n! This message must be improved!'-> putline
+                  #)#)
+               else
+                  T.right.op[] -> getConstLiteral -> BVl.mult
+              if);
+           else
+              T.right.op[] -> readNumber -> BVl.mult
+          if)
+       // idf then
+          (if traceUE then
+              '**   MBK:idf: '->puttext; T.op[] -> putline; 
+          if);
+          T.op[] -> unitTable.find
+          (# theDim: ^text; UT: ^UnitTree; BV: ^BaseVector
+          do current.dim.sig.dopt -> theDim[];
+             (if traceUE then
+                 '**   MBK:idf:thedim: ' -> puttext; theDim[] ->putline
+             if);
+             (if current.isBaseDim then
+                 BaseVector -> BVl[];
+                 1 -> BVl.theBase[current.baseInx];
+                 current.convFactor -> BVL.convFactor;
+                 (if (current.convFactor = 0) 
+                     and not current.isBaseUnit then
+                     '**** convFactor is zero:'->putline;
+                     current.print
+                 if);
+              else (* Derived dimension *)
+                 (if traceUE then
+                     '**** Derived dimension: ' -> puttext; 
+                     theDim[] -> puttext;
+                     ' ' -> put; current.US[2][] -> putline;
+                     (*current.print*)
+                 if);
+                 current.US[2][] 
+                   -> parseUnit 
+                   -> mkBaseVector -> BVl[];
+                 (if current.isBaseUnit then
+                     (if current.convFactor <> 1.0 then
+                         '**** derived base unit wrong convFactor:'
+                           ->puttext;
+                         current.convFactor -> putreal; newline;
+                         current.print
+                     if);
+                     current.convFactor -> BVL.convFactor;
+                  else
+                     current.US[2][] -> parseUnit -> UT[]; 
+                     UT[] -> mkBaseVector -> BV[];
+                     BV.convFactor -> BVl.convFactor;
+                     (if false then
+                         '**** compute convFactor from: ' -> puttext;
+                         current.US[2][] -> putline;
+                         current.print;
+                         UT.print->putline;
+                         BV.print -> putline;
+                     if)
+                 if);
+             if);
+          #);
+          (if BVl[] = none then 
+              '!!!! Unit not found: ' -> puttext; T.print-> putline;
+              BaseVector -> BVl[];
+          if);
+          (if traceUE then 
+              'MBK:idf:final: ' -> putline; BVL.print -> puttext if)
+       // number then
+          'MBK:number: '->puttext;
+          T.op[] -> putline;
+          BaseVector -> BVl[]
+       // var then 
+          BaseVector -> BVl[]
+       else
+          '*** token not handled: '->puttext; T.token ->putint; newline
+      if);
+      (if traceUE then
+          '**** mkBaseVector:res: ' -> putline; BVL.print -> puttext
+      if)
+   #)
+   
+   
