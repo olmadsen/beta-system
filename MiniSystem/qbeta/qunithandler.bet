@@ -8,7 +8,6 @@ useNewUnitHandler: (# exit true #);
 UnitHandler: checker
   (# ModuleItem::<
        (# selectForPrintUnits:: (# do not MD.isIncluded -> done #);
-          printUnits:: (# do not MD.isIncluded -> done #);
        #);
      Pattern::<
        (# isN2N: BooleanValue
@@ -43,6 +42,16 @@ UnitHandler: checker
                        sig.dopt -> puttext; ' unit: ' -> puttext; 
                        U[] -> putline
                if)if)
+            #);
+          printUnit::
+            (# DI: ^Decl; U: ^Text
+            do OG.getReturnDecl -> DI[];
+               (if DI[] <> none then
+                   (*DI.dopt -> putline;*)
+                   '' -> DI.OG.getExpUnit -> U[];
+                   (*U[] -> putline;*)
+                   (rec[],U[],E[]) -> doPrintUnit
+               if)
             #);
           mapVarUnit:
             (# qual: ^ObjectGenerator; unit,U: ^text; UT: ^UnitTree
@@ -181,16 +190,14 @@ UnitHandler: checker
                           (# S: ^StringObj
                           do (if current.isStringLiteral then
                                  (current[] -> S[]).T[] -> U[];
-                             if)
-                          #)
-                       #)
+                       if)#)#)
                     else
                        (if primNo                            
                         // float_prim then '#F' -> U[]
                         // integer_prim then '#I' -> U[]
                if)if)if);
                (if traceUnit then
-                   '**** OG:GEU: '->puttext; dopt -> puthead;
+                   '**** OG:GEU:end: '->puttext; dopt -> puthead;
                    ' unit: ' -> puttext; U[] -> putline
                if)
             #);
@@ -386,32 +393,6 @@ UnitHandler: checker
                if)
             #);
           selectForPrintUnits::
-            (# hasAssign: BooleanValue
-                 (#
-                 do L:
-                      scanSons
-                      (# rec,E,arg: ^Exp; i: @integer
-                      do i + 1 -> i;
-                         E[] -> rec[];
-                         current[] -> E[];
-                         (if E.ATd[] <> none then
-                             (if E.ATd.primNo
-                              // vassign_prim // rassign_prim then
-                                 true -> value;
-                                 rec[] -> doPrintUnit;
-                                 E.args.scanSons
-                                 (# argx: ^ObjectSpecification
-                                 do current->argx[];
-                                    (if argx.IS.isEmpty then 
-                                        (argx.super.last) -> doPrintUnit;
-                                    if)
-                                 #);
-                                 leave L
-                      if)if)#)
-                 #);
-            do hasAssign
-            #);
-          printUnits:: (* obsolete *)
             (* we should consider 
              *   assignments:  V := E, print units for V and E 
              *   invocations:  foo(E), print unit for E and formal arg?
@@ -424,57 +405,31 @@ UnitHandler: checker
                  (#
                  do L:
                       scanSons
-                      (# E: ^Exp 
-                      do (if ((current[]->E[]).ATd[] <> none) then
+                      (# rec,E,arg: ^Exp; i: @integer
+                      do i + 1 -> i;
+                         E[] -> rec[];
+                         current[] -> E[];
+                         (if E.ATd[] <> none then
                              (if E.ATd.primNo
                               // vassign_prim // rassign_prim then
                                  true -> value;
+                                 (none,none,rec[]) -> doPrintUnit;
+                                 E.args.scanSons
+                                 (# argx: ^ObjectSpecification
+                                 do current->argx[];
+                                    (if argx.IS.isEmpty then
+                                        (rec[],(argx.super.last))
+                                          -> (argx.super.last).printUnit;
+                                        (*
+                                        (rec[],none,(argx.super.last))
+                                          -> doPrintUnit;*)
+                                    if)
+                                 #);
                                  leave L
                       if)if)#)
                  #);
-               U: ^text; UT: ^UnitTree; BV: ^BaseVector
-            do (if hasAssign then
-                   L:
-                     scanSons
-                     (# E: ^Exp
-                     do current[] -> E[];
-                        (if ((E.getExpUnit -> U[]) <> none) and (U.length > 0)
-                            and (E.ATd.isDataItem or E.isConstLiteral)
-                            then
-                            (if true
-                             // 'U' -> U.equal // 'Q' -> U.equal then 
-                                leave L 
-                            if);
-                            (if true
-                             // '#I' -> U.equal
-                             // '#F' -> U.equal 
-                             // '#Q' -> U.equal then
-                             else
-                                (if not noPT then
-                                    this(Invocation)[] -> notification
-                                    (# printHeading::
-                                         (#do 'UNIT of Invocation' -> puttext #);
-                                       report:: (#do true -> value #)
-                                    do 'Invocation: ' -> msg;
-                                       E.dopt -> msg; 
-                                       '\n**   has unit  : ' -> msg;
-                                       U[] -> msg;
-                                       '\n**   dimension: ' -> msg;
-                                       U[] -> parseUnit -> UT[] -> mkBaseVector -> BV[];
-                                       BV.print -> msg
-                                    #)
-                                 else
-                                    '\n**** InvocationX: ' -> puttext;
-                                    dopt -> puttext; 
-                                    '\n**   has unit  : ' -> puttext;
-                                    U[] -> puttext;
-                                    '\n**   in base units: ' -> puttext;
-                                    U[] -> parseUnit -> UT[] -> mkBaseVector -> BV[];
-                                    BV.print -> puttext                           
-                                if);
-                                true -> noPT
-               if)if)#)if)
-            #)
+            do hasAssign
+            #);
        #);
      ObjectInvocation::<
        (# isN2NwithUnitArg:
@@ -546,17 +501,15 @@ UnitHandler: checker
                               * and these should not be appended to recU
                               *)
                              leave L
-                          #);
-                      if)
+                      #)if)
                  #);
                filterNumeric:
                  (# op: @char
                  do getBinArg; 
-                    (if false then
-                        '***  for: ' -> puttext; dopt -> puttext;
-                        ' got: ' -> puttext;
-                        '  recU: ' -> puttext; recU[] -> puttext;
-                        '  U: ' -> puttext; U[] -> putline;
+                    (if traceUnit then
+                        '**   OI:GEU:filterNumeric: "' ->puttext; dopt->puttext;
+                        '"  recU: "' -> puttext; recU[] -> puttext;
+                        '"  U: "' -> puttext; U[] -> puttext; '"'->put; newline
                     if);
                     (if true
                      // '#F' -> recU.equal
@@ -740,8 +693,17 @@ UnitHandler: checker
                do (if current.isObjectGenerator then
                       current[] -> arg[];
                       (if arg.IS.isEmpty then  
-                          (arg.super.last) -> doPrintUnit;
+                          (this(ObjectInvocation)[],(arg.super.last))
+                            -> (arg.super.last).ATd.printUnit;
+                          
+                          (this(ObjectInvocation)[],none,(arg.super.last))
+                            -> doPrintUnit;
                if)if)#)
+            #);
+          printUnit::
+            (#
+            do (*'OI:printUnit: '->puttext; dopt -> putline;*)
+               (rec[],E[]) -> ATd.printUnit
             #)
        #);
      BracketedExp::<
@@ -809,6 +771,7 @@ UnitHandler: checker
             #);
           hasConvFactor:: (# do convFactor <> 0 -> value #);
           convDone: @boolean;
+          printUnit:: (#do 'Const:printUnit:'-> puttext; dopt -> putline #);
           int2floatDone:: 
             (# 
             do convDone -> value; 
@@ -840,7 +803,12 @@ UnitHandler: checker
                    CF  -> convFactor; true -> done; 
                if)
             #);
-          hasConvFactor:: (# do convFactor <> 0 -> value #)
+          hasConvFactor:: (# do convFactor <> 0 -> value #);
+          printUnit::
+          (# 
+          do (*'FloatConst:printUnit:'-> puttext; dopt -> putline;*)
+             (rec[],none,E[]) -> doPrintUnit
+          #);
        #);
      
      (******************** public patterns **************)
@@ -949,31 +917,48 @@ UnitHandler: checker
        #);
      doPrintUnit:
        (* See ObjectInvocation:selectForPrintUnit regarding E.unitPrinted *)
-       (# E: ^Exp; U: ^text; UT: ^UnitTree; BV: ^BaseVector
-       enter E[]
-       do (if not E.unitPrinted and
-              ((E.getExpUnit -> U[]) <> none) and (U.length > 0) then
-              (if true
-               // '#I' -> U.equal
-               // '#F' -> U.equal 
-               // 'U' -> U.equal 
-               // '#Q' -> U.equal then
-               else
-                  E[] -> notification
-                  (# printHeading::
-                       (#do 'UNIT of expression' -> puttext #);
-                     report:: (#do true -> value #)
-                  do 'Expression: ' -> msg;
-                     E.dopt -> msg; 
-                     '\n**         unit: ' -> msg;
-                     U[] -> msg;
-                     '\n**    dimension: ' -> msg;
-                     U[] -> parseUnit -> UT[] -> mkBaseVector -> BV[];
-                     BV.print -> msg
-                  #)
-              if);
-              true -> E.unitPrinted
-          if)
+       (# rec: ^Exp; E: ^Exp; recU,U: ^text; UT: ^UnitTree; BV: ^BaseVector
+       enter(rec[],recU[],E[])
+       do (if not E.unitPrinted then
+              (if recU[] = none then
+                  (if rec[] = none then
+                      '' -> recU[] 
+                   else
+                      rec.getExpUnit -> recU[]
+              if)if);
+              (if ((recU[] -> E.getExpUnit -> U[]) <> none) 
+                  and (U.length > 0) then
+                  (if true
+                   // '#I' -> U.equal
+                   // '#F' -> U.equal 
+                   // 'U' -> U.equal 
+                   // '#Q' -> U.equal then
+                   else
+                      (if traceUnit then 
+                          '**** doPrintUnit:'->puttext;
+                          ' rec: ' -> puttext; 
+                          (if rec[] = none then
+                              'none'->puttext
+                           else
+                              rec.dopt -> puttext
+                          if);
+                          ' E: ' -> puttext; E.dopt -> putline;
+                      if);
+                      E[] -> notification
+                      (# printHeading::
+                           (#do 'UNIT of expression' -> puttext #);
+                         report:: (#do true -> value #)
+                      do 'Expression: ' -> msg;
+                         E.dopt -> msg; 
+                         '\n**         unit: ' -> msg;
+                         U[] -> msg;
+                         '\n**    dimension: ' -> msg;
+                         U[] -> parseUnit -> UT[] -> mkBaseVector -> BV[];
+                         BV.print -> msg
+                      #)
+                  if);
+                  true -> E.unitPrinted
+          if)if)
        #);
      decodeUnits:
        (* used to be in qsemchecker.bet but has no purpose? *)       
