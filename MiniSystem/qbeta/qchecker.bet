@@ -511,6 +511,34 @@ checker: Parser
                if)
             exit topDesc[]
             #);
+          searchEmbodied:
+            (# NA: ^Lexem; CS: ^Text; ATd: ^Decl; pn: @integer; 
+               OI: ^ObjectInvocation; DI: ^DataItem
+            enter NA[]
+            do (if (newBasicProp.embodiedProp[] <> none) and
+                   not newBasicProp.checkingEmbodiedProp then
+                   '**** Items:searchEmbodied: '->puttext; 
+                   NA.T[] -> CS[];
+                   NA.doPT -> putline; 
+                   NA.father.label -> putline;
+                   (*true -> traceSearch;*)
+                   newBasicProp.scanEmbodied
+                   (#
+                   do 'searchEmbodied:Search: ' -> puttext; 
+                      current.dopt ->putline;
+                      current[] -> DI[];
+                      CS[] -> current.OG.IS.localSearch -> (Atd[],pn);
+                      (if ATd[] <> none then
+                          'embodied:found: ' -> puttext; ATd.sig.dopt->putline;
+                          ATd.dopt -> putline;
+                          NA.father[] -> OI[];
+                          true -> OI.isEmbodied;
+                          DI[] -> OI.theEmbodied[]
+                      if)
+                   #); (*false -> traceSearch;*)
+               if);
+            exit ATd[]
+            #);
           localSearch:            
             (# CS: ^ Text; ATd: ^Decl; pn: @integer
             enter CS[]
@@ -541,13 +569,15 @@ checker: Parser
                     do current[] -> I[]; 
                        (if I.isDecl then
                            I[] -> AT[]; 
-                           (if false and traceSearch then
+                           (if traceSearch then
                                'Try: ' -> puttext; AT.sig.id[] -> putline;
                            if);
                            (if not nameListInDcl and (CS[] -> AT.sig.id.equalNCS) 
                                or OneArgFunc then
-                               (*'Found: ' -> puttext; CS[] -> puttext;
-                                ' in: ' -> puttext; doPT->putheadN;*)
+                               (if false then
+                                   'Found:A: ' -> puttext; CS[] -> puttext;
+                                   ' in: ' -> puttext; doPT->putheadN;
+                               if);
                                AT[] -> ATd[]; (* ATd is Decl *)
                            if);
                            (if nameListInDcl then
@@ -579,12 +609,14 @@ checker: Parser
                            if)if)if)#)if);
                            (if (ATd[] <> none) then
                                ATd.asDecl -> ATdx[];
-                               (*ATd.label -> puttext; newline;
-                               dopt -> putHeadN; 'father:'->puttext;
-                               Atd.father.father.dopt -> putline;
-                               ATDx[] = none -> putboolean;
-                               newline;
-                               ATDx.label->putline;*)
+                               (if false then
+                                   ATd.label -> puttext; newline;
+                                   dopt -> putHeadN; 'father:'->puttext;
+                                   Atd.father.father.dopt -> putline;
+                                   ATDx[] = none -> putboolean;
+                                   newline;
+                                   ATDx.label->putline;
+                               if);
                                (if (ATdx## = ModuleItem##) then
                                    (* A hack, and worse: this does 
                                     * not work as long as
@@ -601,6 +633,7 @@ checker: Parser
                                if);
                                leave searchDcls
                     if)if)#);
+
                     (if sig[] <> none then 
                         CS[] -> sig.localSearch -> (ATd[],pn);(* pn = 0*)
                     if);
@@ -752,6 +785,9 @@ checker: Parser
                    '**   in: ' -> putline; doPT -> puthead; newline
                if);
                CS[] -> localSearch -> (ATd[],pn);
+               (* we should probably split localSearch into searchMain 
+                * and and searchSuper *)
+               (if ATd[] = none then NA[] -> searchEmbodied -> ATd[] if);
                (if ATd[] = none then
                    NA[] -> searchIncludeProp -> ATd[];                   
                    (if false and (ATd[] <> none) then
@@ -804,7 +840,7 @@ checker: Parser
                    ' on:' -> puttext; on -> putint; 
                    ' pn:' -> puttext; pn -> putint; 
                    newline
-               if)
+               if);
             (*exit(ATd[],on,pn) *)
             #);
           basicNo: integerValue
@@ -1024,6 +1060,53 @@ checker: Parser
                         dopt -> putline
                     if)
                  #);
+               checkEmbody:
+                 (# org: ^Items; INV: ^Invocation
+                 do (if not (origin[]->org[]).newBasicProp.checkingEmbodiedProp 
+                        then
+                        (*'**** checkEmbody:'->puttext;*)
+                        true -> org.newBasicProp.checkingEmbodiedProp;
+                        (origin[]->org[]).newBasicProp.embodiedProp.scanSons
+                        (# OI: ^ObjectInvocation; ok: @boolean; 
+                           ATd: ^Decl; pn: @integer
+                        do (*'**   checkEmbody:son:'->puttext; 
+                            * current.dopt->putline;*)
+                           (if not isFirst then 
+                               current.scanSons
+                               (# n: @integer
+                               do (*'check:'->puttext; 
+                                   * current.dopt -> putline;*)
+                                  current[] -> INV[];
+                                  INV.scanSons
+                                  (#
+                                  do n + 1 -> n;
+                                     (if current## = ObjectInvocation## then
+                                         current[] -> OI[];
+                                         true -> ok
+                                     if)
+                                  #);
+                                  (if (n = 1) and ok then
+                                      (*'**** got:OI:'->puttext; 
+                                       * OI.dopt->putline;
+                                       * origin.dopt -> putline;
+                                       *)
+                                      OI.ptnid.T[] 
+                                        -> org.localSearch -> (ATd[],pn);
+                                      (if ATd[] <> none then
+                                          '**** checkEmbody:found: ' ->puttext;
+                                          ATd.dopt ->putline;
+                                          ATd[] -> OI.ATd[] -> INV.ATd[];
+                                          true -> OI.isEmbodied
+                                      if);
+                                      '**   check:ATD:'->putline;
+                                      (*true -> traceCheck;*)
+                                      (none,org[],none,true) -> ATd.check;
+                                      false -> traceCheck;
+                        if)#)if)#);
+                        false -> org.newBasicProp.checkingEmbodiedProp;
+                        (*'**   checkEmbody:end:'->putline*)
+                    if)
+                 #)
             do (if traceCheck then
                    '**** NewProperty:Check: ' -> puttext; dopt -> putline;
                    (*''**   scope:A: ' -> putline; basicScope.dopt -> puthead*)
@@ -1051,6 +1134,8 @@ checker: Parser
                      // '%publicInSub' -> propId.T.equalNCS then
                      // '%private' -> propId.T.equalNCS then
                      // '%domain_boundary' -> propId.T.equalNCS then
+                     // '%embody' -> propId.T.equalNCS then
+                        checkEmbody;
                      // '%unit' -> propId.T.equalNCS then
                         this(NewProperty)[] -> addToUnitTable
                      // '%association' -> propId.T.equalNCS then
@@ -1170,7 +1255,8 @@ checker: Parser
             #);
           search::
             (# org: ^Scope
-            do NA.T[] -> localSearch -> (ATd[],pn);
+            do
+               NA.T[] -> localSearch -> (ATd[],pn);
                (if ATd[] = none then
                    (NA[],isFirst) -> (origin[]->org[]).search -> (ATd[],on,pn)
                if)
@@ -3052,6 +3138,7 @@ checker: Parser
                   * we check if scp has exactly one DataItem like
                   *    X: var float
                   * and the float is searched in scp
+                  * We dont fo this - must ensure we are in a unit!
                   * Perhaps to ensure that Float in magnintude: var Float
                   * has an ATd in Dimension.Unit and supatterns of Unit!?
                   *)
@@ -3068,8 +3155,9 @@ checker: Parser
                     (if n = 1 then
                         (*'**** Got:DI: ' -> puttext; DI.dopt -> putline;*)
                         (if DI.OG.IS.isEmpty 
-                            and 
-                            (((DI.OG.super.last).ATd[]->dcl[]) <>none) then
+                            and (((DI.OG.super.last).ATd[]->dcl[]) <>none)
+                            and (dcl.OG.primNo = float_Prim)
+                            then
                             (* dcl[] = none may happen in e.g.
                              *    ind : var intEEger
                              * where intEEger is not declared
