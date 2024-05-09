@@ -1139,6 +1139,7 @@ checker: Parser
                      // '%publicInSub' -> propId.T.equalNCS then
                      // '%private' -> propId.T.equalNCS then
                      // '%domain_boundary' -> propId.T.equalNCS then
+                     // '%abstract' -> propId.T.equalNCS then
                      // '%embody' -> propId.T.equalNCS then
                         checkEmbody;
                      // '%unit' -> propId.T.equalNCS then
@@ -1149,7 +1150,6 @@ checker: Parser
                      // '%locals' -> propId.T.equalNCS then
                      // '%interface' -> propId.T.equalNCS then
                      // '%arguments' -> propId.T.equalNCS then
-                     // '%abstract' -> propId.T.equalNCS then
                      // '%kind' -> propId.T.equalNCS then
                      // '%immutable' -> propId.T.equalNCS then
                      // '%unique' -> propId.T.equalNCS then
@@ -1529,10 +1529,13 @@ checker: Parser
      DataItem::<
        (# setUpOrigin::
             (#
-            do origin[] -> sig.setUpOrigin; 
+            do (if not isConst and not isValue then
+                   true -> OG.super.isSuper
+               if);
+               origin[] -> sig.setUpOrigin; 
                origin[] -> OG.setUpOrigin; 
                sig[] -> OG.sig[];
-               true -> OG.isObj (* perhaps only for part-objects! *)
+               true -> OG.isObj; (* perhaps only for part-objects! *)
             #);
           check::
             (# elm::Items
@@ -2207,11 +2210,12 @@ checker: Parser
      ObjectGenerator::<
        (# setUpOrigin::
             (#
-            do origin[] -> super.setUpOrigin;  
+            do (if not IS.isEmpty then true -> super.isSuper; if);
+               origin[] -> super.setUpOrigin;  
                origin[] -> IS.setUpOrigin;
                this(ObjectGenerator)[] -> IS.encOG[];
                sig[] -> IS.sig[];
-               super[] -> IS.super[]
+               super[] -> IS.super[];
             #); 
           checkSuper: booleanValue
             (# checkIfSuperIsCircular: BooleanValue
@@ -2468,7 +2472,13 @@ checker: Parser
      Invocation::<
        (* INV = R.Q.X, where R,Q,X: exp, R,Q may be data-item or patter*)
        (# setupOrigin:: 
-            (#do scanSons(#do origin[] -> current.setUpOrigin #)#);
+            (#
+            do scanSons
+               (# E: ^Exp
+               do isSuper -> (current[]->E[]).isSuper;
+                  origin[] -> E.setUpOrigin; 
+               #)
+            #);
           check::
             (# E: ^Exp; OGS: ^OGsequence; lastMIa: ^ObjectInvocation;
                emitUnits:
@@ -2557,7 +2567,7 @@ checker: Parser
             #);
           checkOI::
             (# BS: ^Scope
-            do (if (trx) or traceCheck or traceGetVqual then
+            do (if traceCheck or traceGetVqual then
                    '**** ObjectInvocation:checkOI: '->puttext;
                    dopt->puthead; ' ' -> put;
                    ' isFirst:'->puttext; isFirst -> putBoolean; newline
@@ -2773,6 +2783,24 @@ checker: Parser
                             ptnId.T[] -> scp.localSearch -> (ATd[],pn);
                     if)if)
                  #);
+               checkIfAbstract:
+                 (* check if ATdx is a pattern having an %abstract property 
+                  * which is illegal
+                  *)
+                 (# ATdx: ^Decl
+                 enter ATdx[]
+                 do (if ATdx.isPattern then
+                        (if not isSuper 
+                            and ATdx.OG.IS.newBasicProp.isAbstract then
+                            this(ObjectInvocation)[] -> SemanticError
+                            (#
+                            do 'Pattern: "'-> msg; ptnId.dopt -> msg;
+                               '" is abstract and cannot be instantiated'
+                                 -> msg
+                            #)
+                        if)
+                    if)
+                 #);
                org: ^Scope; OGq: ^ObjectGenerator; done: @boolean;
                MD: ^Module; MI: ^ModuleItem; ATdx: ^Decl;
                OS: ^objectSpecification;
@@ -2795,6 +2823,7 @@ checker: Parser
                        (ptnId[],on,pn,ATd[]) -> found;
                        ATd.asDecl -> ATdx[] -> ptnId.ATd[];
                        (none,ATdx.origin[],ATdx.origin[],true) -> ATd.check;
+                       ATdx[] -> checkifAbstract
                     else
                        (if false then
                            '**** OI:check:notFound: ' -> puttext;
