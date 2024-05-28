@@ -288,6 +288,72 @@ semchecker: UnitHandler
                         ' ' -> put; srcOS.dopt -> putline;
                     if);
                  #);  
+               checkSameEncloser:
+                 (# src,dst: ^Decl; srcDI,dstDI: ^DataItem;
+                    is,ix: @integer; 
+                    predSrc,lastSrc,predDst,lastDst: ^Exp;
+                    trace: (# exit false #);
+                 enter(src[],dst[])
+                 do (if trace then 'checkSameEncloser:'->puttext; if);
+                    (if src.isDataItem and dst.isDataItem then
+                        (if trace then 'di:'->puttext; if);
+                        src[] -> srcDI[];
+                        dst[] -> dstDI[];
+                        (* for objects must be isConst - 
+                         * here isValueObj *)
+                        (if src.OG.IS.isEmpty and
+                            dst.OG.IS.isEmpty then
+                            (* src = s1.s2,...,sn
+                             * dst = d1.d2,...,dn
+                             * where sn = dn
+                             * Warning if si <> di 
+                             * where 1 <= i and i < n
+                             *)
+                            (if trace then 'IS:empty:'->puttext; if);
+                            src.OG.super.scanSons
+                            (#
+                            do is + 1 -> is;
+                               lastSrc[] -> predSrc[];
+                               current[] -> lastSrc[]
+                            #);
+                            
+                            dst.OG.super.scanSons
+                            (#
+                            do ix + 1 -> ix;
+                               lastDst[] -> predDst[];
+                               current[] -> lastDst[]
+                            #);
+                            (if (is > 1) and (ix > 1) then
+                                (if trace then 
+                                    'remote:'->dumpT;
+                                    predSrc.dopt -> dumpt;
+                                    lastSrc.dopt -> dumpt;
+                                    predDst.dopt -> dumpt;
+                                    lastDst.dopt -> dumptN;
+                                if);
+                                (if predDst.ATd.asDecl <> predSrc.ATd.asDecl then
+                                    srcOs[] -> warning
+                                    (#
+                                    do 'The type of: '->msg;
+                                       dst.sig.dopt -> qmsg;
+                                       ' and ' -> msg;
+                                       src.sig.dopt -> qmsg;
+                                       ' is ' -> msg;
+                                       lastSrc.dopt -> qmsg;
+                                       '\n**   in different objects: '
+                                         -> msg;
+                                       predDst.dopt -> qmsg;
+                                       ' and '->msg;
+                                       predSrc.dopt -> qmsg;
+                                       '\n**   and thus not the same '-> msg;
+                                       lastSrc.dopt -> qmsg;
+                                    #)
+                                if)
+                            if)
+                        if)
+                    if)
+                 #)
+                    
             do (if traceGetQual then emitTrace if);
                (* We may come here with 
                 * dstU = in base: var Unit
@@ -378,17 +444,36 @@ semchecker: UnitHandler
                     // OG.isValueObj // dstQual.isValueObj then
                        (if true
                         // srcQual[] = dstQual[] then (* OK *)
+                           (if false then
+                               'Equal:src:'->dumptN; srcQual.dopt->putheadN;
+                               'dst:'->dumpT; dstQual.dopt->putheadN;
+                               'src:'->dumpT; srcOS.dopt ->dumpTN;
+                               'dst:'->dumpT; dopt -> putheadN;
+                           if);
+                           (# srcDcl: ^Decl; 
+                           do srcOs.getDecl -> srcDcl[]; 
+                              (if srcDcl[] <> none then
+                                  (if false then
+                                      'srcDecl:'->dumpt;
+                                      srcDcl.dopt -> putheadN;
+                                  if);
+                                  (srcDcl[],this(DataItem)[]) 
+                                    -> checkSameEncloser
+                               else
+                                  newline
+                              if)
+                           #)
+                           
                         // srcQual[] -> dstQual.inSuper then 
                            (if dstQual.primNo <> value_prim then
                                srcOS[] -> Warning
                                (# 
                                do 'The right-side value: "' -> msg;
                                   srcOS.doPT -> msg;
-                                  '" is truncated ' -> msg;
-                                  '\n\twhen assigned to the left-side variable: "'
+                                  '" is truncated \n\t' -> msg;
+                                  'when assigned to the left-side variable: "'
                                     -> msg;
-                                  doPT -> msg;
-                                  '"' -> msg
+                                  doPT -> msg; '"' -> msg
                            #)if)
                         // dstQual[] -> srcQual.inSuper then 
                            srcOS[] -> Warning
@@ -467,6 +552,13 @@ semchecker: UnitHandler
                            (* OK: and may be merged with the case below.
                             * Is splitted for test purposes, see below
                             *)
+                           (if false then
+                               'Equal:'->dumptN;
+                               srcQual.dopt->putheadN;
+                               dstQual.dopt->putheadN;
+                               'src:'->dumpT; srcOS.dopt ->dumpTN;
+                               'dst:'->dumpT; dopt -> puthead;
+                           if)
                         // srcQual[] -> dstQual.inSuper then (* OK *)
                            (* This is just for test purposes: 
                             * for references this is ok, but for values, 
@@ -1071,25 +1163,19 @@ semchecker: UnitHandler
                    if)
                if);
                (*'qual:' -> putline; qual.dopT -> putline;*)
-            #); 
-          XinSuper: BooleanValue
-            (# lQ: ^ObjectGenerator
-            enter lQ[]
-            do ('inSuper:lQ',lQ[]) -> display;
-               ('rQ',lQ[]) -> display;
-               L:
-                 (if lQ[] = this(ObjectGenerator)[] then
-                     true -> value 
-                  else
-                     (if (lQ[] <> none) then
-                         (if (lQ.primNo <> object_prim) then
-                             lQ.super.getQual -> lQ[];
-                             (if lQ[] =  none then
-                                 objectDecl.getQual -> lQ[]
-                             if);
-                             restart L;
-                 if)if)if)
             #);
+          getDecl::
+            (#
+            do (if IS.isEmpty then
+                   super.ATd[] -> dcl[]
+                else
+                   (if father## <= Decl## then
+                       father[] -> dcl[]
+                    else
+                       '**** getDecl:singular:not handled:'->puttext;
+                       dopt ->putheadN
+               if)if)
+            #);          
        #);
      Items::<
        (# semCheck::
@@ -1839,6 +1925,10 @@ semchecker: UnitHandler
                       if)
                    #)
                if)
+            #);
+          getDecl::
+            (#
+            do ATd.asDecl -> dcl[]
             #)
        #);
      IfThen::<
