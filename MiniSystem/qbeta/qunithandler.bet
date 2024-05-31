@@ -3,8 +3,8 @@ INCLUDE 'qchecker';
 INCLUDE 'qvirtual'; 
 INCLUDE 'qunitparser' 
 ---lib:attributes--- 
+withDimProp: (# exit false #);
 doCheckUnits: (# exit false #);
-useNewUnitHandler: (# exit true #);
 UnitHandler: checker
   (# ModuleItem::<
        (# selectForPrintUnits:: (# do not MD.isIncluded -> done #);
@@ -277,13 +277,19 @@ UnitHandler: checker
                                   '*** srcU:'->puttext; srcU[]  -> putline;
                                   (if true then 
                                       true -> UT2.print -> putline;
-                                      srcBV.print -> putline
-                                  if);
-                                  srcBV.print; 
+                                      (if withDimProp then
+                                          srcBv.asSymbols -> putline;
+                                       else
+                                          srcBV.print; 
+                                  if)if);
                                   '*** dstU:'->puttext; dstU[]  -> putline;
                                   (if true then 
                                       true -> UT1.print -> putline;
-                                      dstBV.print -> putline
+                                      (if withDimProp then
+                                          dstBv.asSymbols -> putline;
+                                       else
+                                          dstBV.print -> putline
+                                      if)
                                   if);
                                   dstBV.print
                            if)#);
@@ -1086,6 +1092,7 @@ UnitHandler: checker
        #);
      
      (******************** public patterns **************)
+     addToDimTable:: (# do unitProp[] -> dimTable.add #);
      addToUnitTable:: (# do unitProp[] -> unitTable.add #);
      mkBaseVector:
        (# T: ^UnitTree; BVl,BVr: ^baseVector
@@ -1093,10 +1100,33 @@ UnitHandler: checker
        <<SLOT mkBaseVector:doPart>>
        exit BVl[]                   
        #);
-     noOfBaseUnits: @integer;     
+     findDimElm:
+       (# UorD: ^Text; current,dim: ^dimTable.dimElm
+       enter UorD[]
+       do UorD[] -> unitTable.find
+          (#
+          do (if UorD[] -> current.US[1].equalNCS then
+                 current.theDimElm[] -> dim[];
+                 '**** findDimOfDerived:U: ' -> dumpT; dim.print
+             if)
+          #);
+          (if dim[] = none then
+              UorD[] -> dimTable.find
+              (#
+              do (if UorD[] -> current.US[1].equalNCS then
+                     current[] -> dim[];
+                     '**** findDimOfDerived:D:' -> dumpTN; dim.print
+                 if)
+              #);
+          if);
+          dim[] -> current[];
+          inner
+       #);     
+     noOfBaseDims,noOfBaseUnits: @integer;     
      BaseVector:
        (# <<SLOT BaseVectorLib:attributes>>;
           theBase: [noOfBaseUnits] @integer;  
+          theDim: [noOfBaseUnits] ^dimTable.DimElm;
           (* [8] is Dimension, just technical*)
 
           convFactor: @Real;
@@ -1110,7 +1140,13 @@ UnitHandler: checker
             (# T: @text
               <<SLOT BaseVector_print:doPart>>
             exit T[]
-            #)
+            #);
+          asSymbols:
+            (# T: @text
+              <<SLOT asSymbols:doPart>>
+            exit T[]
+            #);
+            
           (*do 8 -> noOfBaseUnits*)
        exit this(Basevector)[]
        #);     
@@ -1121,25 +1157,63 @@ UnitHandler: checker
      TempInx: (#exit 5 #);
      SubstanceInx: (#exit 6 #);
      LuminousInx: (#exit 7 #);
+     dimTable: @
+       (# <<SLOT dimTableLib:attributes>>;
+          add:
+            (# prop: ^NewProperty; (*P: ^Pattern*)
+            enter prop[]
+            <<SLOT dimTableAdd:doPart>>
+            #);
+          dimElm:
+            (# <<SLOT dimTable_dimElm_LIB:attributes>>;
+               dim: ^Decl; 
+               name: ^Lexem;
+               isBaseDim: @boolean;
+               dimExp: ^StringObj;
+               prop: ^NewProperty;
+               baseInx: @integer; (* if base dim, index into baseVector *)
+               US: [5] ^Text; UStop: @integer;
+               print: <<SLOT dimTable_dimElm_print:descriptor>>;
+            enter(dim[],prop[])
+            exit this(dimElm)[]
+            #);   
+          find:
+            (# u: ^text; current: ^dimElm
+            enter U[]
+            <<SLOT dimTable_find:dopart>>
+            #);  
+          scan:
+            (# current: ^dimElm
+            do (for i: top repeat
+                    DU[i][] -> current[];
+                    inner scan
+               for)
+            #);
+          print: <<SLOT dimTable_print:descriptor>>;          
+          DU: [7] ^dimElm; top: @integer; (* DU other name? *)
+          N: ^ObjectGenerator; DI: ^Decl;
+          L: ^dimElm
+       #);
      unitTable: @
        (# <<SLOT unitTableLib:attributes>>;
           add:
-            (# prop: ^NewProperty; P: ^Pattern
+            (# prop: ^NewProperty; unitPtn: ^Pattern
             enter prop[]
             <<SLOT unitTableAdd:doPart>>
             #);
           unitElm:
             (# <<SLOT unitTable_unitElm_LIB:attributes>>;
                dim: ^Decl; 
+               theDimElm: ^dimTable.DimElm;
                isBaseDim: @boolean;
                unit: ^Pattern;
-               isBaseUnit: @boolean;
+               isPrimaryUnit: @boolean;
                US: [5] ^Text; UStop: @integer;
                convFactor: @real;
                prop: ^NewProperty;
                baseInx: @integer; (* if base unit, index into baseVector *)
                print: <<SLOT unitTable_unitElm_print:descriptor>>;
-            enter(dim[],unit[],prop[])
+            enter(dim[],unit[],prop[],theDimElm[])
             exit this(unitElm)[]
             #);
           findAndCheck:
@@ -1186,7 +1260,7 @@ UnitHandler: checker
             #);
           print: <<SLOT unitTable_print:descriptor>>;            
           DU: [7] ^unitElm; top: @integer;
-          N: ^ObjectGenerator; DI: ^Decl;
+          (*N: ^ObjectGenerator; DI: ^Decl;*)
           L: ^unitElm
        #);
      doPrintUnit:
@@ -1252,5 +1326,6 @@ UnitHandler: checker
                       BV.print
           if)for)#)
        #)
-  do inner
+  do (if withDimProp then dimTable.print; if);
+     inner
   #)
