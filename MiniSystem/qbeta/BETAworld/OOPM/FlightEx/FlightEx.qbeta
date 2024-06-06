@@ -1,9 +1,21 @@
 FlightEx: obj
-   %visible Collections.Set
+   %visible Collections.OrderedList
    TimeOfDay: Value
       ...
-   Date: Value
-      ...
+   Date: 
+      in year: var integer
+      in month: var integer
+      in day: var integer
+      = d: ref Date:
+        out B: var Boolean
+        ...
+      setDate(y: var integer, m: var integer, d: var integer):
+         year := y
+         month := m
+         day := d
+      asString -> S: var String:
+         S := I2S(year) 
+         S := S + "." + I2S(month) + "." + I2S(day)
    Time: Value
       in t: var float
       - :
@@ -14,44 +26,108 @@ FlightEx: obj
          putfloat(t)
       ...
    class Route(name: var String, origin: var String, destination: var String):
-      departureTime: var Time(0) --TimeOfDay 
-      arrivalTime: var Time(0.0) -- TimeOfDay 
+      scheduledDepartureTime: var Time(0)
+      scheduledArrivalTime: var Time(0.0)
       flyingTime: var Time(0)
       setTime(dt: var float,at: var float) -> R: ref Route:
-         departureTime.t := dt
-         arrivalTime.t := at
-         R := this(Route)	 
+         scheduledDepartureTime.t := dt
+         scheduledArrivalTime.t := at
+         R := this(Route)
+      flights: obj OrderedList(#Flight)
+      createFlight(D: ref Date(0,0,0)):
+         flights.insert(Flight(D,scheduledDepartureTime,scheduledArrivalTime))
+      scan:
+          currentX: ref Flight
+          flights.scan
+             currentX := current
+             inner(scan)	     
+      lookupFlight(d: ref Date(0,0,0)) -> F: ref Flight:
+           flights.scan
+                if (true) :then -- (current.departureDate = d) :then
+                    F := current
       class Flight: 
-         departureDate: var Date 
-         in actualDepartureTime: var Time(0.0) --TimeOfDay 
-         in actualArrivalTime: var Time(0) -- TimeOfDay 
+         in departureDate: ref Date(0,0,0)
+         in departureTime: var Time(0.0) --TimeOfDay 
+         in arrivalTime: var Time(0) -- TimeOfDay 
          actualFlyingTime: var Time(0)
-         isLanded: var Boolean	 
+         hasTakenOff: var Boolean
+         hasArrived: var Boolean
          seats:
             ...
-         delay -> t: var Time(0):
-            t := actualArrivalTime - arrivalTime
+         delay -> t: var float:
+            t := arrivalTime.t - scheduledArrivalTime.t
          status -> info: var String:
-            info := "Departed at: " + F2S(actualDepartureTime.t)
-            if (isLanded.not) :then
-                info := info + " expected at: " + F2S(actualArrivalTime.t)
+            info := ("Flight " + name + " at: " + departureDate.asString)
+            if (hasTakenOff.not) :then
+                info := info + " On schedule: " + I2S(departureTime.t)
             :else
-                info := info + " landed at: " + F2S(actualArrivalTime.t) + \
+                info := info + " Detarted at: " + I2S(departureTime.t)
+            if (hasArrived.not) :then
+                info := info + " expected at: " + F2S(arrivalTime.t)
+            :else
+                info := info + " Departed at: " + F2S(departureTime.t)
+                info := info + " arrived at: " + F2S(arrivalTime.t) + \
                           " delayed: " +F2S(delay)
       print:
          ("route: " + name + " origin: " + origin + " destination " \
                     +  destination + " departure: ").print
-         departuretime.print
+         scheduledDepartureTime.print
          put(' ' )
-         arrivalTime.print
-         newline	 
-
+         scheduledArrivalTime.print
+         newline
    TimeTable: obj  -- alternative just Routes
-      entries: obj Set(#Route)
+      entries: obj OrderedList(#Route)
+      createFlights(d: ref Date(0,0,0)):
+         "CreateFlights:\n".print
+         entries.scan
+            current.createFlight(d)
+      scanTT:
+         current: ref Route
+         entries.scan
+             this(scanTT).current := current
+             inner(scanTT)     
+      lookupRoute(routeId: var String) -> theRoute: ref Route:
+         entries.scan
+            if (current.name = routeId):then
+                theRoute := current
+                leave(LookupRoute) -- leave LookUp fails in codegen
+      lookupFlight(routeId: var String, d: ref Date(0,0,0)) -> F: ref Route.Flight:
+         R: ref Route
+         R := lookupRoute(routeId)
+         F := R.lookUpFlight(d)
       print:
          "TimeTable:\n".print
-         entries.scan	 
+         entries.scan
             current.print
+   mkTimeTable:
+      SK1926: obj Route("SK1926", "AAR","OSL")
+      Sk1926.setTime(9.00,10.30)
+      SK1927: obj Route("SK1927", "OSL","AAR")
+      SK1927.setTime(8.00,9.30)
+      SK1023: obj Route("SK1023", "CPH","JFK")
+      SK1023.setTime(10.05,17.34)
+      TimeTable.entries.insert(SK1926)
+      TimeTable.entries.insert(SK1927)
+      TimeTable.entries.insert(SK1023)
+      TimeTable.print
+   mkFlights:
+      TimeTable.createFlights(Date(2024,06,19))
+   showFlightStatus:
+      "\nFlight status:\n".print
+      TimeTable.scanTT
+         F: ref Route
+         F := current 
+         F.scan
+              currentX.status.print
+              newline	 
+   runFlights:
+      showFlightStatus
+      F: ref Route.Flight
+      F := timeTable.LookupFlight("SK1926",Date(0,0,0))
+      F.hasTakenOff := true
+      showFlightStatus
+      F.hasArrived := true
+      showFlightStatus
    setUp:
       SK1926: obj Route("SK1926", "AAR","OSL")
       Sk1926.setTime(9.00,10.30)
@@ -60,12 +136,26 @@ FlightEx: obj
       TimeTable.entries.insert(SK1926)
       TimeTable.entries.insert(SK1927)
       TimeTable.print
-      SK1926_flight: obj SK1926.Flight(Time(9.23),Time(10.47))
+      SK1926_flight: obj SK1926.Flight(Date(2024,06,17),Time(9.23),Time(10.47))
       "delay: ".print
       V: var Time(0)
-      V := SK1926_flight.delay
-      V.print
+      V.t := SK1926_flight.delay
+      putFloat(V.t)
       newline
       SK1926_flight.status.print
-   SetUp
+      newline
+      SK1926_flight.hasArrived := true
+      SK1926_flight.status.print
+      newline
+      R: ref Route
+      R := TimeTable.lookupRoute("SK1926")
+      if (R =/= none) :then
+           "Found: ".print
+           R.print
+           newline
+      TimeTable.createFlights(Date(2024,06,19))         
+   "Start\n".print
+   mkTimeTable
+   mkFlights
+   runFlights
    
