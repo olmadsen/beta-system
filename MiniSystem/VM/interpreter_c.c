@@ -2152,17 +2152,18 @@ void  ConvertIndexedAsString(Block *ctx) {
   //printf("\nlength: %i %i%\n",length,X->vfields[length + 2]);
   while (X->vfields[length + 2] == 0 ) {
     length = length - 1;
-    // printf("L:%i ",length);
+    //printf("L:%i ",length);
   }
   QallocIndexed(ctx,X,getTextDescNo(),1,1,length,0);
   
-  //printf("\nlength: %i \n",length);
-  //printf("aaaD %x %s\n", (int)ctx->world,nameOf(ctx->world));
-  //printf("aaaD %x %s\n", (int)getR(ctx->world,3),nameOf(getR(ctx->world,3)));
+  /*printf("\nlength: %i \n",length);
+  printf("aaaD %x %s\n", (int)ctx->world,nameOf(ctx->world));
+  printf("aaaD %x %s\n", (int)getR(ctx->world,3),nameOf(getR(ctx->world,3)));
   putR(ctx->callee,1,getR(ctx->world,3)); // origin - a bloody hack
   ctx->callee->vfields[1 + newAllocOff] = length; // done in QallocIndexed?
-  //printf("callee: %x %s\n",(int)ctx->callee,nameOf(ctx->callee));
-  //printf("origin: %x %s\n",(int)getR(ctx->callee,1),nameOf(getR(ctx->callee,1)));
+  printf("callee: %x %s\n",(int)ctx->callee,nameOf(ctx->callee));
+  printf("origin: %x %s\n",(int)getR(ctx->callee,1),nameOf(getR(ctx->callee,1)));
+  */
   for (i = 2; i <= length + 1; i++) {
     //printf("C: %i\n",X->vfields[i + newAllocOff]);
     ctx->callee->vfields[i + newAllocOff] = X->vfields[i + newAllocOff];
@@ -3777,7 +3778,22 @@ bool traceThreads = true;
 	    float2 = sqrt(float1); // cbrt(float1) givs linker error!?
 #endif
 	    fPush(thisStack,float2);
-	    break;	    
+	    break;
+	  case 145: // floatToString
+	    char buf[80];
+	    Btemplate *X;
+	    //printf("floatToString\n");
+	    float1 = fPop(thisStack);
+	    //gcvt(float1, 6, buf);
+	    sprintf(buf, "%f", float1);
+	    //printf("%s %i\n",buf,strlen(buf));
+	    saveContext;
+	    X = QallocIndexed(thisBlock,NULL,getTextDescNo(),1,1,strlen(buf),0);
+	    restoreContext;
+	    int i = 0;
+	    for (i = 0; i < strlen(buf); i++)
+	      X->vfields[2 + i + newAllocOff] = buf[i];
+	    break;
 	  default:
 	    RTE2("\n\n*** prim: missing case: ",arg1);
 	    runTimeError("prim: missing case");
