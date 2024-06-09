@@ -115,7 +115,8 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case vassign:
 	arg1 = op1(bc,&glsc);
 	arg2 = op1(bc,&glsc);
-	fprintf(trace,"vassign %i %i",arg1,arg2);
+	arg3 = op1(bc,&glsc);
+	fprintf(trace,"vassign %i %i %i",arg1,arg2,arg3);
 	break;
       case store:
 	fprintf(trace,"store %i",op1(bc,&glsc));
@@ -141,6 +142,14 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case xrstoreg:
 	fprintf(trace,"xrstoreg %i ",op1(bc,&glsc));
 	break;
+	
+      case pushFloatConst:
+	arg1 = op4(bc,&glsc); // should read the flaot const
+	arg2 = op4(bc,&glsc);
+	
+	fprintf(trace,"pushFloatConst %x %x",arg1,arg2);
+	break;
+	
       case _double:
 	fprintf(trace,"double");
 	break;

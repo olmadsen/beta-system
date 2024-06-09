@@ -139,8 +139,8 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 Btemplate *getR(Btemplate *obj,int inx);
 void putR(Btemplate *obj,int inx, Btemplate *X);
 
-int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
-void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
+int getV(Btemplate *obj,int inx){ return obj->vfields[obj->valOff + inx];};
+void putV(Btemplate *obj,int inx, int V){ obj->vfields[obj->valOff + inx] = V;};
 
 // **************** Garbage collector ***********************
 //#define traceGC_0
@@ -2795,7 +2795,7 @@ bool traceThreads = true;
 	arg2 = vPop(thisStack); // destOff
         Y = rPop(thisStack);    // destObj
 #ifdef TRACE
-	fprintf(trace,"vassign %i\n",arg1);
+	fprintf(trace,"vassign size:%i mode:%i destOff:%i\n",arg1,mode,arg2);
 #endif
 	int D[10];
 	for (i = 1; i <= arg1; i++){
