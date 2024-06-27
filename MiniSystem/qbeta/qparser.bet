@@ -2,7 +2,8 @@ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qlexer';
 INCLUDE 'qabstractSyntaxTree';
 INCLUDE 'qprimitives';
-INCLUDE 'qsyntaxErrorMessages'
+INCLUDE 'qsyntaxErrorMessages';
+BODY 'parseBody'
 ---lib:attributes---
 (************************ Grammar **********************************
  * Module ::= DataItem
@@ -39,6 +40,7 @@ parser: AbstractSyntaxTree
        do (path.append).copy -> pathToFN[];
           lex[] -> oldLex[];
           &lexer[] -> lex[];
+          oldLex.newFeature -> lex.newFeature;
           &file[] -> inFile[];
           fileName[]  -> inFile.name;
           (if false then
@@ -342,15 +344,20 @@ parser: AbstractSyntaxTree
           (sig[],OG[]) -> LabelDecl -> D[]
        exit D[]
        #);
+     pStatement: 
+       (# S: ^Statement (* ObjectSpecification *)
+       <<SLOT pStatement:doPart>>
+       exit S[]
+       #);
      pObjectSpec:
        (# IV: ^Invocation; E: ^Exp; OI: ^ObjectInvocation;
           IS: ^Items;          
-          OS: ^ObjectSpecification
-       do pInvocation -> IV[];
-          pMainPart -> IS[]; 
-          (if false and IS.isEmpty then
-              (IV[],IS[]) -> ObjectCall -> OS[]
+          OS: ^ObjectSpecification; S: ^Statement
+       do (if newFeature then
+              pStatement -> S[]
            else
+              pInvocation -> IV[];
+              pMainPart -> IS[]; 
               (if pNewFatCommaFile and IS.isEmpty then 
                   IV.last -> E[]; 
                   (if false then
@@ -359,33 +366,28 @@ parser: AbstractSyntaxTree
                       newline;
                   if);
                   (if (E.args[] <> none) 
-                      and (E.args.noOfSons = 4)
+                      and (E.args.noOfSons = 4) (* OBS! hack! *)
                       and (E.args.inBraces) 
                       and E.isObjectInvocation then
                       (if false then
                           '**** pOG:got:arg:as:mainPart: ' -> puttext;
                           E.args.noOfSons -> putint; newline;
                           IV.dopt -> puthead;
-                      if);
-                      (if true then
-                          IV.mkOG -> (IV[],IS[]);
-                          (if false then
-                              '**   IV:' -> puttext; IV.dopt -> putline;
-                              '**   IS:' -> putline; IS.dopt -> putHead
-                          if)
-                       else
-                          (E[]->OI[]).mkOG -> (IV[],IS[])
-                      if)
-                  if)
+                      if);                      
+                      IV.mkOG -> (IV[],IS[]);
+                      (if false then
+                          '**   IV:' -> puttext; IV.dopt -> putline;
+                          '**   IS:' -> putline; IS.dopt -> putHead
+              if)if)if);              
+              (IV[],IS[]) -> ObjectGenerator -> OS[];
+              OS.IS.handleNewProps;
+              OS[] -> S[];
+              (if false then
+                  '*** pObjectSpec: ' -> puttext; OS.dopt -> putline;
+                  OS.doPP -> putline
               if);
-              (IV[],IS[]) -> ObjectGenerator -> OS[]
           if);
-          OS.IS.handleNewProps;
-          (if false then
-              '*** pObjectSpec: ' -> puttext; OS.dopt -> putline;
-              OS.doPP -> putline
-          if);
-       exit OS[]
+       exit S[]
        #);
      pObjectGenerator:
        (* <ObjectInvocation>
@@ -540,7 +542,8 @@ parser: AbstractSyntaxTree
                 // lex.symbols.inArg // lex.symbols.outArg 
                 // lex.symbols.class then
                    pDecl -> D[] -> I.append
-                // lex.symbols.idf then
+                // lex.symbols.idf 
+                // lex.symbols.vAssign // lex.symbols.rAssign then
                    (* Here we do lookahead of 1-3 symbols to determine
                     * if the next item is a DECLARATION or an EXPRESSION
                     *)
@@ -926,7 +929,8 @@ parser: AbstractSyntaxTree
                     pArguments(#do D[] -> args.append #); 
                 if);
                 (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
-             // lex.symbols.special then
+             // lex.symbols.special
+             // lex.symbols.vAssign // lex.symbols.rAssign then
                 (* binary *)
                 lex.sym[] -> sym[] -> NameDecl -> names.append;
                 lex;
@@ -946,11 +950,10 @@ parser: AbstractSyntaxTree
                     #);
                     (sym[],names[],args[],false) -> BinarySigGen -> sig[]
                 if)
-             else
-                '-error-'->NameDecl->names.append;
+             else 
+                '-error-' -> NameDecl -> names.append;
                 4 -> syntaxError;
-                ('-error-',names[],Arguments,false) 
-                  -> UnarySigGen -> sig[]
+                ('-error-',names[],Arguments,false) -> UnarySigGen -> sig[]
             if);
           (if lex.symb = lex.symbols.return then
               lex;
@@ -1493,7 +1496,7 @@ parser: AbstractSyntaxTree
      pKeyword:
        (# sym,id: ^Text; (* sym = keyword = %put *)
           K: ^Exp;
-          args: ^Arguments; OG: ^objectSpecification;
+          args: ^Arguments; OG: ^Statement(*objectSpecification;*)
        enter(sym[])
        do sym[] -> id[]; 
           Arguments -> args[];
@@ -1538,7 +1541,7 @@ parser: AbstractSyntaxTree
        exit K[]
        #);
      pIfExp:
-       (# ifE: ^Exp; cond,thenPart,elsePart: ^ObjectSpecification
+       (# ifE: ^Exp; cond,thenPart,elsePart: ^Statement(*ObjectSpecification*)
        do pObjectSpec -> cond[];
           (if (lex.symb <> lex.symbols.fatComma)
               and not (':then' -> lex.sym.equalNCS) then
@@ -1926,7 +1929,7 @@ parser: AbstractSyntaxTree
      rootModule,
      main: ^Module;
      mainPT,mainPP,printHTMLfile: @boolean;
-     altParser: @boolean
+     altParser: @boolean;
   do true -> newFatComma -> altParser;
      (if onlyLex then
          (FN[],altParser) -> genTokenStream
@@ -1975,6 +1978,7 @@ parser: AbstractSyntaxTree
               *)
              &lexer[] -> lex[]; 
              true -> lex.isXbeta;
+             newFeature -> lex.newFeature;             
              path.init;
              (fullPath,FN[]) -> locateWorld -> topPath[];
              (* Currenly we assume that BETAworld is using.xbeta syntax!*)
