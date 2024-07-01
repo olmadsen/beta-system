@@ -1,0 +1,105 @@
+LottoExperiment: obj MonitorSystem.System
+   %visible Collections.OrderedList,Collections.Set,LIB.DateTime, LIB.Dimensions
+
+   clock: obj
+      waitAweek -> B: var Boolean:
+         ...
+      now -> T: var TimeOfDay(0 min):
+         ...
+      oneWeek -> T: var TimeOfDay(0 min):
+         ...
+   random(start: var integer, end: var integer) -> V: var float:
+       ...   
+   sevenRandomNumbers -> srn: ref Indexed(7, Integer):
+      inx: var Integer
+      srn := Array(7, Integer)
+      next:
+         n: var integer      
+         n := random(1,34)
+         if (srn.has(n)) :then    
+           restart(next)
+         :else
+            srn.put(n):at[inx]
+            inx := inx + 1
+            if (inx < 7) :then 
+               restart(next)
+
+   inTheMoodForPlaying -> m: var Boolean:
+      i: var Integer
+      i := random(0,1)
+      m := random(0,1) <> 0
+
+   inTheMoodForPlayingSameNumbers -> m: var Boolean:
+      i: var Integer
+      i := random(0,1)
+      m := random(0,1) <> 0
+
+   class Bet(timeIssued: var TimeOfDay(0 min), 
+      playerKind: ref String, numbers: ref Indexed(7, Integer) ):
+      %immutable 
+      ... -- mainpart cannot be empty
+   class Player: Process 
+      kind: ref String
+      myBet: ref Bet
+      if (inTheMoodForPlayingSameNumbers) :then 
+         kind := "same"
+      :else 
+         kind := "random"
+      myBet := Bet(clock.now, this(Player).kind, sevenRandomNumbers)
+      cycle -- for each week
+         if (inTheMoodForPlaying) :then 
+            if (kind = "random") :then 
+                myBet :=  Bet(clock.now, this(Player).kind, sevenRandomNumbers)    
+            lotto.submitBet(myBet)
+         clock.waitAweek
+
+   lotto: obj monitor
+      bets: obj Set(#Bet)
+      winningBet: ref Bet   
+      deadline: var TimeOfDay(0 min)
+
+      clearBets: entry
+         bets.clear
+ 
+      submitBet(b: ref Bet): entry
+         if ((b.timeIssued <= deadline) &&
+            (b.timeIssued >= (deadline - clock.oneWeek))) :then
+               bets.insert(b)
+
+      findWinningBets: entry -- must be sub of entry
+         noOfRandomWinners: var integer
+         noOfSameWinners: var Integer
+         winningBet:= Bet(clock.now, "winning bet", 
+                          sevenRandomNumbers)
+         -- check if any bet matches winningBet
+         bets.scan
+            if (current.numbers == 
+                winningBet.numbers) :then
+               if (current.playerKind = "random") :then
+                   noOfRandomWinners := noOfRandomWinners + 1
+               :else 
+                   noOfSameWinners := noOfSameWinners + 1
+               -- print noOfRandomWinners, noOfSameWinners
+      
+   
+   maxNoOfPlayers: val 100000
+   inx: var Integer
+   players: obj Set(#Player)
+
+   cycle -- generate players 
+      if (inx < maxNoOfPlayers) :then 
+         inx := inx + 1
+         players.insert(Player("aPlayer")) -- Player has an id as paremeter
+  
+   -- starting lotto and the players:
+   lotto.deadline := clock.now + clock.oneWeek
+   -- deadline must be set before starting the players
+   players.scan  
+      current.start 
+
+   cycle    
+      clock.waitAweek
+      lotto.findWinningBets
+      lotto.clearBets
+      lotto.deadline := clock.now + clock.oneWeek
+   
