@@ -327,7 +327,11 @@ UnitHandler: checker
              * Apparently used by switch --showUnits
              *)
             (#
-            do '!!!! SelectForPrintUnits:'->dumpT; dopt -> dumpTN;
+            do (if false then
+                   '**** SelectForPrintUnits:'->dumpT; dopt -> dumpTN;
+               if);
+               (none,none,left.last) -> doPrintUnit; 
+               (left.last,none,right.super.last) -> doPrintUnit
             #)
           
        #);
@@ -645,6 +649,10 @@ UnitHandler: checker
                          (if E.ATd[] <> none then
                              (if E.ATd.primNo
                               // vassign_prim // rassign_prim then
+                                 '\n!!!! INV:selectForPrintUnits:hasAssign:'
+                                   ->puttext;
+                                 'shpuldNotHappen:'->dumpT;
+                                 dopt -> dumpTN;
                                  true -> value;
                                  (none,none,rec[]) -> doPrintUnit;
                                  E.args.scanSons
@@ -1136,7 +1144,8 @@ UnitHandler: checker
      addToDimTable:: (# do unitProp[] -> dimTable.add #);
      addToUnitTable:: (# do unitProp[] -> unitTable.add #);
      mkBaseVector:
-       (# T: ^UnitTree; BVl,BVr: ^baseVector
+       (# T: ^UnitTree; BVl,BVr: ^baseVector;
+          notValidUnit:< Object
        enter T[]
        <<SLOT mkBaseVector:doPart>>
        exit BVl[]                   
@@ -1329,17 +1338,46 @@ UnitHandler: checker
        #);
      doPrintUnit:
        (* See ObjectInvocation:selectForPrintUnit regarding E.unitPrinted *)
-       (# rec: ^Exp; E: ^Exp; recU,U: ^text; UT: ^UnitTree; BV: ^BaseVector
+       (# rec: ^Exp; E: ^Exp; recU,U: ^text; UT: ^UnitTree; BV: ^BaseVector;
+          stripUnit: 
+            (* Perhaps a kind of hack;
+             * we may have U = '(1/(#F))' or similar and 
+             * we need to reduce it to '#F'
+             * We should look into using #F and #I and combinations
+             * with numbers like '(1/(#I))'
+             *)
+            (# U,Ux: ^text; stripped: @boolean
+            enter U[]
+            do U[] -> Ux[];
+               L: 
+                 (if (1->Ux.inxGet) = '(' then
+                     (2,Ux.length-1) -> Ux.sub -> Ux[];
+                     (if ('1/'-> ((1,2) -> Ux.sub).equal) then
+                         (3,Ux.length) -> Ux.sub -> Ux[];
+                         true -> stripped;
+                         restart L
+                     if)
+                 if);
+               (if stripped then 
+                   (if traceUE then
+                       '**** stripUnit: "'->puttext; U[] -> puttext;
+                       '" to: "'->puttext; Ux[] -> puttext; '"\n'->puttext
+                   if);
+                   Ux[] -> U[]
+               if)
+            exit U[]
+            #);
        enter(rec[],recU[],E[])
        do (if not E.unitPrinted then
               (if recU[] = none then
                   (if rec[] = none then
                       '' -> recU[] 
                    else
-                      rec.getExpUnit -> recU[]
+                      rec.getExpUnit -> recU[];
               if)if);
               (if ((recU[] -> E.getExpUnit -> U[]) <> none) 
                   and (U.length > 0) then
+                  U[] -> stripUnit -> U[];
                   (if true
                    // '#I' -> U.equal
                    // '#F' -> U.equal 
@@ -1355,8 +1393,9 @@ UnitHandler: checker
                               rec.dopt -> puttext
                           if);
                           ' E: ' -> puttext; E.dopt -> putline;
-                      if);
-                      E[] -> notification
+                      if);  
+                      notify:
+                        E[] -> notification
                       (# printHeading::
                            (#do 'UNIT of expression' -> puttext #);
                          report:: (#do true -> value #)
@@ -1365,7 +1404,10 @@ UnitHandler: checker
                          '\n**         unit: ' -> msg;
                          U[] -> msg;
                          '\n**    dimension: ' -> msg;
-                         U[] -> parseUnit -> UT[] -> mkBaseVector -> BV[];
+                         U[] -> parseUnit -> UT[] 
+                           -> mkBaseVector 
+                         (# notValidUnit::(#do leave notify #)#)
+                           -> BV[];
                          BV.print -> msg
                   #)if);
                   true -> E.unitPrinted
