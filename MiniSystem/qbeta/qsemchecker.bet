@@ -677,9 +677,9 @@ semchecker: UnitHandler
        do E.ATd.doPT -> puthead;
           (if E.ATd[] <> none then (E.ATd.asDecl).isPatternDecl -> value if)
        #); 
+     
      pattern::<
-       (#
-          checkQual::
+       (# checkQual::
             (* We come here for assignments of the form
              *    (this Speed) := exp
              * where 
@@ -842,16 +842,17 @@ semchecker: UnitHandler
                     if)
                  exit(srcQual[],dstQual[])
                  #);
-               checkForLocalsConflict:
-                 (# current,srcQual,dstQual: ^ObjectGenerator;
-                 enter(current[],srcQual[],dstQual[])
+               checkForLocalsConflictX:
+                 (# dst,srcQual,dstQual: ^ObjectGenerator;
+                 enter(dst[],srcQual[],dstQual[])
                  do (origin[]->org[]).scanLocals
                     (# OBS:
                          (#
                          do actualArgs[] -> warning
                             (#
-                            do 'locals conflict:\n' -> msg;
-                               current.dopt -> msg;  '\n' -> msg;
+                            do 'locals conflict:\n\t' -> msg;
+                               dst.dopt -> msg;  
+                               '\n  cannot be assigned to:\n\t' -> msg;
                                fArgs[inx].dopt -> msg
                             #)
                          #)
@@ -930,8 +931,13 @@ semchecker: UnitHandler
                           current.primNo = none_prim ->putBoolean; newline;
                           current.dopt -> putline;
                       if);
-                      (current[],srcQual[],dstQual[]) 
-                        -> checkForLocalsConflict;
+                      (if true then
+                          (theOI[],fArgs[inx][],current[],srcQual[],dstQual[]) 
+                            -> (origin[]->org[]).checkForLocalsConflict
+                       else
+                          (current[],srcQual[],dstQual[]) 
+                            -> checkForLocalsConflictX;
+                      if);
                       (current[],srcQual[],dstQual[],false) 
                         -> fArgs[inx].checkQual;
                   if);
@@ -1128,6 +1134,7 @@ semchecker: UnitHandler
                            '" is in an immutable object and cannot be assigned'
                              -> msg
                     #)if)
+                 exit org[]
                  #);
                checkAssignable:
                  (* check that left can be assigned to right *)
@@ -1153,7 +1160,10 @@ semchecker: UnitHandler
                     
                     (right[],srcQual[],dstQual[],true) 
                       -> (receiver.ATd.asDecl).checkQual;
-                 #)
+                 exit(srcQual[],dstQual[])
+                 #);
+               
+               org: ^Items; srcQual, dstQual: ^ObjectGenerator
             do (if false then
                    '**** AssignmentStatement:semCheck:'-> puttext; dopt->putline
                if);
@@ -1161,8 +1171,10 @@ semchecker: UnitHandler
                 * checkIfReceiverInImmutable;
                 * +++ more to check!
                 *)
-               checkIfReceiverInImmutable;
-               checkAssignable;
+               checkIfReceiverInImmutable -> org[];
+               checkAssignable -> (srcQual[],dstQual[]);
+               (this(AssignmentStatement)[],left.last,right.super.ATd.asDecl,srcQual[],dstQual[]) 
+                 -> org.checkForLocalsConflict;
                enclosingOGwithIS -> encOG[] -> eOG[];
                true -> done
             #);
@@ -1589,7 +1601,42 @@ semchecker: UnitHandler
                       inner scanLocals
                    #)
                if)
-            #)          
+            #);
+
+          checkForLocalsConflict:
+            (* Check possible violation of %locals P1, P2, ...
+             * References to Pi-objects can only be hold in data-items in
+             * this(Items); Is not complete; see the paper 
+             *    Subpattern Restriction and the Aliasing Problem
+             * As an example: demo/LocalsEx.xbeta
+             * Assignments marked by ??? are probaly not handled correct
+             *)
+            (# thisS,dst,src: ^Node;
+               (* if thisS: asgStmt, then dst = thisS.left, src = thisS.right
+                * if thisS: ObjectInvocation, dst = fArgs[inx], 
+                *    src = current = actualArgs[inx]
+                *)
+               srcQual,dstQual: ^ObjectGenerator;
+            enter(thisS[],dst[],src[],srcQual[],dstQual[])
+            do (*'**** checkForLocalsConflict: '-> dumpT; dopt->putheadN;*)
+               scanLocals
+               (# OBS:
+                    (#
+                    do thisS(*actualArgs*)[] -> warning
+                       (#
+                       do 'Locals conflict:\n\t' -> msg;
+                          src.dopt -> msg;
+                          '\n  cannot be assigned to:\n\t' -> msg;
+                          dst.dopt -> msg
+                       #)
+                    #)
+               do (if true
+                   // srcQual[] -> current.inSuper then
+                      (if not (dstQual[] -> current.inSuper) then OBS if)
+                   // dstQual[] -> current.inSuper then
+                      (if not (srcQual[] -> current.inSuper) then OBS if)
+               if)#)
+            #);          
        #);
      Invocation::<
        (# semcheck::
