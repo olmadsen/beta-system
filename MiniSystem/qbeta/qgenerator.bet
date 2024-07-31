@@ -4,7 +4,7 @@ INCLUDE '../VM/objectcode';
 BODY 'qgeneratorBody';
 ---lib:attributes---
 generator: codeGenMarker
-  (# noOGwarn: @boolean;
+  (# withValueProxy, noOGwarn: @boolean;
      Module::
        (# codeGenDone: @Boolean;
           gen:: 
@@ -594,7 +594,7 @@ generator: codeGenMarker
                             // OG.isBasicValue 
                             // OG.primNo = value_prim then 
                                (* OG.primNo = value_prim for handling 
-                                * _v: ?Value 
+                                * _v: var Value 
                                 * in integer, char and boolean *)
                                (* problem here! *)
                                adr.load
@@ -609,9 +609,8 @@ generator: codeGenMarker
                                      #);
                                true -> adr.isAdr;
                                E.isCompositeValueObj -> adr.isCompositeValueObj;
-                               cd.fcom(#do 'createValueProxy:'->TT; 
-                                         OG.OGid->TQ;
-                                         dopt -> TQ;
+                               cd.com(#do 'createValueProxy:'->TT; 
+                                         OG.OGid->TQ; dopt -> TQ;
                                          'origin:'->TT; OG.origin.dopt->TQ
                                       #);
                                adr.load; 
@@ -834,14 +833,14 @@ generator: codeGenMarker
                (* checker/semchecker has ensure that dstE is a DataItem *)
                dstE.ATd[] -> dstDI[];
                
-               cd.fcom
+               cd.com
                (#do 'rec:'->TT; (if rec[] <> none then rec.dopt -> TQ if);
                   'dstE:'->TT; dstE.dopt->TQ;
                   'dstE.ATd:'->TT; dstE.ATd.dopt -> TQ;
                   'useRtn:'->TT; useRtnVal->BB;
                   adr.print->TT;                  
                #);
-               cd.fcom
+               cd.com
                (#
                do 'dstDI.isBasicVal:'->TT; dstDI.isBasicValue->BB;
                   'dstDI.isValObj:'->TT; dstDI.OG.isValueObj-> BB;
@@ -899,7 +898,7 @@ generator: codeGenMarker
                    dstDI.objSize -> adr.size;                            
                    (if true
                     // (right.super.ATd.asDecl).isPattern then 
-                       cd.fcom(#do 'right:isPattern:'-> TT #);
+                       cd.com(#do 'right:isPattern:'-> TT #);
                        (right.super.ATd.asDecl 
                          -> ptn[]).getReturnDecl 
                          -> srcDI[];
@@ -910,7 +909,7 @@ generator: codeGenMarker
                        if)if);
                        (if (srcDI[] <> none) and srcDI.OG.isNonBasicValueObj
                            then                       
-                           cd.fcom(#do 'KUK:B:'->TT#);
+                           cd.com(#do 'KUK:B:'->TT#);
                            (if stringAsVal and 
                                (srcDI.OG.primNo = string_prim) then
                                (srcDI.sig.dopt,srcDI.newOff)
@@ -2420,7 +2419,7 @@ generator: codeGenMarker
             enter(on,NA[])
             do (if on > 0 then
                    cd.com(#do 'items:goOrigin:'-> TT; on -> II #);
-                   (if encOG.isValueObj then
+                   (if false and encOG.isValueObj then
                        '**** Items:goOrigin:isValueObj:'->dumpT;
                        encOG.OGid -> dumpTN; dopt->dumpTN;
                        cd.fcom(#do 'goOrigin:valueObj:'->TT; encOG.OGid->TQ #)
@@ -2652,9 +2651,9 @@ generator: codeGenMarker
                                          actualArg.label -> TT;
                                          formalArg.OG.primNo -> II;
                                          actualArg.primno->II;
-                                          (actualArg.desc).encOG.primNo -> II;
-                                          formalArg.OG.isNonBasicValueObj ->BB;
-                                          actualArg.isValueObj ->BB
+                                         (actualArg.desc).encOG.primNo -> II;
+                                         formalArg.OG.isNonBasicValueObj ->BB;
+                                         actualArg.isValueObj ->BB
                                       #);
                                 (if not actualArg.int2floatDone then
                                     formalArg[] 
@@ -3058,6 +3057,15 @@ generator: codeGenMarker
              * m1.print
              * path(m1) o path(Length) o nest(Meter)
              * origins(print) = origins(Length) O nest(Meter)
+             * print.origin = Meter, Meter.origin = Length
+             * P: var R1.R2.R3.PPP
+             * P.msg
+             * P isA PPP
+             * PPP.origin = R3.ATd, R3.origin = R2.origin, R2.origin = R1.ATd
+             * X: var TTT
+             * X.foo
+             * X isA TTT
+             * TTT.origin = encloser(TTT)
              *)
             (# emitCode,hasValueObj: @boolean; T: ^Text;
                getMax:
@@ -3187,6 +3195,55 @@ generator: codeGenMarker
                if);
             exit(hasValueObj,T[])
             #);
+          checkOriginsII:
+            (# T: @Text
+            do (* M1.print(17) *)
+               scanSons
+               (# E: ^Exp
+               do current[] -> E[];
+                  (if not isLast then
+                      E.doPT -> T.append; 
+                      ':'->T.put; 
+                      E[] -> getOrigin -> T.append
+                   else
+                      'last:' -> T.append; E.dopt -> T.append
+                  if);
+               #) 
+            exit T[]
+            #);
+          getOrigin:
+            (* M: var Length.Meter
+             * M.print(17)
+             *)
+            (# E: ^Exp; OGx: ^ObjectGenerator; T: @Text
+            enter E[]
+            do (* E = M1 *)
+               E.ATd.OG[] -> OGx[]; (* OGx = Length.Meter *)
+               
+               (if OGx.IS.isEmpty then                   
+                   OGx.super.scanSons
+                   (#
+                   do current[] -> E[];
+                      ';'->T.put; 
+                      (if not isLast then
+                          E.dopt -> T.append;
+                       else
+                          'last;' -> T.append; E.dopt -> T.append 
+                      if);
+                      (if E.ATd.OG.isValueObj and not E.ATd.OG.isBasicValue then
+                          ';isValueObj ' -> T.putline;
+                          (* no proxy here
+                           * cd.fcom
+                           * (#do 'CreateProxyQ:'->TT; E.ATd.sig.dopt->TQ#);
+                           *)
+                      if)
+                   #)
+                else
+                   ';singular;'->T.append; 
+                   OGx.OGid -> T.append
+               if);
+            exit T[]
+            #);
           gen:: 
             (# gdb:: 
                  (# 
@@ -3202,8 +3259,8 @@ generator: codeGenMarker
                  #);
                rec,E: ^Exp; T: ^Text;
                IVinx,IVlength: @integer; noOrigin: @boolean;
-               needOrigin: booleanValue
-                 (# IT: ^Items; Ex: ^Exp
+               needOrigin: 
+                 (# IT: ^Items; Ex: ^Exp; value,originIsValueObj: @Boolean
                  do true -> value;
                     cd.com(#do 'needorigin:'-> TT; dopt -> TQ #);
                     scanSons
@@ -3216,7 +3273,7 @@ generator: codeGenMarker
                            IVlength -> IVinx
                        if);
                        (* if-stmt below is superflouos?
-                        * not clear why superflouos!?Aand what goes non here?
+                        * not clear why superflouos!? And what goes non here?
                         *)
                        (if not isLast then E[] -> rec[] 
                         else
@@ -3238,7 +3295,12 @@ generator: codeGenMarker
                     Ex[] -> E[];
                     Ex.ATd.desc -> IT[]; 
                     (if IT.globalRestrictionsInMain and not IT.inVirtualPtn then
-                        cd.com(#do 'Ex!LoadOrign:no:loadOrigin: ' -> TT;
+                        (* Check if globalRestrictionsInMain cover only
+                         *    %globals
+                         * or also %globals P1,P2,P3
+                         * If the latter is covered, this check is not correct
+                         *)
+                        cd.com(#do 'Ex:loadOrign:no:loadOrigin: ' -> TT;
                                  IT.encOG.doPT -> TQ #);
                         (if value and false then
                             '!!! needOrigin:conflict:A: ' -> puttext; 
@@ -3254,9 +3316,18 @@ generator: codeGenMarker
                             ' E: ' -> puttext; E.dopt -> puttext;
                             ' Ex: ' -> puttext; Ex.dopt -> putline
                         if); 
-                        cd.com(#do 'doNeedOrigin:Ex:'->TT; Ex.dopt -> TQ #)
+                        cd.fcom(#do 'doNeedOrigin:Ex:'->TT; Ex.dopt -> TQ #);
+                        (# org: ^Items
+                        do (if (IT.origin[]->org[]).encOG.isValueObj
+                               and not org.isPrimitive
+                               -> originIsValueObj then
+                               cd.fcom(#do 'origin:isValueObj:'->TT;
+                                         (IT.origin[]->org[]).encOG.OGid -> TQ 
+                                      #)
+                        if)#)
                     if);
                     not value -> noOrigin
+                 exit(value,originIsValueObj)
                  #);
                handleBracketedExp:
                  (# done: @boolean
@@ -3274,7 +3345,7 @@ generator: codeGenMarker
                     if)if)#)
                  exit done
                  #);
-               done,hasValueObj: @boolean
+               done,hasValueObj: @boolean; T1: ^Text
             do (* for P1.X := P2.Y,
                 * we need no origin for P1 (and X!?)
                 * we need adress of P1 to be added address of X to get embedded
@@ -3292,24 +3363,67 @@ generator: codeGenMarker
                    'Head:'->T[]; dopt->T.putline;
                    false -> checkOrigins -> (hasValueObj,T.puttext);
                    (if hasValueObj then
-                       '---'->putline; T[] -> putline;
+                       (*'---'->putline; T[] -> putline;;*)
+                       '=====' -> putline;
+                       checkOriginsII -> T1[] -> putline;
                if)if);
                handleBracketedExp -> done;
                (if not done then isConstant -> done if);
                (if not done then
-               (# A: ^Address; off,argNo: @integer;
-               do (if needOrigin then
+                   (# A: ^Address; off,argNo: @integer; 
+                      doNeedOrigin,originIsValueObj: @boolean
+               do needOrigin -> (doNeedOrigin,originIsValueObj);
+                  (if doNeedOrigin then
                       superAdj -> computeAdr -> (rec[],E[],A[]);
                   if);
-                  (if hasValueObj and (E.ATd.asDecl).isPattern then
-                      (* shall only happen if E is a pattern and not assign *)
-                      cd.fcom(#do 'hasValueObj:'->TT;  T[] -> TL #);
-                      true -> checkOrigins
-                  if);
-                  cd.fcom(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
-                           (if A[] <>  none then A.print -> TT if); nl;
-                           'rec: ' -> TT; rec.dopt -> TQ; 
-                           'E: ' -> TT; E.dopt -> TQ;
+                      (if withValueProxy and originIsValueObj (*hasValueObj*) 
+                          and (E.ATd.asDecl).isPattern then
+                      (* shall only happen if E is a pattern *)
+                      (* cd.fcom(#do 'hasValueObj:'->TT;  T[]->TL #);*)
+                      (* true -> checkOrigins;*)
+                      (* cd.fcom(#do 'COII:'->TT; T1[]->TL #);*)
+                      (* Actually only generate proxy if E.origin isValueObj
+                       * Perhaps needOrigin should return 
+                       * 1. Standard origin is needed
+                       * 2. No origin is needed
+                       * 3. Origin isValueObj
+                       * Create a proxy object for valueObj
+                       * with ref to embedded obj - on stack
+                       * wih origin as origin of valueObj
+                       * must be computed
+                       *)
+                      (# org: ^Items; Ex: ^Exp; loadRec: @Boolean; A: ^Address
+                      do cd.fcom(#do 'CreateProxyW:'->TT; 
+                                   (E.ATd.origin[]->org[]).encOG.OGid -> TQ;
+                                   (org.origin[] -> org[]).encOG.OGid -> TQ;
+                                   dopt -> TQ
+                                #);
+                         cd.rdouble;
+                         scansons(# 
+                                 do (if not isLast then current[]->Ex[] if) #);
+                         (if Ex[] <> none then
+                             cd.fcom(#do Ex.dopt -> TQ;
+                                       Ex.ATd.OG.super.doPT -> TQ
+                                    #);
+                             Ex.ATd.OG.super.scanSons
+                             (# Ey: ^Exp
+                             do current[] -> Ey[];
+                                (if isFirst then
+                                    cd.fcom(#do 'first:'->TT; Ey.dopt -> TQ #);
+                                    Ey.loadOrigin;
+                                    &Address[] -> Ey.getAdr -> (loadRec,A[]);
+                                    A.loadAdr;
+                                    (85,3) -> cd.mkValueProxy
+                                 else
+                                    cd.fcom(#do 'next:'->TT; Ey.dopt -> TQ #)
+                                if);
+                                cd.fcom(#do 'createValueProxy:'->TT #);
+                             #)
+                         if)
+                  #)if);
+                  cd.com(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
+                           (if A[] <>  none then A.print->TT if); nl;
+                           'rec: '->TT; rec.dopt->TQ; 'E: '->TT; E.dopt->TQ;
                         #);
                   (* case bar(L1) where L1 is a unit
                    * we should not push L2.magnitude
@@ -3987,14 +4101,14 @@ generator: codeGenMarker
                     (if ATd.OG.isValueObj then ' isValueObj'->TT if);
                     ' E:'->TT; E.dopt -> TQ;
                     ' E.ATd:' -> TT; E.ATd.sig.doPT -> TQ;
-                    ' unique:' -> TT; E.ATd.OG.IS.isUnique -> BB
+                    ' unique:' -> TT; E.ATd.OG.IS.isUnique -> BB;
                  #);
                orig: ^Scope; org: ^Items; stubDescNo: @integer; ATdx: ^Decl
             do (* rec is a dataItem *)               
                ATd.origin[] -> orig[];
                (if orig.isItems then
                    (if ((orig[]->org[]) <> none) and org.encOG.isValueObj then 
-                       cd.com(#do 'origin:isValueObj'->TT #)
+                       cd.com(#do 'origin:isValueObj'->TT; org.sig.dopt->TQ #)
                if)if);
                (if (adr[] <> none) and (E.ATd[] <> none)  then
                    (if (E.ATd.asDecl).OG[] <> none then
@@ -4750,7 +4864,14 @@ generator: codeGenMarker
           main[] -> find;
        #);
      genStubs:
-       (# genMain:
+       (# genValueProxy:
+            (# dN: @integer;
+            do (Invocation,Items) -> ObjectGenerator -> QnewDesc -> dN;
+               ('valProx',dN,false, 1,1,'Object',0,false,false) -> cd.class;
+               dN -> valueProxyDescNo;
+               (4,false,0) -> cd.endClass
+            #);
+          genMain:
             (# restartLab,leaveLab: @LabelHandler.label;  
             do (Invocation,Items) -> ObjectGenerator -> QnewDesc -> mDescNo;
                ('main',mDescNo,false,1,0,'Object',0,false,false) -> cd.class;
@@ -4804,13 +4925,22 @@ generator: codeGenMarker
                  -> cd.class;
                cd.stop; (* we should generate stop here and not in betaVM *)
                (1,false,0) -> CD.endClass;               
-            #);                   
-       do genMain;
+            #);
+       do genValueProxy;
+          (* OBS! genMain; genEventProcessor; genThreadStub
+           * MUST come in this order, since interpreter_c assumes
+           * that threadStubDescNo = mainDescNo + 2;
+           * it calls  mainDescNo = getMainDescInx();  
+           * mainDescNo is packed in the image; 
+           * threadStubNo SHOULD also be packed in the image
+           *)
+          genMain;          
           (if not emitLLVM then 
               genEventProcessor;     
               genThreadStub;
           if);
        #);
+     valueProxyDescNo,
      mDescNo: @integer;
      mainDescNo:: 
        (# 
