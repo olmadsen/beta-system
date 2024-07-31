@@ -3247,7 +3247,8 @@ generator: codeGenMarker
           gen:: 
             (# gdb:: 
                  (# 
-                 do '>useRtnV:'->TT; useRtnVal -> BB;
+                 do '>useRtnV:'->TT; useRtnVal->BB;
+                    'superAdj: '->TT; superAdj->II;
                     scanSons
                     (# ptn: ^Pattern; OI: ^ObjectInvocation
                     do (if (current## = ObjectInvocation##)
@@ -3329,6 +3330,39 @@ generator: codeGenMarker
                     not value -> noOrigin
                  exit(value,originIsValueObj)
                  #);
+               mkValueProxy:
+                 (* create a proxy object for the the valueObj being the
+                  * origin of the method E;
+                  * So far it works for rec.E
+                  * But probably not for R1.R2.rec.E
+                  *)
+                 (# org: ^Items; Ex: ^Exp; orgDescNo: @integer;
+                    loadRec: @Boolean; A: ^Address
+                 do E.ATd.origin[]->org[];
+                    org.newDescNo -> orgDescNo;
+                    cd.fcom(#do 'CreateProxyW:'->TT; org.encOG.OGid -> TQ;
+                              'origin:descNo:'->TT; orgDescNo -> II;
+                              (org.origin[] -> org[]).encOG.OGid -> TQ;
+                              dopt -> TQ; 'rec:'->TT; rec.ATd.dopt->TQ; 
+                              'off:'->TT; rec.ATd.newOff -> II;
+                           #);
+                    cd.rdouble;
+                    scansons(#do (if not isLast then current[]->Ex[] if) #);
+                    (if Ex[] <> none then
+                        cd.fcom(#do Ex.dopt->TQ; Ex.ATd.OG.super.doPT->TQ #);
+                        Ex.ATd.OG.super.scanSons
+                        (# Ey: ^Exp
+                        do current[] -> Ey[];
+                           (if isFirst then
+                               cd.fcom(#do 'first:'->TT; Ey.dopt -> TQ #);
+                               Ey.loadOrigin;
+                               &Address[] -> Ey.getAdr -> (loadRec,A[]);
+                               A.loadAdr;
+                               (orgDescNo,rec.ATd.newOff) -> cd.mkValueProxy
+                            else
+                               cd.fcom(#do 'next:'->TT; Ey.dopt -> TQ #)
+                    if)#)if)
+                 #);               
                handleBracketedExp:
                  (# done: @boolean
                  do scanSons
@@ -3345,7 +3379,9 @@ generator: codeGenMarker
                     if)if)#)
                  exit done
                  #);
-               done,hasValueObj: @boolean; T1: ^Text
+               done,hasValueObj: @boolean; T1: ^Text;
+               A: ^Address; off,argNo: @integer; 
+               doNeedOrigin,originIsValueObj: @boolean
             do (* for P1.X := P2.Y,
                 * we need no origin for P1 (and X!?)
                 * we need adress of P1 to be added address of X to get embedded
@@ -3355,124 +3391,72 @@ generator: codeGenMarker
                 * How about: R.S.T.Q ? Q globalRestrictions, or globals?
                 *)
                cd.bcPos -> beginBCP;
-               cd.com(#do 'Invocation:gen:superAdj: '->TT; superAdj->II #);
                (* We should rewrite computeAdr to include handling
                 * of constants, patterns with no origin and bracketedExp
                 *)
-               (if false then
-                   'Head:'->T[]; dopt->T.putline;
-                   false -> checkOrigins -> (hasValueObj,T.puttext);
-                   (if hasValueObj then
-                       (*'---'->putline; T[] -> putline;;*)
-                       '=====' -> putline;
-                       checkOriginsII -> T1[] -> putline;
-               if)if);
                handleBracketedExp -> done;
                (if not done then isConstant -> done if);
                (if done then leave gen if);
                
-               (# A: ^Address; off,argNo: @integer; 
-                  doNeedOrigin,originIsValueObj: @boolean
-               do needOrigin -> (doNeedOrigin,originIsValueObj);
-                  (if doNeedOrigin then
-                      superAdj -> computeAdr -> (rec[],E[],A[]);
-                  if);
-                  (if withValueProxy and originIsValueObj then
-                      (* shall only happen if E is a pattern *)
-                      (* cd.fcom(#do 'hasValueObj:'->TT;  T[]->TL #);*)
-                      (* true -> checkOrigins;*)
-                      (* cd.fcom(#do 'COII:'->TT; T1[]->TL #);*)
-                      (* Actually only generate proxy if E.origin isValueObj
-                       * Perhaps needOrigin should return 
-                       * 1. Standard origin is needed
-                       * 2. No origin is needed
-                       * 3. Origin isValueObj
-                       * Create a proxy object for valueObj
-                       * with ref to embedded obj - on stack
-                       * wih origin as origin of valueObj
-                       * must be computed
-                       *)
-                      (# org: ^Items; Ex: ^Exp; loadRec: @Boolean; A: ^Address
-                      do cd.fcom(#do 'CreateProxyW:'->TT; 
-                                   (E.ATd.origin[]->org[]).encOG.OGid -> TQ;
-                                   (org.origin[] -> org[]).encOG.OGid -> TQ;
-                                   dopt -> TQ
+               needOrigin -> (doNeedOrigin,originIsValueObj);
+               (if doNeedOrigin then
+                   superAdj -> computeAdr -> (rec[],E[],A[]);
+               if);
+               (if withValueProxy and originIsValueObj then
+                   mkValueProxy                      
+               if);
+               cd.com(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
+                        (if A[] <>  none then A.print->TT if); nl;
+                        'rec: '->TT; rec.dopt->TQ; 'E: '->TT; E.dopt->TQ;
+                     #);
+               (* case bar(L1) where L1 is a unit
+                * we should not push L2.magnitude
+                * but push L1 as a valueObj
+                * For E = bar(L1), the load of L1 happens in E.loadArgs 
+                * For X := exp and foo(exp), E.loadArgs load exp
+                * E.invoke generates assigment for := and invocation for foo
+                *)
+               cd.com(#do 'INV:gen:E.loadArgs'->TT; E.dopt->TQ #);
+               (superAdj,off) -> E.loadArgs; (* only if E is pattern *)
+               (if noOrigin and (IVinx < IVlength) then
+                   (* we come here if E does not need an origin
+                    * For IV = I1.I2.,,,.In, E  = Ej, j = IVinx, n = IVlength
+                    * IVinx and IVlength set by needOrigin
+                    *)
+                   (* We do come here! *)
+                   (rec[],E[],true,staticOff,A[],false) -> E.invoke;
+                   (* The code below is only relevant 
+                    * if E does not need an origin.
+                    * We then have to call invoke for Ej+1,...,En
+                    * But what if som Ek, j+1 <= k has no origin?
+                    *)
+                   scanSons
+                   (# found: @boolean; Ey: ^Exp;
+                   do (if found then
+                          cd.com(#do 'IV:gen:checkTail:'->TT; dopt -> TQ;
+                                   'E:'->TT; E.doPT -> TQ;
+                                   'tail:' -> TT; current.dopt -> TQ;
+                                   ' not isLast:' -> TT; not isLast -> BB;
                                 #);
-                         cd.rdouble;
-                         scansons(# 
-                                 do (if not isLast then current[]->Ex[] if) #);
-                         (if Ex[] <> none then
-                             cd.fcom(#do Ex.dopt -> TQ;
-                                       Ex.ATd.OG.super.doPT -> TQ
-                                    #);
-                             Ex.ATd.OG.super.scanSons
-                             (# Ey: ^Exp
-                             do current[] -> Ey[];
-                                (if isFirst then
-                                    cd.fcom(#do 'first:'->TT; Ey.dopt -> TQ #);
-                                    Ey.loadOrigin;
-                                    &Address[] -> Ey.getAdr -> (loadRec,A[]);
-                                    A.loadAdr;
-                                    (85,3) -> cd.mkValueProxy
-                                 else
-                                    cd.fcom(#do 'next:'->TT; Ey.dopt -> TQ #)
-                                if);
-                                cd.fcom(#do 'createValueProxy:'->TT #);
-                             #)
-                         if)
-                  #)if);
-                  cd.com(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
-                           (if A[] <>  none then A.print->TT if); nl;
-                           'rec: '->TT; rec.dopt->TQ; 'E: '->TT; E.dopt->TQ;
-                        #);
-                  (* case bar(L1) where L1 is a unit
-                   * we should not push L2.magnitude
-                   * but push L1 as a valueObj
-                   * For E = bar(L1), the load of L1 happens in E.loadArgs 
-                   * For X := exp and foo(exp), E.loadArgs load exp
-                   * E.invoke generates assigment for := and invocation for foo
-                   *)
-                  cd.com(#do 'INV:gen:E.loadArgs'->TT; E.dopt->TQ #);
-                  (superAdj,off) -> E.loadArgs; (* only if E is pattern *)
-                  (if noOrigin and (IVinx < IVlength) then
-                      (* we come here if E does not need an origin
-                       * For IV = I1.I2.,,,.In, E  = Ej, j = IVinx, n = IVlength
-                       * IVinx and IVlength set by needOrigin
-                       *)
-                      (* We do come here! *)
-                      (rec[],E[],true,staticOff,A[],false) -> E.invoke;
-                      (* The code below is only relevant 
-                       * if E does not need an origin.
-                       * We then have to call invoke for Ej+1,...,En
-                       * But what if som Ek, j+1 <= k has no origin?
-                       *)
-                      scanSons
-                      (# found: @boolean; Ey: ^Exp;
-                      do (if found then
-                             cd.com(#do 'IV:gen:checkTail:'->TT; dopt -> TQ;
-                                      'E:'->TT; E.doPT -> TQ;
-                                      'tail:' -> TT; current.dopt -> TQ;
-                                      ' not isLast:' -> TT; not isLast -> BB;
-                                   #);
-                             (superAdj,off) -> (current[]->Ey[]).loadArgs;
-                             (* In a previous version, 'not isLast' was used
-                              * as the value of the useRtnVal parameter,
-                              * but this did not work for expressions like
-                              * (":" + I2S(N) + "\n").print
-                              * However, there may have been a reason for using
-                              * 'not isLast'!?
-                              *)
-                             (E[],current[],useRtnVal,staticOff,A[],false)
-                               -> Ey.invoke;
-                         if);
-                         (if current[] = E[] then true -> found if);
-                      #);
-                   else
-                      cd.com(#do 'IV:E.invoke:useRtnVal:' -> TT; 
-                               useRtnVal -> BB; 'E:' -> TT; E.dopt -> TQ;
-                            #);
-                      (rec[],E[],useRtnVal,staticOff,A[],false) -> E.invoke;
-               if)#);
+                          (superAdj,off) -> (current[]->Ey[]).loadArgs;
+                          (* In a previous version, 'not isLast' was used
+                           * as the value of the useRtnVal parameter,
+                           * but this did not work for expressions like
+                           * (":" + I2S(N) + "\n").print
+                           * However, there may have been a reason for using
+                           * 'not isLast'!?
+                           *)
+                          (E[],current[],useRtnVal,staticOff,A[],false)
+                            -> Ey.invoke;
+                      if);
+                      (if current[] = E[] then true -> found if);
+                   #);
+                else
+                   cd.com(#do 'IV:E.invoke:useRtnVal:' -> TT; 
+                            useRtnVal -> BB; 'E:' -> TT; E.dopt -> TQ;
+                         #);
+                   (rec[],E[],useRtnVal,staticOff,A[],false) -> E.invoke;
+               if);
                cd.bcPos -> endBCP
             #);
           isConstant: BooleanValue
