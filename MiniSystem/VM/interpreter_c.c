@@ -113,7 +113,7 @@ void RTE2(char *msg, int errNo){
 #ifdef withGC
 #define heapMax 500000
 #else
-#define heapMax 30000000
+#define heapMax 80000000
 #endif
 
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
@@ -1120,7 +1120,7 @@ void *heapAlloc(Block *ctx,int size) {
   //#else
   if (useBetaHeap) {
     if ((heapTop % 4) != 0) heapTop = ((heapTop + 4) / 4) * 4;
-    //printf("heapTop after: %i size: %i",heapTop,size);
+    //printf("heapTop after: %i size: %i\n",heapTop,size);
     if ((heapTop + size) > (heapMax - 8)) {
       // (heapTop - 8) since we need space for a free block at the end
       printf("\n\n!!!! Heap overflow: doBGC\n");
