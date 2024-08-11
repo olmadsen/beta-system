@@ -1,0 +1,299 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'qabstractSyntaxTree';
+---lib:attributes---
+ModuleHandler: AbstractSyntaxTree
+  (# Module::<
+       (# doHandleDirModules:: (# do handleDirModules #);
+          
+          handleDirModules:
+            (# pDirModule:<
+                 (# moduleDir: ^text; (* name of direcory with BETA module *)
+                    md: ^Module
+                 enter moduleDir[]
+                 do inner;
+                 exit md[]
+                 #);
+               findModuleItems:
+                 (# addDirModuleN:
+                      (# dir: ^text
+                      enter dir[]
+                      do (if (dcTop + 1 -> dcTop) > dirModuleN.range then 
+                             dirModuleN.range -> dirModuleN.extend;
+                             dirModule.range -> dirModule.extend
+                         if);
+                         dir[] -> dirModuleN[dcTop][]
+                      #)
+                 do (if trace then
+                        'findModuleItems:in:\n   ' -> puttext; 
+                        path.append -> putline; 
+                    if);
+                    (path.append,false) -> getBETAdirectories
+                    (#
+                    do scan
+                       (#
+                       do (if not currentIsFile then
+                              current[] -> addDirModuleN;
+                 if)#)#)#);
+               
+               dirModuleN: [4] ^text; dcTop: @integer;
+               (* Perhaps save ModuleItemDecl instead?
+                * Perhaps factor appendModule out of scanDir
+                *)
+               dirModule: [4] ^ModuleItem;
+               scanDir:
+                 (# appendModule:
+                      (# dcl: ^Decl 
+                      enter dcl[] 
+                      do dcl[] -> OG.IS.append
+                      #);
+                    currentModule: ^Module;
+                    N: ^text; (* module on path to ...*)
+                 do (*'ScanDir:'->putline; dctop->putint; newline;*)
+                    (for i: dcTop repeat
+                         (*dirModuleN[i][] -> N[] -> putline;*)
+                         dirModuleN[i][] 
+                           -> N[] 
+                           -> pDirModule 
+                           -> currentModule[];
+                         (if currentModule[] = none then
+                             (* happens if MiniBeta *)
+                          else
+                             (true,N[],currentModule[]) 
+                               -> ModuleItem 
+                               -> dirModule[i][];
+                             dirModule[i][] -> addSigFromDI -> appendModule; 
+                             (if currentModule[] = none then 
+                                 'currentModule none' -> putline 
+                             if);
+                             true -> dirModule[i].isParsed; (* eliminate *)
+                             INNER;
+                    if)for)
+                 #);
+               parseModuleItems: scanDir 
+                 (#
+                 do currentModule.sig.id[] -> path.push;
+                    (if trace then
+                        'EQ:'->putline; path.append-> putline; 
+                        locateWorld.CWD[] -> putline; 
+                    if);
+                    &currentModule.handleDirModules
+                    (# pDirModule::
+                         (#
+                         do (* calling pDirModule in enclosing handleDirModule,
+                             * which is called from parser and parser has
+                             * a binding of pDirModule
+                             *)
+                            moduleDir[] 
+                              -> this(handleDirModules).pDirModule 
+                              -> md[]
+                         #)
+                    #) -> m[];
+                    (if m[] <> none then m[] -> main[] if);
+                    path.pop
+                 #);
+                     
+               main,m: ^Module;
+               isNotWorld: @boolean
+            enter isNotWorld
+            do (if trace then
+                   '**** HandleDirModules: '->puttext; 
+                   sig.doPt -> putline;
+                   '**   path: ' -> puttext; path.append -> putline;
+                   '**   CWD: ' -> puttext; pathToFN[] ->  getCWD -> putline;
+               if);
+               0 -> dcTop;
+               (if (dirCh->(path.append).put) -> locateWorld.CWD.equal then
+                   this(Module)[] -> main[];
+                   (if trace then
+                       'Found main: ' -> putline; main.doPT -> putline
+               if)if);
+               
+               findModuleItems;
+               parseModuleItems               
+            exit main[]
+            #);
+          requires: @
+            (* Modules required by this  module *)
+            (# L: [4] ^Module; top: @integer;
+               codeGenDone: @boolean;
+               init:< (# do 0 -> top; #);
+               add:
+                 (# M: ^module
+                 enter M[]
+                 do (if not (M[] -> has) then
+                        (if traceImports then
+                            'requires.add: ' -> puttext; 
+                            M.moduleName -> puttext;
+                            ' to: ' -> puttext; 
+                            (theModule).moduleName -> putline;
+                        if);
+                        (if (top+1->top) > L.range then 
+                            L.range->L.extend if);
+                        M[] -> L[top][];
+                        (if false and not M.isChecked then 
+                            (none,M.origin[],M.origin[],true) -> M.check;
+                            true -> M.isChecked
+                        if);
+                        (* So if module M is required, we apprenly also
+                         * require all enclosing modules! 
+                         * Is this what we mean?
+                         * NO only enclosing of this(Module)
+                         *)
+                    if)
+                 #);
+               scan:
+                 (# current: ^module
+                 do (for i: top repeat
+                         L[i][] -> current[]; inner
+                 for)#);
+               has: BooleanValue
+                 (# M: ^Module
+                 enter M[]
+                 do L:
+                      scan
+                      (#
+                      do  (if (M[] = current[]) -> value then
+                              leave L
+                      if)#)                    
+                 #);
+               import:
+                 (# org: ^Items; M: ^Module; 
+                 do (if origin[] <> none then
+                        (origin[] -> org[]).theModule -> M[];
+                        (if M[] <> none then
+                            (if false then
+                                '**** import: ' -> puttext; 
+                                M.moduleName -> puttext;
+                                ' of: ' -> puttext; 
+                                (theModule).moduleName -> putline;
+                            if);
+                            M.requires.scan
+                            (#
+                            do (if false then
+                                   '**   addQEncReq: ' -> puttext;
+                                   current.sig.dopt -> putline;
+                               if);
+                               current[] -> requires.add 
+                            #);
+                            M[] -> requires.add;
+                    if)if)
+                 #);
+               print:
+                 (#
+                 do '**** Module: "' -> puttext;
+                    moduleName -> puttext; 
+                    '" requires: ' -> puttext;
+                    scan
+                    (#
+                    do current.moduleName -> puttext; ' ' -> put
+                    #);
+                    newline
+                 #)
+            #);
+          imports: @
+            (# L: [4] ^module; top: @integer;
+               init:< (# do 0 -> top;(* ' imports:init ' -> puttext; *) #);
+               addM: 
+                 (# M: ^module; MI: ^ModuleItem
+                 enter M[]
+                 do (if (M.father[] -> MI[]) <> none then
+                        (*'***imports.addM: ' -> puttext; 
+                         * M.moduleName -> putline; *)
+                        MI[] -> add
+                    if)
+                 #);
+               add:
+                 (# mi: ^moduleItem
+                 enter mi[]
+                 do (if traceImports then
+                        'Imports.add: ' -> puttext; 
+                        mi.md.moduleName -> puttext; ' ' ->put;
+                        mi.md.label -> puttext; ' ' -> put;
+                        mi.label -> putline
+                    if);
+                    (if (top+1->top) > L.range then L.range->L.extend if);
+                    mi.md[] -> L[top][];
+                    (if not mi.md.isChecked then 
+                        (none,MI.MD.origin[],MI.MD.origin[],true) 
+                          -> MI.MD.check;
+                        true -> MI.isChecked
+                    if);
+                    addEnclosingModules
+                 #);   
+               addEnclosingModules:
+                 (# org: ^Items; M: ^Module; MI: ^ModuleItem
+                 do (if origin[] <> none then
+                        (origin[] -> org[]).theModule -> M[];
+                        (if M[] <> none then
+                            (*'**** AddEnclosingModule: ' -> puttext; 
+                             * M.moduleName -> putline;
+                             *)
+                            M[] -> M.imports.addM
+                    if)if)
+                 #);
+               scan:
+                 (# current: ^module
+                 do (for i: top repeat
+                         L[i][] -> current[]; inner
+                 for)#);
+               mark: scan
+                 (# 
+                 do (if false then
+                        current.sig.doPT -> putText; ' descNo: '->putText; 
+                        (current.desc).DescNo -> putint; ' ' -> put;
+                    if);
+                    current.markModule
+                 #);
+            #);
+          
+          markModule: 
+            (# inMainP: @boolean
+            enter inMainP
+            do (if traceImports then
+                   'MarkImports: '->puttext; sig.doPT ->putline if);
+               (if inMainP then
+                   (*'Module in main path: ' -> puttext; 
+                    * DI.sig.doPT ->putline;  *)
+                   inMainP -> inMainPath
+               if);
+               
+               (if not isIncluded then (* avoid circularity *)
+                   true -> isIncluded; 
+                   (if not inModuleProp then
+                       '*** Module not in %requires prop: ' -> puttext;
+                       sig.dopt -> putline
+                   if);
+                   imports.mark
+               if);
+            #); 
+          markInModuleProp:
+            (# org: ^Items; M: ^Module; MI: ^ModuleItem
+            do (if not InModuleProp then
+                   (if false then
+                       '**   markInModuleProp: ' -> puttext; 
+                       sig.dopt-> puttext;
+                   if);
+                   true -> inModuleProp;
+                   (if (origin[] <> none) and
+                       (((origin[]->org[]).theModule -> M[]) <> none) then
+                       (if false then
+                           ', markOrigin: ' -> puttext;
+                           M.sig.dopt -> putline;
+                       if);
+                       M.markInModuleProp
+                    else
+                       (if false then 'origin is none' -> putline if);
+               if)if)
+            #);
+          
+          clear::<
+            (#
+            do imports.init;
+               false -> isAdded -> isIncluded -> inMainPath ->inModuleProp;
+               inner
+            #);
+          isAdded,isIncluded,inModuleProp: @boolean;
+          inMainPath: @boolean; (* Module in origin path of main program *)
+       #)
+  do inner
+  #)
