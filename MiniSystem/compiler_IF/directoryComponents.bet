@@ -7,6 +7,27 @@ machine_type: external (# T: [1]@ char  exit T #);
 
 BetaLib: (# path: ^text do '$(BETALIB)' -> expandEnvVar -> path[] exit path[] #);
 
+DirCh: 
+  (# ch: @char; T: @text
+  do machine_type -> T;
+     (if 'linux' -> T.equal then  '/' -> ch else '\\' -> ch if)
+  exit ch
+  #);
+selectFileNameInPath:
+  (* For a path '.../foo.qbeta' return foo *)
+  (# path,FN: ^text; i,pos: @integer; dCh: @char
+  enter path[]
+  do dirCh -> dCh;
+     path.scanAll
+     (#
+     do i + 1 -> i;
+        (if ch = dCh then
+            i -> pos
+        if);
+     #);
+     (pos + 1,path.length - 6) -> path.sub -> FN[];
+  exit FN[]
+  #);
 BetaFile: File
   (# isOpen: @boolean; 
      doOpenRead: 
@@ -121,9 +142,10 @@ DirectoryModules:
      DirectoryComponents:
        (# D: @directory;
           rpath,dir: ^text;  (* rpath = rpathX/dir *)
+          isBody: @Boolean; (* trrue if we scan the body directory *)
           current: ^text;
           isAltExtension: @boolean;
-          private:< (# FN: ^Text enter FN[] do inner #);
+          body:< (# FN: ^Text enter FN[] do inner #);
           nameError:
             (#
             do'\n\n*** In: \n    "' -> puttext;
@@ -135,7 +157,7 @@ DirectoryModules:
                dir[] -> puttext; '"' -> put; newline;
                stop
             #)
-       enter(rpath[],dir[])
+       enter(rpath[],dir[],isBody)
        do rpath[] -> D.name;
           (if false then
               D.entry.path.name -> putline;
@@ -157,8 +179,8 @@ DirectoryModules:
                   // '.' -> current.equal
                   // '..' -> current.equal 
                   // (current.length -> current.inxGet) = '~' then
-                  // 'private' -> current.equal then
-                     current[] -> private
+                  // 'body' -> current.equal then
+                     current[] -> body
                   else                
                      rpath.copy -> T[];
                      dirCh -> T.put;
@@ -169,18 +191,22 @@ DirectoryModules:
                          then
                          (if ((1,current.length-SrcExtLgth) 
                                -> current.sub -> dir.equalNCS)
-                             or BetaBrowser then
+                             or BetaBrowser 
+                             or ('body' -> dir.equal)
+                             then
                              (if false then
                                  'Found component file: ' -> puttext; 
                                  current[] -> putline;
                              if);
                              current[] -> T.append -> current[];
                              inner DirectoryComponents;
-                             leave L (* OBS! Temporary hack. We need to first
-                                      * search for srcExt and if not found,
-                                      * search for altSrcExt and if not found
-                                      * call nameError
-                                      *)
+                             (if not isBody then
+                                 leave L (* OBS! Temporary hack. Must first
+                                          * search for srcExt and if not found,
+                                          * search for altSrcExt, if not found
+                                          * call nameError
+                                          *)
+                             if)
                           else
                              nameError
                          if)
@@ -248,7 +274,7 @@ DirectoryModules:
             enter dir[]
             do (* 'IsBETAdir: ' -> puttext; rPath[] -> puttext; ' '->put; dir[] -> putline;*)
                rpath.copy -> RP[]; dirCh -> RP.put; dir[] -> RP.append;
-               (RP[],dir[]) -> DirectoryComponents(# do true -> value #)
+               (RP[],dir[],false) -> DirectoryComponents(# do true -> value #)
             #);
           allDir: @boolean
        enter(rpath[],allDir)
@@ -271,7 +297,7 @@ DirectoryModules:
                   // '..' -> FN.equal
                   // (1 -> FN.inxGet) = '.'
                   // (fn.length -> FN.inxGet) = '~' then
-                  // 'private' -> FN.equal then
+                  // 'body' -> FN.equal then
                   else            
                      select
                      (# whenFile:: 
