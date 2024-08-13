@@ -56,7 +56,7 @@ restrictions: semchecker
                              inner scanGlobals
                if)#)#)if)
             #);
-          checkGlobalsIncluded:
+          checkGlobalsConform:
             (* adIS: the AD.IS of application
              * check ad.IS.globals IN this(Items).globals
              * Assume that this(items).globals exist
@@ -91,32 +91,32 @@ restrictions: semchecker
                noSubGlobals: @boolean
             enter ad[]
             do (if isObjectQualOrPtnName then
-                   '**** checkGlobalsIncluded:'->puttext;
+                   '**** checkGlobalsConform:'->puttext;
                    ad.dopt -> putheadN;
-                   leave checkGlobalsIncluded
+                   leave checkGlobalsConform
                if);
                ad.ATd.desc -> adIS[];
                (if traceAE then
-                   '\n>>> checkGlobalsIncluded:' -> puttext;
+                   '**** checkGlobalsConform:' -> puttext;
                    adIS.dopt -> putheadN
                if);
                true -> noSubGlobals;
                adIS.scanGlobals
                (# hasGlobals:: (# do false -> noSubGlobals #);
                do (if traceAE then
-                      ':sub: ' -> puttext; 
+                      '**   sub: ' -> puttext; 
                       current.doPT -> putLine;
                   if);
                   current[] -> dx[];
                   (current.ATd.asDecl).getQual -> subQual[];
-                  (if traceAe THEN '?in adIS:globals: ' -> puttext; if); 
+                  (if traceAe THEN '**   in adIS:globals: ' -> puttext if); 
                   L:
                     (if true then
                         scanGlobals
                         (# hasGlobals:: 
                              (# 
                              do (* always the case *)
-                                (if traceAE then ' hasGlobals'-> putline if)
+                                (if traceAE then '**   hasGlobals'-> putline if)
                              #)
                         do (if traceAE then 
                                current.doPT -> puttext; ' ' -> put if);
@@ -127,7 +127,7 @@ restrictions: semchecker
                            if);
                         #);
                         (* not found *)
-                        inner checkGlobalsIncluded;
+                        inner checkGlobalsConform;
                         (if traceAE then newline if);
                     if)
                #);
@@ -141,34 +141,33 @@ restrictions: semchecker
                (if traceAE then newline if)
             #);
           checkGlobalsViolations:
-            (* check if AD in this(items).globals
-             * if not check if AD.globals in this(items).globals 
-             *    using checkGlobalsIncluded
+            (* check if ATapl in this(items).globals
+             * if not check if ATapl.globals in this(items).globals 
+             *    using checkGlobalsConform
              *)
-            (# ok,first: @boolean;
-               AD: ^Apl; (* The Apl being accessed *)
+            (# noViolations,emitTrace: @boolean;
+               ATapl: ^Apl; (* The Apl being accessed *)
                OG: ^ObjectGenerator;
                adQual,rQual: ^ObjectGenerator (* adQual <= rQual *)
-            enter AD[]
-            do (if AD[] = none then
-                   (*'AD none'->putline;*)
-                   true -> ok;
+            enter ATapl[]
+            do (if ATapl[] = none then
+                   true -> noViolations;
                    leave checkGlobalsViolations
                if);
                scanGlobals; (* just test if Super has globals[inSub] *)
-               true -> ok;
-               true -> first;
+               true -> noViolations; (* we assume no violations *)
+               true -> emitTrace;    (* emitTrace only for first %globals *)
                loop:
                  scanGlobals
                  (# hasGlobals:: 
                       (# 
-                      do false -> ok;
-                         (if first then 
+                      do false -> noViolations; (* now assume violations *)
+                         (if emitTrace then 
                              (if traceAE then
-                                 '\n%%% checkGlobalsViolations: ' ->puttext;
-                                 AD.doPT -> puttext; 
+                                 '\n**** checkGlobalsViolations: ' ->puttext;
+                                 ATapl.doPT -> puttext; 
                              if);
-                             false -> first;
+                             false -> emitTrace;
                          if)
                       #);
                     hasInSub:: (# do true -> superHAsInSub #);
@@ -176,7 +175,6 @@ restrictions: semchecker
                  do (if traceAE then
                         ' < ' -> puttext; current.doPT -> puttext;
                     if);
-                    (*false -> ok; (*global restrictions exists *)
                     (* Current: Property has no desc att - 
                      * Property should probably be an Apl 
                      * and checked as an Apl
@@ -185,49 +183,61 @@ restrictions: semchecker
                      * so perhaps we are ok!?
                      *)
                     (if traceAE then
-                        '>>> adQual=AD.qual=' -> puttext; 
-                        AD.doPT -> puttext; ':\n' -> puttext;
+                        '>>> adQual=ATapl.qual=' -> puttext; 
+                        ATapl.doPT -> puttext; ':\n' -> puttext;
                     if);
-                    AD.getQual -> adQual[];
-                    (* '\n>>> adQual:'->putline; *)
-                    (if current[] = none then ' P is none'->putline if);
-                    (if current.ATd[] = none then 'ATd is none'->putline if);
-                    (current.ATd.asDecl).getQual -> rQual[]; (*Must check current*)
+                    ATapl.getQual -> adQual[];
+                    (current.ATd.asDecl).getQual->rQual[];(*Must check current*)
                     (if traceAE then
                         '>>> adQual:'->putline; adQual.doPT -> putHeadN;
                         rQual.dopt -> putheadN;
                     if);
                     (if (adQual[] -> rQual.inSuper) then 
                         (if traceAE then ' -> OK'->putline if);
-                        true -> ok;
+                        true -> noViolations;
                         leave loop
-                    if);
-                 #);
-               (if not ok then 
+                 if)#);
+               (if not noViolations then 
                    (if not superHasInSub then
-                       (if (AD.ATd.asDecl).isPatternDecl then
+                       (if (ATapl.ATd.asDecl).isPatternDecl then
                            (if traceAE then ' -> Pattern:'->putline if);
-                           (* foo: [Q1,Q2,Q3]
-                            * [Q1,Q2,Q3] must be contained in globals[this(PTN)]
+                           (* this(Items): %globals P1, P2, ...
+                            * foo: %globals Q1,Q2, ...
+                            * Check that Q1,Q2, ... is conformed by P1,P2,...
+                            * contained, .. What to call it?
                             *)
-                           AD[] -> checkGlobalsIncluded
+                           ATapl[] -> checkGlobalsConform
                            (#
-                           do AD[] -> accessError
+                           do ATapl[] -> accessError
                               (#
-                              do AD.doPT -> msg;
-                                 ' may access: "' -> msg;
-                                 dx.doPT -> msg;
-                                 '" which is not allowed in this scope' -> msg
+                              do ATapl.doPT -> msg; ' may access: ' -> msg;
+                                 dx.doPT -> qmsg;
+                                 ' which is not allowed in this scope' -> msg
                               #)
                            #)
                         else
-                           AD[] -> AccessError
+                           ATapl[] -> AccessError
                            (#
-                           do 'Cannot access global data-item: "' -> msg;;
-                              AD.doPT -> msg;
-                              '"' -> msg
+                           do 'Cannot access global data-item: ' -> msg;
+                              ATapl.doPT -> qmsg;
                            #)
             if)if)if)#)
+       #);
+     objectInvocation::<
+       (# semCheck::
+            (# qual: ^ObjectGenerator
+            do (if false then
+                   '**** Restrictions:OI:semcheck:'->puttext; dopt -> putline;
+               if);
+               (if (ATd.asDecl).isVirtual then
+                   (if false then
+                       '**** Restrictions:OI:semcheck:isVirtual: ' -> puttext;
+                       (ATd.asDecl).sig.dopt -> putline
+                   if)
+               if);
+               getQual -> qual[];
+               
+            #)
        #)
   do (if verbose then '**** RESTRICTIONS ****' -> putline if);
      inner
