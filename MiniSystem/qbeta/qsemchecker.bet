@@ -771,59 +771,26 @@ semchecker: UnitHandler
                   * This includes computing the OGSequence of the argument
                   * And then calling getVqual
                   *)
-                 (# OGs,OGSx: ^OGsequence; orgS: ^Scope;
-                    aplOG,dclOG,superOG: ^ObjectGenerator;
+                 (# OGs: ^OGsequence; theOIdclOG,theFargOG: ^ObjectGenerator;
                     pn: @integer
                  enter OGS[] (* the savedOGS for theOI *)
-                 do (if traceGetVqual then
-                        '\n**** theOI: ' -> puttext; theOI.doPT -> putline;
-                        ('**   Before: ',0,0) -> OGS.print;
-                    if);
+                 do <<SLOT sem_getOGSofArg:descriptor>>;
                     ((theOI.ATd.asDecl).OG[],true,OGS[]) 
                       -> OGsequence
                       -> OGS[];
-                    (if traceGetVqual then 
-                        ('**   After : ',0,0) -> OGS.print if);
-                    (theOI.ATd.asDecl).OG[] -> aplOG[];
-                    (if traceGetVqual then
-                        '**** fArgs[inx].origin.label: ' -> puttext;
-                        fArgs[inx].origin.label -> puttext; ' ' -> put;
-                        fArgs[inx].dopt -> putline;
-                    if);
-                    (fArgs[inx].origin[]->orgS[]).encOG[] -> dclOG[];
-                    
-                    (if false and 
-                        ('Signature'->(fArgs[inx].origin.label).equal) then
-                        '**** GotSignature: dclOG: ' -> putline;
-                        dclOG.dopt -> puthead;
-                        '**   altDclOG: ' -> putline;
-                        (# S: ^Scope; dclOGx: ^ObjectGenerator
-                        do (fArgs[inx].origin[]->orgS[]).OGofScope 
-                             -> dclOGx[];
-                           dclOGx.dopt -> puthead
-                        #)
-                    if);
-                           
-                    aplOG.IS.superDesc.encOG[] -> superOG[];
+                    (if traceGetVqual then ('**   After:',0,0) -> OGS.print if);
+                    (theOI.ATd.asDecl).OG[] -> theOIdclOG[];
+                    fArgs[inx].origin.encOG[] -> theFargOG[];
                     0 -> pn;
-                    <<SLOT sem_encOG:descriptor>>;
+                    <<SLOT sem_getOGSofArg_encOG:descriptor>>;
                     findDclOG:
-                      (if aplOG[] = dclOG[] then
-                          (if traceGetVqual then
-                              '*** FoundDclOG:pn:' -> puttext;
-                              pn -> putint; newline;
-                          if)
-                       else
-                          aplOG.IS.superDesc.encOG[] -> aplOG[];
-                          (if traceGetVqual then
-                              '*** loop:superOG:'->puttext;
-                              aplOG.doPT -> puthead;
-                          if);
+                      (if theOIdclOG[] <> theFargOG[] then
+                          theOIdclOG.IS.superDesc.encOG[] -> theOIdclOG[];
                           pn + 1 -> pn;
                           restart findDclOG
                       if);
-                    <<SLOT sem_OGS_pn:descriptor>>;                   
                     (for pn repeat OGS.PRE -> OGS[] for);
+                    <<SLOT sem_getOGSofArg_pn:descriptor>>;
                  exit OGS[]
                  #);
                checkForGenericUnit:
@@ -874,11 +841,11 @@ semchecker: UnitHandler
                        * the trace slots may not be meaningful
                        *)
                       theOI.savedOGS[] -> getOGsequenceOfArg -> OGS[];
-                      <<SLOT sem_before_getVqual:descriptor>>;
+                      <<SLOT sem_before_fArgs_getVqual:descriptor>>;
                       (encOG[],false,OGS[]) 
                         -> fArgs[inx].getVqual 
                         -> (OGS[],dstqual[]);                      
-                      <<SLOT semC4:descriptor>>;
+                      <<SLOT sem_after_fArgs_getVqual:descriptor>>;
                       (if true then
                           (none,theOI.enclosingObjectGenerator)
                             -> current.semcheck -> srcQual[];
@@ -1883,7 +1850,7 @@ semchecker: UnitHandler
                markENC: mark(#do 'ENC:on='->puttext #);
                markPRE: mark(#do 'PRE:pn='->puttext #);
                OGSx,OGSy: ^OGsequence; OGx: ^ObjectGenerator; DI: ^Decl;
-               U,T: ^Text; inSig: @boolean
+               U,T: ^Text; inSig: @boolean; onx: @integer
             do <<SLOT sem_OI_getVq:descriptor>>;
                (if ptnID.viaIncl[] <> none then
                    (* Given X, via %include C, path(X) to C is (on,pn), *)
@@ -1939,7 +1906,21 @@ semchecker: UnitHandler
                        (* isNest ==> on = 0, 
                         * otherwise on >= 0, we may come from DataItem:getVqual 
                         *)
-                       (for i: on repeat
+                       (if traceGetVqual then
+                           '**** koks:'->dumpt; dopt -> dumpT;
+                           'on:'->dumpT; on -> dumpI; 
+                           origin.label -> dumpT;
+                           newline;
+                           '**   father:'->dumpt; father.dopt->dumpTN;
+                           '**   father.f.f.f.f:'->dumpTN; 
+                           father.father.father.father.father.dopt->dumpTN;
+                       if);
+                       (if false  and  origin.isSignature then
+                           on - 1 -> onx
+                        else 
+                           on -> onx
+                       if);
+                       (for i: onx repeat
                             ('OI.getVqual:',i) -> OGSx.ENC -> OGSx[]; 
                             i -> markENC;
                        for);
@@ -1949,13 +1930,29 @@ semchecker: UnitHandler
                          -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
                        <<SLOT sem_OI_getVq_cont_afterATd:descriptor>>;
                if)if);
-               (# IT: ^node; wasSaved: @boolean
+               (# IT: ^node; wasSaved,B: @boolean
                do father.father.father[] -> IT[];
                   (if (savedOGS[] <> none) and not IT.isDecl then
-                      true -> wasSaved;
+                      (if traceGetVqual then
+                          '**** savedOGS:save:was:'->puttext; 
+                          savedOgs.print; 
+                          '**   OI: '->puttext; 
+                          this(ObjectInvocation).dopt->putline;
+                      if);
+                      true -> wasSaved; (* ??? - local here? *)
                    else 
-                      OGSx[] -> OGS[] -> savedOGS[]; 
+                      (* savedOGS is used atcheckActualArgs as 
+                       * argument to getOGsequenceOfArg
+                       * savedOI is not used
+                       *)
+                      OGSx[] -> OGS[] -> savedOGS[];
                       this(ObjectInvocation)[] -> savedOI[];
+                      (if traceGetVqual then
+                          '**** savedOGS:save:'->puttext; B -> putboolean;
+                          savedOgs.print;
+                          '**   OI: '->puttext; 
+                          this(ObjectInvocation).dopt->putline;
+                      if)
                   if);
                   <<SLOT sem_OI_getVq_savedOGS:descriptor>>;
                #);
