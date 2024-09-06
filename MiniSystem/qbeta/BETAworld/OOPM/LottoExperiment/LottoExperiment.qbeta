@@ -1,58 +1,108 @@
 LottoExperiment: obj MonitorSystemLib.MonitorSystem
-   %visible Collections.OrderedList,Collections.SetLib,LIB.DateTime, LIB.Dimensions
+   %visible Collections.OrderedList,Collections.SetLib,LIB.DateTimeLib, LIB.Dimensions
 
-   clock: obj
+   clock:
+      %globals
       waitAweek -> B: var Boolean:
-         ...
+         sleep(100)
       now -> T: var DateTime(Date(0,0,0),0 min):
          ...
       oneWeek -> T: var DateTime(Date(0,0,0),0 min):
          ...
-   random(start: var integer, end: var integer) -> V: var float:
-       ...   
-   sevenRandomNumbers -> srn: ref Indexed(7, Integer):
-      inx: var Integer
-      srn := Array(7, Integer)
-      next:
-         n: var integer      
-         n := random(1,34)
-         if (srn.has(n)) :then    
-           restart(next)
-         :else
-            srn.put(n):at[inx]
-            inx := inx + 1
-            if (inx < 7) :then 
-               restart(next)
+   randomGenerator: Monitor
+      R : obj Indexed(10,#integer)
+      ix: var integer
+      init::
+         --linearRandomGenerator(3,5,9,34,10)
+         put('i')	 
+      random(start: var integer,end: var integer) -> V: var integer: entry
+         if (false) :then
+            put('R')
+            --console.display
+            --   "random: start,end:ix;V ".print
+            --   putint(start)
+            --   put(',')	 
+            --   putint(end)
+            --   put(':')
+            ix := (ix /% 10) + 1
+            --putint(ix)
+            --put(';')
+            --if (R == none) :then
+            --   "R is none\n".print	 
+            V := R.get[ix]
+            --putint(V)
+            --newline
+	 
+      linearRandomGenerator(x0: var integer, a: var integer,
+                            b: var integer,
+                            m: var integer,
+                            n: var integer): entry
+         -- x0=seed a=multiplie b=increment m=modulus n=desired array length;
+         --"LinearRandomGenerator n:".print
+         --putint(n)
+         --newline
+         for (1):to(n):repeat
+             x0 := (a * x0 + b) /%m
+             R.put(x0):at[inx]	  
+             --putint(R.get[inx])
+             --put(' ')
+         -- newline	  
 
+      sevenRandomNumbers -> srn: ref Indexed(7, Integer): entry
+         inx: var Integer
+         srn := Array(7, Integer)
+         for (1):to(7):repeat
+             srn.put(R.get[inx]):at[inx]
+   ran: obj RandomGenerator
+   ranLotto: obj RandomGenerator
+   ranSeven1: obj RandomGenerator
    inTheMoodForPlaying -> m: var Boolean:
-      i: var float
-      i := random(0,1)
-      m := random(0,1) <> 0
+      %globals ran, console
+      --console.display
+      --   "inTheMoodForPlaying:\n".print
+      m := (ran.random(0,1) /% 2) <> 0
 
    inTheMoodForPlayingSameNumbers -> m: var Boolean:
-      i: var Integer
-      i := random(0,1)
-      m := random(0,1) <> 0
+      %globals ran, console
+      --console.display
+      --   "inTheMoodForPlayingSameNumbers:\n".print
+      m := (ran.random(0,1) /% 2) <> 0
+      --ran.putI(m)
+      newline
 
    class Bet(timeIssued: var DateTime(Date(0,0,0),0 min), 
-      playerKind: ref String, numbers: ref Indexed(7, Integer) ):
+      playerKind: var String, numbers: ref Indexed(7, #Integer) ):
       %globals
       %immutable 
-      ... -- mainpart cannot be empty
    class Player: MonitorProcess 
-      kind: ref String
+      kind: var String
       myBet: ref Bet
+      --ran.print(id + ": ")
+      console.display
+         put('P')
+         --id.print
+         --newline	 
       if (inTheMoodForPlayingSameNumbers) :then 
+         --console.display
+         --    "same:\n".print
          kind := "same"
-      :else 
+      :else
+         --console.display
+         --    "random\n".print
          kind := "random"
-      myBet := Bet(clock.now, this(Player).kind, sevenRandomNumbers)
-      cycle -- for each week
-         if (inTheMoodForPlaying) :then 
-            if (kind = "random") :then 
-                myBet := Bet(clock.now, this(Player).kind, sevenRandomNumbers)
-            lotto.submitBet(myBet)
-         clock.waitAweek
+
+      myBet := none --Bet(clock.now, this(Player).kind, ran.sevenRandomNumbers)
+
+      L:
+         cycle -- for each week
+            if (inTheMoodForPlaying) :then 
+               if (kind = "random") :then 
+                  myBet := Bet(clock.now, this(Player).kind, ranseven1.sevenRandomNumbers)
+               lotto.submitBet(myBet)
+            clock.waitAweek
+            if (lotto.stop) :then
+               put('S')
+               leave(L)
 
    lotto: obj monitor
       bets: obj Set(#Bet)
@@ -63,6 +113,8 @@ LottoExperiment: obj MonitorSystemLib.MonitorSystem
          bets.clear
  
       submitBet(b: ref Bet): entry
+         console.display
+              "submitBet:\n".print	 
          if ((b.timeIssued <= deadline) &&
             (b.timeIssued >= (deadline - clock.oneWeek))) :then
                bets.insert(b)
@@ -70,36 +122,56 @@ LottoExperiment: obj MonitorSystemLib.MonitorSystem
       findWinningBets: entry -- must be sub of entry
          noOfRandomWinners: var integer
          noOfSameWinners: var Integer
-         winningBet:= Bet(clock.now, "winning bet", sevenRandomNumbers)
+         --console.display
+         --     "findWinningBets:\n".print
+         winningBet := Bet(clock.now, "winning bet",ranLotto.sevenRandomNumbers)
+         --console.display
+         --     "before bets.scan:\n".print	 
          -- check if any bet matches winningBet
          bets.scan
-            if (current.numbers == 
-                winningBet.numbers) :then
+            if (current.numbers == winningBet.numbers) :then
                if (current.playerKind = "random") :then
                    noOfRandomWinners := noOfRandomWinners + 1
                :else 
                    noOfSameWinners := noOfSameWinners + 1
                -- print noOfRandomWinners, noOfSameWinners
-      
-   
-   maxNoOfPlayers: val 100000
+         newline
+      stop -> B: var Boolean: entry
+         B := false -- doStop
+      setStop: entry
+         doStop := true
+      doStop: var Boolean	 
+   main: obj MonitorProcess("main")
+      i: var integer
+      L: do
+         cycle
+            i := i + 1      
+            clock.waitAweek
+            lotto.findWinningBets
+            lotto.clearBets
+            lotto.deadline := clock.now + clock.oneWeek
+            if (i > 100) :then
+               console.display
+                   "stop\n".print
+               leave(L)
+      lotto.setStop
+   maxNoOfPlayers: val 5
    inx: var Integer
    players: obj Set(#Player)
-
-   cycle -- generate players 
-      if (inx < maxNoOfPlayers) :then 
-         inx := inx + 1
-         players.insert(Player("aPlayer")) -- Player has an id as paremeter
-  
+   generatePlayers: do
+      inx := inx + 1
+      if (inx <= maxNoOfPlayers) :then
+         players.insert(Player("aPlayer" + I2S(inx)))
+         restart(generatePlayers)
    -- starting lotto and the players:
    lotto.deadline := clock.now + clock.oneWeek
    -- deadline must be set before starting the players
+   --ran.init
+   ran.linearRandomGenerator(3,5,9,34,10)
+   ranLotto.linearRandomGenerator(7,5,9,34,10)
+   ranSeven1.linearRandomGenerator(9,5,9,34,10)	
+   lotto.init
+   main.start
    players.scan  
       current.start 
-
-   cycle    
-      clock.waitAweek
-      lotto.findWinningBets
-      lotto.clearBets
-      lotto.deadline := clock.now + clock.oneWeek
-   
+   newline
