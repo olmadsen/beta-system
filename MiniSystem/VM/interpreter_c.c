@@ -67,7 +67,7 @@ extern void Bfork(void * interpreter, void * B, int coreNo);
 //#define TRACE
 //#define EVENT
     
-#define useBetaHeap true
+#define useBetaHeap false
 //#define withGC 
 
 #include "interpreter_image.c"
@@ -111,7 +111,7 @@ void RTE2(char *msg, int errNo){
 }  
 
 #ifdef withGC
-#define heapMax 500000
+#define heapMax 80000000
 #else
 #define heapMax 80000000
 #endif
@@ -176,7 +176,8 @@ Btemplate *putBTheap(Btemplate *R, int inx, Btemplate *S){
 }
 
 void checkInHeap(Btemplate *obj){
-  if ((int) obj > (int)&heap[heapTop] | (int)obj < 0) {
+  if (useBetaHeap)
+    if ((int) obj > (int)&heap[heapTop] | (int)obj < 0) {
 #ifdef __arm__
 #else
     printf("\n\n*** GC error:\n");
@@ -1938,13 +1939,9 @@ void invokeValObj(Block *ctx,int descNo,int staticOff){
   fprintf(ctx->trace,"invokeVal %i %i\n",descNo,staticOff);
 #endif
   cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
- 
   lscPush(ctx->thisObj,staticOff);
-
   ctx->currentDescNo = descNo;
-
   ctx->thisObj->valOff = ctx->thisObj->valOff + staticOff;
-
   //ctx->currentDescNo = descNo;
 
   ctx->bc = (ObjDesc) codeFromDescNo(descNo);
