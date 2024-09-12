@@ -694,7 +694,12 @@ parser: ModuleHandler
               true -> mustBePattern
           if);
           'pDecl:after:inOut' -> trace;
-          pSignature -> sig[];
+          (if true then
+              pSignatureNEW -> sig[];
+           else
+              pSignature -> sig[];
+          if);
+          'pDecl:after:pSignature: '->trace;
           L:
             (#
             do (if lex.symb
@@ -813,6 +818,177 @@ parser: ModuleHandler
           isInArg -> D.isInArg;
           isOutArg -> D.isOutArg;
        exit D[]
+       #);
+     pArgNew:
+       (# D: ^Decl
+       do pDecl -> D[]; 
+          true -> D.isArg; (* when is D.isArg used ? *)
+          true -> D.isInArg -> D.inSig; (* is NOT inArg in return *)
+       exit D[]
+       #);
+     pSignatureNEW:
+       (* foo: ...
+        * foo(a: var T, b: ref S): ...
+        * foo(x: var integer):at[inx: var integer]:do{V: <Object}: ...
+        * ++ V: var integer: ...
+        *)
+       (# sym,id: ^text; names: ^NameList; sig: ^Signature; 
+          args: ^Arguments; 
+          prevSymb: @char;
+          D: ^Decl; 
+       do NameList -> names[];
+          'pSigNew'->trace;
+          pParam:
+            (if lex.symb
+             // lex.symbols.idf then 
+                (* got foo *)
+                lex.sym[] -> sym[] -> NameDecl -> names.append;
+                sym.copy -> id[];
+                lex; (* ':' ( [ { *)
+                (if lex.symb                   
+                 // lex.symbols.leftBrack 
+                 // lex.symbols.leftSquare
+                 // lex.symbols.begin then
+                    'pSigNew:id'->trace;
+                    lex.symb -> prevSymb;  
+                    lex; 
+                    Arguments -> args[]; true -> args.isKeyword;
+                    (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
+                    true -> sig.isNewFatCommaSig;
+                    pArgNew -> D[]; 
+                    'after:pArg:pDecl'->trace;
+                    D[] -> sig.append;
+                    (if lex.symb 
+                     // prevSymb + 1 then
+                        lex;
+                        'prevSymb+1'->trace;
+                        pFatPar:
+                          (#
+                          do (if lex.symb 
+                              // lex.symbols.fatComma then
+                                 lex.sym[] -> id.append;
+                                 lex;
+                                 (* next must be bracket *)
+                                 (if lex.symb                
+                                  // lex.symbols.leftBrack 
+                                  // lex.symbols.leftSquare
+                                  // lex.symbols.begin then
+                                     lex.symb -> prevSymb;  
+                                     lex; 
+                                  else
+                                     666 -> SyntaxError
+                                 if);
+                                 pArgNew -> D[] -> sig.append;
+                                 (if lex.symb 
+                                  // (prevSymb + 1) then
+                                     lex;
+                                     'restartFat'->trace;
+                                     restart pFatPar
+                                  // lex.symbols.comma then
+                                     'restartCommaInFat'->trace;
+                                     restart pFatPar
+                                  else
+                                     888 -> syntaxError
+                                 if)
+                              // lex.symbols.comma then
+                                 lex;
+                                 pArgNew -> D[] -> sig.append;
+                                 (if lex.symb 
+                                  // lex.symbols.comma then
+                                     lex;
+                                     'restartComma'->trace;
+                                     restart pFatPar
+                                  //(prevSymb + 1) then
+                                     lex;
+                                  else
+                                     888 -> syntaxError
+                                 if)
+                             if)
+                          #);
+                        id[] -> sig.id[]
+                     // lex.symbols.comma then
+                        (* foo(x: var T , y: var S, ...): ...
+                         *              ;
+                         *)
+                        lex; 
+                        'commaNew'->trace;
+                        pCommaPar:
+                          (#
+                          do (* foo(x: var T , y: var S, ...): ...
+                              *                ;
+                              *)
+                             pArgNew -> D[] -> sig.append;; 
+                             (* foo(x: var T , y: var S, ...): ...
+                              *                        ;    ;
+                              *)
+                             (if lex.symb 
+                              // lex.symbols.comma then
+                                  lex;
+                                  'commaRestart'->trace;
+                                  restart pCommaPar
+                              // (prevSymb + 1) then
+                                  'commaRbrack'->trace;
+                                 lex
+                          if)#)
+                    if);
+                    D.sig.id[] -> id[]; 
+                 else
+                    'pSigNew:unary'->trace;
+                    (sym[],names[],arguments,false) -> UnarySigGen -> sig[]
+                if)
+             // lex.symbols.special then                
+                (* binary *)
+                lex.sym[] -> sym[] -> NameDecl -> names.append;
+                lex;
+                'pSigNew:special'->trace;
+                Arguments -> args[]; true -> args.isBinary;
+                (if lex.symb 
+                 // lex.symbols.colon 
+                 // lex.symbols.virtual 
+                 // lex.symbols.further 
+                 // lex.symbols.final then
+                    (sym[],names[],args[],false) -> BinarySigGen -> sig[]
+                 else
+                    pArgument -> args.append;
+                    args.scanSons
+                    (# di: ^DataItem
+                    do current[] -> DI[];
+                       true->DI.isInArg
+                    #);
+                    (sym[],names[],args[],false) -> BinarySigGen -> sig[]
+                if)
+             // lex.symbols.keyword then  
+                (* old .xbeta syntax 
+                 * we  come here with .qbeta files that still have
+                 * @-keywords like @if in BETA.qbeta
+                 *)
+                (if (1 -> lex.sym.inxGet) = '@' then
+                    lex.sym[] -> sym[] -> nameDecl -> names.append;
+                    lex;
+                    Arguments -> args[]; 
+                    sym[] -> name -> args.append;
+                    true -> args.isNewKeyWord;
+                    (if lex.symb = lex.symbols.colon then 
+                        (* do we need this test?*)
+                    if)
+                 else '\n!!!pSignature: do we come here?' -> putline;
+                    lex.sym[] -> sym[];
+                    lex;
+                    Arguments -> args[]; 
+                    sym[] -> name -> args.append;
+                    pArguments(#do D[] -> args.append #); 
+                if);
+                (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
+             else
+                '-error-' -> NameDecl -> names.append;
+                4 -> syntaxError;
+                ('-error-',names[],Arguments,false) -> UnarySigGen -> sig[]
+            if);
+          (if lex.symb = lex.symbols.return then
+              lex;
+              pReturn -> sig.return[] -> sig.append
+          if);
+       exit sig[]
        #);
      pSignature:
        (* foo:
