@@ -2474,7 +2474,7 @@ bool traceThreads = true;
     threadId = thisBlock->threadId;
   }
 
-  int opCode,off,inx,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
+  int opCode,off,inx,value,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
   int dinx,isRindexed,rangee,i;
   double float1, float2, float3;
   bool running = true, doTrace = false; 
@@ -2550,7 +2550,7 @@ bool traceThreads = true;
 	break;
       case pushValId:
 #ifdef TRACE
-	fprintf(trace,"pushValId\n");
+	fprintf(trace,"pushValId 1 %i\n",thisValObjDescInx);
 #endif
 	vPush(thisStack,1);
 	vPush(thisStack,thisValObjDescInx);
@@ -2626,17 +2626,19 @@ bool traceThreads = true;
 	vPush(thisStack,arg2);
 	break;
       case ovpushg:
-	arg1 = op1(bc,&glsc);
+	off = op1(bc,&glsc);
 	dscNo = vPop(thisStack); //descInx of valObj,not used
-	arg2 = vPop(thisStack);
+	inx = vPop(thisStack);  // originAdjust
 	X = rPop(thisStack);
 	if (X == NULL) {
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
-	arg3 = getV(X,arg1 + arg2 - 1 + X->valOff);
+	arg3 = getV(X,off + inx - 1); // + X->valOff added in getV
         vPush(thisStack,arg3);
 #ifdef TRACE
-	fprintf(trace,"ovpushg %s[%i+%i-1] = %i\n",nameOf(X),arg1,arg2,arg3);
+	fprintf(trace,"ovpushg %i descInx:%i originAdjust:%i valOff:%i ",off,dscNo,inx,X->valOff);
+	fprintf(trace,"%s[%i+%i-1] = %i\n",nameOf(X),off,inx,arg3);
+	dumpObj(trace,"ovpushg:",X);	
 #endif
 	break;
       case rpushg:
@@ -2660,7 +2662,7 @@ bool traceThreads = true;
 	rPush(thisStack,Y);
 #ifdef TRACE
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
-	dumpObj(trace,"rpushg",Y);
+	//dumpObj(trace,"rpushg",Y); // implies segmentation fault
 #endif
 	
 	break;
@@ -2774,16 +2776,20 @@ bool traceThreads = true;
 	X->vfields[arg1 + X->valOff] = arg2;
 	break;
       case ovstoreg:
-	arg1 = op1(bc,&glsc);
+	off = op1(bc,&glsc);
 
-	arg2 = vPop(thisStack);
+	value = vPop(thisStack); // value
 	X = rPop(thisStack);
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
-	arg3 = vPop(thisStack); //descInx of valObj, not used	
-	arg3 = vPop(thisStack);
-	X->vfields[arg1 + arg3 - 1 + X->valOff] = arg2;
+	dscNo = vPop(thisStack); //descInx of valObj, not used	
+	inx = vPop(thisStack);
+	
+	//X->vfields[off + inx - 1 + X->valOff] = value;
+	putV(X,off + inx - 1, value);
 #ifdef TRACE
-	fprintf(trace,"ovstoreg %i\n",arg1);
+	fprintf(trace,"ovstoreg %i descinx:%i originAdjust:%i ",arg1,arg3,inx);
+	fprintf(trace,"%s[%i+%i-1]=%i \n",nameOf(X),arg1,inx,arg2);
+	dumpObj(trace,"ovstoreg:",X);	
 #endif
 	break;
       case vassign:
