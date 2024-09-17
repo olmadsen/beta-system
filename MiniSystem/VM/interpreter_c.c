@@ -2633,7 +2633,7 @@ bool traceThreads = true;
 	if (X == NULL) {
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
-	arg3 = getV(X,off + inx - 1); // + X->valOff added in getV
+	arg3 = getV(X,off + inx - 1); 
         vPush(thisStack,arg3);
 #ifdef TRACE
 	fprintf(trace,"ovpushg %i descInx:%i originAdjust:%i valOff:%i ",off,dscNo,inx,X->valOff);
@@ -2777,18 +2777,15 @@ bool traceThreads = true;
 	break;
       case ovstoreg:
 	off = op1(bc,&glsc);
-
-	value = vPop(thisStack); // value
+	value = vPop(thisStack);
 	X = rPop(thisStack);
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	dscNo = vPop(thisStack); //descInx of valObj, not used	
-	inx = vPop(thisStack);
-	
-	//X->vfields[off + inx - 1 + X->valOff] = value;
+	inx = vPop(thisStack);  // value
 	putV(X,off + inx - 1, value);
 #ifdef TRACE
-	fprintf(trace,"ovstoreg %i descinx:%i originAdjust:%i ",arg1,arg3,inx);
-	fprintf(trace,"%s[%i+%i-1]=%i \n",nameOf(X),arg1,inx,arg2);
+	fprintf(trace,"ovstoreg %i descinx:%i originAdjust:%i value:%i",off,dscNo,inx,value);
+	fprintf(trace,"%s[%i+%i-1]=%i \n",nameOf(X),off,inx,value);
 	dumpObj(trace,"ovstoreg:",X);	
 #endif
 	break;
