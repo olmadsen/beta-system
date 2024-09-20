@@ -816,12 +816,24 @@ parser: ModuleHandler
           isOutArg -> D.isOutArg;
        exit D[]
        #);
+     mkSig:
+       (# id: ^Text; names: ^NameList; args: ^Arguments; 
+          isKeyword: @boolean; sig: ^Signature
+       enter(id[],names[],args[],isKeyWord)
+       do &Signature -> sig[];
+          id[] -> sig.id[];
+          names[] -> sig.names[];
+          &Arguments -> sig.args[];
+       exit sig[]
+       #);
      mkProp:
        (# propId:  ^Name; NP: ^NewProperty; args: ^NewPropertyArguments;
-          stringArg:  ^StringObj; T:  ^Text
+          stringArg:  ^StringObj; T:  ^Text; inv: ^Invocation
        enter(Name -> propId[],T[])
        do NewPropertyArguments -> args[];
-          T[] -> StringObj -> stringArg[] -> args.append;
+          Invocation -> inv[]; 
+          T[] -> StringObj -> stringArg[] -> inv.append;
+          inv[] -> args.append;
           (propId[],args[]) -> NewProperty -> NP[]
        exit NP[]
        #);
@@ -856,11 +868,12 @@ parser: ModuleHandler
                // lex.symbols.begin then
                   'pSigNew:id'->trace;
                   lex.symb -> prevSymb;  
-                  ('%$B',lex.sym[]) -> mkProp -> Itm.append;
+                  ('%$B',lex.sym.copy) -> mkProp -> Itm.append;
                   lex; 
                   (if sigAsItems then
+                      Arguments -> args[]; true -> args.isKeyword;
                       pArgNew -> D[] -> Itm.append;
-                      &Signature -> sig[];
+                      (sym[],names[],args[],true) -> mkSig -> sig[];
                    else
                       Arguments -> args[]; true -> args.isKeyword;
                       (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
@@ -960,11 +973,7 @@ parser: ModuleHandler
                else
                   'pSigNew:unary'->trace;
                   (if sigAsItems then
-                      &Signature -> sig[];
-                      sym[] -> sig.id[];
-                      names[] -> sig.names[];
-                      &Arguments -> sig.args[];
-                      Itm[] -> sig.paramItems[] -> sig.append
+                      (sym[],names[],arguments,false) -> mkSig -> sig[]
                    else
                       (sym[],names[],arguments,false) -> UnarySigGen -> sig[]
                   if)
@@ -980,7 +989,11 @@ parser: ModuleHandler
                // lex.symbols.virtual 
                // lex.symbols.further 
                // lex.symbols.final then
-                  (sym[],names[],args[],false) -> BinarySigGen -> sig[]
+                  (if sigAsItems then
+                      (sym[],names[],args[],false) -> mkSig -> sig[]
+                   else
+                      (sym[],names[],args[],false) -> BinarySigGen -> sig[]
+                  if)
                else
                   pArgument -> args.append;
                   args.scanSons
@@ -993,7 +1006,11 @@ parser: ModuleHandler
                      if);
                      true->DI.isInArg
                   #);
-                  (sym[],names[],args[],false) -> BinarySigGen -> sig[]
+                  (if sigAsItems then
+                      (sym[],names[],args[],false) -> mkSig -> sig[]
+                   else
+                      (sym[],names[],args[],false) -> BinarySigGen -> sig[]
+                  if)
               if)
            // lex.symbols.keyword then  
               (* old .xbeta syntax 
@@ -1022,11 +1039,19 @@ parser: ModuleHandler
                          D[] -> args.append; D.copyAST -> Itm.append
                   if)#); 
               if);
-              (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
+              (if sigAsItems then
+                  (sym[],names[],args[],false) -> mkSig -> sig[]
+               else
+                  (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
+              if)
            else
               '-error-' -> NameDecl -> names.append;
               4 -> syntaxError;
-              ('-error-',names[],Arguments,false) -> UnarySigGen -> sig[]
+              (if sigAsItems then
+                  ('-error-',names[],args[],false) -> mkSig -> sig[]
+               else
+                  ('-error-',names[],Arguments,false) -> UnarySigGen -> sig[]
+              if)
           if);
           (if lex.symb = lex.symbols.return then
               lex;
