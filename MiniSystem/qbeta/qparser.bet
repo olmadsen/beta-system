@@ -99,6 +99,7 @@ parser: ModuleHandler
           sig: ^Signature;
           M: ^Module; E: ^Exp
        do (if lex.symb = lex.symbols.idf then
+              'pModule'->trace;
               pSignatureNew -> sig[];
               (if lex.symb = lex.symbols.colon then
                   lex; 
@@ -857,12 +858,17 @@ parser: ModuleHandler
                   lex.symb -> prevSymb;  
                   ('%$B',lex.sym[]) -> mkProp -> Itm.append;
                   lex; 
-                  Arguments -> args[]; true -> args.isKeyword;
-                  (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
-                  true -> sig.isNewFatCommaSig;
-                  pArgNew -> D[] -> sig.append; 
+                  (if sigAsItems then
+                      pArgNew -> D[] -> Itm.append;
+                      &Signature -> sig[];
+                   else
+                      Arguments -> args[]; true -> args.isKeyword;
+                      (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
+                      true -> sig.isNewFatCommaSig;
+                      pArgNew -> D[] -> sig.append; 
+                      D.copyAST -> Itm.append;
+                  if);
                   'after:pArg:pDecl'->trace;
-                  D.copyAST -> Itm.append;
                   (if lex.symb 
                    // prevSymb + 1 then
                       &text[] -> fc[]; lex.sym[] -> fc.append;
@@ -892,9 +898,14 @@ parser: ModuleHandler
                                ('%$E',fc[]) -> mkProp -> Itm.append;
                                leave pParam
                            if);
-                           pArgNew -> D[] -> sig.append;
+                           pArgNew -> D[];
                            ('%$S',fc[]) -> mkProp -> Itm.append;
-                           D.copyAST -> Itm.append;
+                           (if sigAsItems then
+                               D[] -> Itm.append
+                            else
+                               D[] -> sig.append;
+                               D.copyAST -> Itm.append;
+                           if);
                            (if lex.symb 
                             // (prevSymb + 1) then
                                lex;
@@ -909,7 +920,8 @@ parser: ModuleHandler
                                888 -> syntaxError
                            if)
                         #);
-                      id[] -> sig.id[]
+                      id[] -> sig.id[];
+                      'prevSymb+1:end'->trace;
                    // lex.symbols.comma then
                       (* foo(x: var T , y: var S, ...): ...
                        *              ;
@@ -922,8 +934,12 @@ parser: ModuleHandler
                         do (* foo(x: var T , y: var S, ...): ...
                             *                ;
                             *)
-                           pArgNew -> D[] -> sig.append;
-                           D.copyAST -> Itm.append;
+                           (if sigAsItems then
+                               pArgNew -> D[] -> Itm.append;
+                            else
+                               pArgNew -> D[] -> sig.append;
+                               D.copyAST -> Itm.append;
+                           if);
                            (* foo(x: var T , y: var S, ...): ...
                             *                        ;    ;
                             *)
@@ -943,7 +959,15 @@ parser: ModuleHandler
                   D.sig.id[] -> id[]; 
                else
                   'pSigNew:unary'->trace;
-                  (sym[],names[],arguments,false) -> UnarySigGen -> sig[]
+                  (if sigAsItems then
+                      &Signature -> sig[];
+                      sym[] -> sig.id[];
+                      names[] -> sig.names[];
+                      &Arguments -> sig.args[];
+                      Itm[] -> sig.paramItems[] -> sig.append
+                   else
+                      (sym[],names[],arguments,false) -> UnarySigGen -> sig[]
+                  if)
               if)
            // lex.symbols.special then                
               (* binary *)
@@ -961,7 +985,12 @@ parser: ModuleHandler
                   pArgument -> args.append;
                   args.scanSons
                   (# DI: ^DataItem
-                  do current[] -> DI[]; DI.copyAST -> Itm.append;
+                  do current[] -> DI[]; 
+                     (if sigAsItems then
+                         DI[] -> Itm.append;
+                      else
+                         DI.copyAST -> Itm.append;
+                     if);
                      true->DI.isInArg
                   #);
                   (sym[],names[],args[],false) -> BinarySigGen -> sig[]
@@ -985,7 +1014,13 @@ parser: ModuleHandler
                   lex;
                   Arguments -> args[]; 
                   sym[] -> name -> args.append;
-                  pArguments(#do D[] -> args.append; D.copyAST -> Itm.append #); 
+                  pArguments
+                  (#
+                  do (if sigAsItems then
+                         D[] -> Itm.append
+                      else
+                         D[] -> args.append; D.copyAST -> Itm.append
+                  if)#); 
               if);
               (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
            else
@@ -995,10 +1030,14 @@ parser: ModuleHandler
           if);
           (if lex.symb = lex.symbols.return then
               lex;
-              pReturn
-              (#
-              do D.copyAST -> Itm.append;
-              #) -> sig.return[] -> sig.append;
+              (if sigAsItems then
+                  pReturn(#do D[] -> Itm.append #)
+               else
+                  pReturn
+                  (#
+                  do D.copyAST -> Itm.append;
+                  #) -> sig.return[] -> sig.append;
+              if)
           if);
           (if false then
               (if Itm.NoOfSons > 0 then
@@ -1007,6 +1046,9 @@ parser: ModuleHandler
           if)if);
           Invocation -> Itm.super[]; true -> Itm.super.ischecked;
           Itm[] -> sig.paramItems[]; (* perhaps an argument to Signature? *)
+          (if sigasItems then
+              Itm[] -> sig.append
+          if)
        exit sig[]
        #);
      pSignatureX:
