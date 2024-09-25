@@ -370,6 +370,33 @@ checker: Parser
                                   -> thisDcl.sig.id.equalNCS
                                   -> value
                          if)#);
+                       isParameter: BooleanValue
+                          (* thisDcl is a parameter and currentDcl 
+                           * must have been bound by an argument in its super;
+                           * however, not sufficient - consider:
+                           *    foo(xF: var integer): ...
+                           *    bar(xF: var integer): foo(xF) ...
+                           *    fisk(xF: var integer): foo ...
+                           * xF is declared in fo and subpatterns bar and fisk
+                           * and is thus a double declaration, but ok if xF
+                           * is bound in super patterns;
+                           * Should not give an error for bar
+                           * but should gove error for fisk - currently no check
+                           * for xF in foo being bound in super of fisk;
+                           * Must be fixed!
+                           *)
+                         (# org: ^Items
+                         do (if sigAsItems then
+                                (thisDcl.origin[]->org[]).isArgs -> value
+                             else
+                                'Signature' 
+                                  -> (thisDcl.origin.label).equalNCS
+                                  -> value
+                            if);
+                            (if value then
+                                currentDcl.isInArg -> value
+                            if)
+                         #);
                        thisDcl: ^Decl
                     do currentDcl[] -> thisDcl[]; 
                        checkReDecl;
@@ -382,18 +409,9 @@ checker: Parser
                                 isEq:
                                   (if currentDcl[] -> checkEqual
                                       then
-                                      (if 'Signature' 
-                                            -> (thisDcl.origin.label).equalNCS then
-                                          (if currentDcl.isInArg then
-                                              (* thisDcl is a parameter of 
-                                               * a pattern with fatComma 
-                                               * syntax; and currentDcl 
-                                               * must have been bound
-                                               * by an argument in super 
-                                               * of the pattern
-                                               *)
-                                              leave isEQ
-                                      if)if);
+                                      (if isParameter then
+                                          leave isEQ
+                                      if);
                                       (* We must check that currentDcl is 
                                        * actually a binding of thisDcl; perhaps 
                                        * currentDcl.off=thisDcl.off is ok?
@@ -1328,6 +1346,7 @@ checker: Parser
                if);
                (if true then
                    (if sigAsItems then
+                       true -> paramItems.isArgs;
                        origin[] -> paramItems.setUpOrigin;
                        encOG[] -> paramItems.encOG[];
                        (*this(Signature)[] -> paramItems.setUpOrigin*)

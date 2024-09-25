@@ -1241,7 +1241,8 @@ AbstractSyntaxTree: Tree
                        sig.paramItems.scanSons
                        (#
                        do (if current.isDecl then
-                              current[] -> currentDcl[]
+                              current[] -> currentDcl[];
+                              inner scanAllItemDecls
                        if)#)
                     else
                        sig.scanSons
@@ -1319,7 +1320,10 @@ AbstractSyntaxTree: Tree
                    do currentDcl[] -> currentArg[];
                       (if currentArg.isInArg then
                           inner scanNonBoundItemArgs
-               if)#)if);
+                       else
+                          (if currentArg.isOutArg then
+                          (*'**** scanArgs:skip:out:'->dumpT; currentDcl.dopt->dumpTN*)
+               if)if)#)if);
             #);
           scanArgsReverse:
             (# skipMain: @boolean; args: [4] ^DataItem; top: @integer;
@@ -1374,28 +1378,40 @@ AbstractSyntaxTree: Tree
                   if)if)
                #);
                (if sig[] <> none then
-                   sig.scanSons (* OBS! includes returnDI -> V: var integer! *)
-                   (# 
-                   do (if true
-                       // current.isDataItem then
-                          (if (top + 1 -> top) > args.range then
-                              args.range -> args.extend
-                          if);
-                          current[] -> args[top][]
-                       // current## = Arguments## then               
-                          current.scanSons
-                          (#
-                          do (if current## = dataItem## then
-                                 current[] -> currentArg[];
-                                 (if currentArg.isInArg 
-                                     and not currentArg.isVirtual then
-                                     cd.com(#do 'got:DI:'->TT; 
-                                              current.dopt -> TQ #);
-                                     (if (top + 1 -> top) > args.range then
-                                         args.range -> args.extend
-                                     if);
-                                     currentArg[] -> args[top][]
-                   if)if)#)if)#);
+                   (if sigAsItems then
+                       sig.paramItems.scanSons
+                       (# DI: ^DataItem
+                       do (if current.isDataItem then
+                              (if (current[] ->DI[]).isInArg then 
+                                  (if (top + 1 -> top) > args.range then
+                                      args.range -> args.extend
+                                  if);
+                                  current[] -> args[top][]
+                          if)if)
+                       #)
+                   else
+                       sig.scanSons (*OBS! includes returnDI -> V:var integer!*)
+                       (# 
+                       do (if true
+                           // current.isDataItem then
+                              (if (top + 1 -> top) > args.range then
+                                  args.range -> args.extend
+                              if);
+                              current[] -> args[top][]
+                           // current## = Arguments## then               
+                              current.scanSons
+                              (#
+                              do (if current## = dataItem## then
+                                     current[] -> currentArg[];
+                                     (if currentArg.isInArg 
+                                         and not currentArg.isVirtual then
+                                         cd.com(#do 'got:DI:'->TT; 
+                                                  current.dopt -> TQ #);
+                                         (if (top + 1 -> top) > args.range then
+                                             args.range -> args.extend
+                                         if);
+                                         currentArg[] -> args[top][]
+                   if)if)#)if)#)if);
                    (for i: top repeat
                         args[top - i + 1][] -> currentArg[];
                         inner scanItemArgsReverse
@@ -1878,7 +1894,7 @@ AbstractSyntaxTree: Tree
            * are both explicit and appended as 'incl' and others like Item's
            * are appended
            *)
-          isEmpty: @boolean;
+          isEmpty,isArgs: @boolean;
           objSize: IntegerValue (# do qsize[1] -> value #); 
           (* why not binding of objSize? *)
           
@@ -2284,9 +2300,10 @@ AbstractSyntaxTree: Tree
                       dopt -> putline
                   if);
                   (if D.off = 0 then 
-                      (* 'firstDecl:'->dumpT;
-                       * D.dopt -> dumpT; D.off -> dumpI; dumpNL;*)
-                      D.ATd.off -> D.off
+                      'firstDecl:'->dumpT; D.dopt->dumpT; D.off->dumpI;dumpNL;
+                      (if D.ATd[] <> none then
+                          (D.ATd.asDecl).off -> D.off
+                      if)
                   if)
                #)
             exit D[]
@@ -3086,10 +3103,20 @@ AbstractSyntaxTree: Tree
             do (if true (*or sig._a_rgs.isNewKeyWord*) then
                    (* Formal args may be declared as: in A:  var integer *)
                    (if sigAsItems then
+                       L:
                        sig.paramItems.scanSons
-                       (#
-                       do (if current.isDecl then
-                              current[] -> currentArg[]
+                       (# NP: ^NewProperty
+                       do (if true
+                           // current.isDecl then
+                              current[] -> this(scanArgs).currentArg[];
+                              inner scanArgs 
+                           else (*%sep prop *)
+                              current[] -> NP[]; 
+                              (if '%$E'->NP.propid.T.equal then
+                                  (*'**** gong:A:'->dumpT; 
+                                  sig.paramitems.dopt->putheadN;*)
+                                  leave L
+                              if)
                           if)
                        #);
                     else
@@ -3780,15 +3807,25 @@ AbstractSyntaxTree: Tree
           getReturnDecl:
             (# ptn: ^Pattern; DI: ^DataItem
             do L:
-                 (if true then
+                 (if true then (*'**** getReturnDecl:'->dumpT;dopt->putheadN;*)
                      (if sig[] <> none then
+                         (if sigAsItems and (sig.paramItems[] <> none) then
+                             sig.paramItems.scanSons
+                             (# D: ^Decl;
+                             do (if current.isDecl then
+                                    current[] -> D[];
+                                    (if D.isOutArg then
+                                        current[] -> DI[];
+                                        leave L
+                                if)if)
+                         #)if);
                          (if sig.return[] <> none then
                              sig.return.scanSons
                              (#
                              do current[] -> DI[];
                                 leave L
                              #)
-                     if)if);
+                     if)if); 
                      IS.scanAllItemDecls
                      (#
                      do (if currentDcl.isOutArg then
