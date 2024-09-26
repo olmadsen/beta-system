@@ -837,11 +837,19 @@ parser: ModuleHandler
           (propId[],args[]) -> NewProperty -> NP[]
        exit NP[]
        #);
-     pArgNew:
-       (# D: ^Decl
+     pArgument:
+       (# D: ^Decl; P: ^Pattern
        do pDecl -> D[]; 
           true -> D.isArg; (* when is D.isArg used ? *)
           true -> D.isInArg -> D.inSig; (* is NOT inArg in return *)
+          (if D## = pattern## then
+              D[] -> P[];
+              (if P.ptnKind = plainPtn then
+                  SyntaxError
+                  (#
+                  do 'A non-virtual pattern cannot be an argument' 
+                       -> putline 
+          #)if)if)
        exit D[]
        #);
      pSignatureNEW:
@@ -872,13 +880,13 @@ parser: ModuleHandler
                   lex; 
                   (if sigAsItems then
                       Arguments -> args[]; true -> args.isKeyword;
-                      pArgNew -> D[] -> Itm.append;
+                      pArgument -> D[] -> Itm.append;
                       (sym[],names[],args[],true) -> mkSig -> sig[];
                    else
                       Arguments -> args[]; true -> args.isKeyword;
                       (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
                       true -> sig.isNewFatCommaSig;
-                      pArgNew -> D[] -> sig.append; 
+                      pArgument -> D[] -> sig.append; 
                       D.copyAST -> Itm.append;
                   if);
                   'after:pArg:pDecl'->trace;
@@ -911,7 +919,7 @@ parser: ModuleHandler
                                ('%$E',fc[]) -> mkProp -> Itm.append;
                                leave pParam
                            if);
-                           pArgNew -> D[];
+                           pArgument -> D[];
                            ('%$S',fc[]) -> mkProp -> Itm.append;
                            (if sigAsItems then
                                D[] -> Itm.append
@@ -948,9 +956,9 @@ parser: ModuleHandler
                             *                ;
                             *)
                            (if sigAsItems then
-                               pArgNew -> D[] -> Itm.append;
+                               pArgument -> D[] -> Itm.append;
                             else
-                               pArgNew -> D[] -> sig.append;
+                               pArgument -> D[] -> sig.append;
                                D.copyAST -> Itm.append;
                            if);
                            (* foo(x: var T , y: var S, ...): ...
@@ -1032,13 +1040,13 @@ parser: ModuleHandler
                   lex;
                   Arguments -> args[]; 
                   sym[] -> name -> args.append;
-                  pArguments
+                  (*pArguments
                   (#
                   do (if sigAsItems then
                          D[] -> Itm.append
                       else
                          D[] -> args.append; D.copyAST -> Itm.append
-                  if)#); 
+                  if)#); *)
               if);
               (if sigAsItems then
                   (sym[],names[],args[],false) -> mkSig -> sig[]
@@ -1077,133 +1085,14 @@ parser: ModuleHandler
           if)
        exit sig[]
        #);
-     pSignatureX:
-       (* foo:
-        * fool(a: ?integer, ...):
-        * %put x: ?integer ... :
-        * ++ V: ?integer: 
-        *)
-       (# sym,id: ^text; names: ^NameList; sig: ^Signature; 
-          args: ^Arguments; 
-          prevSymb: @char;
-          elimArgs: (# exit true #)
-       do NameList -> names[];
-          L: 
-            (if lex.symb              
-             // lex.symbols.idf then 
-                lex.sym[] -> sym[] -> NameDecl -> names.append;
-                lex;
-                (if pNewFatCommaFile then
-                    (if lex.symb 
-                     // lex.symbols.comma then
-                        lex; 
-                        restart L
-                     // lex.symbols.leftBrack 
-                     // lex.symbols.leftSquare
-                     // lex.symbols.begin then
-                        lex.symb -> prevSymb;
-                        lex;
-                        Arguments -> args[]; true -> args.isKeyword;
-                        (if elimArgs then
-                            (sym[],names[],args[],true) 
-                              -> KeyWordSigGen -> sig[];
-                            (* Note sym[]->sig.id[] is overwritten below*)
-                        if);
-                        (sym[],prevSymb) -> pSigArgs
-                        (#
-                        do (if elimArgs then
-                               (* This implies that Arguments is empty
-                                * in the sons of Signature;
-                                * we need to clean-up the structure of
-                                * Signature!
-                                *)
-                               D[] -> sig.append
-                            else
-                               D[] -> args.append;  
-                           if);
-                        #) 
-                          -> id[];
-                        names.scan
-                        (* a bloody hack to ensure that T = if:then:else
-                         * otherwise T = if
-                         *)
-                        (# i: @integer
-                        do (if (i + 1) < 2 then id[] -> current.T[] if)
-                        #);
-                        (if not elimArgs then
-                            (sym[],names[],args[],true) 
-                              -> KeyWordSigGen -> sig[];
-                        if);
-                        id[] -> sig.id[];
-                        true -> sig.isNewFatCommaSig;
-                     else
-                        (sym[],names[],arguments,false)
-                          -> UnarySigGen -> sig[]
-                    if)
-                 else (* UnarySignature *)
-                    Arguments -> args[];
-                    (sym[],names[],args[],false) -> UnarySigGen -> sig[]
-                if)
-             // lex.symbols.keyword then
-                (* old .xbeta syntax 
-                 * we  come here with .qbeta files that still have
-                 * @-keywords like @while
-                 *)
-                (if (1 -> lex.sym.inxGet) = '@' then
-                    lex.sym[] -> sym[] -> nameDecl -> names.append;
-                    lex;
-                    Arguments -> args[]; 
-                    sym[] -> name -> args.append;
-                    true -> args.isNewKeyWord;
-                    (if lex.symb = lex.symbols.colon then 
-                        (* do we need this test?*)
-                    if)
-                 else '\n!!!pSignature: do we come here?' -> putline;
-                    lex.sym[] -> sym[];
-                    lex;
-                    Arguments -> args[]; 
-                    sym[] -> name -> args.append;
-                    pArguments(#do D[] -> args.append #); 
-                if);
-                (sym[],names[],args[],true) -> KeyWordSigGen -> sig[];
-             // lex.symbols.special then
-                (* binary *)
-                lex.sym[] -> sym[] -> NameDecl -> names.append;
-                lex;
-                Arguments -> args[]; true -> args.isBinary;
-                (if lex.symb 
-                 // lex.symbols.colon 
-                 // lex.symbols.virtual 
-                 // lex.symbols.further 
-                 // lex.symbols.final then
-                    (sym[],names[],args[],false) -> BinarySigGen -> sig[]
-                 else
-                    pArgument -> args.append;
-                    args.scanSons
-                    (# di: ^DataItem
-                    do current[] -> DI[];
-                      true->DI.isInArg
-                    #);
-                    (sym[],names[],args[],false) -> BinarySigGen -> sig[]
-                if)
-             else 
-                '-error-' -> NameDecl -> names.append;
-                4 -> syntaxError;
-                ('-error-',names[],Arguments,false) -> UnarySigGen -> sig[]
-            if);
-          (if lex.symb = lex.symbols.return then
-              lex;
-              pReturn -> sig.return[] -> sig.append
-          if);
-       exit sig[]
-       #);   
      pReturn:
        (# rtn: ^Arguments; D: ^Decl
        do Arguments -> rtn[]; true -> rtn.isReturn;
           (* check if lex.symb = lex.symbols.leftBracket and then 
            * perhaps pSigArgs; however do we have fatComma in return?
            *)
-          pSigArg -> D[] -> rtn.append; false -> D.isInArg; true -> D.isOutArg;
+          pArgument -> D[] -> rtn.append; 
+          false -> D.isInArg; true -> D.isOutArg;
           inner pReturn
        exit rtn[]
        #);
@@ -1221,88 +1110,6 @@ parser: ModuleHandler
               '?' -> T[]
           if)
        exit T[]
-       #);
-     pSigArg:
-       (# D: ^Decl; P: ^Pattern
-       do pDecl -> D[]; (* Perhaps not all decl's should be allowed *)
-          true -> D.isArg; (* when is D.isArg used ? *)
-          true -> D.isInArg -> D.inSig; (* is NOT inArg in return *)
-          (if D## = pattern## then
-              D[] -> P[];
-              (if P.ptnKind = plainPtn then
-                  SyntaxError
-                  (#
-                  do 'A non-virtual pattern cannot be an argument' 
-                       -> putline 
-          #)if)if)
-       exit D[]
-       #);
-     pSigArgs:
-       (* comma is each element in the signature including brackets
-        * id is the signature stripped from brackest
-        *)
-       (# sym: ^Text; D: ^Node; id,comma: ^text;
-          leftB,rightB: @char
-       enter(sym[],leftB)
-       do leftB + 1 -> rightB;
-          sym.copy -> comma[]; 
-          leftB -> brackAsText -> name -> D[];
-          sym.copy -> id[];
-          (if false then
-              '**** pSigArgs:A:sym: "' -> puttext; sym[] -> puttext;
-              '" id: "' -> puttext; id[] -> puttext; 
-              '"  "' -> puttext; comma[] -> puttext; 
-              '" D: ' -> puttext; D.dopt -> putline;
-          if);
-          inner pSigArgs;
-          Loop:
-            (#
-            do pSigArg -> D[]; 
-               inner pSigArgs;
-               (if lex.symb 
-                // rightB (*lex.symbols.rightBrack*) then
-                   lex;
-                   (if lex.symb = lex.symbols.fatComma then
-                       rightB -> brackAsText -> comma[];
-                       lex.sym.copy -> comma.append;
-                       lex.sym.copy -> id.append;
-                       lex;
-                       (if lex.symb 
-                        // lex.symbols.leftBrack 
-                        // lex.symbols.leftSquare
-                        // lex.symbols.begin then
-                           lex.symb -> leftB;
-                           leftB + 1 -> rightB;
-                           leftB -> brackAsText -> comma.puttext -> Name -> D[];
-                           (if false then
-                               '**** pSigArgs:B:id: "'->puttext; id[]->puttext;
-                               '"  "' -> puttext; comma[] -> puttext; newline;
-                           if);
-                           lex;
-                           inner pSigArgs;
-                           restart Loop
-                        else
-                           111 -> syntaxError
-                       if)
-                    else
-                       rightB -> brackAsText -> comma[] -> name -> D[];
-                       (if false then comma.copy -> id.append; if);
-                       (if false then
-                           '**** pSigArgs:C:id: "' -> puttext; id[] -> puttext;
-                           '"  "' -> puttext; comma[] -> puttext; newline;
-                       if);
-                       inner pSigArgs
-                   if)
-                // lex.symbols.comma then
-                   ',' -> comma[] -> name -> D[];
-                   (*',' -> id.append;*)
-                   (*'**** psigArgs: ' -> puttext; id[]->putline;*)
-                   inner pSigArgs;
-                   lex;
-                   restart Loop
-               if)
-            #)
-       exit id[]
        #);
      pArgumentsNew:
        (# args: ^Arguments; rightB: @integer; lastArg: ^Node
@@ -1325,38 +1132,6 @@ parser: ModuleHandler
                        200 -> syntaxError
             if)if)#)
        exit args[]
-       #);
-     pArgument:
-       (# D: ^Decl; P: ^Pattern
-       do pDecl -> D[]; (* Perhaps not all decl's should be allowed *)
-          true -> D.isArg;
-          (if D## = pattern## then
-              D[] -> P[];
-              (if P.ptnKind = plainPtn then
-                  SyntaxError
-                  (#
-                  do 'A non-virtual pattern cannot be an argument' 
-                       -> putline 
-          #)if)if)
-       exit D[]
-       #);
-     pArguments:
-       (# D: ^Decl
-       do Loop:
-            (#
-            do pArgument -> D[]; 
-               inner pArguments;
-               (if lex.symb 
-                // lex.symbols.fatComma then
-                   lex.sym[] -> Name -> D[];
-                   lex;
-                   inner pArguments;
-                   restart Loop
-                // lex.symbols.comma then
-                   lex;
-                   restart Loop
-               if)
-            #)
        #);
      pInvocation:
        (* foo
