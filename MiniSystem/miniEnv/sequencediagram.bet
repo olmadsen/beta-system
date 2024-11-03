@@ -264,16 +264,33 @@ SequenceDiagram: SuperSequenceDiagram
                shapes: @ActionShapeList;
                manager: @PositionManager;
                first: @boolean;
+
+               SORT_ACTIONS: (# exit false #);
+               DO_TRACE: (# exit false #);
             enter (leaders[], header)
-            do (if false then 
-                   '*** presentSequenceDiagram:present:'->putline if);
+            do (if DO_TRACE then 
+                   '*** presentSequenceDiagram:present:'->putline 
+               if);
                true -> first;
                &ActionList[] -> actions[];
                leaders.scan
                (#
-               do (*current.description -> puttext; ' ' -> put;*)
+               do (if DO_TRACE then
+                     '*** leader: ' -> putText;
+                     current.description -> putline;
+                  if);
+                  
                   current[] -> current.receiver.invocator[];
                   actions[] -> current.flatten;
+
+                  (if DO_TRACE then
+                     '*** actions: ' -> putLine;
+                     actions.scan
+                     (#
+                     do '  * ' -> putText;
+                        current.description -> putLine;
+                     #);
+                  if);
                   (if not first then
                       current.isPreemptive -> (actions.last).isPreemptive;
                       true -> (actions.last).isLastInSuspended;
@@ -283,27 +300,24 @@ SequenceDiagram: SuperSequenceDiagram
                   false -> first;
                #);
                
-               (*'\n**** actions: ' -> putline;*)
                actions.scan
                (# height: @integer;
-               do (*current.description -> puttext; *)
-                  (if not current.isSkipping then
-                      (*' no skip ' -> putline;*)
+               do (if not current.isSkipping then
                       manager[] -> current.prepare -> height;
                       (if height > header then
                           height -> header;
                       if);
-                   else
-                      (*' skip ' -> putline;*)
                   if);
                #);
                
-               actions.sort
-               (# less::
-                    (#
-                    do left.id < right.id -> value;
-                    #);
-               #);
+               (if SORT_ACTIONS then 
+                   actions.sort
+                   (# less::
+                        (#
+                        do left.id < right.id -> value;
+                        #);
+                   #);
+               if);
                
                header + 24 -> y;
                y + offset -> y;
@@ -318,7 +332,6 @@ SequenceDiagram: SuperSequenceDiagram
                do 'present' -> current.refresh;
                #);
                manager.layout;
-               (*'*** manager.apply'->putline;*)
                manager.apply;
                shapes.scan
                (#
@@ -1106,7 +1119,9 @@ SequenceDiagram: SuperSequenceDiagram
             #);
           description::
             (# sender: ^ObjectShape;
-            do '[' -> string[];
+            do '[Invocation(' -> string[];
+               id -> string.putInt;
+               ') ' -> string.putText;
                (if return[] <> NONE then
                    return.receiver[] -> sender[];
                if);
@@ -1121,10 +1136,7 @@ SequenceDiagram: SuperSequenceDiagram
                    message.reflect.name -> string.puttext;
                    ' ' -> string.puttext;
                 else
-                   ' | allocate: ' -> string.puttext;
-                   (if receiver[] <> NONE then
-                       receiver.description -> string.puttext;
-                   if);
+                   ' | allocation ' -> string.puttext;
                if);               
                (if receiver[] <> NONE then
                    ' | receiver: ' -> string.puttext;
@@ -1343,7 +1355,7 @@ SequenceDiagram: SuperSequenceDiagram
      suspendInvocation:
        (# self: ^ObjDesc.RunTimeObject;
           skipped: @boolean;
-	  preemptive: @boolean;
+          preemptive: @boolean;
        enter (self[], preemptive)
        do (# current: ^Invocation;
              link: ^Invocation;
@@ -1351,7 +1363,7 @@ SequenceDiagram: SuperSequenceDiagram
              while:
                (if current[] <> NONE then
                    (if current[] = skippingOver[] then
-                       true ->skipped;
+                       true -> skipped;
                    if);
                    (if NOT (self[] -> current.match) then
                        current.deactivate;
@@ -1366,6 +1378,7 @@ SequenceDiagram: SuperSequenceDiagram
                      current.description -> putline;
                  if);
                  current.return[] -> link[];
+
                  top[] -> current.return[];
                  link[] -> top[];
                  (if (top.peek = current[]) then
@@ -1709,7 +1722,28 @@ SequenceDiagram: SuperSequenceDiagram
                    inner;
                    newline
                if)
-            #)
+            #);
+          DO_TRACE: (# exit false #);
+          trace:
+            (# operation: ^Text;
+               caller: ^ObjDesc.RunTimeObject;
+               self: ^ObjDesc.RunTimeObject;
+            enter (operation[], caller[], self[])
+            do (if DO_TRACE then
+                  '>>> ' -> putText;
+                  operation[] -> putText;
+                  ':' -> putText;
+                  ' caller=' -> putText;
+                  (if caller[] <> NONE then
+                     caller.myName -> putText;
+                  else
+                     'NONE' -> putText;
+                  if);
+                  ' self=' -> putText;
+                  self.myName -> putText;
+                  newLine;
+               if);
+            #);
        do false -> beginning;
           NONE -> recentlyResumed[];
           INNER
@@ -1721,7 +1755,8 @@ SequenceDiagram: SuperSequenceDiagram
           origin: ^ObjDesc.RunTimeObject;
           bc: @integer;
        enter (caller[], self[], origin[], bc)
-       do (# receiver: ^ObjectShape;
+       do ('onStart', caller[], self[]) -> trace;
+          (# receiver: ^ObjectShape;
              theInvocation: ^Invocation;
           do (self[] -> reflection, self.isObj)
                -> objectShapeForTarget
@@ -1741,7 +1776,8 @@ SequenceDiagram: SuperSequenceDiagram
           isObj: @boolean;
           isIndexed: @boolean;
        enter (caller[], self[], origin[], bc, isObj, isIndexed)
-       do (# shape: ^ObjectShape;
+       do ('onAlloc', caller[], self[]) -> trace;
+          (# shape: ^ObjectShape;
           do (if doDumpEvents then
                  '**** sequenceDiagram:onAlloc:'->puttext; self[] -> dumpObj;
                  ' isObj: ' -> puttext; isObj -> putBoolean; newline
@@ -1778,7 +1814,8 @@ SequenceDiagram: SuperSequenceDiagram
           preemptive: @boolean;
           bc: @integer;
        enter (caller[], self[], origin[], bc, preemptive)
-       do (if self[] <> NONE then
+       do ('onDo', caller[], self[]) -> trace;
+          (if self[] <> NONE then
               (# receiver: ^ObjectShape;
                  shape: ^ObjectShape;
                  message: ^ObjectShape;
@@ -1922,7 +1959,8 @@ SequenceDiagram: SuperSequenceDiagram
           bc: @integer;
           isSkipping: @boolean;
        enter (caller[], self[], origin[], bc)
-       do (#
+       do ('onReturn', caller[], self[]) -> trace; 
+         (#
           do (if mode = SearchingMode then
                  (if LOGGING then
                      'step-over cancel-search' -> putline;
@@ -1950,7 +1988,8 @@ SequenceDiagram: SuperSequenceDiagram
           origin: ^ObjDesc.RunTimeObject;
           bc: @integer;
        enter (caller[], self[], origin[], bc)
-       do (if self[] -> top.matchAllocation then
+       do ('onReturnAlloc', caller[], self[]) -> trace; 
+          (if self[] -> top.matchAllocation then
              popInvocation;
              pause;
           if);
@@ -1961,7 +2000,8 @@ SequenceDiagram: SuperSequenceDiagram
           origin: ^ObjDesc.RunTimeObject;
           bc: @integer;
        enter (caller[], self[], origin[], bc)
-       do true -> stepping;
+       do ('onBreak', caller[], self[]) -> trace; 
+          true -> stepping;
           pause;
        #);
      onSuspend: VMEvent
@@ -1972,7 +2012,8 @@ SequenceDiagram: SuperSequenceDiagram
           
           preemptive: @boolean;
        enter (caller[], self[], origin[], bc, preemptive)
-       do (if not preemptive then
+       do ('onSuspend', caller[], self[]) -> trace; 
+          (if not preemptive then
               top.pop;
           if);
           (if (self[], preemptive) -> suspendInvocation then
@@ -1989,9 +2030,10 @@ SequenceDiagram: SuperSequenceDiagram
           bc: @integer;
           preemptive: @boolean;
        enter (caller[], self[], origin[], bc, preemptive)
-       do top.pop;
+       do ('onResume', caller[], self[]) -> trace; 
+          top.pop;
           self[] -> resumeInvocation;
-	  (if not preemptive then
+          (if not preemptive then
               pause;
           if);
        #);
