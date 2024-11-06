@@ -1,0 +1,80 @@
+ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '~beta/process/streamgenerator';
+INCLUDE '~beta/basiclib/file';
+
+(*
+ * This is a very simple webserver that only handles GET requests.
+ * 
+ * Example URL:
+ *
+ * http://localhost:7913/qbeta/BETAworld/BETA/BETA.qbeta
+ *
+ * There is no error handling.
+ *)
+-- systemlib:attributes --
+WebServer:
+  (# TRACE: (# exit false #);
+     theSocketGenerator: @SocketGenerator;
+     init:<
+       (#
+       do 7913 -> theSocketGenerator.bind;
+       #);
+     accept:
+       (# socket: ^StreamSocket;
+       do (# command: ^Text;
+             verb: ^Text;
+             uri: ^Text;
+          do waitForEver -> theSocketGenerator.getStreamConnection -> socket[];
+             socket.getLine -> command[];
+             (if TRACE then
+                'Command: ' -> putText; command[] -> putLine;
+             if);
+             command.reset;
+             command.getAtom -> verb[];
+             (if TRACE then
+                'Verb: ' -> putText; verb[] -> putLine;
+             if);
+             command.getAtom -> uri[];
+             (if TRACE then
+                'URI: ' -> putText;  uri[] -> putLine;
+             if);
+             'HTTP/1.1 200 OK' -> socket.putLine;
+             'Content-Type: text/plain' -> socket.putLine;
+             socket.newLine;
+             uri[] -> serve -> socket.putLine;
+             socket.close;
+          #);
+       #);
+
+     serve:
+       (#  uri: ^Text;
+           reply: ^Text;
+       enter uri[]
+       do (# path: ^Text;
+             theFile: @File;
+
+          do '.' -> path[];
+             uri[] -> path.append;
+             path[] -> theFile.name;
+             theFile.openRead;
+             &Text[] -> reply[];
+             copy:
+               (if not theFile.eos then
+                  theFile.get -> reply.put;
+                  restart copy;
+               if);
+             theFile.close;
+          #);
+       exit reply[]
+       #);
+  #);
+
+-- program:descriptor --
+SystemEnv
+  (# theWebServer: @WebServer;
+  do theWebServer.init;
+     cycle 
+       (#
+       do  theWebServer.accept;
+       #);
+  #)
