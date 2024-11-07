@@ -1,6 +1,9 @@
 ORIGIN '~beta/basiclib/systemenv';
 INCLUDE '~beta/process/streamgenerator';
 INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/containers/dictionary';
+INCLUDE '~beta/containers/list';
+
 
 (*
  * This is a very simple webserver that only handles GET requests.
@@ -10,10 +13,74 @@ INCLUDE '~beta/basiclib/file';
  * http://localhost:7913/qbeta/BETAworld/BETA/BETA.qbeta
  *
  * There is no error handling.
+ *
+ * The goal is to create a simple framework for implementing webservices that understands 
+ * the HTTP protocol.
+ * 
+ * Next steps:
+ *
+ * 1. Dispatch message based on path in URI
+ * 2. Produce JSON, HTML etc.
  *)
--- systemlib:attributes --
+
+-- lib: attributes --
+
+TextList: List
+  (# element:: Text;
+     get:
+       (# index: @integer;
+          elm: ^element;
+       enter index
+       do loop: scan
+            (# i: @integer;
+            do i + 1 -> i;
+               (if i = index then
+                  current[] -> elm[];
+                  leave loop;
+               if);
+            #);
+       exit elm[]
+       #);
+  #);
+
+-- textlib: attributes --
+
+split:
+  (# ch: @char;
+     parts: ^TextList;
+  enter ch
+  do &TextList[] -> parts[];
+     (# previousIndex: @integer;
+     do 0 -> previousIndex;
+        reset;
+        ch -> find
+          (#
+          do (if (previousIndex + 1) = inx then
+                &Text[] -> parts.append;
+             else
+                (previousIndex + 1, inx - 1) -> sub -> parts.append;
+                inx -> previousIndex;
+             if);
+          #);
+        (if previousIndex = length then
+          &Text[] -> parts.append;
+        else
+          (previousIndex + 1, length) -> sub -> parts.append;
+        if);
+     #);
+     INNER;
+  exit parts[]
+  #);
+
+-- systemlib: attributes --
+
+
+QueryParameters: Dictionary
+  (# element:: TextList;
+     key:: Text;
+  #);
 WebServer:
-  (# TRACE: (# exit false #);
+  (# TRACE: (# exit true #);
      theSocketGenerator: @SocketGenerator;
      init:<
        (#
@@ -24,7 +91,9 @@ WebServer:
        do (# command: ^Text;
              verb: ^Text;
              uri: ^Text;
-          do waitForEver -> theSocketGenerator.getStreamConnection -> socket[];
+             header: ^Text;
+          do 'Ready' -> putLine;
+             waitForEver -> theSocketGenerator.getStreamConnection -> socket[];
              socket.getLine -> command[];
              (if TRACE then
                 'Command: ' -> putText; command[] -> putLine;
@@ -38,34 +107,105 @@ WebServer:
              (if TRACE then
                 'URI: ' -> putText;  uri[] -> putLine;
              if);
+
+             socket.getLine -> header[];
+       loop: (if not header.empty then
+                'header: ' -> putText;
+                header[] -> putLine;
+                socket.getLine -> header[];
+                restart loop;
+             if);
+
              'HTTP/1.1 200 OK' -> socket.putLine;
              'Content-Type: text/plain' -> socket.putLine;
              socket.newLine;
-             uri[] -> serve -> socket.putLine;
+             (verb[], uri[]) -> dispatch -> socket.putLine;
              socket.close;
           #);
        #);
-
-     serve:
-       (#  uri: ^Text;
+     dispatch:
+       (*
+        * This is just a very simple example of returning plain text to the caller.
+        * The goal is to dispatch the message based on the path in the URI and
+        * return JSON, HTML or XML based on the requirements of the message.
+        *)
+       (#  verb: ^Text;
+           uri: ^Text;
            reply: ^Text;
-       enter uri[]
+       enter (verb[], uri[])
        do (# path: ^Text;
-             theFile: @File;
+             query: ^QueryParameters;
+             part: ^Text;
+          do 'Hello, World' -> reply[];
+             uri[] -> parseUri -> (path[], query[], part[]);
 
-          do '.' -> path[];
-             uri[] -> path.append;
-             path[] -> theFile.name;
-             theFile.openRead;
-             &Text[] -> reply[];
-             copy:
-               (if not theFile.eos then
-                  theFile.get -> reply.put;
-                  restart copy;
-               if);
-             theFile.close;
           #);
        exit reply[]
+       #);
+     parseUri:
+       (# uri: ^Text;
+          path: ^Text;
+          query: ^QueryParameters;
+          part: ^Text;
+       enter uri[]
+       do (# parseQueryAndPart:
+               (# input: ^Text;
+               enter input[]
+               do '#' -> input.split
+                    (#
+                    do 1 -> parts.get -> parseQuery;
+                       (if parts.size > 1 then
+                          2 -> parts.get -> part[];
+                       if);
+                    #);
+               #);
+             parseQuery:
+               (# input: ^Text;
+               enter input[]
+               do &QueryParameters[] -> query[];
+                  '&' -> input.split
+                    (#
+                    do parts.scan
+                         (#
+                         do '=' -> current.split
+                              (# name: ^Text;
+                                 value: ^Text;
+                                 values: ^TextList;
+                              do (if parts.size = 2 then
+                                    1 -> parts.get -> name[];
+                                    2 -> parts.get -> value[];
+                                    name[] -> query.lookup -> values[];
+                                    (if values[] = NONE then
+                                       &TextList[] -> values[];
+                                       (name[], values[]) -> query.associate;
+                                    if);
+                                    value[] -> values.append;
+                                 if);
+                              #);
+                         #);
+                    #);
+               #);
+          do '?' -> uri.split
+               (#
+               do 1 -> parts.get -> path[];
+                  'path: ' -> putText; path[] -> putline;
+                  (if parts.size > 1 then
+                      2 -> parts.get -> parseQueryAndPart;
+                  if);
+               #);
+             query.scanAssociations
+               (#
+               do k[] -> putText;
+                  ': ' -> putText;
+                  e.scan
+                    (#
+                    do current[] -> putText;
+                       ' ' -> putText;
+                    #);
+                  newLine;
+               #);
+          #);
+       exit (path[], query[], part[])
        #);
   #);
 
