@@ -1,6 +1,7 @@
 ORIGIN '~beta/basiclib/systemenv';
 INCLUDE '~beta/process/streamgenerator';
 INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/textmatch';
 INCLUDE '~beta/containers/dictionary';
 INCLUDE '~beta/containers/list';
 
@@ -79,12 +80,83 @@ QueryParameters: Dictionary
   (# element:: TextList;
      key:: Text;
   #);
+HttpRequest:
+  (# path: ^Text;
+     query: ^QueryParameters;
+     part: ^Text;
+  #);
+HttpResponse:
+  (# status: @integer;
+     message: ^Text;
+     body: ^Text;
+  #);
+
+RequestHandler:
+  (# prefix: ^Text;
+
+     matches:
+       (# path: ^Text;
+          result: @boolean;
+       enter path[]
+       do prefix[] -> path.startsWith -> result;
+       exit result
+       #);
+     RequestMethod:
+       (# request: ^HttpRequest;
+          response: ^HttpResponse;
+       enter request[]
+       do &HttpResponse[] -> response[];
+          INNER;
+       exit response[]
+       #);
+     get:< RequestMethod;
+     post:< RequestMethod;
+     put:< RequestMethod;
+     delete:< RequestMethod;
+
+     dispatch:
+       (# verb: ^Text;
+          request: ^HttpRequest;
+          response: ^HttpResponse;
+       enter (verb[], request[])
+       do 'dispatch: ' -> putText;
+          verb[] -> putLine; 
+          (if 'GET' -> verb.equal then
+             request[] -> get -> response[];
+          else
+             (if 'POST' -> verb.equal then
+                request[] -> post -> response[];
+             else
+                (if 'PUT' -> verb.equal then
+                   request[] -> put -> response[];
+                else
+                   (if 'DELETE' -> verb.equal then
+                      request[] -> put -> response[];
+                   else
+                      request[] -> delete -> response[];
+                   if);
+                if);
+             if);
+          if);
+       exit response[]
+       #);
+  #);
 WebServer:
-  (# TRACE: (# exit true #);
+  (# TRACE: (# exit false #);
      theSocketGenerator: @SocketGenerator;
-     init:<
+
+     handlers: @List
+       (# element:: RequestHandler;
+       #);
+
+     init:
        (#
        do 7913 -> theSocketGenerator.bind;
+       #);
+     register:
+       (# theRequestHandler: ^RequestHandler;
+       enter theRequestHandler[]
+       do theRequestHandler[] -> handlers.append;
        #);
      accept:
        (# socket: ^StreamSocket;
@@ -92,55 +164,72 @@ WebServer:
              verb: ^Text;
              uri: ^Text;
              header: ^Text;
+             response: ^HttpResponse;
+             status: ^Text;
           do 'Ready' -> putLine;
              waitForEver -> theSocketGenerator.getStreamConnection -> socket[];
              socket.getLine -> command[];
-             (if TRACE then
-                'Command: ' -> putText; command[] -> putLine;
-             if);
              command.reset;
              command.getAtom -> verb[];
-             (if TRACE then
-                'Verb: ' -> putText; verb[] -> putLine;
-             if);
              command.getAtom -> uri[];
-             (if TRACE then
-                'URI: ' -> putText;  uri[] -> putLine;
-             if);
+             (verb[], uri[]) -> dispatch -> response[];
 
-             socket.getLine -> header[];
-       loop: (if not header.empty then
-                'header: ' -> putText;
-                header[] -> putLine;
-                socket.getLine -> header[];
-                restart loop;
-             if);
-
-             'HTTP/1.1 200 OK' -> socket.putLine;
+             &Text[] -> status[];
+             'HTTP/1.1 ' -> status.putText;
+             response.status -> status.putInt;
+             ' ' -> status.putText;
+             response.message[] -> status.putText;
+             status[] -> socket.putLine;
              'Content-Type: text/plain' -> socket.putLine;
+             &Text[] -> header[];
+             'Content-Length: ' -> header.putText;
+             (if response.body[] = NONE then
+                0 -> header.putInt;
+             else
+                response.body.length -> header.putInt;
+             if);
+             header[] -> socket.putLine;
              socket.newLine;
-             (verb[], uri[]) -> dispatch -> socket.putLine;
+             (if response.body[] <> NONE then
+                response.body[] -> socket.putText;
+             if);
              socket.close;
           #);
        #);
      dispatch:
        (*
-        * This is just a very simple example of returning plain text to the caller.
         * The goal is to dispatch the message based on the path in the URI and
         * return JSON, HTML or XML based on the requirements of the message.
         *)
        (#  verb: ^Text;
            uri: ^Text;
-           reply: ^Text;
+           response: ^HttpResponse;
        enter (verb[], uri[])
        do (# path: ^Text;
              query: ^QueryParameters;
              part: ^Text;
-          do 'Hello, World' -> reply[];
-             uri[] -> parseUri -> (path[], query[], part[]);
-
+             request: ^HttpRequest;
+          do uri[] -> parseUri -> (path[], query[], part[]);
+             &HttpRequest[] -> request[];
+             path[] -> request.path[];
+             query[] -> request.query[];
+             part[] -> request.part[];
+       loop: handlers.scan
+               (# 
+               do current.prefix[] -> putLine;
+                  (if path[] -> current.matches then
+                     (verb[], request[]) -> current.dispatch -> response[];
+                     leave loop;
+                  if);
+               #);
+              (if response[] = NONE then
+                 &HttpResponse[] -> response[];
+                 404 -> response.status;
+                 'Not Found' -> response.message[];
+                 'Resource not found' -> response.body[];
+              if);
           #);
-       exit reply[]
+       exit response[]
        #);
      parseUri:
        (# uri: ^Text;
@@ -163,6 +252,7 @@ WebServer:
                (# input: ^Text;
                enter input[]
                do &QueryParameters[] -> query[];
+                  query.init;
                   '&' -> input.split
                     (#
                     do parts.scan
@@ -177,6 +267,7 @@ WebServer:
                                     name[] -> query.lookup -> values[];
                                     (if values[] = NONE then
                                        &TextList[] -> values[];
+                                       values.init;
                                        (name[], values[]) -> query.associate;
                                     if);
                                     value[] -> values.append;
@@ -188,21 +279,9 @@ WebServer:
           do '?' -> uri.split
                (#
                do 1 -> parts.get -> path[];
-                  'path: ' -> putText; path[] -> putline;
                   (if parts.size > 1 then
                       2 -> parts.get -> parseQueryAndPart;
                   if);
-               #);
-             query.scanAssociations
-               (#
-               do k[] -> putText;
-                  ': ' -> putText;
-                  e.scan
-                    (#
-                    do current[] -> putText;
-                       ' ' -> putText;
-                    #);
-                  newLine;
                #);
           #);
        exit (path[], query[], part[])
@@ -212,7 +291,36 @@ WebServer:
 -- program:descriptor --
 SystemEnv
   (# theWebServer: @WebServer;
+     operationsHandler: @RequestHandler
+       (# get::
+            (# command: ^Text;
+               commands: ^TextList;
+            do request.query.scanAssociations
+               (#
+               do
+                  (if 'command' -> k.equal then
+                     e.scan
+                       (#
+                       do current[] -> command[];
+                       #);
+                  if);
+               #);
+               (if 'step' -> command.equal then
+                  'Handling STEP' -> putLine;
+                  200 -> response.status;
+                  'OK' -> response.message[];
+                  'Let Us Step Into The Night And Pursue That Flighty Temptress, Adventure' -> response.body[];
+               else
+                  400 -> response.status;
+                  'Bad Request' -> response.message[];
+                  'Unknown command: ' -> response.body[];
+                  command[] -> response.body.putLine;
+               if);
+            #);
+       #);
   do theWebServer.init;
+     '/op' -> operationsHandler.prefix[];
+     operationsHandler[] -> theWebServer.register;
      cycle 
        (#
        do  theWebServer.accept;
