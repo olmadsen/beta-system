@@ -24,7 +24,8 @@ BODY 'parseBody'
  * Arguments ::= ObjectSpec * ,
  *)
 parser: ModuleHandler
-  (# iRootModule::
+  (# newExpParser: (#exit false #);
+     iRootModule::
        (# root: @ iModule;
        do rootModule[] -> root.M[];
           (*rootModule.name.lexemSy -> root.nm[];*)
@@ -1023,18 +1024,23 @@ parser: ModuleHandler
        #);
      pInvocation:
        (* foo
-        * R.foo    .foo is a methoinvocation with possible arguments
-        * R ++ E   ++ E is a mthod invocation with argument E
+        * R.foo    .foo is a method invocation with possible arguments
+        * R ++ E   ++ E is a method invocation with argument E
         * R.put(E):at [ix]
         * a:= a + b * 117
         * R.S ++ E . put(E):at[i]
         * foo.a ++ 12 OK
         * foo . ++ 12 - not OK; but accepted by parser
         *)
-       (# IV: ^Invocation;
+       (# IV: ^Invocation; OI: ^ObjectInvocation;
           E: ^Exp;
           i: @integer
        do 'pInvocation:'->trace;
+          (if newExpParser then
+              Invocation -> IV[];
+              pNewExp -> E[] -> IV.append;
+              leave pInvocation
+          if);
           Invocation -> IV[];
           Loop:
             (#
@@ -1081,7 +1087,7 @@ parser: ModuleHandler
              (if ch 
               // '\\' then true -> predIsSlash
               // '{' then
-                 &text[] -> inn[]; (* collect string between { and } *)
+                 &text[] -> inn[]; (* collect string between '{' and '}' *)
                  not predIsSlash -> toInn;
                  false -> predIsSlash;
                  pos -> first;
@@ -1089,7 +1095,7 @@ parser: ModuleHandler
                      '!!!! Nested curlyLeftCh in String: "' -> puttext;
                      T[] -> puttext; '"\n' -> puttext
                  if);
-              // '}' then
+                   // '}' then
                  (if not predIsSlash and ((leftB - 1 -> leftB) < 0) then
                      '!!!! No matching left brace "{" in String: "' -> puttext;
                      T[] -> puttext; '"\n' -> puttext
@@ -1121,15 +1127,171 @@ parser: ModuleHandler
           #);
        exit S[]
        #);
+     pNewExp:
+       (# E,rE: ^Exp; sym: ^text; INV: ^Invocation; OI: ^ObjectInvocation
+       do 'pNewExp'->trace;
+          Invocation -> INV[];
+          pNewSimpleExp -> E[] -> INV.append;
+          (if (lex.sym[] -> lex.symbols.isRelOp) then 
+              'pNewExp:=' -> trace;
+              lex.sym[] -> sym[];
+              lex;
+              pNewSimpleExp -> rE[];
+              (sym[],E[],rE[]) -> BinaryExp -> E[];
+          if);          
+       exit E[]
+       #);
+     pNewSimpleExp:
+       (# E,rE: ^Exp; sym: ^text
+       do 'pNewSimpleExp'->trace;
+          pTerm -> E[];
+          L:
+            (if (lex.sym[] -> lex.symbols.isAddOp) then 
+                'pNewSimpleExp:+' -> trace;
+                lex.sym[] -> sym[];
+                lex;
+                pTerm -> rE[];
+                (sym[],E[],rE[]) -> BinaryExp -> E[];
+                restart L
+            if)
+       exit E[]
+       #);
+    pTerm:
+       (# E,rE: ^Exp; sym: ^text
+       do 'pTerm'->trace;
+          pFactor -> E[];
+          L:
+            (if true
+             // (lex.sym[] -> lex.symbols.isMultOp) 
+             // lex.symb = lex.symbols.special then 
+                'pTerm:*' -> trace;
+                lex.sym[] -> sym[];
+                lex;
+                pFactor -> rE[];
+                (sym[],E[],rE[]) -> BinaryExp -> E[];
+                restart L
+            if)
+       exit E[]
+       #);          
+     pFactor:
+       (# E: ^Exp;
+       do 'pFactor'->trace;
+          L:
+          (if lex.symb 
+           // lex.symbols.const then
+              lex.sym[] -> Const -> E[];
+              StringObj -> E.unit[];
+              lex
+           // lex.symbols.floatConst then
+              lex.sym[] -> FloatConst -> E[];
+              StringObj -> E.unit[];              
+              lex;              
+           // lex.symbols.string then
+              lex.sym[] -> handleString -> E[];
+              StringObj -> E.unit[];              
+              lex;
+              L: 
+                (if lex.symb = lex.symbols.dot then
+                    lex; 
+                    pNewExp -> E[];
+                    StringObj -> E.unit[];                    
+                    restart L
+                if)
+           // lex.symbols.charSy then 
+              lex.sym[] -> CharObj -> E[];
+              StringObj -> E.unit[];              
+              lex;
+           // lex.symbols.idf then
+              'pTerm:idf:'->trace;
+              pOI -> E[];
+              StringObj -> E.unit[];
+              L: 
+                (if lex.symb = lex.symbols.dot then
+                    lex; 
+                    pNewExp -> E[];
+                    StringObj -> E.unit[];                    
+                    restart L
+                if)
+           // lex.symbols.leftBrack then
+              lex;
+              pBracketedExp -> E[]
+           else
+              Exp -> E[]; 
+              StringObj -> E.unit[];              
+              true -> E.isEmpty
+          if);
+          (if lex.symb // lex.symbols.string // lex.symbols.idf then
+              'pFactor:unit '-> trace;
+              lex.sym[] -> StringObj -> E.unit[];
+              lex
+           else
+              StringObj -> E.unit[]
+          if);
+          
+          (if lex.symb = lex.symbols.dot then
+              lex; 
+              pNewExp -> E[];
+              StringObj -> E.unit[];                    
+              restart pFactor
+          if)
+       exit E[]
+       #);
+    pOI:
+       (# E: ^Exp; prevSymb: @char; sym: ^text
+       do 'pOI' -> trace;        
+          lex.sym[] -> sym[];
+          (if ('if' -> sym.equalNCS) then
+              (*'Got if'->putline;*)
+              lex;
+              pIfExp -> E[];
+              leave pOI
+          if);
+          (if '#' = (1 -> sym.inxGet) then
+              (*'Got # '->puttext; sym[] -> putline;*)
+              ((false,false,Signature) -> pVarRefTypeNoBrack2,Arguments)
+                -> UnaryGen ->  E[];
+              (*newline; lex.symb -> lex.symbols.asText -> putline;*)
+              leave pOI
+          if);
+          lex;
+          (if lex.symb
+           // lex.symbols.leftBrack 
+           // lex.symbols.leftSquare
+           // lex.symbols.begin then
+              'pOI:(' -> trace;        
+              lex.symb -> prevSymb;
+              lex;
+              (sym[],prevSymb) -> pNewFatComma -> E[]
+           else (*unary *)
+             'pOI:unary' -> trace;  
+              (sym[],arguments) -> UnaryGen -> E[]
+          if)
+       exit E[]
+       #);
      pExp:
+       (# E,RE: ^Exp; sym: ^text
+       do 'pExp'->trace;
+          (*pSimpleExp -> E[];*)
+          (if false and (lex.sym[] -> lex.symbols.isRelOp) then 
+              'pExp:=' -> trace;
+              lex.sym[] -> sym[];
+              lex;
+              sym[] -> pBinary -> E[];
+           else
+              pSimpleExp -> E[];
+          if);
+       exit E[]
+       #);
+            
+     pSimpleExp:
        (* R.foo
         * f(e1,e2,e3)
         * a + b
         * %if E0 %then E1 %else E2
         *)
-       (# sym,sym2: ^Text;
+       (# sym: ^Text;
           E: ^Exp; prevSymb: @char
-       do 'pExp:'->trace;
+       do 'pSimpleExp'->trace;
           L:
           (if lex.symb 
            // lex.symbols.const then
@@ -1145,9 +1307,8 @@ parser: ModuleHandler
               lex.sym[] -> CharObj -> E[];
               lex;
            // lex.symbols.idf then 
-              'pExp:idf:'->trace;              
+              'pSimpleExp:idf:'->trace;              
               lex.sym[] -> sym[];
-              (* lex;*)
               (if ('if' -> sym.equalNCS) then
                   (*'Got if'->putline;*)
                   lex;
@@ -1182,8 +1343,7 @@ parser: ModuleHandler
                   if)
                else     
                   lex;
-                  (if lex.symb 
-                   // lex.symbols.leftBrack then
+                  (if lex.symb = lex.symbols.leftBrack then
                       lex;
                       sym[] -> pFunction  -> E[]
                    else 
@@ -1194,17 +1354,10 @@ parser: ModuleHandler
               lex.sym[] -> sym[];
               lex;
               sym[] -> pBinary -> E[]
-           (*// lex.symbols.keyword then 
-              lex.sym[] -> sym[];
-              lex;             
-              (*'exp:kw:' -> puttext; lex.current -> putline;* )
-              sym[] -> pKeyword -> E[]*)
            // lex.symbols.leftBrack then
               lex.sym[] -> sym[];
               lex;
               pBracketedExp -> E[]
-          (* // lex.symbols.begin then
-              pMainPart -> ObjectGeneratorExp -> E[]*)
            else
               Exp -> E[]; 
               true -> E.isEmpty
@@ -1472,6 +1625,7 @@ parser: ModuleHandler
      pBracketedExp:
        (# E: ^exp; I: ^Invocation
        do (* pExp *) pInvocation  -> I[];
+          'pBracketedExp' -> trace;
           I[] -> BracketedExp -> E[];
           L:
             (if lex.symb 
