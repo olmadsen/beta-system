@@ -1036,17 +1036,17 @@ parser: ModuleHandler
           E: ^Exp;
           i: @integer
        do 'pInvocation:'->trace;
-          Invocation -> IV[];
-          L:
-            (if newExpParser then
-              pNewExp -> E[] -> IV.append;               
-              (if lex.symb = lex.symbols.dot then
-                  lex; 
-                  (*pNewExp -> E[]; StringObj -> E.unit[];*)
-                  restart L
+          (if newExpParser then
+              pNewExp -> E[];
+              (if E## = Invocation## then
+                  E[] -> IV[]
+               else
+                  Invocation -> IV[];
+                  E[] -> IV.append;   
               if);
               leave pInvocation
           if);
+          Invocation -> IV[];
           Loop:
             (#
             do i + 1 -> i;
@@ -1132,98 +1132,136 @@ parser: ModuleHandler
           #);
        exit S[]
        #);
+     mkBinary:
+        (* binE = (BinaryExp 
+                      rec 
+                      (ObjectInvocation 
+                          op 
+                          (arguments 
+                              (ObjectGeneration 
+                                  (Invocation arg) (Items)))))
+         *)
+        (# rec,arg: ^Exp; op: ^text; 
+           IV: ^Invocation; OI: ^ObjectInvocation; 
+           OGx: ^ObjectGenerator; IS: ^Items;
+           binE:  ^BinaryExp;
+           args: ^Arguments
+        enter(rec[],op[],arg[])
+        do stripInv:
+             (if (arg## = Invocation##) and (arg.noOfSons = 1) then
+                 arg.son[] -> arg[];
+                 restart stripInv
+             if);
+           (if true then
+               arg[]->(Invocation->IV[]).append;
+               (IV[],Items->IS[]) -> ObjectGenerator -> OGx[];
+               true -> IS.isEmpty;
+               OGx[] -> (Arguments->args[]).append;
+               (op[],args[]) -> ObjectInvocation -> OI[];
+               OI.binary -> OI.type[];
+               (rec[],OI[]) -> BinaryExp -> binE[]
+            else
+               arg[] -> (Arguments->args[]).append;
+               (op[],args[]) -> ObjectInvocation -> OI[];
+               OI.binary -> OI.type[];
+               OI[] -> (Invocation -> IV[]).append;
+               (IV[],Items) -> ObjectGenerator -> OGx[];
+               (*(rec[],OGx[]) -> BinaryExp -> binE[]*)
+           if)
+        exit binE[]
+        #);
      pNewExp:
-       (# E,rE: ^Exp; sym: ^text; INV: ^Invocation; OI: ^ObjectInvocation
+       (# E,rE: ^Exp; sym: ^text; 
        do 'pNewExp'->trace;
-          Invocation -> INV[];
-          pNewSimpleExp -> E[] -> INV.append;
+          pNewSimpleExp -> E[];
           (if (lex.sym[] -> lex.symbols.isRelOp) then 
               'pNewExp:=' -> trace;
               lex.sym[] -> sym[];
               lex;
               pNewSimpleExp -> rE[];
-              (sym[],E[],rE[]) -> BinaryExp -> E[];
+              (E[],sym[],rE[]) -> mkBinary -> E[]
           if);          
        exit E[]
        #);
      pNewSimpleExp:
-       (# E,rE: ^Exp; sym: ^text
+       (# E,rE: ^Exp; sym: ^text;
        do 'pNewSimpleExp'->trace;
-          pTerm -> E[];
+          pTerm -> E[]; 
           L:
             (if (lex.sym[] -> lex.symbols.isAddOp) then 
                 'pNewSimpleExp:+' -> trace;
                 lex.sym[] -> sym[];
                 lex;
                 pTerm -> rE[];
-                (sym[],E[],rE[]) -> BinaryExp -> E[];
+                (E[],sym[],rE[]) -> mkBinary -> E[];
                 restart L
             if)
        exit E[]
        #);
     pTerm:
-       (# E,rE: ^Exp; sym: ^text
+       (# E,rE: ^Exp; sym: ^text;
        do 'pTerm'->trace;
           pFactor -> E[];
           L:
             (if true
              // (lex.sym[] -> lex.symbols.isMultOp) 
-             // lex.symb = lex.symbols.special then 
+             // lex.sym[] -> lex.symbols.isTrueSpecial then 
                 'pTerm:*' -> trace;
                 lex.sym[] -> sym[];
                 lex;
                 pFactor -> rE[];
-                (sym[],E[],rE[]) -> BinaryExp -> E[];
+                (E[],sym[],rE[]) -> mkBinary -> E[];
                 restart L
             if)
        exit E[]
        #);          
      pFactor:
-       (# E: ^Exp;
+       (# E: ^Exp; IV: ^Invocation;
        do 'pFactor'->trace;
+          Invocation -> IV[];
           L:
-          (if lex.symb 
-           // lex.symbols.const then
-              lex.sym[] -> Const -> E[];
-              StringObj -> E.unit[];
-              lex
-           // lex.symbols.floatConst then
-              lex.sym[] -> FloatConst -> E[];
-              StringObj -> E.unit[];              
-              lex;              
-           // lex.symbols.string then
-              lex.sym[] -> handleString -> E[];
-              StringObj -> E.unit[];              
-              lex;
-           // lex.symbols.charSy then 
-              lex.sym[] -> CharObj -> E[];
-              StringObj -> E.unit[];              
-              lex;
-           // lex.symbols.idf then
-              'pTerm:idf:'->trace;
-              pOI -> E[];
-           // lex.symbols.leftBrack then
-              lex;
-              pBracketedExp -> E[]
-           else
-              Exp -> E[]; 
-              StringObj -> E.unit[];              
-              true -> E.isEmpty
-          if);
-          (if lex.symb // lex.symbols.string // lex.symbols.idf then
-              'pFactor:unit '-> trace;
-              lex.sym[] -> StringObj -> E.unit[];
-              lex
-           else
-              StringObj -> E.unit[]
-          if);
-          
-          (if false and (lex.symb = lex.symbols.dot) then
-              lex; 
-              (*pNewExp -> E[]; StringObj -> E.unit[];*)
-              restart pFactor
-          if)
-       exit E[]
+            (if true then
+                (if lex.symb 
+                 // lex.symbols.const then
+                    lex.sym[] -> Const -> E[] -> IV.append;
+                    lex
+                 // lex.symbols.floatConst then
+                    lex.sym[] -> FloatConst -> E[] -> IV.append;
+                    lex;              
+                 // lex.symbols.string then
+                    lex.sym[] -> handleString -> E[] -> IV.append;
+                    lex;
+                 // lex.symbols.charSy then 
+                    lex.sym[] -> CharObj -> E[] -> IV.append;
+                    lex;
+                 // lex.symbols.idf then
+                    'pTerm:idf:'->trace;
+                    pOI -> E[] -> IV.append;
+                 // lex.symbols.leftBrack then
+                    lex;
+                    pBracketedExp -> E[] -> IV.append
+                 else
+                    'pTerm:empty'->trace;
+                    Exp -> E[] -> IV.append;; 
+                    true -> E.isEmpty -> IV.isEmpty
+                if);
+                (if lex.symb // lex.symbols.string // lex.symbols.idf then
+                    'pFactor:unit '-> trace;
+                    lex.sym[] -> StringObj -> E.unit[];
+                    lex
+                 else
+                    StringObj -> E.unit[]
+                if);
+                
+                (if (lex.symb = lex.symbols.dot) then
+                    (* OBS! Check that restart actually has a match 
+                     * and not being empty
+                     *)
+                    'pTerm:dot'->trace;
+                    lex; 
+                    restart L
+            if)if)
+       exit IV[]
        #);
     pOI:
        (# E: ^Exp; prevSymb: @char; sym: ^text
