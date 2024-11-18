@@ -587,6 +587,7 @@ generator: codeGenMarker
                    cd.rpop;
                    leave invoke
                if);
+               cd.fcom(#do 'DI:invoke:'->TT; dopt->TQ #);
                (if OG.isBasicValue or OG.isValueObj then 
                    (if (E[] <> none) then
                        (if ((E.ATd.asDecl).primNo <> cmpAndSwap_prim) then
@@ -626,7 +627,7 @@ generator: codeGenMarker
                                     adr.print -> TT #);
                            adr.loadAdr;
                        if)
-                    else 
+                    else
                        cd.com(#do '>:E=none' -> TT#);
                        (if adr[] <> none then 
                            adr.load
@@ -824,12 +825,18 @@ generator: codeGenMarker
                  #);
                rec,dstE: ^Exp; adr: ^Address;
                dstDI,srcDI: ^DataItem; ptn: ^Pattern
-            do (if false then
-                   'AssignmentStatement:gen: '->puttext; dopt ->putline
+            do (if newExpParser then
+                   '**** AssignmentStatement:gen: '->puttext; dopt ->putline;
+                   doPP -> putline
                if);
                cd.bcPos -> beginBCP;
                
                (left[],superAdj) -> computeAdrG -> (rec[],dstE[],adr[]);
+               
+               cd.fcom(#do 'AssignmentStatement:gen:'->TT; dopt ->TQ; 
+                         'right.label:'->TT; right.label -> TQ;
+                         right.dopt -> TQ #);
+               
                (true(*useRtnVal*),superAdj,staticOff) -> right.gen;
 
                (* checker/semchecker has ensure that dstE is a DataItem *)
@@ -1250,6 +1257,7 @@ generator: codeGenMarker
                E: ^Exp; OI: ^ObjectInvocation;
                trace: (# exit false #);
             do (if not genIsDone or true then
+                   cd.fcom(#do 'OG:gen:'->TT; dopt->TQ #);
                    true -> genIsDone;
                    super.last -> E[];   
                    (if ('???' -> (E.label).equal) and IS.isEmpty then
@@ -1274,6 +1282,7 @@ generator: codeGenMarker
                            isCompositeValueObj 
                              -> (super.last).isCompositeValueObj;
                        if);
+                       cd.fcom(#do 'OG:before:super.gen:'->TT; super.dopt->TQ#);
                        (useRtnVal,superAdj,staticOff) -> super.gen
                     else
                        (* Perhaps move check for virtuals to here!? *)
@@ -2759,6 +2768,8 @@ generator: codeGenMarker
                 // restart_prim // leave_prim then
                    (* skip *)
                 else 
+                   cd.fcom(#do 'ptn:loadArgs:E'->TT; E.dopt->TQ; #);
+                   cd.fcom(#do 'args:'->TT; E.args.dopt->TQ #);
                    E.args.scanArgs
                    (#
                    do (if (top+1 -> top) > actArgs.range then 
@@ -2816,7 +2827,7 @@ generator: codeGenMarker
             #);
           invoke:: 
             (# 
-            do cd.com(#do 'ptn:invoke:' -> TT; sig.dopt -> TQ;
+            do cd.fcom(#do 'ptn:invoke:' -> TT; sig.dopt -> TQ;
                         'E:'->TT; E.dopt -> TQ;
                         'useRtnV:' -> TT; useRtnVal -> BB#);
                (if false then
@@ -3058,142 +3069,142 @@ generator: codeGenMarker
        exit this(Address)[]
        #);
      computeAdrG:
-            (* R.S.foo(exp).Q
-             * X := Y + (Z +117)
-             * aLine.aPoint.X
-             * (4) @if ascii.isLetter(ch1) || ascii.isDigit(ch2) :then ...
-             *)
-            (# A,recA: ^Address; E,rec,pRec: ^Exp; j: @integer; 
-               loadRec,orgIsVal: @boolean; ptn: ^Pattern;
-               superAdj: @integer;
-               thisE:  ^Exp
-            enter(thisE[],superAdj)
-            do cd.com
-               (#do 'computeAdr:superAdj:'->TT; superAdj->II; thisE.dopt->TQ #);
-               superAdj -> Address -> A[];
-               (* for (4) above, A.superAdj may be non-zero when computing 
-                * address of ascii.isLetter(ch1) || ascii.isDigit(ch2)
-                * We must thus save A.superAdj to be used when calling 
-                * rec.loadArgs below to load ch1.
-                * If || ascii.isDigit(ch2) is not present, loadArgs is not 
-                * called here but in IV:gen
-                *)
-               thisE.scanSons
-               (# org: ^Items
-               do rec[] -> pRec[]; E[] -> rec[]; current[] -> E[];
-                  cd.com
-                  (#do 'computeAdr:'->TT; j+1->j->II; ':rec:'->TT; 
-                     (if rec[]<> none then rec.dopt->TQ else 'none'->TQ if);
-                     ' E:'->TT; E.dopt -> TQ;  
-                     (if A.E[] <> none then ' A.E:' -> TT; A.E.dopt->TQ if);
-                     nl; A.print -> TT;
-                  #);
-                  (if isFirst then
-                      E[] -> rec[];
-                      E.pushThis; (* why E? we should pushThis for thisObj!
-                                   * So just cd.pushThis? TST fails if 
-                                   * cd.pushThis
-                                   *)
-                      (if (E.ATd.asDecl).isPattern 
-                          and (thisE.origin->org[]).encOG.isValueObj then  
-                          (* origin is a value object;
-                           * E is a pattern invoked in the mainpart
-                           * of the value object;
-                           * we thus must push an extended origin for E
-                           * with holder ref, offset to value obj and
-                           * descNo of the actual value pattern.
-                           * The offset must be 1 (one) since the bytecodes
-                           * pushg, etc adds the offset stored in 
-                           * thisObj = holder
-                           * We do not know the descNo of the value pattern
-                           * here, since the actual value pattern may
-                           * be a subpatttern of the one we are generating
-                           * code for here.
-                           * The actual descNo is saved by a subsequent 
-                           * invokeVal and pushed by a possible invoke
-                           * or sendv
-                           *)
-                          cd.com
-                          (#do 'computeAdr:orgIsValue:'->TT; E.dopt->TQ; 
-                             E.label->TQ; E.ATd.primNo->II#);
-                          (if (E.ATd.asDecl).primNo
-                           // string_prim // inner_prim then
-                           else
-                              (* Perhaps virtual E.pushValId is better? *)
-                              cd.pushValId;
-                              (* push const 1 & thisValObjDescInx *)
-                      if)if);
-                      A.superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
-                      (* we should ignore rec and E - defined above 
-                       * And A.superAdj should be eliminated *)
-                      inner computeAdrG;
-                      (* start of problem *)
-                      A[] -> E.getAdr -> (loadRec,A[]);
-                      (* really getOffSet of E.ATd *)
-                      cd.com(#do 'E.on:' -> TT; E.on -> II #);
-                      (if (E.on > 0) or (A.superadj > 0) then
-                          cd.com(#do 'beforeIsValueObj:E:'->TT; E.dopt->TQ;
-                                   ' ATd:'->TT; E.ATd.dopt -> TQ;
+       (* R.S.foo(exp).Q
+        * X := Y + (Z +117)
+        * aLine.aPoint.X
+        * (4) @if ascii.isLetter(ch1) || ascii.isDigit(ch2) :then ...
+        *)
+       (# A,recA: ^Address; E,rec,pRec: ^Exp; j: @integer; 
+          loadRec,orgIsVal: @boolean; ptn: ^Pattern;
+          superAdj: @integer;
+          thisE:  ^Exp
+       enter(thisE[],superAdj)
+       do cd.com
+          (#do 'computeAdr:superAdj:'->TT; superAdj->II; thisE.dopt->TQ #);
+          superAdj -> Address -> A[];
+          (* for (4) above, A.superAdj may be non-zero when computing 
+           * address of ascii.isLetter(ch1) || ascii.isDigit(ch2)
+           * We must thus save A.superAdj to be used when calling 
+           * rec.loadArgs below to load ch1.
+           * If || ascii.isDigit(ch2) is not present, loadArgs is not 
+           * called here but in IV:gen
+           *)
+          thisE.scanSons
+          (# org: ^Items
+          do rec[] -> pRec[]; E[] -> rec[]; current[] -> E[];
+             cd.com
+             (#do 'computeAdr:'->TT; j+1->j->II; ':rec:'->TT; 
+                (if rec[]<> none then rec.dopt->TQ else 'none'->TQ if);
+                ' E:'->TT; E.dopt -> TQ;  
+                (if A.E[] <> none then ' A.E:' -> TT; A.E.dopt->TQ if);
+                nl; A.print -> TT;
+             #);
+             (if isFirst then
+                 E[] -> rec[];
+                 E.pushThis; (* why E? we should pushThis for thisObj!
+                              * So just cd.pushThis? TST fails if 
+                              * cd.pushThis
+                              *)
+                 (if (E.ATd.asDecl).isPattern 
+                     and (thisE.origin->org[]).encOG.isValueObj then  
+                     (* origin is a value object;
+                      * E is a pattern invoked in the mainpart
+                      * of the value object;
+                      * we thus must push an extended origin for E
+                      * with holder ref, offset to value obj and
+                      * descNo of the actual value pattern.
+                      * The offset must be 1 (one) since the bytecodes
+                      * pushg, etc adds the offset stored in 
+                      * thisObj = holder
+                      * We do not know the descNo of the value pattern
+                      * here, since the actual value pattern may
+                      * be a subpatttern of the one we are generating
+                      * code for here.
+                      * The actual descNo is saved by a subsequent 
+                      * invokeVal and pushed by a possible invoke
+                      * or sendv
+                      *)
+                     cd.com
+                     (#do 'computeAdr:orgIsValue:'->TT; E.dopt->TQ; 
+                        E.label->TQ; E.ATd.primNo->II#);
+                     (if (E.ATd.asDecl).primNo
+                      // string_prim // inner_prim then
+                      else
+                         (* Perhaps virtual E.pushValId is better? *)
+                         cd.pushValId;
+                         (* push const 1 & thisValObjDescInx *)
+                 if)if);
+                 A.superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
+                 (* we should ignore rec and E - defined above 
+                  * And A.superAdj should be eliminated *)
+                 inner computeAdrG;
+                 (* start of problem *)
+                 A[] -> E.getAdr -> (loadRec,A[]);
+                 (* really getOffSet of E.ATd *)
+                 cd.com(#do 'E.on:' -> TT; E.on -> II #);
+                 (if (E.on > 0) or (A.superadj > 0) then
+                     cd.com(#do 'beforeIsValueObj:E:'->TT; E.dopt->TQ;
+                              ' ATd:'->TT; E.ATd.dopt -> TQ;
+                           #);
+                     ((E.ATd.asDecl).enclosingObjectGenerator).isValueObj 
+                       -> A.originIsValue
+                     (* should probably be for each receiver in
+                      * R.S.foo(exp).Q, i.e. R, S and foo
+                      *)
+                 if);
+                 cd.com(#do 'computeAdr:isFirst:' -> TT; A.print->TT #)
+              else
+                 (* mutex.cmpAndSwap 
+                  * rec = mutex, cmpAndSwap = E
+                  *)
+                 A[] -> recA[] -> E.getAdr -> (loadRec,A[]);
+                 (* really getOffSet of E.ATd *)
+                 (if (E.ATd.asDecl).isPattern then
+                     E.ATd.asDecl -> ptn[];
+                     cd.com(#do 'ptn.isUnitValueObj:'->TT; 
+                              ptn.OG.isUnitValueObj -> BB;
+                              ' isFloat:E:' -> TT; 
+                              ptn.OG.isFloat -> BB #);
+                     (if ptn.OG.isUnitValueObj 
+                         or ptn.OG.isFloat then
+                         (# UN: ^NewProperty
+                         do ptn.OG.getUnitProp -> UN[];
+                            (if (UN[] <> none) 
+                                and 
+                                ('%unit "U*U"' -> (UN.doPT).equal)
+                                then
+                                cd.com
+                                (#
+                                do 'Generic:unit:' -> TT;
+                                   UN.dopt -> TT; nl;
+                                   'ptn: ' -> TT; ptn.dopt -> TQ; 
                                 #);
-                          ((E.ATd.asDecl).enclosingObjectGenerator).isValueObj 
-                            -> A.originIsValue
-                          (* should probably be for each receiver in
-                           * R.S.foo(exp).Q, i.e. R, S and foo
-                           *)
-                      if);
-                      cd.com(#do 'computeAdr:isFirst:' -> TT; A.print->TT #)
-                   else
-                      (* mutex.cmpAndSwap 
-                       * rec = mutex, cmpAndSwap = E
-                       *)
-                      A[] -> recA[] -> E.getAdr -> (loadRec,A[]);
-                      (* really getOffSet of E.ATd *)
-                      (if (E.ATd.asDecl).isPattern then
-                          E.ATd.asDecl -> ptn[];
-                          cd.com(#do 'ptn.isUnitValueObj:'->TT; 
-                                   ptn.OG.isUnitValueObj -> BB;
-                                   ' isFloat:E:' -> TT; 
-                                   ptn.OG.isFloat -> BB #);
-                          (if ptn.OG.isUnitValueObj 
-                              or ptn.OG.isFloat then
-                              (# UN: ^NewProperty
-                              do ptn.OG.getUnitProp -> UN[];
-                                 (if (UN[] <> none) 
-                                     and 
-                                     ('%unit "U*U"' -> (UN.doPT).equal)
-                                     then
-                                     cd.com
-                                     (#
-                                     do 'Generic:unit:' -> TT;
-                                        UN.dopt -> TT; nl;
-                                        'ptn: ' -> TT; ptn.dopt -> TQ; 
-                                     #);
-                                     false -> A.isUnitVal    
-                              if)#)
-                           else
-                              false -> A.isUnitVal 
-                      if)if);
-                      (if loadRec then
-                          (* In R.foo, rec = R, E = foo
-                           *    P.print, rec = P, E = print
-                           *    R.S,      rec = R, E = S
-                           * E is a pattern or dataItem 
-                           * For ascii.isLetter(ch1) 
-                           * || ascii.isDigit(ch2)
-                           * see comment at the beginning of computeAdr
-                           *)
-                          (superAdj,0) -> rec.loadArgs;
-                          (* Perhaps a combined invoke & getAdr *)
-                          (* A is the address of E - not of rec!!!!!! *)
-                          (pRec[],E[],true,0,recA[],false) -> rec.invoke;
-                          (if (pRec[],E[]) -> checkInt2IntWithUnitArg then
-                              cd.I2F
-                  if)if)if);
-                  (if isLast then
-                      cd.com(#do 'computeAdr:isLast:E: '->TT; E.dopt->TQ #)
-               if)#);
-            exit(rec[],E[],A[])
-            #);          
+                                false -> A.isUnitVal    
+                         if)#)
+                      else
+                         false -> A.isUnitVal 
+                 if)if);
+                 (if loadRec then
+                     (* In R.foo, rec = R, E = foo
+                      *    P.print, rec = P, E = print
+                      *    R.S,      rec = R, E = S
+                      * E is a pattern or dataItem 
+                      * For ascii.isLetter(ch1) 
+                      * || ascii.isDigit(ch2)
+                      * see comment at the beginning of computeAdr
+                      *)
+                     (superAdj,0) -> rec.loadArgs;
+                     (* Perhaps a combined invoke & getAdr *)
+                     (* A is the address of E - not of rec!!!!!! *)
+                     (pRec[],E[],true,0,recA[],false) -> rec.invoke;
+                     (if (pRec[],E[]) -> checkInt2IntWithUnitArg then
+                         cd.I2F
+             if)if)if);
+             (if isLast then
+                 cd.com(#do 'computeAdr:isLast:E: '->TT; E.dopt->TQ #)
+          if)#);
+       exit(rec[],E[],A[])
+       #);          
      checkInt2IntWithUnitArg: booleanValue
        (# rec,E: ^Exp; OGx: ^ObjectGenerator
        enter(rec[],E[])
@@ -3426,6 +3437,22 @@ generator: codeGenMarker
                if);
             exit T[]
             #);
+          invoke:: 
+            (#
+            do (if newExpParser then
+                   '**** Invocation:invoke:'->puttext; dopt -> putline
+               if);
+               cd.fcom(#do 'Invocation:invoke:'->TT; dopt -> TQ #);
+               scanSons
+               (# E: ^Exp
+               do cd.fcom(#do 'Inv:invoke:son:'->TT; current.dopt -> TQ #);
+                  (if false then
+                      (if adr[]=none then Address -> Adr[] if);
+                      (rec[],E[],useRtnVal,staticOff,adr[],isResume)
+                        ->(current[]->E[]).invoke
+                  if);
+               #);
+            #);
           gen:: 
             (# gdb:: 
                  (# 
@@ -3586,6 +3613,10 @@ generator: codeGenMarker
                 * load adr of R
                 * How about: R.S.T.Q ? Q globalRestrictions, or globals?
                 *)
+               (if newExpParser then
+                   '**** Invocation:gen: '->puttext; doPT -> putline;
+                   cd.fcom(#do 'Invocation:gen:'->TT; doPT ->TQ#)
+               if);
                cd.bcPos -> beginBCP;
                (* We should rewrite computeAdr to include handling
                 * of constants, patterns with no origin and bracketedExp
@@ -3609,7 +3640,7 @@ generator: codeGenMarker
                                   'BUM:'->dumpT; org.dopt->putheadN;
                                   mkValueProxy
                if)#)if)if)if);
-               cd.com(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
+               cd.fcom(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
                         (if A[] <>  none then A.print->TT if); nl;
                         'rec: '->TT; rec.dopt->TQ; 'E: '->TT; E.dopt->TQ;
                      #);
@@ -3662,6 +3693,10 @@ generator: codeGenMarker
                    (rec[],E[],useRtnVal,staticOff,A[],false) -> E.invoke;
                if);
                cd.bcPos -> endBCP
+            #);
+          loadArgs::
+            (#
+            do cd.fcom(#do 'Invocation:loadArgs:'->TT; doPT -> TQ #)
             #);
           isConstant: BooleanValue
             (* Not good enough for 
@@ -4304,7 +4339,8 @@ generator: codeGenMarker
                     ' unique:' -> TT; E.ATd.OG.IS.isUnique -> BB;
                  #);
                orig: ^Scope; org: ^Items; stubDescNo: @integer; ATdx: ^Decl
-            do (* rec is a dataItem *)               
+            do (* rec is a dataItem *)   
+               cd.fcom(# do 'OI:invoke:'->TT; dopt -> TQ #);
                ATd.origin[] -> orig[];
                (if orig.isItems then
                    (if ((orig[]->org[]) <> none) and org.encOG.isValueObj then 
@@ -4455,7 +4491,7 @@ generator: codeGenMarker
      IfThenElse::
        (# gen::
             (# Tlab, Flab, exitLab: @ LabelHandler.label
-            do (if false then
+            do (if newExpParser then
                    '**** IfThenElse:gen ' -> puttext; dopt -> putline;
                if);
                117 -> cd.pushConst;
@@ -4474,7 +4510,7 @@ generator: codeGenMarker
             #);
           invoke:: 
             (# 
-            do (if false then
+            do (if newExpParser then
                    '**** IfThenElse:Invoke: ' -> putline;
                if);
                gen
@@ -4485,21 +4521,45 @@ generator: codeGenMarker
           gen:: 
             (# 
             do '**** BinaryExp:gen: ' -> puttext; dopt -> putline;
+               cd.fcom(#do 'BinaryExp:gen:'->TT; dopt->TQ#);
+               
+               (false,0,0) -> leftRec.gen;
+               (M[],superAdj,staticOff) 
+                 -> (M.ATd.asDecl).loadArgs 
+            #);
+          loadOrigin::
+            (#
+            do '**** BinaryExp:loadOrigin: ' -> puttext; doPT -> putline;
+               cd.fcom(#do 'BinaryExp:loadOrigin:'->TT; dopt->TQ #);
+            #);
+          loadArgs::
+            (*  V := BE where BE = this(BE)
+             *  V := e1 + e2, this(BE) e1 + e2
+             *)
+            (#
+            do '**** BinaryExp:loadArgs: ' -> puttext; doPT -> putline;
+               cd.fcom(#do 'BinaryExp:loadArgs:'->TT; dopt->TQ #);
+               (false,0,0) -> leftRec.gen;
+               (M[],superAdj,staticOff) -> (M.ATd.asDecl).loadArgs 
             #);
           invoke:: 
             (# A: ^Address; superAdj,off: @integer
             do '**** BinaryExp:invoke: ' -> puttext; dopt -> putline;
-               0 -> superAdj; (* is this ok? *)
-               cd.fcom(#do 'BinaryExp:invoke:A:'->TT; leftRec.dopt->TQ #);
-               (leftRec[],superAdj) -> computeAdrG -> (rec[],E[],A[]);
-               cd.fcom(#
-                      do 'BinaryExp:invoke:B:rec'->TT; rec.dopt->TQ;
-                         'E:'->TT; E.dopt -> TQ; A.print->TT
-                      #);
-               (superAdj,off) -> rec.loadArgs;
-               cd.fcom(#do 'after:loadArgs'->TT #);
-               (rec[],E[],useRtnVal,staticOff,A[],false) -> rec.invoke;
-               cd.fcom(#do 'after:invoke'->TT #);
+               (if true then
+                   0 -> superAdj; (* is this ok? *)
+                   cd.fcom(#do 'BinaryExp:invoke:A:'->TT; leftRec.dopt->TQ #);
+                   (*(leftRec[],superAdj) -> computeAdrG -> (rec[],E[],A[]);*)
+                   
+                   (leftRec[],leftRec[],useRtnVal,staticOff,adr[],false)
+                     -> leftRec.invoke;
+                   
+                   cd.fcom(#do 'BinaryExp:invoke:B:'->TT; leftRec.dopt->TQ #);
+                   
+                   Address->A[]; (* ??? *)
+                   (rec[],M[],useRtnVal,staticOff,A[],false) -> M.invoke;
+                   
+                   cd.fcom(#do 'BinaryExp:invoke:end:'->TT; leftRec.dopt->TQ #);
+               if)
             #);
           
        #);
