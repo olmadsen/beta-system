@@ -1,0 +1,255 @@
+ORIGIN '../webservice';
+
+-- TextLib: Atttributes --
+
+split:
+  (# ch: @char;
+     parts: ^TextList;
+  enter ch
+  do &TextList[] -> parts[];
+     (# previousIndex: @integer;
+     do 0 -> previousIndex;
+        reset;
+        ch -> find
+          (#
+          do (if (previousIndex + 1) = inx then
+                &Text[] -> parts.append;
+             else
+                (previousIndex + 1, inx - 1) -> sub -> parts.append;
+                inx -> previousIndex;
+             if);
+          #);
+        (if previousIndex = length then
+          &Text[] -> parts.append;
+        else
+          (previousIndex + 1, length) -> sub -> parts.append;
+        if);
+     #);
+     INNER;
+  exit parts[]
+  #);
+
+
+-- BasicWebServiceLib: Attributes --
+
+Reader:
+  (# input: ^Stream;
+     init:
+       (#
+       enter input[]
+       #);
+     get:
+       (# ch: @char;
+       do (if input.eos then
+             ascii.EOT -> ch;
+          else
+             input.get -> ch;
+          if);
+       exit ch
+       #);
+     getLine:
+       (# line: ^Text;
+          ch: @char;
+       do &Text[] -> line[];
+          get -> ch;
+          loop:
+            (if (ch <> ascii.EOT) AND (ch <> ascii.NL) then
+               (if ch <> ascii.CR then
+                  ch -> line.put;
+               if);
+               get -> ch;
+               restart loop;
+            if);
+       exit line[]
+       #);
+  #);
+Writer:
+  (# output: ^Stream;
+     init:
+       (#
+       enter output[]
+       #);
+     put:
+       (# ch: @char;
+       enter ch
+       do ch -> output.put;
+       #);
+     putLine:
+       (# line: ^Text;
+       enter line[]
+       do line[] -> output.putText;
+          ascii.CR -> output.put;
+          ascii.NL -> output.put;
+       #);
+     newLine:
+       (#
+       do ascii.CR -> output.put;
+          ascii.NL -> output.put;
+       #);
+  #);
+
+parseHttpRequest:
+  (# socket: ^StreamSocket;
+     socketReader: @Reader;
+     line: ^Text;
+     method: ^Text;
+     uri: ^Text;
+     protocol: ^Text;
+     headers: ^HeaderParameters;
+     body: ^Text;
+     contentLength: ^Text;
+     length: @integer;
+     path: ^Text;
+     query: ^QueryParameters;
+     part: ^Text;
+     request: ^HttpRequest;
+  enter socket[]
+  do socket[] -> socketReader.init;
+     socketReader.getLine -> line[];
+     line.reset;
+     line.getAtom -> method[];
+     line.getAtom -> uri[];
+     line.getAtom -> protocol[];
+     &HeaderParameters[] -> headers[];
+     socketReader.getLine -> line[];
+     loop:
+       (if NOT line.empty then
+          (# name: ^Text;
+             value: ^Text;
+          do line.reset;
+             line.getAtom -> name[];
+             (if name.length > 1 then
+                (if (name.length -> name.inxGet) = ':' then
+                   (1, name.length - 1) -> name.sub -> name[];
+                   line.scanWhiteSpace;
+                   &Text[] -> value[];
+                   line.scan (# do ch -> value.put #);
+                   (name[], value[]) -> headers.associate;
+                if);
+             if);
+          #);
+          socketReader.getLine -> line[];
+          restart loop;
+       if);
+     'Content-Length' -> headers.lookup -> contentLength[];
+     (if contentLength[] <> NONE then
+        contentLength.asInt -> length;
+        &Text[] -> body[];
+        (for length repeat
+           socketReader.get -> body.put;
+        for);
+     if);
+     uri[] -> parseUri -> (path[], query[], part[]);
+     &HttpRequest[] -> request[];
+     method[] -> request.method[];
+     headers[] -> request.headers[];
+     path[] -> request.path[];
+     query[] -> request.query[];
+     part[] -> request.part[];
+     body[] -> request.body[];
+  exit request[]
+  #);
+parseUri:
+  (# uri: ^Text;
+     path: ^Text;
+     query: ^QueryParameters;
+     part: ^Text;
+  enter uri[]
+  do (# parseQueryAndPart:
+          (# input: ^Text;
+          enter input[]
+          do '#' -> input.split
+               (#
+               do 1 -> parts.get -> parseQuery;
+                  (if parts.size > 1 then
+                     2 -> parts.get -> part[];
+                  if);
+               #);
+          #);
+        parseQuery:
+          (# input: ^Text;
+          enter input[]
+          do &QueryParameters[] -> query[];
+             query.init;
+             '&' -> input.split
+               (#
+               do parts.scan
+                    (#
+                    do '=' -> current.split
+                         (# name: ^Text;
+                            value: ^Text;
+                            values: ^TextList;
+                         do (if parts.size = 2 then
+                               1 -> parts.get -> name[];
+                               2 -> parts.get -> value[];
+                               name[] -> query.lookup -> values[];
+                               (if values[] = NONE then
+                                  &TextList[] -> values[];
+                                  values.init;
+                                  (name[], values[]) -> query.associate;
+                               if);
+                               value[] -> values.append;
+                            if);
+                         #);
+                    #);
+               #);
+          #);
+     do '?' -> uri.split
+          (#
+          do 1 -> parts.get -> path[];
+             (if parts.size > 1 then
+                 2 -> parts.get -> parseQueryAndPart;
+             if);
+          #);
+     #);
+  exit (path[], query[], part[])
+  #);
+writeHttpResponse:
+  (# socket: ^StreamSocket;
+     response: ^HttpResponse;
+     socketWriter: @Writer;
+     responseLine: ^Text;
+     header: ^Text;
+  enter (socket[], response[])
+  do socket[] -> socketWriter.init;
+     (if response[] = NONE then
+        defaultResponse -> response[];
+     if);
+     'HTTP/1.1 ' -> responseLine[];
+     response.status -> responseLine.putInt;
+     ' ' -> responseLine.putText;
+     response.message[] -> responseLine.putText;
+     responseLine[] -> socketWriter.putLine;
+     'Content-Type: ' -> header[];
+     response.contentType[] -> header.putText;
+     header[] -> socketWriter.putLine;
+     (if response.body[] <> NONE then
+        'Content-Length: ' -> header[];
+        response.body.length -> header.putInt;
+        header[] -> socketWriter.putLine;
+     if);
+     socketWriter.newLine;
+     (if response.body[] <> NONE then
+        response.body.reset;
+        response.body.scan
+          (#
+          do ch -> socketWriter.put;
+          #);
+     if);
+  #);
+
+defaultResponse:
+  (# response: ^HttpResponse;
+  do &HttpResponse[] -> response[];
+     404 -> response.status;
+     'No Response' -> response.message[];
+     'The response from dispatch was none' -> response.body[];
+     'text/plain' -> response.contentType[];
+  exit response[]
+  #);
+
+-- BasicWebServiceParseRequest: dopart --
+do socket[] -> parseHttpRequest -> request[];
+
+-- BasicWebServiceWriteResponse: dopart --
+do (socket[], response[]) -> writeHttpResponse;
