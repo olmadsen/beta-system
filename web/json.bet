@@ -1,0 +1,416 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'textcollections';
+
+-- lib: attributes --
+TextDictionary: Dictionary
+  (# key:: Text;
+     hashFunction::
+       (# 
+       do k.scanAll
+          (#
+          do 131 * value + ch -> value;
+          #);
+          (if value < 0 then
+              -value -> value;
+          if);
+       #);
+     keyEqual::
+       (#
+       do left[] -> right.equal -> value;
+       #);
+  #);
+
+JsonEnv:
+  (# JsonObject:
+       (# serialize:<
+            (# output: ^Stream;
+               level: @integer;
+            enter (output[], level)
+            do INNER;
+            #);
+       #);
+     JsonMap: JsonObject
+       (# content: @TextDictionary
+            (# element:: JsonObject;
+            #);
+          associate:
+            (# name: ^Text;
+               value: ^JsonObject;
+            enter (name[], value[])
+            do (name[], value[]) -> content.associate;
+            #);
+          associateText:
+            (# name: ^Text;
+               value: ^Text;
+            enter (name[], value[])
+            do (# json: ^JsonText;
+               do &JsonText[] -> json[];
+                  value[] -> json.value[];
+                  (name[], json[]) -> associate;
+               #);
+            #);
+          associateInteger:
+            (# name: ^Text;
+               value: @integer;
+            enter (name[], value)
+            do (# json: ^JsonInteger;
+               do &JsonInteger[] -> json[];
+                  value -> json.value;
+                  (name[], json[]) -> associate;
+               #);
+            #);
+          associateBoolean:
+            (# name: ^Text;
+               value: @boolean;
+            enter (name[], value)
+            do (# json: ^JsonBoolean;
+               do &JsonBoolean[] -> json[];
+                  value -> json.value;
+                  (name[], json[]) -> associate;
+               #);
+            #);
+          lookup:
+            (# name: ^Text;
+               value: ^JsonObject;
+            enter name[]
+            do name[] -> content.lookup -> value[];
+            exit value[]
+            #);
+          serialize::
+            (# pairs: @List (# element:: Pair #);
+               last: ^Pair;
+            do '{ ' -> output.putLine;
+               content.scanAssociations
+                 (# thePair: ^Pair;
+                 do &Pair[] -> thePair[];
+                    k[] -> thePair.name[];
+                    e[] -> thePair.value[];
+                    thePair[] -> pairs.append;
+                    thePair[] -> last[];
+                 #);
+               pairs.scan
+                 (#
+                 do (for i: (level + 1) repeat
+                       '  ' -> output.putText;
+                    for);
+                    '"' -> output.putText;
+                    current.name[] -> output.putText;
+                    '": ' -> output.putText;
+                    (if current.value[] <> NONE then
+                       (output[], level + 1) -> current.value.serialize;
+                       (if current[] <> last[] then
+                          ',' -> output.puttext;
+                       if);
+                       output.newline;
+                    else
+                       'null' -> output.putline;
+                    if);
+                 #);
+               (for i: level repeat
+                  '  ' -> output.putText;
+               for);
+               '}' -> output.puttext;
+            #);
+          Pair:
+            (# name: ^Text;
+               value: ^JsonObject;
+            #);
+       #);
+     JsonList: JsonObject
+       (# content: @List
+            (# element:: JsonObject;
+            #);
+          append:
+            (# value: ^JsonObject;
+            enter value[]
+            do value[] -> content.append;
+            #);
+          appendText:
+            (# value: ^Text;
+            enter value[]
+            do (# json: ^JsonText;
+               do &JsonText[] -> json[];
+                  value[] -> json.value[];
+                  json[] -> append;
+               #); 
+            #);
+          scan: content.scan
+            (#
+            do INNER;
+            #);
+          serialize::
+            (# last: ^JsonObject;
+            do '[' -> output.putLine;
+               content.scan (# do current[] -> last[]; #);
+               content.scan
+                 (#
+                 do (for i: (level + 1) repeat
+                       '  ' -> output.putText;
+                    for);
+                    (output[], level + 1) -> current.serialize;
+                    (if current[] <> last[] then
+                          ',' -> output.puttext;
+                    if);
+                    output.newline;
+                 #);
+               (for i: level repeat
+                  '  ' -> output.putText;
+               for);
+               ']' -> output.puttext;
+            #);
+       #);
+     JsonSimpleValue: JsonObject
+       (#
+       #);
+     JsonText: JsonSimpleValue
+       (# value: ^Text;
+          serialize::
+            (#
+            do (if value[] <> NONE then
+                  '"' -> output.putText;
+                  value[] -> output.putText;
+                  '"' -> output.putText;
+               else
+                  'null' -> output.putText;
+               if);
+            #);
+       #);
+     JsonInteger: JsonSimpleValue
+       (# value: @integer;
+          serialize::
+            (#
+            do value -> output.putInt;
+            #);
+       #);
+     JsonBoolean: JsonSimpleValue
+       (# value: @boolean;
+          serialize::
+            (#
+            do (if value then
+                  'true' -> output.putText;
+               else
+                  'false' -> output.putText;
+               if);
+            #);
+       #);
+     toText:
+       (# json: ^JsonObject;
+          output: ^Text;
+       enter json[]
+       do &Text[] -> output[];
+          (output[], 0) -> json.serialize;
+       exit output[]
+       #);
+     fromText:
+       (# input: ^Text;
+          json: ^JsonObject;
+          theParser: @Parser;
+       enter input[]
+       do input.reset;
+          input[] -> theParser.init;
+          theParser.parseJsonObject -> json[];
+       exit json[]
+       #);
+     Parser:
+       (# Token:
+            (# value: ^Text;
+               kind: ^Text;
+            #);
+          current: ^Token;
+          theLexer: ^Lexer;
+          init:
+            (# input: ^Stream;
+            enter input[]
+            do &Lexer[] -> theLexer[];
+               input[] -> theLexer.init;
+               next;
+            #);
+          next:
+            (#
+            do theLexer.nextToken -> current[];
+            #);
+
+          parseJsonObject:
+            (# json: ^JsonObject;
+            do (if true
+                 //'{' -> current.kind.equal then
+                    parseJsonMap -> json[];
+                 //'string' -> current.kind.equal then
+                    parseJsonText -> json[];
+                 //'number' -> current.kind.equal then
+                    parseJsonInteger -> json[];
+               if);
+            exit json[]
+            #);
+          parseJsonMap:
+            (# json: ^JsonMap;
+               done: @boolean;
+               name: ^Text;
+               value: ^JsonObject;
+            do &JsonMap[] -> json[];
+               (if '{' -> current.kind.equal then
+                  next;
+                  '}' ->current.kind.equal -> done;
+                  loop:
+                    (if NOT done then
+                       (if 'string' -> current.kind.equal then
+                          current.value[] -> name[];
+                          next;
+                          (if ':' -> current.kind.equal then
+                             next;
+                             parseJsonObject -> value[];
+                             (name[], value[]) -> json.associate;
+                             '}' -> current.kind.equal -> done;
+                             (if ',' -> current.kind.equal then
+                                next;
+                             if);
+                             restart loop;
+                          if);
+                       if);
+                    if);
+                  next;  
+               if);
+            exit json[]
+            #);
+          parseJsonText:
+            (# json: ^JsonText;
+            do &JsonText[] -> json[];
+               current.value[] -> json.value[];
+               next;
+            exit json[]
+            #);
+          parseJsonInteger:
+            (# json: ^JsonInteger;
+            do &JsonInteger[] -> json[];
+               current.value.asInt -> json.value;
+               next;
+            exit json[]
+            #);
+          Lexer: 
+            (# input: ^Stream;
+               EOS: (# exit 0 #);
+               ch: @char;
+               init:
+                 (#
+                 enter input[]
+                 do next;
+                 #);
+               next:
+                 (# 
+                 do (if input.eos then
+                       EOS -> ch;
+                    else
+                       input.get -> ch;
+                    if);
+                 #);
+               nextToken:
+                 (# 
+                   theToken: ^Token;
+                 do &Token[] -> theToken[];
+                    while: (if (ch <> EOS) AND (ch -> ascii.isWhiteSpace) then
+                              next;
+                              restart while;
+                           if);
+                    (if ch
+                      //EOS then
+                         'eos' -> theToken.kind[];
+                      //'{' then
+                         '{' -> theToken.kind[];
+                         next;
+                      //'}' then
+                         '}' -> theToken.kind[];
+                         next;
+                      //'[' then
+                         '[' -> theToken.kind[];
+                        next;
+                      //']' then
+                         ']' -> theToken.kind[];
+                        next;
+                      //':' then
+                         ':' -> theToken.kind[];
+                        next;
+                      //',' then
+                         ',' -> theToken.kind[];
+                        next;
+                      //'"' then
+                         'string' -> theToken.kind[];
+                         &Text[] -> theToken.value[];
+                         next;
+                         while:
+                           (if ch <> '"' then
+                              ch -> theToken.value.put;
+                              next;
+                              restart while;
+                           if);
+                         next;
+                      else
+                         (if ch -> ascii.isDigit then
+                            'number' -> theToken.kind[];
+                            &Text[] -> theToken.value[];
+                            ch -> theToken.value.put;
+                            next;
+                            while:
+                              (if ch -> ascii.isDigit then
+                                 ch -> theToken.value.put;
+                                 next;
+                                 restart while;
+                              if);
+                         else
+                            (if ch -> ascii.isLetter then
+                               'number' -> theToken.kind[];
+                               &Text[] -> theToken.value[];
+                               ch -> theToken.value.put;
+                               next;
+                               while:
+                                 (if (ch -> ascii.isLetter) then
+                                    ch -> theToken.value.put;
+                                    next;
+                                    restart while;
+                                 if);
+                            if);
+                         if);
+                    if);
+                 exit theToken[]
+                 #);
+            #);
+       #);
+  #);
+
+
+-- program: descriptor --
+(# json: @JsonEnv;
+   employee: @json.JsonMap;
+   address: @json.JsonMap;
+   employment1: @json.JsonMap;
+   employment2: @json.JsonMap;
+   employments: @json.JsonList;
+   emails: @json.JsonList;
+   email1: @json.JsonText;
+   email2: @json.JsonText;
+   input: ^Text;
+   js: ^json.JsonMap;
+do ('firstName', 'Mike') -> employee.associateText;
+   ('lastName', 'Lassen') ->employee.associateText;
+   ('employeeNumber', 1345) -> employee.associateInteger;
+   ('city', 'Copenhagen') -> address.associateText;
+   ('street', 'Oxford Have') -> address.associateText;
+   ('zip', NONE) -> address.associateText;
+   ('address', address[]) -> employee.associate;
+   ('department', 'IT') -> employment1.associateText;
+   ('title', 'Developer') -> employment1.associateText;
+   employment1[] -> employments.append;
+   ('department', 'HR') -> employment2.associateText;
+   ('title', 'Consultant') -> employment2.associateText;
+   employment2[] -> employments.append;
+   ('employements', employments[]) -> employee.associate;
+   'mila.it@cbs.dk' -> emails.appendText;
+   'mike.lassen@gmail.com' -> emails.appendText;
+   ('emails', emails[]) -> employee.associate;
+   employee[] -> json.toText -> putLine;
+
+   '{ "city": "Copenhagen", "post": 2100, "name": "Mike", "address": { "line1": "A", "line2": "B" }}'-> input[];
+   input[] -> json.fromText -> js[];
+   'Parsed: ' -> putLine;
+   js[] -> json.toText -> putLine;
+#)
+
