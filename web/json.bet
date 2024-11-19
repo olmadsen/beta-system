@@ -235,10 +235,14 @@ JsonEnv:
             do (if true
                  //'{' -> current.kind.equal then
                     parseJsonMap -> json[];
+                 //'[' -> current.kind.equal then
+                    parseJsonList -> json[];
                  //'string' -> current.kind.equal then
                     parseJsonText -> json[];
                  //'number' -> current.kind.equal then
                     parseJsonInteger -> json[];
+                 //'name' -> current.kind.equal then
+                    parseJsonLiteral -> json[]
                if);
             exit json[]
             #);
@@ -250,7 +254,7 @@ JsonEnv:
             do &JsonMap[] -> json[];
                (if '{' -> current.kind.equal then
                   next;
-                  '}' ->current.kind.equal -> done;
+                  '}' -> current.kind.equal -> done;
                   loop:
                     (if NOT done then
                        (if 'string' -> current.kind.equal then
@@ -272,6 +276,28 @@ JsonEnv:
                if);
             exit json[]
             #);
+          parseJsonList:
+            (# json: ^JsonList;
+               done: @boolean;
+               value: ^JsonObject;
+            do &JsonList[] -> json[];
+               (if '[' -> current.kind.equal then
+                  next;
+                  ']' -> current.kind.equal -> done;
+                  loop:
+                    (if NOT done then
+                       parseJsonObject -> value[];
+                       value[] -> json.append;
+                       ']' -> current.kind.equal -> done;
+                       (if ',' -> current.kind.equal then
+                          next;
+                       if);
+                       restart loop;
+                    if);
+                  next;
+               if);
+            exit json[]
+            #);
           parseJsonText:
             (# json: ^JsonText;
             do &JsonText[] -> json[];
@@ -286,6 +312,27 @@ JsonEnv:
                next;
             exit json[]
             #);
+          parseJsonLiteral:
+            (# json: ^JsonSimpleValue;
+            do (if true
+                 //'null' -> current.value.equal then
+                    NONE -> json[];
+                 //'true' -> current.value.equal then
+                    (# literal: ^JsonBoolean;
+                    do &JsonBoolean[] -> literal[];
+                       true -> literal.value;
+                       literal[] -> json[];
+                    #);
+                 //'false' -> current.value.equal then
+                    (# literal: ^JsonBoolean;
+                    do &JsonBoolean[] -> literal[];
+                       false -> literal.value;
+                       literal[] -> json[];
+                    #);
+               if);
+               next;
+            exit json[]
+            #);  
           Lexer: 
             (# input: ^Stream;
                EOS: (# exit 0 #);
@@ -357,7 +404,7 @@ JsonEnv:
                               if);
                          else
                             (if ch -> ascii.isLetter then
-                               'number' -> theToken.kind[];
+                               'name' -> theToken.kind[];
                                &Text[] -> theToken.value[];
                                ch -> theToken.value.put;
                                next;
@@ -375,42 +422,3 @@ JsonEnv:
             #);
        #);
   #);
-
-
--- program: descriptor --
-(# json: @JsonEnv;
-   employee: @json.JsonMap;
-   address: @json.JsonMap;
-   employment1: @json.JsonMap;
-   employment2: @json.JsonMap;
-   employments: @json.JsonList;
-   emails: @json.JsonList;
-   email1: @json.JsonText;
-   email2: @json.JsonText;
-   input: ^Text;
-   js: ^json.JsonMap;
-do ('firstName', 'Mike') -> employee.associateText;
-   ('lastName', 'Lassen') ->employee.associateText;
-   ('employeeNumber', 1345) -> employee.associateInteger;
-   ('city', 'Copenhagen') -> address.associateText;
-   ('street', 'Oxford Have') -> address.associateText;
-   ('zip', NONE) -> address.associateText;
-   ('address', address[]) -> employee.associate;
-   ('department', 'IT') -> employment1.associateText;
-   ('title', 'Developer') -> employment1.associateText;
-   employment1[] -> employments.append;
-   ('department', 'HR') -> employment2.associateText;
-   ('title', 'Consultant') -> employment2.associateText;
-   employment2[] -> employments.append;
-   ('employements', employments[]) -> employee.associate;
-   'mila.it@cbs.dk' -> emails.appendText;
-   'mike.lassen@gmail.com' -> emails.appendText;
-   ('emails', emails[]) -> employee.associate;
-   employee[] -> json.toText -> putLine;
-
-   '{ "city": "Copenhagen", "post": 2100, "name": "Mike", "address": { "line1": "A", "line2": "B" }}'-> input[];
-   input[] -> json.fromText -> js[];
-   'Parsed: ' -> putLine;
-   js[] -> json.toText -> putLine;
-#)
-
