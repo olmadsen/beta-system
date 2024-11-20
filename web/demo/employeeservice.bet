@@ -1,0 +1,230 @@
+ORIGIN '../webservice';
+INCLUDE '../json';
+
+-- SystemLib: Attributes --
+
+Employee:
+  (# id: @integer;
+     firstName: ^Text;
+     lastName: ^Text;
+     title: ^Text;
+  #);
+EmployeeList: List
+  (# element:: Employee;
+     findById:
+       (# id: @integer;
+          theEmployee: ^Employee;
+       enter id
+       do loop: scan
+            (#
+            do (if current.id = id then
+                 current[] -> theEmployee[];
+                 leave loop;
+               if);
+            #);
+       exit theEmployee[]
+       #);
+  #);
+
+EmployeeRepository:
+  (# employees: @EmployeeList;
+     sequence: @integer;
+     init:<
+       (#
+       do employees.init;
+          INNER;
+       #);
+     find:
+       (# id: @integer;
+          theEmployee: ^Employee;
+       enter id
+       do id -> employees.findById -> theEmployee[];
+       exit theEmployee[]
+       #);
+     findAll:
+       (# result: ^EmployeeList;
+       do employees[] -> result[];
+       exit result[]
+       #);
+     save:
+       (# theEmployee: ^Employee;
+       enter theEmployee[]
+       do sequence + 1 -> sequence;
+          sequence -> theEmployee.id;
+          theEmployee[] -> employees.append;
+       #);
+     delete:
+       (# theEmployee: ^Employee;
+       enter theEmployee[]
+       do theEmployee[] -> employees.at -> employees.delete;
+       #);
+  #);
+
+EmployeeHandler: RequestHandler
+  (# repository: @EmployeeRepository;
+     json: @JsonEnv;
+
+     init::
+       (# anEmployee: ^Employee;
+       do 'employees' -> path[];
+          repository.init;
+          &Employee[] -> anEmployee[];
+          'Hugh' -> anEmployee.firstName[];
+          'Mann' -> anEmployee.lastName[];
+          'Chief People Officer' -> anEmployee.title[];
+          anEmployee[] -> repository.save;
+          &Employee[] -> anEmployee[];
+          'Anita' -> anEmployee.firstName[];
+          'Bath' -> anEmployee.lastName[];
+          'Head of Hygiene and Sanitation' -> anEmployee.title[];
+          anEmployee[] -> repository.save;
+          &Employee[] -> anEmployee[];
+          'Justin' -> anEmployee.firstName[];
+          'Case' -> anEmployee.lastName[];
+          'Risk Management Specialist' -> anEmployee.title[];
+          anEmployee[] -> repository.save;
+          &Employee[] -> anEmployee[];
+          'Paige' -> anEmployee.firstName[];
+          'Turner' -> anEmployee.lastName[];
+          'Head Librarian' -> anEmployee.title[];
+          anEmployee[] -> repository.save;
+          &Employee[] -> anEmployee[];
+          'Al' -> anEmployee.firstName[];
+          'Beback' -> anEmployee.lastName[];
+          'Director of Customer Retention' -> anEmployee.title[];
+          anEmployee[] -> repository.save;
+       #);
+     employeeToJson:
+       (# theEmployee: ^Employee;
+          map: ^json.JsonMap;
+       enter theEmployee[]
+       do &json.JsonMap[] -> map[];
+          ('id', theEmployee.id) -> map.associateInteger;
+          ('firstName', theEmployee.firstName[]) -> map.associateText;
+          ('lastName', theEmployee.lastName[]) -> map.associateText;
+          ('title', theEmployee.title[]) -> map.associateText;
+       exit map[]
+       #);
+     employeesToJson:
+       (# employees: ^EmployeeList;
+          lst: ^json.JsonList;
+       enter employees[]
+       do &json.JsonList[] -> lst[];
+          employees.scan
+            (#
+            do current[] -> employeeToJson -> lst.append;
+            #);
+       exit lst[]
+       #);
+     jsonToEmployee:
+       (# map: ^json.JsonMap;
+          theEmployee: ^Employee;
+       enter map[]
+       do &Employee[] -> theEmployee[];
+          'firstName' -> map.lookupText -> theEmployee.firstName[];
+          'lastName' -> map.lookupText -> theEmployee.lastName[];
+          'title' -> map.lookupText -> theEmployee.title[];
+       exit theEmployee[]
+       #);
+     get::
+       (# getAll:
+            (#
+            exit repository.findAll -> employeesToJson -> json.toText
+            #);
+          getSingle:
+            (# id: @integer;
+               theEmployee: ^Employee;
+               result: ^Text;
+            enter id
+            do id -> repository.find -> theEmployee[];
+               (if theEmployee[] <> NONE then
+                  theEmployee[] -> employeeToJson -> json.toText -> result[];
+               if);
+            exit result[] 
+            #)
+       do &HttpResponse[] -> response[];
+          (if request.path.empty then
+             getAll -> response.body[];
+          else
+             (# id: @integer;
+             do request.path.asInt -> id;
+                id -> getSingle -> response.body[];
+             #);   
+          if);
+          'application/json' -> response.contentType[];
+          200 -> response.status;
+          'OK' -> response.message[];
+       #);
+     post::
+       (# theEmployee: ^Employee;
+       do request.body[] -> json.fromText -> jsonToEmployee -> theEmployee[];
+          theEmployee[] -> repository.save;
+          &HttpResponse[] -> response[];
+          theEmployee[] -> employeeToJson -> json.toText -> response.body[];
+          'application/json' -> response.contentType[];
+          201 -> response.status;
+          'Created' -> response.message[];
+       #);
+     put::
+       (# id: @integer;
+          theEmployee: ^Employee;
+          newEmployee: ^Employee;
+       do request.path.asInt -> id;
+          id -> repository.find -> theEmployee[];
+          request.body[] -> json.fromText -> jsonToEmployee -> newEmployee[];
+          newEmployee.firstName[] -> theEmployee.firstName[];
+          newEmployee.lastName[] -> theEmployee.lastName[];
+          newEmployee.title[] -> theEmployee.title[];
+          &HttpResponse[] -> response[];
+          theEmployee[] -> employeeToJson -> json.toText -> response.body[];
+          'application/json' -> response.contentType[];
+          200 -> response.status;
+          'OK' -> response.message[];
+       #);
+     patch::
+       (# id: @integer;
+          theEmployee: ^Employee;
+          newEmployee: ^Employee;
+       do request.path.asInt -> id;
+          id -> repository.find -> theEmployee[];
+          request.body[] -> json.fromText -> jsonToEmployee -> newEmployee[];
+          (if newEmployee.firstName[] <> NONE then
+            newEmployee.firstName[] -> theEmployee.firstName[];
+          if);
+          (if newEmployee.lastName[] <> NONE then
+             newEmployee.lastName[] -> theEmployee.lastName[];
+          if);
+          (if newEmployee.title[] <> NONE then
+             newEmployee.title[] -> theEmployee.title[];
+          if);
+          &HttpResponse[] -> response[];
+          theEmployee[] -> employeeToJson -> json.toText -> response.body[];
+          'application/json' -> response.contentType[];
+          200 -> response.status;
+          'OK' -> response.message[];
+       #);
+     delete::
+       (# id: @integer;
+          theEmployee: ^Employee;
+       do request.path.asInt -> id;
+          id -> repository.find -> theEmployee[];
+          theEmployee[] -> repository.delete;
+          &HttpResponse[] -> response[];
+          200 -> response.status;
+          'OK' -> response.message[];
+       #);
+  #);
+
+-- program: descriptor --
+SystemEnv
+  (# theWebservice: @WebService;
+     theEmployeeHandler: @EmployeeHandler;
+  do 7913 -> theWebservice.init;
+     theEmployeeHandler.init;
+     theEmployeeHandler[] -> theWebservice.register;
+     cycle
+       (#
+       do theWebservice.accept;
+       #);
+  #)
+
