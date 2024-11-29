@@ -2431,7 +2431,7 @@ bool traceThreads = true;
   thisBlock->trace = trace;
   setbuf(trace, NULL);
   if (threadId == 0){
-    output = fopen("output","w");
+    output = fopen("output.lst","w");
     setbuf(output, NULL);
   }else{
     output = thisBlock->output;
