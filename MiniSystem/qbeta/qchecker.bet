@@ -603,9 +603,9 @@ checker: Parser
                     do current[] -> I[]; 
                        (if I.isDecl then
                            I[] -> AT[]; 
-                           (if false and traceSearch then
-                               'Try: ' -> puttext; AT.sig.id[] -> putline;
-                               AT.sig.id[] = none -> putboolean; newline
+                           (if traceSearch then
+                               'Try: "' -> puttext; AT.sig.id[] -> puttext;
+                               '"'->put; newline
                            if);
                            (if not nameListInDcl and (CS[] ->AT.sig.id.equalNCS)
                                or OneArgFunc then
@@ -836,8 +836,9 @@ checker: Parser
                (*enter(NA[],isFirst)*)
             do NA.rmHash -> CS[];
                (if traceSearch then
-                   '**** Items:search: '->puttext; CS[] -> putline;
-                   '**   in: ' -> putline; doPT -> puthead; newline
+                   '**** Items:search: "'->puttext; CS[] -> puttext;
+                   '" isFirst:'-> puttext; isFirst->putboolean;
+                   '\n**   in: ' -> putline; doPT -> puthead; newline
                if);
                CS[] -> localSearch -> (ATd[],pn);
                (* we should probably split localSearch into searchMain 
@@ -2556,15 +2557,26 @@ checker: Parser
                   emit:
                     (# i: @integer
                     enter i 
-                    do (if trx then
+                    do (if traceCheck then
                            '**** INV:check:i=' -> puttext; i -> putint;
-                           ' ' -> put; rec.dopt -> puttext;
-                           ' label: ' -> puttext; current.label -> putline
+                           ' rec:' -> puttext;
+                           (if rec[] <> none then
+                               rec.dopt -> puttext
+                            else
+                               'none'->puttext
+                           if);
+                           ' label: ' -> puttext; current.label -> putline;
+                           '**   OGS:'->dumpT; 
+                           (if OGS[] <> none then
+                               OGS.print
+                            else
+                               'none'->dumpTN
+                           if);
                        if)
                     #);
                   ap: ^Apl; 
                do i + 1 -> i; i = 1 -> isFirst;
-                  (if i > 1 then i - 1 -> emit if);
+                  (if i >= 1 then i - 1 -> emit if);
                   inModulePropX -> (current[] -> ap[]).inModulePropX;
                   (* Given: X: {...; R.foo(e1).bar(e2).x; ...}
                    * the scope for foo is R, but the scope for e1 is X
@@ -2783,17 +2795,24 @@ checker: Parser
                       if);
                       (if traceGetVqual then
                           '**** encOG:' -> puttext; 
+                          isFirst -> putboolean; newline;
+                          '**   OGS:'->dumpT; 
+                          (if OGs[] <> none then
+                              OGS.print
+                           else
+                              'none'->dumpTN
+                          if);
                           encOG.dopt -> putheadn;
                       if);
                       (encOG[],not isFirst,OGS[]) 
                         -> getVqual 
                         -> (OGS[],qual[]);
-                      (if (*('Velocity'->(ptnID.dopt).equal) or *)traceGetVqual then
+                      (if traceGetVqual then
                           '**** checkOI:checkOI:after:getVqual: ' ->puttext;
                           ptnID.dopt ->putline;
                           '**** qual:'->putline;
                           qual.dopt -> putheadN;
-                          qual.doPP->dumpTN;
+                          qual.doPT->dumpTN;
                           '**** OGS:'->putline;
                           OGS.print
                       if);
@@ -3102,27 +3121,80 @@ checker: Parser
                origin[] -> M.setUpOrigin;
             #);
           checkOI::
-            (#
+            (# INV: ^Invocation
             do (if traceCheck then
-                   '**** BinaryExp:checkOI:' -> puttext; doPT -> putheadN
+                   '**** BinaryExp:checkOI:' -> puttext; doPT -> putheadN;
+                   '**   leftRec.label:' -> puttext; leftRec.label -> puttext;
+                   ' M.label:'->dumpT; M.label -> dumpT;
+                   ' OGS:'->dumpT; 
+                   (if OGS[] <> none then
+                       OGS.print else 'none'->putline
+                   if)
                if);
-               (rec[],basicScope[],argScope[],isFirst) 
-                 -> check 
-                 -> basicScope[]
+               (if true then
+                   leftRec.scanSons
+                   (#
+                   do
+                      (rec[],basicScope[],argScope[],isFirst,OGS[])
+                        -> current.checkOI 
+                        -> (basicScope[],OGS[]);
+                      current[] -> rec[]
+                   #);
+                   (*leftRec[] -> rec[];*)
+                   false -> isFirst;
+                   (if traceCheck then
+                       '**   BinaryExp:checkOI:after:left:'->puttext;
+                       dopt -> putline;      
+                       '**   leftRec.ATd:'->dumpt; 
+                       (if rec.ATd[] <> none then
+                           rec.ATd.doPT -> dumpTN
+                        else
+                           'none'->dumpTN
+                       if);
+                       '**   OGS:'->dumpT; 
+                       (if OGS[] <> none then
+                           OGS.print else 'none'->putline
+                   if)if);
+                   (rec[],basicScope[],argScope[],isFirst,OGS[])
+                     -> M.checkOI 
+                     -> (basicScope[],OGS[]);
+                   basicScope.OGofScope -> theQual[];
+                   rec.ATd[] -> ATd[] -> leftRec.ATd[];
+                   (if ATd[] = none then
+                       '!!!! ATd is none: ' -> dumpTN;
+                       rec.dopp -> dumpTN
+                   if);
+                   (if father## = Invocation## then
+                       (*'**   father:isBinaryExp'->dumptN;*)
+                       ATd[] -> (father[]->INV[]).Atd[]
+                   if);
+                   rec.on -> on;
+                else
+                   (rec[],basicScope[],argScope[],isFirst) 
+                     -> check 
+                     -> basicScope[]
+               if)
             #);
           check::
-            (# OGS: ^OGsequence; qual: ^ObjectGenerator;
+            (# OGS,OGSx: ^OGsequence; qual: ^ObjectGenerator;
                OI:  ^ObjectInvocation
-            do (if traceCheck then
-                   '**** BinaryExp:check:' -> puttext; doPP -> putheadN
+            do OGS[] -> OGSX[];
+               (origin.encOG[],false,none)->OGsequence -> OGS[];
+               (if traceCheck then
+                   '**** BinaryExp:check:' -> puttext; doPP -> putline;
+                   '**   OGS:'->dumpT; OGS.print;
+                   '**   OGSX:'->dumpT; 
+                   (if OGSx[] <> none then
+                       OGSX.print else 'none'->putline
+                   if)
                if);
-               (rec[],basicScope[],argScope[],isFirst,
-               OGS[])
-               (*(origin.encOG[],false,none)->OGsequence*)
+                (origin.encOG[],false,none)->OGsequence -> OGS[];
+               (rec[],basicScope[],argScope[],isFirst,OGS[])
                  -> leftRec.checkOI
                  -> (basicScope[],OGS[]);
-               (if false then
+               (if traceCheck then
                    '**** left:basicScope:'->dumpt; basicScope.doPT -> putheadN;
+                   '**   OGS:'->dumpT; OGS.print
                if);
                (*(origin.encOG[],isFirst,(origin.encOG[],false,none) 
                  -> OGsequence) 
@@ -3131,14 +3203,15 @@ checker: Parser
                (*qual.IS[] -> basicScope[]; *)
                (if false then
                    '**   BinaryExp:before:M.check:'->dumpT; M.label -> dumptN;
-                   M.dopt->dumptn;
+                   '**   OGS:'->dumpT; M.dopt->dumptn;
                if);
-               (leftRec[],basicScope[],argScope[],true,OGS[]) 
+               (leftRec[],basicScope[],argScope[],false,OGS[]) 
                  -> M.checkOI
                  -> (basicScope[],OGS[]);
-               (if false then
+               (if traceCheck then
                    '**   BinaryExp:after:M.check:basicScope:'->dumpT;
                    basicScope.doPT -> putheadN;
+                   OGS.print
                if);
                M.ATd[] -> ATd[];
                (if false then
