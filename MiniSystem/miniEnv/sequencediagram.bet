@@ -343,6 +343,10 @@ SequenceDiagram: SuperSequenceDiagram
                           do (mark[], nodes[], shapes[], y, header, manager[]) 
                                -> current.process -> y; 
                           #);
+                       sorted.scan
+                          (# 
+                          do current.complete;
+                          #);
                     else
                        actions.scan
                           (# 
@@ -580,6 +584,7 @@ SequenceDiagram: SuperSequenceDiagram
           isSkipping: @boolean;
           isPrevious: @boolean;
           isComponent: @boolean;
+          shape: ^ActionShape;
 
 
           resume:<
@@ -630,9 +635,14 @@ SequenceDiagram: SuperSequenceDiagram
                INNER;
             exit y
             #);
+          complete:<
+            (#
+            do INNER;
+            #);  
           makeShape:<
             (# result: ^ActionShape;
             do INNER;
+               result[] -> THIS(Action).shape[];
             exit result[]
             #);
           finish:<
@@ -1183,6 +1193,29 @@ SequenceDiagram: SuperSequenceDiagram
                    if);
                    y + dy -> y;
                    makeShape -> addShape;
+               if);
+            #);
+          complete::
+            (# getFirstChildShape:
+                 (# shape: ^ActionShape;
+                 do search: stack.scan
+                      (#
+                      do (if current.shape[] <> NONE then
+                            current.shape[] -> shape[];
+                            leave search;
+                         if);
+                      #);
+                 exit shape[]     
+                 #);
+               childShape: ^ActionShape;   
+            do (if isComponent AND (shape[] <> NONE) then
+                  0 -> shape.delta;
+                  getFirstChildShape -> childShape[];
+                  (if childShape[] <> NONE then
+                     (if childShape.offset < shape.offset then
+                        (shape.offset - childShape.offset) -> shape.delta;
+                     if);
+                  if);
                if);
             #);
           
@@ -3264,13 +3297,15 @@ SequenceDiagram: SuperSequenceDiagram
      
      ActionShapeList: Sequence(# element:: ActionShape #);
      ActionShape: Composite
-       (# offset: @integer;
+       (# delta: @integer;
+          offset: @integer;
           createArrow:
             (# lst: ^PointList;
                dash: @boolean;
+               pointy: @boolean;
                head: ^ArrowHead;
                arrow: ^Composite;
-            enter (lst[], dash)
+            enter (lst[], dash, pointy)
             do (# 
                do &Decoration[] -> arrow[];
                   arrow.init;   
@@ -3292,19 +3327,20 @@ SequenceDiagram: SuperSequenceDiagram
                         current[] -> prev[];
                      #);
                   #);
-                  
-                  (# start, end: ^Point2d;
-                  do lst.size - 1 -> lst.get -> start[];
-                     lst.size -> lst.get -> end[];
-                     &ArrowHead[] -> head[];
-                     head.init;
-                     end[] -> head.to[];
-                     start[] -> head.from[];
-                     head.refresh;
-                     res.colors.darkerCoolBrown[] -> head.stroke[];
-                     res.colors.darkerCoolBrown[] -> head.fill[];
-                     head[] -> arrow.add;
-                  #);
+                  (if pointy then
+                     (# start, end: ^Point2d;
+                     do lst.size - 1 -> lst.get -> start[];
+                        lst.size -> lst.get -> end[];
+                        &ArrowHead[] -> head[];
+                        head.init;
+                        end[] -> head.to[];
+                        start[] -> head.from[];
+                        head.refresh;
+                        res.colors.darkerCoolBrown[] -> head.stroke[];
+                        res.colors.darkerCoolBrown[] -> head.fill[];
+                        head[] -> arrow.add;
+                     #);
+                  if);
                #);
             exit arrow[]
             #);
@@ -3412,7 +3448,7 @@ SequenceDiagram: SuperSequenceDiagram
             (# lst: ^PointList;
                dash: @boolean;
             enter (lst[], dash)
-            do (lst[], dash) -> createArrow -> add;
+            do (lst[], dash, true) -> createArrow -> add;
                (if message[] <> NONE then
                    (# start, end: ^Point2d;
                       mid: ^Point2d;
@@ -3486,7 +3522,7 @@ SequenceDiagram: SuperSequenceDiagram
             (# lst: ^PointList;
                dash: @boolean;
             enter (lst[], dash)
-            do (lst[], dash) -> createArrow -> add;
+            do (lst[], dash, true) -> createArrow -> add;
                (if message[] <> NONE then
                    (# start, end: ^Point2d;
                       mid: ^Point2d;
@@ -3501,6 +3537,33 @@ SequenceDiagram: SuperSequenceDiagram
                if);
                lst[] -> pts[];
             #);
+          makeStippledArrow:
+            (# to: ^Point2d;
+               delta: @integer;
+            enter (to[], delta)
+            do (# lst: ^PointList;
+                  p1: ^Point2d;
+                  p2: ^Point2d;
+                  p3: ^Point2d;
+                  xAdjust: (# exit 20 #);
+                  yAdjust: (# exit 10 #);
+               do &PointList[] -> lst[];
+                  lst.init;
+                  &Point2d[] -> p1[];
+                  to.x - xAdjust -> p1.x;
+                  to.y -> p1.y;
+                  &Point2d[] -> p2[];
+                  to.x - xAdjust -> p2.x;
+                  to.y - delta - yAdjust -> p2.y;
+                  &Point2d[] -> p3[];
+                  to.x -> p3.x;
+                  to.y - delta - yAdjust -> p3.y;
+                  p1[] -> lst.append;
+                  p2[] -> lst.append;
+                  p3[] -> lst.append;
+                  (lst[], true, false) -> createArrow -> add;
+               #);
+            #);  
           makeAllocationArrow:
             (# anchor: ^Point2d;
                pts: ^PointList;
@@ -3624,6 +3687,11 @@ SequenceDiagram: SuperSequenceDiagram
                    (from[], to[]) -> makeAllocationArrow
                else
                    (lst[], isReturn) -> makeArrow;
+               if);
+               (if delta <> 0 then
+                  (if not isReturn then
+                     (to[], delta) -> makeStippledArrow;
+                  if);
                if);
             #);
        #);
