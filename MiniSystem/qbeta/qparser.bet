@@ -462,6 +462,7 @@ parser: ModuleHandler
            // char_prim then D[] -> charDecl[]
            // string_prim then D[] -> stringDecl[]
            // boolean_prim then D[] -> booleanDecl[]
+           // float_prim then D[] -> floatDecl[]
            // error_prim then D[] -> errorDecl[]
            // this_prim then D[] -> thisDecl[]
            // thisCore_prim then D[] -> thisCoreDecl[]
@@ -1036,7 +1037,7 @@ parser: ModuleHandler
           i: @integer
        do 'pInvocation:'->trace;
           (if true then
-              pNewExp -> E[];
+              pExp -> E[];
               (if E## = Invocation## then
                   E[] -> IV[]
                else
@@ -1045,26 +1046,7 @@ parser: ModuleHandler
               if);
               leave pInvocation
           if);
-          Invocation -> IV[];
-          Loop:
-            (#
-            do i + 1 -> i;
-               pExp -> E[] -> IV.append; (* elim is E.isEmpty *)
-               (if lex.symb 
-                // lex.symbols.dot then
-                   lex;
-                   (if lex.symb 
-                    // lex.symbols.idf 
-                    (*// lex.symbols.keyword *) then
-                       restart Loop
-                    else
-                       311 -> syntaxError
-                   if)
-                // lex.symbols.special then (* OBS! No lex here *)
-                   restart Loop
-               (* // lex.symbols.idf then *) (* useless? *)
-               if)
-            #);          
+          (* do we need to set IV.isEmpty above? *)
           (if i = 1 then 
               E.isEmpty -> IV.isEmpty;
               (* if E.isEmpty, we have IV = (invocation (???))
@@ -1176,10 +1158,10 @@ parser: ModuleHandler
            if)
         exit binE[]
         #);
-     pNewExp:
+     pExp:
        (# E,rE: ^Exp; sym: ^text; 
-       do 'pNewExp'->trace;
-          pNewSimpleExp -> E[]; (* E may be empty - should be fixed *)
+       do 'pExp'->trace;
+          pSimpleExp -> E[]; (* E may be empty - should be fixed *)
           (if (lex.sym[] -> lex.symbols.isRelOp) then 
               (if E.isEmpty then
                   lex.sym[] -> sym[];
@@ -1188,23 +1170,23 @@ parser: ModuleHandler
                   (if false then
                       '**** single:relOp:'->dumpt; sym[]->dumpT; E.doPP->dumpTN
                   if);
-                  leave pNewExp
+                  leave pExp
               if);
-              'pNewExp:=' -> trace;
+              'pExp:=' -> trace;
               lex.sym[] -> sym[];
               lex;
-              pNewSimpleExp -> rE[];
+              pSimpleExp -> rE[];
               (E[],sym[],rE[]) -> mkBinary -> E[]
           if);          
        exit E[]
        #);
-     pNewSimpleExp:
+     pSimpleExp:
        (# E,rE: ^Exp; sym: ^text;
-       do 'pNewSimpleExp'->trace; 
+       do 'pSimpleExp'->trace; 
           pTerm -> E[]; 
           L:
             (if (lex.sym[] -> lex.symbols.isAddOp) then 
-                'pNewSimpleExp:+' -> trace;
+                'pSimpleExp:addOp:' -> trace;
                 lex.sym[] -> sym[];
                 lex;
                 pTerm -> rE[];
@@ -1342,112 +1324,7 @@ parser: ModuleHandler
               (sym[],arguments) -> UnaryGen -> E[]
           if)
        exit E[]
-       #);
-     pExp:
-       (# E,RE: ^Exp; sym: ^text
-       do 'pExp'->trace;
-          (*pSimpleExp -> E[];*)
-          (if false and (lex.sym[] -> lex.symbols.isRelOp) then 
-              'pExp:=' -> trace;
-              lex.sym[] -> sym[];
-              lex;
-              sym[] -> pBinary -> E[];
-           else
-              pSimpleExp -> E[];
-          if);
-       exit E[]
-       #);
-            
-     pSimpleExp:
-       (* R.foo
-        * f(e1,e2,e3)
-        * a + b
-        * %if E0 %then E1 %else E2
-        *)
-       (# sym: ^Text;
-          E: ^Exp; prevSymb: @char
-       do 'pSimpleExp'->trace;
-          L:
-          (if lex.symb 
-           // lex.symbols.const then
-              lex.sym[] -> Const -> E[];
-              lex;
-           // lex.symbols.floatConst then
-              lex.sym[] -> FloatConst -> E[];
-              lex;              
-           // lex.symbols.string then
-              lex.sym[] -> handleString -> E[];
-              lex;
-           // lex.symbols.charSy then 
-              lex.sym[] -> CharObj -> E[];
-              lex;
-           // lex.symbols.idf then 
-              'pSimpleExp:idf:'->trace;              
-              lex.sym[] -> sym[];
-              (if ('if' -> sym.equalNCS) then
-                  (*'Got if'->putline;*)
-                  lex;
-                  pIfExp -> E[];
-                  leave L
-              if);
-              (if pNewFatCommaFile then
-                  (if '#' = (1 -> sym.inxGet) then
-                      (*'Got # '->puttext; sym[] -> putline;*)
-                      ((false,false,Signature) -> pVarRefTypeNoBrack2,Arguments)
-                        -> UnaryGen ->  E[];
-                      (*newline; lex.symb -> lex.symbols.asText -> putline;*)
-                      leave L
-                  if);
-                  lex;
-                  (if lex.symb
-                   // lex.symbols.leftBrack 
-                   // lex.symbols.leftSquare
-                   // lex.symbols.begin then
-                      lex.symb -> prevSymb;
-                      lex;
-                      (if false then
-                          'goFAT: ' -> puttext; 
-                          sym[] -> puttext;
-                          ' ' -> puttext; 
-                          prevSymb -> lex.symbols.asText -> puttext;
-                          newline;
-                      if);
-                      (sym[],prevSymb) -> pNewFatComma -> E[]
-                   else (*unary *)
-                      (sym[],arguments) -> UnaryGen -> E[]
-                  if)
-               else     
-                  lex;
-                  (if lex.symb = lex.symbols.leftBrack then
-                      lex;
-                      sym[] -> pFunction  -> E[]
-                   else 
-                      (sym[],arguments) -> UnaryGen -> E[]
-                  if)
-              if)
-           // lex.symbols.special then
-              lex.sym[] -> sym[];
-              lex;
-              sym[] -> pBinary -> E[]
-           // lex.symbols.leftBrack then
-              lex.sym[] -> sym[];
-              lex;
-              pBracketedExp -> E[]
-           else
-              Exp -> E[]; 
-              true -> E.isEmpty
-          if);
-          (if lex.symb // lex.symbols.string // lex.symbols.idf then
-              (* *** got string: ' -> puttext; E.dopt -> puttext;
-               lex .sym[] -> putline;
-               *)
-              lex.sym[] -> StringObj -> E.unit[];
-              lex
-           else
-              StringObj -> E.unit[]
-          if)
-       exit E[]
-       #);
+       #); 
      pNewFatComma:
        (# sy,sig,comma: ^text; E,F: ^exp;
           args: ^Arguments;
