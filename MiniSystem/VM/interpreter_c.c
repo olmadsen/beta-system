@@ -1,3 +1,4 @@
+
 //#define _GNU_SOURCE define __ARDIUNO__ // just my attempt;-) define
 //#usewinsock2 define usekbhit 
 #ifdef linux
@@ -3139,6 +3140,7 @@ bool traceThreads = true;
       case invokeVal:
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);
+	arg3 = op1(bc,&glsc);
 	saveContext();
         invokeValObj(thisBlock,arg1,arg2);
 	restoreContext();
