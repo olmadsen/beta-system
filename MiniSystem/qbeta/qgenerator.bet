@@ -750,7 +750,12 @@ generator: codeGenMarker
                       ,(mainIS.encOG,false,none) -> OGsequence)
                         -> E.getVqual 
                         -> (OGs[],qual[]);
-                      (OG.objSize,0) -> cd.vassign;
+                      cd.fcom(#do 'vassign:B:' -> TT; sig.dopt->TT;
+                                'off:'->TT; newOff -> II;
+                                'size:'->TT; objSize -> II;
+                                'mode: 0' -> TT
+                             #);
+                      (newOff,OG.objSize,0) -> cd.vassign;
                       L2 -> cd.jmp;
                       L1 -> cd.defLab;   
                       (if true then
@@ -874,8 +879,45 @@ generator: codeGenMarker
                             (recx[],argx[]) -> checkInt2IntWithUnitArg -> value;
                     if)if)
                  #);
+               mkCom:
+                 (# ch: @char
+                 enter ch
+                 do (if OIadr[] <> none then
+                        OIadr.off -> OIadrOff
+                     else
+                        -1 -> OIadrOff
+                    if);
+                    (if right.super.ATd[] <> none then
+                        cd.fcom(#do 'right.super.ATd:not:none'-> TT #)
+                     else
+                        cd.fcom(#do 'right.super.ATd:none'-> TT; 
+                                  right .label -> TQ;
+                                  right.dopt -> TT; #)
+                    if);
+                    (if right.super.ATd.OG.super.ATd[] <> none then
+                        cd.fcom(#do 'right.super.ATd.OG.super.ATd:not:none'
+                                    -> TT #);
+                        right.super.ATd.OG.super.ATd.OG.IS.newDescNo 
+                          -> rightDescNo
+                     else
+                        cd.fcom(#do 'right.super.ATd.OG.super.ATD:none'-> TT; 
+                                  right .label -> TQ;
+                                  right.dopt -> TT; #);
+                        -1 -> rightDescNo
+                    if);
+                    cd.fcom
+                    (#do 'pushValue:'->TT; ch -> CC;
+                       ': off:' -> TT; OIadrOff -> II;
+                       'size:'->TT; right.objSize -> II;
+                       'descNo:'-> TT; rightDescNo -> II;
+                       right.dopt -> TT;
+                    #);
+                    
+                 #);
                rec,dstE: ^Exp; adr: ^Address;
-               dstDI,srcDI: ^DataItem; ptn: ^Pattern
+               dstDI,srcDI: ^DataItem; ptn: ^Pattern;
+               MP:  ^Module; OIadr:  ^Address; 
+               OIadrOff: @integer; rightDescNo: @integer
             do (if false then
                    '**** AssignmentStatement:gen: '->puttext; dopt ->putline;
                if);
@@ -888,8 +930,10 @@ generator: codeGenMarker
                          'right.label:'->TT; right.label -> TQ;
                          right.dopt -> TQ #);
                
-               (true(*useRtnVal*),superAdj,staticOff) -> right.gen;
-
+               (true(*useRtnVal*),superAdj,staticOff) 
+                 -> right.gen
+                 -> (mp[],OIadr[]);
+               
                (* checker/semchecker has ensure that dstE is a DataItem *)
                dstE.ATd[] -> dstDI[];
                
@@ -977,9 +1021,9 @@ generator: codeGenMarker
                                (srcDI.sig.dopt,srcDI.newOff)
                                  -> cd.rpushg
                             else
-                               cd.fcom(#do 'descNo:A:'->TT; 
-                                         srcDI.OG.IS.newdescNo -> II #);
-                               srcDI.objSize -> cd.pushValue
+                               'A' -> mkCom;
+                               (OIadrOff,srcDI.objSize,rightDescNo)
+                                 -> cd.pushValue
                            if)
                         else
                            cd.com(#do 'else:'->TT; dopt->TT #)
@@ -987,10 +1031,8 @@ generator: codeGenMarker
                     // (right.super.ATd.asDecl).isDataItem then
                        cd.com(#do 'right:isDI:'-> TT #);
                        right.inValueObj -> adr.srcIsVal;
-
-                       cd.fcom(#do 'descNo:B:'->TT; 
-                                 right.super.ATd.OG.IS.newdescNo -> II #);
-                       right.objSize-> cd.pushValue
+                       'B' -> mkCom;
+                       (OIadrOff,right.objSize ,rightDescNo) -> cd.pushValue
                    if);
                 else (* reference *)
                    true -> adr.isAdr;
@@ -1318,6 +1360,7 @@ generator: codeGenMarker
                name: ^text; head: @boolean;
                on,pn: @integer;
                E: ^Exp; OI: ^ObjectInvocation;
+               mp:  ^Module; 
                trace: (# exit false #);
             do (if not genIsDone or true then
                    cd.fcom(#do 'OG:gen:'->TT; dopt->TQ #);
@@ -1346,7 +1389,9 @@ generator: codeGenMarker
                              -> (super.last).isCompositeValueObj;
                        if);
                        cd.fcom(#do 'OG:before:super.gen:'->TT; super.dopt->TQ#);
-                       (useRtnVal,superAdj,staticOff) -> super.gen
+                       (useRtnVal,superAdj,staticOff) 
+                         -> super.gen
+                         -> (mp[],OIadr[]);
                     else
                        (* Perhaps move check for virtuals to here!? *)
                        (* Singular object like R.foo{ }
@@ -2247,7 +2292,7 @@ generator: codeGenMarker
                     if)if)
                  #);
                genAttributes:
-                 (# theIS: ^Items
+                 (# theIS: ^Items; OIadrX: ^Address
                  enter theIS[]
                  do (if (theIS[] -> hasRealSuper)
                         and (theIS.superDesc[] <> objectDecl.desc) then
@@ -2259,7 +2304,7 @@ generator: codeGenMarker
                        (if true
                         // I.isDecl and (I## <> LabelDecl##) then
                            (if not I.isPattern or I.isVirtual then
-                               (false,0,0) -> current.gen -> MP[];
+                               (false,0,0) -> current.gen -> (MP[],OIadrX[]);
                                (if MP[] <> none then
                                    MP[] -> mainPathModule[];
                                if)
@@ -2268,7 +2313,7 @@ generator: codeGenMarker
                                    (false,0,0) -> current.gen if) 
                            if)
                         // I.isNewProp then
-                           (false,0,0) -> current.gen -> MP[];
+                           (false,0,0) -> current.gen -> (MP[],OIadrX[]);
                            (if MP[] <> none then
                                MP[] -> mainPathModule[];
                            if)
@@ -2653,8 +2698,19 @@ generator: codeGenMarker
                     ':descNo:' -> TT; OG.IS.newDescNo -> II;
                  #);
                handleNonVirtualArg:             
-                 (# formalArg: ^DataItem; actualArg: ^ObjectSpecification;
-                    superOG: ^ObjectGenerator;
+                 (# mkCom:
+                      (# ch: @char
+                      enter ch
+                      do cd.fcom
+                         (#do 'pushValue:'->TT; ch -> CC; 
+                            ': off:' -> TT; OIadr.off -> II;
+                            'size:' -> TT; formalArg.objSize -> II;
+                            formalArg.OG.super.ATd.OG.IS.newDescNo -> II;
+                            formalArg.dopt -> TT;
+                         #);            
+                      #);
+                    formalArg: ^DataItem; actualArg: ^ObjectSpecification;
+                    superOG: ^ObjectGenerator; mp:  ^Module; OIadr: ^Address
                  enter(formalArg[],actualArg[])
                  do (* E is the exp with arguments actArgs 
                      * this(Pattern) = E.ATd
@@ -2702,14 +2758,11 @@ generator: codeGenMarker
                                  actualArg.isCompositeValueObj -> BB
                               #)
                     if);
-                    cd.fcom(#do 'loadArgs:A:' -> TT; actualArg.doPT -> TQ;
-                              'staticOff: ' -> TT; staticOff -> II;
-                              superAdj -> II #);
-
-                    (true,superAdj,staticOff) -> actualArg.gen;
                     
-                    cd.fcom(#do 'loadArgs:after:gen:' -> TT; E.doPT->TQ #);
-
+                    (true,superAdj,staticOff) 
+                      -> actualArg.gen 
+                      -> (mp[],OIadr[]);
+                    
                     (if actualArg.isNonBasicValueObj 
                         and (actualArg.super.ATd.asDecl).isDataItem then
                         (* actualArg is a data-item being 
@@ -2726,13 +2779,10 @@ generator: codeGenMarker
                             then
                             (* composite valueObj or not a unitValue *)
                             (*11 -> cd.pushConst;*)
-
-                            cd.fcom
-                            (#do 'pushValue:C:'->TT; formalArg.newOff -> II;
-                               formalArg.OG.super.ATd.OG.IS.newDescNo -> II;
-                               formalArg.dopt -> TT
-                            #);
-                            actualArg.objSize -> cd.pushValue;
+                            'C' -> mkCom;
+                            (OIadr.off,actualArg.objSize
+                            ,formalArg.OG.super.ATd.OG.IS.newDescNo)
+                              -> cd.pushValue;
                             1 -> cd.pushConst
                          else
                             cd.com(#do 'actualArg:UnitOne?:'-> TT; 
@@ -2799,9 +2849,11 @@ generator: codeGenMarker
                                         cd.com(#do 'string:'->TT; 
                                                   formalArg.dopt-> TT #);
                                      else
-                                        cd.fcom(#do 'descNo:D:'->TT; 
-                                                  OG.IS.newdescNo -> II #);
-                                        formalArg.objSize -> cd.pushValue;
+                                        'D' -> mkCom;
+                                        (OIadr.off,formalArg.objSize
+                                        ,formalArg.OG.super.ATd.OG.IS.newDescNo 
+                                        )
+                                          -> cd.pushValue;
                                         1 -> cd.pushConst
                                     if)
                                  else
@@ -3157,8 +3209,13 @@ generator: codeGenMarker
                                                 srcIsVal -> BB;
                                                 ' destIsVal:'->TT;originIsValue->BB;
                                                 ' mode:' -> TT; mode -> II #);
+                                       cd.fcom(#do 'vassign:A:'->TT; E.dopt->TQ;
+                                                 'off:'->TT; off -> II;
+                                                 'size:'->TT; size -> II;
+                                                 'mode:'->TT; mode -> II
+                                              #);
                                        off -> cd.pushConst;
-                                       (size,mode) -> cd.vassign
+                                       (off,size,mode) -> cd.vassign
                                    if)
                                if)
                             else
@@ -3876,6 +3933,7 @@ generator: codeGenMarker
                if);
                cd.fcom(#do 'INV:gen:end:off:'->TT; 
                          (if A[] <> none then A.off -> II if) #);
+               A[] -> OIadr[];
                cd.bcPos -> endBCP
             #);
           loadArgs::
