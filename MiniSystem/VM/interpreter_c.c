@@ -2791,9 +2791,10 @@ bool traceThreads = true;
 #endif
 	break;
       case vassign:
+	arg2 = op2(bc,&glsc);   // destOff
 	arg1 = op1(bc,&glsc);   // size
 	mode = op1(bc,&glsc); 
-	arg2 = vPop(thisStack); // destOff
+	V = vPop(thisStack); // destOff
         Y = rPop(thisStack);    // destObj
 #ifdef TRACE
 	fprintf(trace,"vassign size:%i mode:%i destOff:%i\n",arg1,mode,arg2);
