@@ -2898,9 +2898,10 @@ bool traceThreads = true;
 	putR(X,arg1 + arg2 + newAllocOff,Y);
 	break;
       case pushValue:
+	arg2 = op2(bc,&glsc);   // srcOff
 	arg1 = op1(bc,&glsc);   // size
 	arg3 = vPop(thisStack); //descInx of valObj, not used	
-	arg2 = vPop(thisStack); // srcOff
+	V = vPop(thisStack);    // srcOff - not used
 	X = rPop(thisStack);    // srcObj
 #ifdef TRACE
 	fprintf(trace,"pushValue %s %i %i ",nameOf(X), arg1,arg2);
