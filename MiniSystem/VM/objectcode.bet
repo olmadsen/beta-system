@@ -1465,13 +1465,19 @@ ObjectCode:
           if)
        #);
      invokeVal:
-         (# N,PN: ^text; descNo,staticOff,rN: @integer
-         enter(N[],descNo,staticOff) 
+       (# N,PN: ^text; descNo,staticOff,rN: @integer; 
+          isValueObj: @Boolean
+         enter(N[],descNo,staticOff,isValueObj) 
          do 'invokeVal' -> emitOp; ' ' -> out.put; N[] -> out.puttext; 
             ' ' -> out.put; descNo -> out.putint; ' ' -> out.put;
-            staticOff -> out.putint; out.newline;
+            staticOff -> out.putint; 
+            (if isValueObj then
+                ' true' -> out.puttext
+            if);
+            out.newline;
             (if notLLVM then
-                codes.invokeVal -> emit; descNo -> emit2; staticOff -> emit2
+                codes.invokeVal -> emit; descNo -> emit2; staticOff -> emit2;
+                (if isValueObj then 1 -> emit else 0 -> emit if);
              else;
                 (0,thisClassP[],(N[],descNo) -> mkTypePtr -> PN[])
                   -> BitCast -> rN;
@@ -1490,12 +1496,17 @@ ObjectCode:
             if)
          #);
      mkValueProxy:
-       (# descNo,off: @integer
-       enter(descNo,off)
+       (# descNo,off: @integer; isValueObj: @boolean
+       enter(descNo,off,isValueObj)
        do 'mkValueProxy' -> emitOp; descNo -> out.putint; ' ' ->out.put;
-          off -> out.putint; out.newline;
+          off -> out.putint;
+          (if isValueObj then
+              ' true' -> out.puttext
+          if); 
+          out.newline;
           (if notLLVM then
-              codes.mkValueProxy -> emit; descNo -> emit2; off -> emit2
+              codes.mkValueProxy -> emit; descNo -> emit2; off -> emit2;
+              (if isValueObj then 1 -> emit else 0 -> emit if);
            else
               
           if)
@@ -1967,6 +1978,15 @@ ObjectCode:
           1 -> stack.rpop; 
           rN2 -> stack.vPush; (* push of value - no type needed *)
        #);
+     vpushg:
+       (# N: ^text; off: @integer;
+       enter(N[],off)
+       do 'vpushg' -> emitOp; off -> out.putint;
+          ' ' -> out.put; N[] -> out.putline;
+          (if notLLVM then
+              codes.vpushg -> emit; off -> emit;
+          if);
+       #);
      fpushg: 
        (# N: ^text; off: @integer
        enter(N[],off)
@@ -1976,6 +1996,17 @@ ObjectCode:
               codes.fpushg -> emit; off -> emit;
            else
               '   ;; fpushg\n' ->  out.puttext
+          if)
+       #);
+     fvpushg:
+       (# N: ^text; off: @integer
+       enter(N[],off)
+       do (if notLLVM then
+              ' fvpushg ' -> out.puttext; off -> out.putint; ' ' -> out.put; 
+              N[] -> out.putline;
+              codes.fvpushg -> emit; off -> emit;
+           else
+              '   ;; fvpushg\n' ->  out.puttext
           if)
        #);     
      ovpushg:
@@ -2189,14 +2220,15 @@ ObjectCode:
        (# T,T1: ^text; stringDescNo,I: @integer
        enter (T[],stringDescNo)
        do (if notLLVM then
-              ' pushText ' -> out.puttext; T[] -> out.putline;
+              ' pushText ' -> out.puttext; 
+              '"' -> out.put; T[] -> out.puttext; '"' -> out.put; out.newline;
               codes.pushText -> emit;
               T[] -> handleEscape -> T1[];
-              (* 'PushText: ' -> puttext; T1[] -> putline;*)
               T1.length -> descs.current.addLiteral
               (#
               do i + 1 -> i -> T1.inxGet -> value;
               #) -> emit;
+
               stack.rPush
            else
               ';; pushText \n' -> out.puttext;
@@ -2272,22 +2304,25 @@ ObjectCode:
           codes.allocFromStrucRefObj -> emit;
        #);
      pushValue:
-       (# size: @integer
-       enter size
-       do 'pushvalue ' -> emitop; size -> out.putint; out.newline;
+       (# off,size,descNo: @integer
+       enter(off,size,descNo)
+       do 'pushvalue' -> emitop; ' off:'->out.puttext; off->out.putint;
+          ' size:'->out.puttext; size -> out.putint; 
+          ' descNo: ' -> out.puttext; descno -> out.putint; out.newline;
           (if notLLVM then
-              codes.pushValue -> emit; size -> emit;
+              codes.pushValue -> emit; off -> emit2; size -> emit;
            else
               '!!!! LLVM:pushValue not implemented!' -> putline
           if)
        #);
      vassign:
-       (# size,mode: @integer
-       enter(size,mode)
-       do 'vassign ' -> emitOp; size -> out.putint; ' ' -> out.put;
-          mode -> out.putint; out.newline;
+       (# off,size,mode: @integer
+       enter(off,size,mode)
+       do 'vassign ' -> emitOp; off -> out.putint; ' ' -> out.put;
+          size -> out.putint; ' ' -> out.put; mode -> out.putint; out.newline;
           (if notLLVM then
-              codes.vassign -> emit; size -> emit; mode -> emit
+              codes.vassign -> emit; off -> emit2; size -> emit; 
+              mode -> emit
            else
               '!!!! LLVM:vassign not implemented!' -> putline
           if);
@@ -2384,6 +2419,17 @@ ObjectCode:
               1 -> stack.rpop
           if)          
        #);
+     vstoreg:
+       (# N: ^text; off: @integer; rN,rN1,rN2,vN: @integer
+       enter(N[],off)
+       do 'vstoreg' -> emitop;  N[] -> out.puttext;
+          ' '-> out.put; off -> out.putint; out.putline;
+          (if notLLVM then
+              codes.vstoreg -> emit; off -> emit;
+           else
+              '   ;; vstoreg \n' -> out.puttext;
+          if)
+       #);
      fstoreg: 
        (# N: ^text; off: @integer
        enter(N[],off) 
@@ -2395,7 +2441,19 @@ ObjectCode:
               '   ;; fstoreg \n' -> out.puttext;
           if);
           1 -> stack.vpop          
-       #);     
+       #);   
+     fvstoreg: 
+       (# N: ^text; off: @integer
+       enter(N[],off) 
+       do (if notLLVM then
+              'fvstoreg ' -> emitOp; off -> out.putint; ' ' -> out.put; 
+              N[] -> out.putline;
+              codes.fvstoreg -> emit; off -> emit;
+           else
+              '   ;; fvstoreg \n' -> out.puttext;
+          if);
+          1 -> stack.vpop          
+       #);
      ovstoreg:
        (# N: ^text; off: @integer
        enter(N[],off)
@@ -2841,6 +2899,7 @@ ObjectCode:
               (if operator
                // codes.plus then 'plus' -> out.putline; 
                // codes.minus then 'minus' -> out.putline
+               // codes.uminus then 'uminus' -> out.putline
                // codes.mult then 'mult' -> out.putline; 
                // codes.rdiv then 'div' -> out.putline (* not used? *)
                // codes.idiv then 'idiv' -> out.putline
@@ -2858,7 +2917,8 @@ ObjectCode:
                // codes.req then 'req' -> out.putline
                // codes.rne then 'rne' -> out.putline
                // codes.fplus then 'fplus' -> out.putline
-               // codes.fminus then 'fplus' -> out.putline
+               // codes.fminus then 'fminus' -> out.putline
+               // codes.funaryminus then 'funaryminus' -> out.putline
                // codes.fmult then 'fmult' -> out.putline
                // codes.fdiv then 'fdiv' -> out.putline
                // codes.fexp then 'fexp' -> out.putline
@@ -2929,7 +2989,7 @@ ObjectCode:
      sne: (# do ' rne' -> out.putline; codes.sne -> emit #);    
      uminus: 
        (# 
-       do ' u-' -> out.putline; 
+       do ' uminus' -> out.putline; 
           codes.uminus -> emit
        #);
      nott: (# do ' not' -> out.putline; codes.nott -> emit #);

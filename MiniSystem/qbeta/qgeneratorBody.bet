@@ -19,6 +19,7 @@ do (# doPrimElse: BooleanValue
                     cd.fcom(#do 'DI.OG:' -> TT; DI.OG.dopt -> TT#);
                 if);
                 (if OGx.primNo = 0 then
+                    cd.fcom(#do 'GeneralPtn:veq:'->TT; #);
                     (rec.ATd.asDecl).OG.objSize -> cd.vEq
                  else
                     (* we assume a primitive value *)
@@ -94,7 +95,7 @@ do (# doPrimElse: BooleanValue
            if)if)
         #);
       N:^ Node; di: ^DataItem; isVal,isObj: @boolean;
-      ATdx: ^Decl; mkI2F: @boolean
+      ATdx: ^Decl; mkI2F: @boolean; rtnOff: @integer
    do (if doPrimElse then
           (* Cases: E is an invocation of a pattern as in E, rec.E, R.rec.E, .
            * (a)The receiver, rec, may be a constant or variable dataItem
@@ -108,7 +109,11 @@ do (# doPrimElse: BooleanValue
           (# DI: ^dataItem; ptn: ^Pattern; 
              isValue,isStatic,returnsValueObj,recIsValObj:  @boolean; 
              org: ^Items; noOfRefArgs: @integer; vObjId: ^text
-          do cd.com(#do 'GPTN:invoke:'->TT; ptnKind -> II #);
+          do cd.fcom
+             (#do 'GeneralPTN:invoke:ptnKind:'->TT; ptnKind -> II;
+                'staticOff:'->TT; staticOff-> II;
+                (if adr[] <> none then adr.print -> TT else 'adr:none'->TT if)
+             #);
              (if ptnkind // virtualptn // furtherptn // finalptn then
                  (if true
                   // 'var' -> (rec.father.father.father.label).equal
@@ -133,10 +138,13 @@ do (# doPrimElse: BooleanValue
                           'rec:'->TT; rec.dopt->TQ #);
                  (if isStatic then
                      (if isValue then
-                         (sig.id[],new_descNo,staticOff - 1) -> cd.invokeval;
+                         (sig.id[],new_descNo,staticOff - 1,inValueObj)
+                           -> cd.invokeval;
                          true -> isVal
                       else
-                         (OG[],staticOff,false) -> callInvoke
+                         (OG[],staticOff,false) -> callInvoke -> rtnOff;
+                         cd.fcom(#do 'GeneralPTN:invoke:after:callInvoke:X:'
+                                         ->TT; rtnOff -> II #)
                      if)
                   else
                      (* OG may have ref-args that will be above the
@@ -168,8 +176,9 @@ do (# doPrimElse: BooleanValue
                                    -> off
                      if)#)#);
                      (* Push return value; should we check useRtnVal ? *)
-                     (OG[],vObjId[]) -> pushOut
-                     (* callee is on rtop of rStack *)
+                     (OG[],vObjId[]) -> pushOut -> rtnOff;
+                     (* callee is on rtop of rStack *);
+                     cd.fcom(#do 'GeneralPTN:invoke:after:pushOut:'->TT; #);
                  if)
               else 
                  (if not isPrimitivePtn then
@@ -188,7 +197,7 @@ do (# doPrimElse: BooleanValue
                                  0 -> cd.pushConst
                              if)
                           else
-                             (sig.id[],OG.is.newdescno,staticoff - 1) 
+                             (sig.id[],OG.is.newdescno,staticoff - 1,inValueObj)
                                -> cd.invokeVal
                              (# T: ^text
                              do cd.thisClassId[] -> T[]; 
@@ -226,7 +235,9 @@ do (# doPrimElse: BooleanValue
                              (* we dont use isObj here,
                               * callInvoke uses OG.isObj
                               *)
-                             (OG[],staticOff,false) -> callInvoke
+                             (OG[],staticOff,false) -> callInvoke -> rtnOff;
+                             cd.fcom(#do 'GeneralPTN:invoke:after:callInvoke:'
+                                         ->TT; rtnOff -> II #)
                           else
                              (sig.id[],OG.IS.newDescno,OG.IS.objSize
                              ,staticOff,isObj)
@@ -261,8 +272,16 @@ do (# doPrimElse: BooleanValue
                             '" here may give an error' -> msg;
                          #);
              if)if)if);
-             (if not useRtnVal and not isVal then popReturn if)
-      #)if)
+             (if not useRtnVal and (not isVal or withValueProxy) then popReturn if)
+      #)if);
+      (if (adr[] <> none) and (rtnOff > 0) then
+          cd.fcom
+          (#do 'GeneralPTN:invoke:end:' ->TT; rtnOff -> II; adr.print -> TT #);
+          rtnOff -> adr.off
+       else
+          Address -> adr[]; rtnOff -> adr.off
+      if);
+      adr[] -> OIadr[]
    #);   
 ---AssignmentPattern_invoke:doPart--
 do (# isArgOfAssignI2IwithUniValArg: BooleanValue
@@ -296,7 +315,8 @@ do (# isArgOfAssignI2IwithUniValArg: BooleanValue
                           * value: 2 but not basic
                           * ref  : 3
                           *)
-   do (if (rec.ATd.asDecl).isPattern then 
+   do  '**** pattern:assign:should not happen!'->dumptN;
+      (if (rec.ATd.asDecl).isPattern then 
           cd.com(#do 'Assign to pattern - %this ' -> TT; print #)
        else
           E.args.scanArgs(#do current[] -> arg[] #); 

@@ -1,3 +1,4 @@
+
 //#define _GNU_SOURCE define __ARDIUNO__ // just my attempt;-) define
 //#usewinsock2 define usekbhit 
 #ifdef linux
@@ -2790,9 +2791,10 @@ bool traceThreads = true;
 #endif
 	break;
       case vassign:
+	arg2 = op2(bc,&glsc);   // destOff
 	arg1 = op1(bc,&glsc);   // size
 	mode = op1(bc,&glsc); 
-	arg2 = vPop(thisStack); // destOff
+	// V = vPop(thisStack); // destOff
         Y = rPop(thisStack);    // destObj
 #ifdef TRACE
 	fprintf(trace,"vassign size:%i mode:%i destOff:%i\n",arg1,mode,arg2);
@@ -2897,9 +2899,10 @@ bool traceThreads = true;
 	putR(X,arg1 + arg2 + newAllocOff,Y);
 	break;
       case pushValue:
+	arg2 = op2(bc,&glsc);   // srcOff
 	arg1 = op1(bc,&glsc);   // size
 	arg3 = vPop(thisStack); //descInx of valObj, not used	
-	arg2 = vPop(thisStack); // srcOff
+	V = vPop(thisStack);    // srcOff - not used
 	X = rPop(thisStack);    // srcObj
 #ifdef TRACE
 	fprintf(trace,"pushValue %s %i %i ",nameOf(X), arg1,arg2);
@@ -3139,6 +3142,7 @@ bool traceThreads = true;
       case invokeVal:
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);
+	arg3 = op1(bc,&glsc);
 	saveContext();
         invokeValObj(thisBlock,arg1,arg2);
 	restoreContext();

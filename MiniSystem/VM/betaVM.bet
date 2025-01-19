@@ -839,6 +839,23 @@ betaVM:
                if)
             exit obj[]
             #);
+          allocValueProxyTemplate:
+            (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean;
+               obj: ^objDesc.template
+            enter(descNo,isObj,vInxSize,rInxSize)
+            do &descs.OD[descNo].template[] -> obj[];
+               descs.OD[valueProxyDescNo].objSize  -> obj.fields.new;
+               descNo -> obj.myDescInx;
+               obj[] -> descs.ObjPool;
+               isObj -> obj.isObj;
+               descs.OD[descNo].OSDvisibility -> obj.OSDvisibility; 
+               (if false then
+                   '**** allocTemplate: '->puttext; obj.myId -> puttext;
+                   ' visibility:' -> puttext;
+                   obj.OSDvisibility -> putint; newline
+               if)
+            exit obj[]
+            #);
           alloc:
             (# origin,callee,Y: ^objDesc.template; descNo: @integer; 
                isObj: @boolean
@@ -863,45 +880,105 @@ betaVM:
                (Y[],thisObj[],origin[],descNo,glsc,isObj,false) -> allocEvent;
             #);
           invokeVal:
-            (# descNo,staticOff: @integer; callee: ^objDesc.template;
-            enter(descNo,staticOff)
-            do (if false then
+            (# descNo,staticOff,isValueObj: @integer; 
+               callee,Y: ^objDesc.template;
+            enter(descNo,staticOff,isValueObj)
+            do (if false and (isValueObj = 1) then
                    '\n*** invokeVal:descNo: ' -> puttext; descNo -> putint;
-                   ' ' -> put; descs.OD[descNo].myId -> putline
+                   ' ' -> put; descs.OD[descNo].myId -> putline;
                if);
-               (thisCode.descInx,glsc) -> thisObj.saveReturn;
-               staticOff -> thisObj.lscPush; 
-               (* returnValue below use staticOff to
-                * adjust thisObj.valOff dont work: will be on top of
-                * possible arguments. Use lscStack 
-                *)
-               staticOff + thisObj.valOff -> thisObj.valOff;               
-               descs.OD[descNo].bc[] -> thisCode[];
-               descs.OD[DescNo].BC.allocE -> glsc;
-               true -> isValObj;
-               descs.OD[DescNo][] -> thisValObjDesc[];
-               (if true or not withValueProxy then 
-                   descNo -> thisValObjDescInx 
+               (if withValueProxy then
+                   ('thisObj',true,out[]) -> thisObj.dump;
+                   ('thisStack',true,out[]) -> thisStack.dump;
+                   (if true then
+                       (if false and (isValueObj = 1) then
+                           ((4 -> thisObj.get),false,0,0) 
+                             -> allocValueProxyTemplate 
+                             -> callee[];
+                        else
+                           (descNo,false,0,0) 
+                             -> allocValueProxyTemplate 
+                             -> callee[];
+                       if)
+                    else
+                       (valueProxyDescNo,false,0,0) -> allocTemplate -> callee[]
+                   if);
+
+                   (1,none) -> callee.rput; (* no origin *)
+
+                   (if isValueObj = 1 then
+                       (4 -> thisObj.get) -> callee.myDescInx;
+                       (2,2 -> thisObj.get) -> callee.put; (* holder *)
+                       (3,staticOff + (3 -> thisObj.get)) -> callee.Put;
+                       (4,descNo) -> callee.put;
+                    else
+                       descNo -> callee.myDescInx;
+                       (2,thisObj[]) -> callee.rput; (* holder *)
+                       (3,staticOff) -> callee.Put;
+                       (4,descNo) -> callee.put;
+                   if);
+                   ('ValueProxy',true,out[]) -> callee.dump;
+                   ('holder',true,out[]) -> thisObj.dump;
+                   
+                   (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                   descs.OD[descNo].bc[] -> thisCode[];
+                   thisObj[] -> Y[] -> callee.rPush; (* return *)
+                   thisStack[] -> callee.rPush;
+                   descs.OD[descNo].BC.allocE -> glsc;                   
+                   callee[] -> thisObj[];
+                   ('thisObj',true,out[]) -> thisObj.dump;
+                   ('thisStack',true,out[]) -> thisStack.dump;
+                   (*isObj -> asObjEnabled;*)
+               else
+                   (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                   staticOff -> thisObj.lscPush;
+                   (* returnValue below use staticOff to
+                    * adjust thisObj.valOff dont work: will be on top of
+                    * possible arguments. Use lscStack 
+                    *)
+                   staticOff + thisObj.valOff -> thisObj.valOff;
+                   descs.OD[descNo].bc[] -> thisCode[];
+                   descs.OD[DescNo].BC.allocE -> glsc;
+                   true -> isValObj;
+                   descs.OD[DescNo][] -> thisValObjDesc[];
+                   (if true or not withValueProxy then 
+                       descNo -> thisValObjDescInx
+                   if)
                if)
             #);
           mkValueProxy:
-            (# descNo,off: @integer; VP,X,Y: ^objDesc.template;
-            enter(descNo,off)
-            do (if false then
+            (# descNo,off,isValueObj: @integer; VP,X,Y: ^objDesc.template;
+            enter(descNo,off,isValueObj)
+            do (if isValueObj = 1 then
                    '\n**** mkValueProxy:valueProxyDescNo: ' -> puttext;
                    valueProxyDescNo -> putint;
                    ' descNo:'->puttext; descNo -> putint;
                    ' off: ' -> puttext; off -> putint; newline;
                if);
-               (valueProxyDescNo,false,0,0) -> allocTemplate -> VP[];
+               ('thisObj',true,out[]) -> thisObj.dump;
+               ('thisStack',true,out[]) -> thisStack.dump;
+               (if true then
+                   (descNo,false,0,0) -> allocValueProxyTemplate -> VP[];
+                else
+                   (valueProxyDescNo,false,0,0) -> allocTemplate -> VP[];
+                   descNo -> VP.myDescInx;
+               if);
                (1,thisStack.rPop->X[]) -> VP.rput;
                (2,thisStack.rPop->Y[]) -> VP.rput;
                (3, off) -> VP.Put;
                (4,descNo) -> VP.put;
                VP[] -> thisStack.rPush;
                ('ValueProxy',true,out[]) -> VP.dump;
-               ('ValueOrigin',true,out[]) -> X.dump;
-               ('Holder',true,out[]) -> Y.dump;
+               (if X[] <> none then
+                   ('ValueOrigin',true,out[]) -> X.dump;
+               if);
+               (if Y[] <> none then
+                   ('Holder',true,out[]) -> Y.dump;
+               if);
+               (if false then
+                   ('thisObj',true,out[]) -> thisObj.dump;
+                   ('thisStack',true,out[]) -> thisStack.dump;
+               if)
             #);
           returnValue:
             (# staticOff: @integer
@@ -1618,7 +1695,7 @@ betaVM:
                          if)
                       #);
                     descInx,size,isValueObj,isRindexed,dinx,rangee,inx,length,serverId
-                    ,handle,msgId,rtnVal, off, value,on,lab,pn:
+                    ,handle,msgId,rtnVal,off,value,on,lab,pn:
                       @integer;
                     hasRtnVal: @boolean;
                     callee,R,X,Y,rtnRef: ^ObjDesc.Template;
@@ -1726,6 +1803,22 @@ betaVM:
                         (thisObj[],X[],true,thisStack[],off,false
                         ,0,thisCode.descInx,glsc,thisStack.vTopElm) 
                           -> vPushEvent
+                     // codes.vpushg then
+                        'vpushg' -> exe; op1 -> off;
+                        thisStack.rpop -> X[]; (* this *)
+                        (if X[] = none then
+                            3 -> fatalError; leave loop
+                        if);
+                        2 -> X.rget -> Y[]; (* holder *)
+                        3 -> X.get -> inx;
+                        inx -> out.putint; 
+                        (off + inx ) -> Y.get -> top1 -> thisStack.vpush;
+                        ('vpushg:',true,out[]) -> X.dump;
+                        ('holder:',true,out[]) -> Y.dump;
+                        (X[],off + inx ,top1) -> VtoOut;
+                        (thisObj[],X[],true,thisStack[],off,false
+                        ,0,thisCode.descInx,glsc,thisStack.vTopElm)
+                          -> vPushEvent
                      // codes.fpushg then
                         'fpushg' -> exe;
                         thisStack.rpop -> X[];
@@ -1739,6 +1832,22 @@ betaVM:
                         if);
                         off -> X.get -> top1 -> thisStack.vpush;
                         off + 1-> X.get -> top2 -> thisStack.vpush;
+                        (X[],off,top1,top2) -> FtoOut;
+                        (thisObj[],X[],true,thisStack[],off,false,0
+                        ,thisCode.descInx,glsc
+                        ,(top1,top2) -> intPair2float)
+                          -> fPushEvent
+                     // codes.fvpushg then
+                        'fvpushg' -> exe;
+                        thisStack.rpop -> X[];
+                        (if X[] = none then
+                            3 -> fatalError; leave loop
+                        if);
+                        op1 -> off;
+                        2 -> X.rget -> Y[]; (* holder *)
+                        3 -> X.get -> inx;
+                        (off + inx) -> Y.get -> top1 -> thisStack.vpush;
+                        (off + inx + 1) -> Y.get -> top2 -> thisStack.vpush;
                         (X[],off,top1,top2) -> FtoOut;
                         (thisObj[],X[],true,thisStack[],off,false,0
                         ,thisCode.descInx,glsc
@@ -1808,7 +1917,6 @@ betaVM:
                           -> thisStack.vpush;
                         (* '\nxpush: off: ' -> puttext; off -> putint;
                          ' inx: ' -> puttext; inx -> putint; newline;*)
-                        
                         (thisObj[],thisObj[],false,thisStack[],off,true
                         ,inx,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent
@@ -1891,9 +1999,11 @@ betaVM:
                      // codes.pushValue then
                         (# size,srcOff,value: @integer;
                            srcObj: ^ObjDesc.template
-                        do 'pushValue' -> exe; op1 -> size;
-                           thisStack.vPop -> descInx;
-                           thisStack.vPop -> srcOff;
+                        do 'pushValue' -> exe; op2 -> srcOff; op1 -> size;
+                           (if not withValueProxy then
+                               thisStack.vPop -> descInx;
+                               thisStack.vPop; (* -> srcOff;*)
+                           if);
                            thisStack.rPop -> srcObj[];
                            ' srcOff:'->out.puttext; srcOff -> out.putint;
                            ('src',true,out[]) -> srcObj.dump;
@@ -1911,10 +2021,11 @@ betaVM:
                         (# size,mode,destOff: @integer; 
                            destObj: ^ObjDesc.template;
                            D: [10] @integer
-                        do 'vassign' -> exe; op1 -> size; op1 -> mode;
+                        do 'vassign' -> exe; op2 -> destOff; 
+                           op1 -> size; op1 -> mode;
                            thisStack.vTopElm -> out.putint;
                            stacksToOut;
-                           thisStack.vpop -> destOff;
+                           (*thisStack.vpop -> destOff;*)
                            thisStack.rpop -> destObj[];
                            ('thisStack:before',true,out[]) ->thisStack.dump;
                            ('thisObj:before',true,out[]) -> thisObj.dump;
@@ -1927,8 +2038,6 @@ betaVM:
                                  -> destOff
                                  -> out.putint; 
                            if);
-                           out.newline;
-                           
                            ('dest:before',true,out[]) -> destObj.dump;
                            (for i: size repeat
                                 D[i] -> value;
@@ -1939,8 +2048,8 @@ betaVM:
                            out.newline;
                            stacksToOut;
                            ('dest:after',true,out[]) -> destObj.dump;
-                           (destObj[],3, destOff -> destObj.get
-                           , destOff+1 -> destObj.get) -> FtoOut;
+                           (*(destObj[],3, destOff -> destObj.get
+                           , destOff+1 -> destObj.get) -> FtoOut;*)
                         #)
                      // codes.vEq then
                         (# R: [10]@ integer; size, mode, di,off:  @integer;
@@ -1948,13 +2057,17 @@ betaVM:
                         do
                            'veq' -> exe; op1 -> size;
                            stacksToOut;
-                           thisStack.vPop ->mode; (* NO *)
+                           thisStack.vPop -> mode; (* NO *)
                            (for i: size repeat 
-                                thisStack.vpop -> R[size - i + 1] 
+                                thisStack.vpop -> R[size - i + 1] -> out.putint;
+                                ' ' -> out.put
                            for);
-                           thisStack.vPop  -> di;
                            thisStack.rPop -> Lobj[];
-                           thisStack.vPop -> off;
+                           ('veq',true,out[]) -> Lobj.dump;
+                           (if not withValueProxy then
+                               thisStack.vPop  -> di;
+                               thisStack.vPop -> off;
+                           if);
                            1 -> B;
                            L:
                              (for i: size repeat
@@ -1996,6 +2109,25 @@ betaVM:
                         (thisObj[],thisStack[],true,X[],off,false,0
                         ,thisCode.descInx,glsc,value) 
                           -> vStoreEvent
+                     // codes.vstoreg  then
+                        'vstoreg' -> exe;
+                        thisStack.rpop -> X[]; (* this *)
+                        (if X[] = none then
+                            3 -> fatalError; leave loop
+                        if);
+                        thisStack.vpop -> value;
+                        op1 -> off;
+                        2 -> X.rget -> Y[]; (* holder *)
+                        (if Y[] = none then
+                            '!!!! Holder = Y is none'->putline;
+                        if);
+                        3 -> X.get -> inx;
+                        (off + inx,value) -> Y.put;
+                        (X[],off + inx,value) -> VtoOut;
+                        ('vstoreg:holder',true,out[]) -> Y.dump;
+                        (thisObj[],Y[],true,thisStack[],off,false
+                        ,0,thisCode.descInx,glsc,value)
+                          -> vPushEvent;
                      // codes.fstoreg  then
                         'fstoreg' -> exe;
                         thisStack.rpop -> X[];
@@ -2010,6 +2142,27 @@ betaVM:
                         (off,top1) -> X.put;
                         (off + 1,top2) -> X.put;
                         (X[],off,top1,top2) -> FtoOut;
+                        (thisObj[],thisStack[],true,X[],off,false,0
+                        ,thisCode.descInx,glsc
+                        ,(top1,top2)->intPair2Float)
+                          -> fStoreEvent
+                     // codes.fvstoreg  then
+                        'fvstoreg' -> exe;
+                        thisStack.rpop -> X[]; (* this *)
+                        (if X[] = none then 3 -> fatalError; leave loop if);
+                        thisStack.vpop -> top2;
+                        thisStack.vpop -> top1;
+                        op1 -> off;
+                        
+                        2 -> X.rget -> Y[]; (* holder *)
+                        3 -> X.get -> inx;
+                        ('fvstoreg:this',true,out[]) -> X.dump;
+                        ('fvstoreg:holder',true,out[]) -> Y.dump;
+                        (off + inx,top1) -> Y.put;
+                        top1 -> out.putint; ' ' -> out.put;
+                        (off + inx + 1,top2) -> Y.put;
+                        top2 -> out.putint;
+                        (X[],off + inx ,top1,top2) -> FtoOut;
                         (thisObj[],thisStack[],true,X[],off,false,0
                         ,thisCode.descInx,glsc
                         ,(top1,top2)->intPair2Float)
@@ -2231,8 +2384,8 @@ betaVM:
                      // codes.invokeVal then
                         StacksToOut;
                         'invokeVal' -> exel;
-                        op2 -> descInx; op2 -> off;
-                        (descInx,off) -> invokeVal;   
+                        op2 -> descInx; op2 -> off; op1 -> isValueObj;
+                        (descInx,off,isValueObj) -> invokeVal;   
                         StacksToOut
                      // codes.boxedInvokeVal then
                         'boxedInvokeVal' -> exel;
@@ -2253,7 +2406,7 @@ betaVM:
                         thisStack[] -> callee.rPush;
                         callee[] -> thisObj[];
                         ('BoxedInvokeVal:',true,out[]) -> thisObj.dump;
-                        (descInx,2) -> invokeVal;
+                        (descInx,2,0) -> invokeVal; (* Check isValueObj *)
                         ('BoxedInvokeVal:',true,out[]) -> thisObj.dump;
                      // codes.allocIndexed then
                         'allocIndexed' -> exel; 
@@ -2332,74 +2485,78 @@ betaVM:
                                  (for i: inx repeat
                                       thisStack.rpop -> R[top + 1 -> top][]
                              for)if);
-                             thisStack.rpop -> X[];                            
+                             thisStack.rpop -> X[]; 
+                             ('invokev:X:',true,out[]) -> X.dump;
                              (if X[] = none then 
                                  3 -> fatalError;
                                  leave loop 
                              if);
                              (if (inx > 0) then
-                                 ('invokev:inx>0:X:',true,out[]) -> X.dump;
-                                 ('invokev:thisObj:',true,out[]) 
-                                   -> thisObj.dump;
+                                 ('invokev:thisObj:',true,out[]) -> thisObj.dump
                              if);
                              (if true
                               // isValObj then
                                  '\n** Invokev in mainpart of value object'
                                    -> out.putline;
-                                 ('invokev:isValObj:X:',true,out[]) -> X.dump;
-                                 ('invokev:thisObj:',true,out[]) 
-                                   -> thisObj.dump;
-                                 stacksToOut;
                                  thisValObjDesc.vdtTable[dinx] -> descInx; 
                                  (*thisValObjDescInx -> thisStack.vPush*)
-                              // recIsValObj = 1 then
-                                 '\n** Invokev: rec is value object' 
-                                   -> out.putline;
-                                 stacksToOut;
-                                 descs.OD[thisStack.vTopElm].vdtTable[dinx]
-                                   -> descInx
+                              // (recIsValObj = 1) then
+                                 '\n** Invokev:rec:valueObj:' -> out.putline;
+                                 (if withValueProxy then
+                                     (X.myObjDesc).myId -> out.puttext;
+                                     ' ' -> out.put;
+                                     4 -> X.get -> inx;
+                                     inx -> out.putint; ' ' -> out.put;
+                                     descs.OD[inx].vdtTable[dinx] -> descInx;
+                                     0 -> inx
+                                  else
+                                     descs.OD[thisStack.vTopElm].vdtTable[dinx]
+                                       -> descInx
+                                 if)
                               else
                                  (X.myObjDesc).vdtTable[dinx] -> descInx; 
                              if);
-                             'vDescInx: ' -> out.puttext;
+                             '\nvDescInx: ' -> out.puttext;
                              descInx -> out.putint; ' ' -> out.put;
                            
-                           (if descInx = 0 then 
-                               8 -> fatalError;
-                               leave loop 
-                           if);
-                           (* copy of send below *)
-                           (descInx,false,0,0) -> allocTemplate -> callee[];
-                           callee.myId -> out.putline;
-                           (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                           descs.OD[descInx].bc[] -> thisCode[];
-                           thisObj[] -> Y[] -> callee.rPush;
-                           thisStack[] -> callee.rPush;
-                           (if isXbeta then
-                               X[] -> thisStack.rpush;
-                               callee[] -> thisObj[];
-                            else
-                               X[] -> callee.rpush;
-                               callee[] -> thisStack[]  -> thisObj[];
-                           if);
-                           descs.OD[descInx].BC.allocE -> glsc;
-                           (for i: inx repeat
-                                R[top - i + 1][] -> thisStack.rpush
-                           for);
-                           (* we need to distinguish if we generate 
-                            * an object or an activation. 
-                            * For now we assume an activation
-                            *)
-                           (*StacksToOut;*)
-                           false -> isValObj;
-                           (if not isXbeta then
-                               (Y[],thisObj[],X[],thisCode.descInx,glsc,false,false) 
-                                 -> allocEvent
-                           if)
+                             (if descInx = 0 then 
+                                 8 -> fatalError;
+                                 leave loop 
+                             if);
+                             (* copy of send below *)
+                             (descInx,false,0,0) -> allocTemplate -> callee[];
+                             'callee:'->out.puttext;
+                             callee.myId -> out.putline;
+                             (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                             descs.OD[descInx].bc[] -> thisCode[];
+                             thisObj[] -> Y[] -> callee.rPush;
+                             thisStack[] -> callee.rPush;
+                             (if isXbeta then
+                                 X[] -> thisStack.rpush;
+                                 callee[] -> thisObj[];
+                              else
+                                 X[] -> callee.rpush;
+                                 callee[] -> thisStack[]  -> thisObj[];
+                             if);
+                             descs.OD[descInx].BC.allocE -> glsc;
+                             (for i: inx repeat
+                                  R[top - i + 1][] -> thisStack.rpush
+                             for);
+                             (* we need to distinguish if we generate 
+                              * an object or an activation. 
+                              * For now we assume an activation
+                              *)
+                             (*StacksToOut;*)
+                             false -> isValObj;
+                             (if not isXbeta then
+                                 (Y[],thisObj[],X[],thisCode.descInx,glsc,false,false) 
+                                   -> allocEvent
+                             if);
                           #)
                      // codes.mkValueProxy then
                         'mkValueProxy'-> exe; op2 -> descInx; op2 -> off;
-                        (descInx,off) -> mkValueProxy
+                        op1 -> isValueObj;
+                        (descInx,off,isValueObj) -> mkValueProxy
                      // codes.mvStack then
                         'mvStack'-> exe;
                         (*('mvstackA',true,screen[])  -> thisObj.dump;*)
@@ -2478,8 +2635,28 @@ betaVM:
                         stacksToOut
                      // codes.rtnV then
                         'rtnV' -> exe;
-                        (*stacksToOut;*)
-                        returnValue;
+                        (if withValueProxy then
+                            thisObj[] -> X[];
+                            thisObj.rpop -> thisStack[];
+                            thisObj.rpop -> thisObj[];
+                            ' to: ' -> out.puttext;
+                            thisObj.myId -> out.puttext;
+                            thisObj.restoreReturn -> (descInx,glsc);
+                            descs.OD[descInx].bc[] -> thisCode[];
+                            descs.OD[descInx].isValueObj ->isValObj;
+                            (if not isXbeta then
+                                X[] -> thisStack.rpush;
+                            if);
+                            (if inx // 'A' // 'D' then
+                                (if thisObj[] <> X[] then
+                                    (thisObj[],X[],X.myOrigin,thisCode.descInx,glsc) -> rtnEvent;
+                                if);
+                                allocLevel - 1 -> allocLevel
+                            if);
+                         else
+                            (*stacksToOut;*)
+                            returnValue;
+                        if);
                         StacksToOut;
                         ('rtnV:',true,out[]) -> thisObj.dump;
                      // codes.rtnEvent then 
@@ -3135,7 +3312,8 @@ betaVM:
                         thisStack.fpop -> float2;
                         thisStack.fpop -> float1;
                         
-                        float1 -> out.putreal; ' ' -> out.put; float2 -> out.putreal;
+                        float1 -> out.putreal; ' ' -> out.put;
+                        float2 -> out.putreal;
                         (if false then 
                             '*** fplus: ' -> puttext;
                             float1 -> putreal; ' ' -> put; 
@@ -3143,9 +3321,6 @@ betaVM:
                         if);
                         
                         float1 + float2 -> float1;
-                        
-                        (if false then float1 -> putreal; newline; if);
-                        
                         float1 -> thisStack.fpush;
                         
                         ('fplus',thisStack[],thisCode.descInx,glsc,float1)
@@ -3162,11 +3337,14 @@ betaVM:
                             float2 -> putReal; ' ' -> put;
                         if);
                         float1 - float2 -> float1;
-                           
-                        (if false then float1 -> putreal; newline if);
                         float1 -> thisStack.fpush; 
                         ('fminus',thisStack[],thisCode.descInx,glsc,float1)
                           -> fBinOpEvent 
+                     // codes.fUnaryMinus then
+                        'fUnaryMinus' -> exe;
+                        - thisStack.fpop -> thisStack.fpush;
+                        ('-',thisStack[],thisCode.descInx,glsc,thisStack.vtopElm)
+                          -> unOpEvent
                      // codes.fmult // codes.rdiv then
                         'fmult' -> exe;
                         thisStack.fpop -> float2;
@@ -3179,9 +3357,6 @@ betaVM:
                             float2 -> putReal; ' ' -> put;
                         if);
                         float1 * float2 -> float1;
-                        (if false then 
-                            float1 -> putreal; newline;
-                        if);
                         float1 -> thisStack.fpush;
                          ('fmult',thisStack[],thisCode.descInx,glsc,float1)
                           -> fBinOpEvent 
@@ -3197,8 +3372,6 @@ betaVM:
                             float2 -> putReal; ' ' -> put;
                         if);
                         float1 / float2 -> float1;
-                           
-                        (if false then float1 -> putreal; newline; if);
                         float1 -> thisStack.fpush;
                         ('fdiv',thisStack[],thisCode.descInx,glsc,float1)
                           -> fBinOpEvent                          
@@ -3295,11 +3468,6 @@ betaVM:
                         (#  L1,L2: @integer
                         do 'pushFloatConst' -> exe; op8 -> (float1,L1,L2);
                            float1 -> out.putreal; out.newline;
-                           (if false then
-                               'pushFloatConst ' -> puttext;
-                               float1 -> putReal; ' '  -> put;
-                               L1 -> puthex; ' ' -> put; L2 -> puthex; newline;
-                           if);
                            L1 -> thisStack.vpush;
                            L2 -> thisStack.vpush;
                            (thisObj[],X[],true,thisStack[],off,false,0

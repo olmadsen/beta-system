@@ -237,7 +237,8 @@ generator: codeGenMarker
         *)
        (# sig: ^Signature; OGx: ^ObjectGenerator
        enter(sig[],OGx[])
-       do sig.names.scan
+       do cd.com(#do'storeDecls:'->TT; sig.dopt -> TQ #);
+          sig.names.scan
           (# i: @integer
           do i + 1 -> i; 
              (if (sig.names.noOfSons > 1) 
@@ -308,7 +309,7 @@ generator: codeGenMarker
                        ':isBasicValue:'->TT; OG.isBasicValue->BB;
                        ':primNo:'->TT; OG.primNo -> II;
                  #)#);
-               T: @text; org: ^Items; D: ^DataItem
+               T: @text; org: ^Items; D: ^DataItem; rtnOff: @integer
             do trace1;
                (if true 
                 // OG.isBasicPattern and not OG.isConstLiteral then
@@ -381,6 +382,11 @@ generator: codeGenMarker
                     else
                        (sig.id[],this(DataItem).NewOff) -> cd.rstoreg
                    if);
+                // (OG.primNo = String_prim) and (not isInArg) then
+                   cd.com(#do 'StringVar' -> TT; dopt -> TQ #);
+                   ('',(stringDecl.desc).newDescNo) -> cd.pushText;
+                   cd.pushThis;
+                   (sig.id[],this(DataItem).NewOff) -> cd.rstoreg
                 // isConst or not OG.IS.isEmpty or isValue then
                    cd.com(#do 'DI:add:BP4: ' -> TT; sig.dopt -> TT #);
                    (* C3,C4,V4 *)
@@ -418,7 +424,8 @@ generator: codeGenMarker
                                    '**   out: ' -> puttext; D.dopt -> putline;
                                if);
                                (true,0,0) -> OG.gen;
-                               (OG.getQual,'RTN') -> pushOut;
+                               (OG.getQual,'RTN') -> pushOut -> rtnOff;;
+                               cd.fcom(#do'DI:after:pushOut:'->TT; rtnOff->II#);
                                cd.pushThis;
                                (if nameListInDcl then
                                    ('RTN',(sig.names.firstDecl).NewOff) 
@@ -587,7 +594,7 @@ generator: codeGenMarker
                    cd.rpop;
                    leave invoke
                if);
-               cd.com(#do 'DI:invoke:'->TT; dopt->TQ #);
+               cd.fcom(#do 'DI:invoke:'->TT; dopt->TQ #);
                (if OG.isBasicValue or OG.isValueObj then 
                    (if (E[] <> none) then
                        (if ((E.ATd.asDecl).primNo <> cmpAndSwap_prim) then
@@ -606,20 +613,17 @@ generator: codeGenMarker
                                (* problem here! *)
                                adr.load
                             // OG.isValueObj then 
-                               cd.com(#do 'isValueObj:isAdr:' -> TT;
+                               cd.fcom(#do 'isValueObj:isAdr:' -> TT;
                                         adr.isAdr -> BB; 
-                                        ' Size:'->TT; objSize -> II;
+                                        'objSize:'->TT; objSize -> II;
                                         ' rec'->TT; rec.dopt->TQ;',E:'->TT;
                                         E.dopt -> TQ; E.label -> TQ;
                                         'E.isCompositeValueObj:' -> TT; 
                                         E.isCompositeValueObj -> BB 
-                                     #);
+                                      #);
+                               cd.fcom(#do adr.print -> TT #);
                                true -> adr.isAdr;
                                E.isCompositeValueObj -> adr.isCompositeValueObj;
-                               cd.com(#do 'createValueProxy:'->TT; 
-                                         OG.OGid->TQ; dopt -> TQ;
-                                         'origin:'->TT; OG.origin.dopt->TQ
-                                      #);
                                adr.load; 
                            if)
                         else
@@ -628,7 +632,7 @@ generator: codeGenMarker
                            adr.loadAdr;
                        if)
                     else
-                       cd.com(#do '>:E=none' -> TT#);
+                       cd.fcom(#do '>:E=none' -> TT#);
                        (if adr[] <> none then 
                            adr.load
                         else
@@ -647,12 +651,12 @@ generator: codeGenMarker
                                (org.encOG.OGidwDno,NewOff) -> cd.pushg
                    if)if)if)
                 else
-                   cd.com(#do '>Object:unique:'->TT; OG.IS.isUnique->BB#);
+                   cd.fcom(#do '>Object:unique:'->TT; OG.IS.isUnique->BB#);
                    (if adr[] <> none then 
                        adr.load;
                        E.adjustEmbodied
                     else
-                       cd.com(# do '>adr=none'->TT #);
+                       cd.fcom(# do '>adr=none'->TT #);
                        (if true then
                            (if org[] = none then
                                (if nameListInDcl then
@@ -677,8 +681,9 @@ generator: codeGenMarker
                        ',isVirtualObject:' -> TT; isVirtualObject -> BB;
                        ' isValueObj:'->TT; OG.isValueObj -> BB
                     #);
-               OGx: ^ObjectGenerator; 
-            do (if true
+               OGx: ^ObjectGenerator; org:  ^Scope
+            do cd.com(#do 'DI:store:' -> TT; sig.dopt-> TQ #);
+               (if true
                 // OG.isBasicValue // OG.primNo = value_prim 
                    (*// OG.isUnitValueObj*) then 
                    (* OG.primNo = value_prim for handling _v: ?Value 
@@ -688,15 +693,25 @@ generator: codeGenMarker
                        (if nameListInDcl then
                            (sig[],OG[]) -> storeRealDecls
                         else
-                           (sig.id[],NewOff) -> cd.fstoreg
-                       if)
+                           (if withValueProxy and 
+                               this(DataItem).origin.encOG.isValueObj then
+                               cd.com(#do 'DI.origin.encOG.OG.isValueObj'->TT #);
+                               (OG.OGidWdNo,NewOff) -> cd.fvstoreg
+                            else
+                               (sig.id[],NewOff) -> cd.fstoreg
+                       if)if)
                     else
                        (if true then
                            (if nameListInDcl then
                                (sig[],OG[]) -> storeDecls
                             else
-                               (OG.OGidWdNo,NewOff) -> cd.storeg
-                           if)
+                               (if withValueProxy and 
+                                   this(DataItem).origin.encOG.isValueObj then
+                                   cd.com(#do 'DI.origin.encOG.OG.isValueObj'->TT #);
+                                   (OG.OGidWdNo,NewOff) -> cd.vstoreg
+                                else
+                                   (OG.OGidWdNo,NewOff) -> cd.storeg
+                           if)if)
                         else
                            (sig.id[],NewOff) -> cd.storeg
                    if)if)
@@ -708,10 +723,12 @@ generator: codeGenMarker
                    do L1.new; L2. new;
                       (0,L1) -> cd.jmpFalse;
                       cd.pushThis;
-                      (if nameListInDcl then
-                          (sig.names.firstDecl).off -> cd.pushConst;
-                       else
-                          newOff -> cd.pushConst;
+                      (if false then
+                          (if nameListInDcl then
+                              (sig.names.firstDecl).off -> cd.pushConst;
+                           else
+                              newOff -> cd.pushConst;
+                          if);
                       if);
                       (if false then
                           (* attemtp to handle Cvalue with 
@@ -736,20 +753,29 @@ generator: codeGenMarker
                       ,(mainIS.encOG,false,none) -> OGsequence)
                         -> E.getVqual 
                         -> (OGs[],qual[]);
-                      (OG.objSize,0) -> cd.vassign;
+                      cd.fcom(#do 'vassign:B:' -> TT; sig.dopt->TT;
+                                'off:'->TT; newOff -> II;
+                                'size:'->TT; objSize -> II;
+                                'mode: 0' -> TT
+                             #);
+                      (newOff,OG.objSize,0) -> cd.vassign;
                       L2 -> cd.jmp;
                       L1 -> cd.defLab;   
                       (if true then
                           (if nameListInDcl then
                               (sig.id[],(OG.superPtn).new_DescNo,
-                              (sig.names.firstDecl).newOff - 1)
+                              (sig.names.firstDecl).newOff - 1,
+                              inValueObj)
                                 -> cd.invokeVal;
                            else
-                              (sig.id[],(OG.superPtn).new_DescNo,newOff - 1)
+                              (sig.id[],(OG.superPtn).new_DescNo,newOff - 1
+                              ,inValueObj)
                                 -> cd.invokeVal;
-                          if)
+                          if);
+                          (if withValueProxy then cd.rpop if);
                        else
-                          (sig.id[],(OG.superPtn).OG.IS.newDescNo,newOff - 1)
+                          (sig.id[],(OG.superPtn).OG.IS.newDescNo,newOff - 1
+                          ,inValueObj)
                             -> cd.invokeVal;
                       if);
                       L2 -> cd.defLab
@@ -809,7 +835,7 @@ generator: codeGenMarker
                   *)
                  (# arg: ^ObjectGenerator; recx,argx: ^Exp;  i: @integer
                  enter arg[]
-                 do cd.fcom(#do 'isArgOfAssignI2IwithUniValArg'->TT;
+                 do cd.com(#do 'isArgOfAssignI2IwithUniValArg'->TT;
                               dopt -> TQ; 'arg:'->TT; arg.dopt->TQ;
                               arg.label ->TT
                            #);
@@ -818,19 +844,19 @@ generator: codeGenMarker
                         arg.super.scanSons
                         (# bE:  ^ BinaryExp
                         do i + 1 -> i; 
-                           cd.fcom(#do 'arg.super.arg:'->TT; current.dopt->TQ; 
+                           cd.com(#do 'arg.super.arg:'->TT; current.dopt->TQ; 
                                      current.label->TT #);
                            (if i 
                             // 1 then 
                                current[] -> recx[];
                                (if recx.isBinaryExp then
                                    (*arg.dopt -> dumpTN; arg.doPP -> dumpTN;*)
-                                   cd.fcom
+                                   cd.com
                                    (#do 'recx:BinaryExp:recx:'->TT;
                                       recx.dopt -> TQ;
                                    #);
                                    recx[] -> bE[];
-                                   cd.fcom
+                                   cd.com
                                    (#do 'M:'->TT; bE.M.dopt -> TQ;
                                       'label:'->TT; bE.M.label -> TQ;
                                       'M.ATd:'->TT; bE.M.ATd.dopt -> TQ
@@ -839,7 +865,7 @@ generator: codeGenMarker
                                      -> checkInt2IntWithUnitArg -> value;
                                    bE.M.args.scanSons
                                    (#
-                                   do cd.fcom
+                                   do cd.com
                                       (#do 'M:arg:'->TT; current.dopt -> TQ;
                                          current.label -> TT;
                                          value  -> BB;
@@ -851,16 +877,54 @@ generator: codeGenMarker
                                current[] -> argx[]
                         if)#);
                         (if i = 2 then
-                            cd.fcom(#do 'recx:'->TT; recx.dopt->TQ;
+                            cd.com(#do 'recx:'->TT; recx.dopt->TQ;
                                       'argx:'->TT; argx.dopt->TQ #);
                             (recx[],argx[]) -> checkInt2IntWithUnitArg -> value;
                     if)if)
                  #);
+               mkCom:
+                 (# ch: @char
+                 enter ch
+                 do (if OIadr[] <> none then
+                        OIadr.off -> OIadrOff
+                     else
+                        -1 -> OIadrOff
+                    if);
+                    (if right.super.ATd[] <> none then
+                        cd.fcom(#do 'right.super.ATd:not:none'-> TT #)
+                     else
+                        cd.fcom(#do 'right.super.ATd:none'-> TT; 
+                                  right .label -> TQ;
+                                  right.dopt -> TT; #)
+                    if);
+                    (if right.super.ATd.OG.super.ATd[] <> none then
+                        cd.fcom(#do 'right.super.ATd.OG.super.ATd:not:none'
+                                    -> TT #);
+                        right.super.ATd.OG.super.ATd.OG.IS.newDescNo 
+                          -> rightDescNo
+                     else
+                        cd.fcom(#do 'right.super.ATd.OG.super.ATD:none'-> TT; 
+                                  right .label -> TQ;
+                                  right.dopt -> TT; #);
+                        -1 -> rightDescNo
+                    if);
+                    cd.fcom
+                    (#do 'pushValue:'->TT; ch -> CC;
+                       ': off:' -> TT; OIadrOff -> II;
+                       'size:'->TT; right.objSize -> II;
+                       'descNo:'-> TT; rightDescNo -> II;
+                       right.dopt -> TT;
+                    #);
+                    
+                 #);
                rec,dstE: ^Exp; adr: ^Address;
-               dstDI,srcDI: ^DataItem; ptn: ^Pattern
+               dstDI,srcDI: ^DataItem; ptn: ^Pattern;
+               MP:  ^Module; OIadr:  ^Address; 
+               OIadrOff: @integer; rightDescNo: @integer
             do (if false then
                    '**** AssignmentStatement:gen: '->puttext; dopt ->putline;
                if);
+               cd.fcom(#do 'assign:'->TT; dopt -> TQ; #);
                cd.bcPos -> beginBCP;
                
                (left[],superAdj) -> computeAdrG -> (rec[],dstE[],adr[]);
@@ -869,8 +933,10 @@ generator: codeGenMarker
                          'right.label:'->TT; right.label -> TQ;
                          right.dopt -> TQ #);
                
-               (true(*useRtnVal*),superAdj,staticOff) -> right.gen;
-
+               (true(*useRtnVal*),superAdj,staticOff) 
+                 -> right.gen
+                 -> (mp[],OIadr[]);
+               
                (* checker/semchecker has ensure that dstE is a DataItem *)
                dstE.ATd[] -> dstDI[];
                
@@ -927,9 +993,9 @@ generator: codeGenMarker
 
                    then
                    true -> adr.isValue;
-                   cd.fcom(#do 'right:'->TT; right.dopt -> TQ #);
+                   cd.com(#do 'right:'->TT; right.dopt -> TQ #);
                    (if not (right[] -> isArgOfAssignI2IwithUniValArg) then
-                       cd.fcom(#do 'dstDI:'->TT; dstDI.dopt->TQ #);
+                       cd.com(#do 'dstDI:'->TT; dstDI.dopt->TQ #);
                        dstDI[] -> right.checkNumberConvert
                        (# I2F:: (#do cd.I2f #);
                           F2I:: (# do cd.F2I #);
@@ -958,7 +1024,9 @@ generator: codeGenMarker
                                (srcDI.sig.dopt,srcDI.newOff)
                                  -> cd.rpushg
                             else
-                               srcDI.objSize -> cd.pushValue
+                               'A' -> mkCom;
+                               (OIadrOff,srcDI.objSize,rightDescNo)
+                                 -> cd.pushValue
                            if)
                         else
                            cd.com(#do 'else:'->TT; dopt->TT #)
@@ -966,12 +1034,22 @@ generator: codeGenMarker
                     // (right.super.ATd.asDecl).isDataItem then
                        cd.com(#do 'right:isDI:'-> TT #);
                        right.inValueObj -> adr.srcIsVal;
-                       right.objSize-> cd.pushValue
+                       'B' -> mkCom;
+                       (OIadrOff,right.objSize ,rightDescNo) -> cd.pushValue;
+                       cd.fcom
+                       (#do 'after:pushValue:OIadrOff:'->TT; OIadrOff->II;
+                          'adr.off:'->TT; adr.off->II; nl;
+                          OIadr.print->TT; nl;
+                          adr.print->TT
+                       #);
+                       (*OIadr.off -> adr.off*)
                    if);
                 else (* reference *)
                    true -> adr.isAdr;
                if);
+               cd.fcom(#do 'assign:adr.store:A:'->TT #);
                adr.store;
+               cd.fcom(#do 'assign:adr.store:B:'->TT #);
                cd.bcPos -> endBCP
             #)
        #);
@@ -1138,6 +1216,7 @@ generator: codeGenMarker
                       #);
                       (for i: top repeat
                            fArgs[top - i + 1][] -> DI[];
+                           cd.com(#do 'kuk:storeArgs:'-> TT;DI.sig.dopt->TQ #);
                            cd.rswap;
                            cd.rdouble;
                            (if DI.isBasicValue then
@@ -1155,7 +1234,8 @@ generator: codeGenMarker
                  (* '**** E is none:main:\n' -> Puttext; 
                   main.dopt -> puthead;
                   ' this: ' -> puttext; thisOg.doPT -> putline*)
-              if);(mainOG[],thisOG.super.ATd.OG[],fromVDTalloc) -> storeOrigins;
+              if);
+              (mainOG[],thisOG.super.ATd.OG[],fromVDTalloc) -> storeOrigins;
            else
               (if trace then newline if)
           if);
@@ -1166,6 +1246,7 @@ generator: codeGenMarker
        do (if theOG.super.ATd[] <> none then
               (T[],(theOG.super.ATd.asDecl).OG[]) -> storeArgs
           if);
+          cd.com(#do 'storeArgs:' -> TT; theOG.OGid -> TQ #);
           theOG.IS.scanItemArgsReverse
           (# DI: ^DataItem
           do (if (currentArg[]->DI[]).isBasicValue then
@@ -1176,7 +1257,7 @@ generator: codeGenMarker
        #);
      callInvoke:
        (# theOG: ^ObjectGenerator; staticOff: @integer; fromStub: @boolean;
-          T: ^text
+          T: ^text; rtnOff: @integer
        enter(theOG[],staticOff,fromStub)
        do (theOG.OGid,theOG.IS.newDescNo,theOG.IS.objSize,staticOff,theOG.isObj)
             -> cd.invoke
@@ -1194,11 +1275,11 @@ generator: codeGenMarker
              (if false then
                  (T[],theOG[]) -> storeArgs
               else
-                 cd.lcom(#do 'store:args'->TT #);
+                 cd.com(#do 'callInvoke:store:args'->TT #);
                  theOG.IS.scanNonBoundItemArgs
                  (# 
                  do currentArg[] -> fArgs[top + 1 -> top][];
-                    cd.lcom(#do 'arg:' -> TT; currentArg.dopt -> TT #)
+                    cd.com(#do 'arg:' -> TT; currentArg.dopt -> TT #)
                  #);
                  (for i:top repeat
                       fArgs[top - i + 1][] -> DI[];   
@@ -1207,7 +1288,7 @@ generator: codeGenMarker
                        else
                           (T[],DI.newOff,false) -> cd.rstoreX
              if)for)if);
-             cd.lcom(#do 'after:store:args:top:'-> TT; top->II  #);
+             cd.com(#do 'after:store:args:top:'-> TT; top->II  #);
              (* vStack = [...]
               * rStack = [..., possible origin, callee]
               *)
@@ -1215,7 +1296,11 @@ generator: codeGenMarker
                  (theOG[],theOG[],false) -> storeOrigins;
              if);
           #);
-          (if not fromStub then (theOG[],T[]) -> pushOut if)
+          (if not fromStub then 
+              (theOG[],T[]) -> pushOut -> rtnOff;
+              cd.fcom(#do 'callInvoke:after:pushOut:'->TT; rtnOff->II #);
+          if)
+       exit rtnOff
        #);
      ObjectGenerator::
        (# 
@@ -1289,9 +1374,10 @@ generator: codeGenMarker
                name: ^text; head: @boolean;
                on,pn: @integer;
                E: ^Exp; OI: ^ObjectInvocation;
+               mp:  ^Module; rtnOff: @integer;
                trace: (# exit false #);
             do (if not genIsDone or true then
-                   cd.com(#do 'OG:gen:'->TT; dopt->TQ #);
+                   cd.fcom(#do 'OG:gen:'->TT; dopt->TQ #);
                    true -> genIsDone;
                    super.last -> E[];   
                    (if ('???' -> (E.label).equal) and IS.isEmpty then
@@ -1316,8 +1402,10 @@ generator: codeGenMarker
                            isCompositeValueObj 
                              -> (super.last).isCompositeValueObj;
                        if);
-                       cd.com(#do 'OG:before:super.gen:'->TT; super.dopt->TQ#);
-                       (useRtnVal,superAdj,staticOff) -> super.gen
+                       cd.fcom(#do 'OG:before:super.gen:'->TT; super.dopt->TQ#);
+                       (useRtnVal,superAdj,staticOff) 
+                         -> super.gen
+                         -> (mp[],OIadr[]);
                     else
                        (* Perhaps move check for virtuals to here!? *)
                        (* Singular object like R.foo{ }
@@ -1329,10 +1417,12 @@ generator: codeGenMarker
                            (* This is also the case for R.S.foo{ ... } *)
                        if);
                        (* Invoke the singular object *)
-                       cd.com(#do 'before objTmpStack:add: '->TT;
+                       cd.fcom(#do 'before objTmpStack:add: '->TT;
                                 IS.newDescNo -> II; ' ' -> TT; OGid ->TQ #);
                        (this(ObjectGenerator)[],staticOff,false) 
-                         -> callInvoke;
+                         -> callInvoke
+                         -> rtnOff;
+                       Address -> OIadr[]; rtnOff -> OIadr.off;
                        L:
                          (if not useRtnVal then 
                              IS.scanAllItemDecls
@@ -1344,6 +1434,8 @@ generator: codeGenMarker
                              if)#);
                              cd.rPop 
                    if)if);
+                   cd.fcom(#do 'OG:gen:end:'->TT; 
+                             (if OIadr[] <> none then OIadr.print->TT if) #);
                    cd.bcPos -> endBCP;     
                if)
             #);
@@ -1460,11 +1552,11 @@ generator: codeGenMarker
           pushReturnValues:
             (# ptn: ^Pattern; DI: ^DataItem
             do (if ((father[]->ptn[]).getReturnDecl -> DI[]) <> none then
-                   (if true then
-                       '**** pushReturnValues:Off:' -> puttext;
-                       DI.newOff -> putint;
-                       ' '  -> put; DI.doPT -> putline;
-                   if);
+                   cd.fcom
+                   (#do
+                       'OG:pushReturnValues:Off:' -> TT;
+                       DI.newOff -> II; DI.doPT -> TT;
+                   #);
                    (if not isValueObj then
                        cd.setThisStack
                    if);                   
@@ -1476,8 +1568,11 @@ generator: codeGenMarker
                       (* and not DI.OG.isUnitValueObj*)
                        then
                        cd.pushThis;
-                       DI.newOff -> cd.pushConst;
-                       DI.OG.IS.newDescNo -> cd.pushConst
+                       cd.fcom(#do 'pushReturn:valOff:descNo:'->TT #);
+                       (if not withValueProxy then
+                           DI.newOff -> cd.pushConst;
+                           DI.OG.IS.newDescNo -> cd.pushConst
+                       if)
                     else
                        cd.pushThis;
                        DI.invoke
@@ -1488,28 +1583,7 @@ generator: codeGenMarker
                        cd.setThisStack;
                        cd.pushThis
                if)if)
-            #);    
-          pushRtnV:
-            (# DI: ^DataItem
-            enter DI[]
-            do (if not isValueObj then
-                   cd.setThisStack
-               if);                   
-               (if DI.OG.isValueObj 
-                   and not (DI.OG.primNo = integer_prim) 
-                   and not (DI.OG.primNo = boolean_prim) 
-                   and not (DI.OG.primNo = char_prim) 
-                   and not (DI.OG.primNo = float_prim) 
-                   (* and not DI.OG.isUnitValueObj*)
-                   then
-                   cd.pushThis;
-                   DI.newOff -> cd.pushConst;
-                   DI.OG.IS.newDescNo -> cd.pushConst
-                else
-                   cd.pushThis;
-                   DI.invoke
-               if)
-            #);          
+            #);         
           genClass::
             (#
             do (if hasVirtualObject then
@@ -1798,6 +1872,7 @@ generator: codeGenMarker
             #);
           clear::< (# do false -> marked -> virtualDone; inner #);
        #);
+     inValueObj: @boolean; (* true if generating code for a value object *)
      items::
        (# actPos: @integer;
           actionBCPos::
@@ -2028,7 +2103,8 @@ generator: codeGenMarker
                             '**** StoreOrigin:before:originISValue:'->putline;
                             dopt -> puthead
                         if);
-                        (if (theIS.origin[] -> originIsValue)
+                        (if not withValueProxy and
+                            (theIS.origin[] -> originIsValue)
                             and (mainIS.origin[] -> originIsvalue) then
                             ('origin.valueOff',theIS.NewOriginOff + 2) 
                               -> cd.store;
@@ -2148,7 +2224,8 @@ generator: codeGenMarker
                                     cd.com(#do'isSingularImplSuper:'->TT#);
                                     cd.pushThis;
                                     ('iOrigin',theIS.newOriginOff) -> cd.rpushg;
-                                    (if (theIS.origin[] -> originIsValue) then
+                                    (if not withValueProxy and
+                                        (theIS.origin[] -> originIsValue) then
                                         cd.pushThis;
                                         (T[],theIS.newOriginOff + 1) 
                                           -> cd.pushg;
@@ -2208,12 +2285,12 @@ generator: codeGenMarker
                  (#
                  do (if (superDesc[] <> none) and not superDesc.isPrimitive then
                      else 
-                        (if not OG.isValueObj then 
+                        (if withValueProxy or not OG.isValueObj then 
                             cd.mvStack
                     if)if)
                  #);
                genAttributes:
-                 (# theIS: ^Items
+                 (# theIS: ^Items; OIadrX: ^Address
                  enter theIS[]
                  do (if (theIS[] -> hasRealSuper)
                         and (theIS.superDesc[] <> objectDecl.desc) then
@@ -2225,7 +2302,7 @@ generator: codeGenMarker
                        (if true
                         // I.isDecl and (I## <> LabelDecl##) then
                            (if not I.isPattern or I.isVirtual then
-                               (false,0,0) -> current.gen -> MP[];
+                               (false,0,0) -> current.gen -> (MP[],OIadrX[]);
                                (if MP[] <> none then
                                    MP[] -> mainPathModule[];
                                if)
@@ -2234,7 +2311,7 @@ generator: codeGenMarker
                                    (false,0,0) -> current.gen if) 
                            if)
                         // I.isNewProp then
-                           (false,0,0) -> current.gen -> MP[];
+                           (false,0,0) -> current.gen -> (MP[],OIadrX[]);
                            (if MP[] <> none then
                                MP[] -> mainPathModule[];
                            if)
@@ -2249,7 +2326,7 @@ generator: codeGenMarker
                  do (not OG.isValueObj and 
                     not ((superDesc[] <> none) and not superDesc.isPrimitive )
                     ) -> cd.actions;
-                   (if not OG.isValueObj then cd.mvStack if);
+                   (if withValueProxy or not OG.isValueObj then cd.mvStack if);
                    restartLab -> cd.defLab;
                    scanSons
                    (# I: ^Item; superHasNewInner: @boolean
@@ -2270,8 +2347,14 @@ generator: codeGenMarker
                     else
                        cd.com(#do 'pushReturn: ' -> TT; 
                                 (if sig[] <> none then sig.id[] -> TQ if)#);
-                       (if encOG.isValueObj then
+                       (if not withValueProxy and encOG.isValueObj then
+                           (* OBS! A value object has no out-parameters
+                            * The whole object is copied in asignment
+                            * So hwat does "out V: var integer" mean?
+                            * Perhaps we should allow it?
+                            *)
                            (if sig[] <> none then
+                               (* use pushOut instead *)
                                encOG.pushReturnValues
                            if);
                            cd.rtnV
@@ -2415,9 +2498,13 @@ generator: codeGenMarker
                (* the following dataitems used to be arguments of genClass *)
                OG.OGid -> N[]; OG.sig[] -> sig[]; newDescNo -> descNo;
                OG.super[] -> super[];
+               OG.isValueObj -> inValueObj;
                
                cd.com
-               (#do 'Items:GenClass:'->TT; N[]->TT; 'descNo:'->TT; descNo->II#);
+               (#
+               do 'Items:GenClass:'->TT; N[]->TT; 'descNo:'->TT; descNo->II;
+                  'isValue:'->TT; OG.isValueObj -> BB
+               #);
                
                2 -> labelhandLer.labCount;
                genSuperClass;
@@ -2472,8 +2559,9 @@ generator: codeGenMarker
                            1 -> cd.rtnAlloc;
                            (realTopSuper).newDescNo -> cd.toSuper
                        if)
-		      else
-		       (if not this(Items).encOG.isValueObj then
+                    else
+		       (if withValueProxy or 
+                           not this(Items).encOG.isValueObj then
                            1 -> cd.rtnAlloc
 		   if)if);
                    genActionPart;
@@ -2504,7 +2592,7 @@ generator: codeGenMarker
                    NA[] -> checkGlobalsViolations;
                    (if encOG.IS.newOriginOff = 0 then 
                        '!!!! encOG.IS.newOriginOff = 0:'->dumpTN;
-                       cd.fcom(#do '!!!! encOG.IS.newOriginOff = 0:'->TT #);
+                       cd.com(#do '!!!! encOG.IS.newOriginOff = 0:'->TT #);
                        encOG.dopt -> putheadN;
                    if);
                    (if true then
@@ -2512,7 +2600,7 @@ generator: codeGenMarker
                     else                   
                        ((NA.origin[]->scp[]).OGofScope).OGidWdNo -> T[];
                    if);
-                   (if (origin[] -> originIsValue) and
+                   (if not withValueProxy and (origin[] -> originIsValue) and
                        not ((origin[]->org[]).encOG.primNo = string_prim) then
                        cd.com(#do 'origin.valueOff:load ' -> TT; 
                                 newOriginOff + 1 -> II #);
@@ -2614,8 +2702,19 @@ generator: codeGenMarker
                     ':descNo:' -> TT; OG.IS.newDescNo -> II;
                  #);
                handleNonVirtualArg:             
-                 (# formalArg: ^DataItem; actualArg: ^ObjectSpecification;
-                    superOG: ^ObjectGenerator;
+                 (# mkCom:
+                      (# ch: @char
+                      enter ch
+                      do cd.fcom
+                         (#do 'pushValue:'->TT; ch -> CC; 
+                            ': off:' -> TT; OIadr.off -> II;
+                            'size:' -> TT; formalArg.objSize -> II;
+                            formalArg.OG.super.ATd.OG.IS.newDescNo -> II;
+                            formalArg.dopt -> TT;
+                         #);            
+                      #);
+                    formalArg: ^DataItem; actualArg: ^ObjectSpecification;
+                    superOG: ^ObjectGenerator; mp:  ^Module; OIadr: ^Address
                  enter(formalArg[],actualArg[])
                  do (* E is the exp with arguments actArgs 
                      * this(Pattern) = E.ATd
@@ -2625,8 +2724,7 @@ generator: codeGenMarker
                              'ActArg: ' -> TT;actualArg.dopt->TQ;
                              'isValue: ' -> TT;  actualArg.isValueObj->BB;
                           #);
-                    cd.com(#do
-                             'formalArg.OG.isBasicValue:' -> TT;
+                    cd.com(#do 'formalArg.OG.isBasicValue:' -> TT;
                              formalArg.OG.isBasicValue -> BB;
                              ' formalArg.OG.isValueObj:' ->TT; 
                              formalArg.OG.isValueObj -> BB;nl;
@@ -2664,28 +2762,31 @@ generator: codeGenMarker
                                  actualArg.isCompositeValueObj -> BB
                               #)
                     if);
-                    cd.com(#do 'loadArgs:A:' -> TT; actualArg.doPT -> TQ #);
-                    (true,superAdj,staticOff) -> actualArg.gen;
-                    cd.com(#do 'loadArgs:after:gen:' -> TT; E.doPT->TQ #);
-
+                    
+                    (true,superAdj,staticOff) 
+                      -> actualArg.gen 
+                      -> (mp[],OIadr[]);
+                    
                     (if actualArg.isNonBasicValueObj 
                         and (actualArg.super.ATd.asDecl).isDataItem then
                         (* actualArg is a data-item being 
                          * a (nonBasic?) ValueObj *)
-                        cd.com(#do 'before:pushSize: ' -> TT;
-                                 'actualArg.super.ATd.OG.isUnitValueObj:'
-                                   -> TT;
-                                 actualArg.super.ATd.OG.isUnitValueObj 
-                                   -> BB; nl;
-                                 ':actualArg.isCompositeValueObj:'->TT;
-                                 actualArg.isCompositeValueObj -> BB;
-                              #);
+                        cd.fcom
+                        (#do 'before:pushSize: ' -> TT;
+                           'actualArg.super.ATd.OG.isUnitValueObj:' -> TT;
+                           actualArg.super.ATd.OG.isUnitValueObj -> BB; nl;
+                           ':actualArg.isCompositeValueObj:'->TT;
+                           actualArg.isCompositeValueObj -> BB;
+                        #);
                         (if not (actualArg.super.ATd.asDecl).OG.isUnitValueObj 
                             or actualArg.isCompositeValueObj
                             then
                             (* composite valueObj or not a unitValue *)
                             (*11 -> cd.pushConst;*)
-                            actualArg.objSize -> cd.pushValue;
+                            'C' -> mkCom;
+                            (OIadr.off,actualArg.objSize
+                            ,formalArg.OG.super.ATd.OG.IS.newDescNo)
+                              -> cd.pushValue;
                             1 -> cd.pushConst
                          else
                             cd.com(#do 'actualArg:UnitOne?:'-> TT; 
@@ -2752,7 +2853,11 @@ generator: codeGenMarker
                                         cd.com(#do 'string:'->TT; 
                                                   formalArg.dopt-> TT #);
                                      else
-                                        formalArg.objSize -> cd.pushValue;
+                                        'D' -> mkCom;
+                                        (OIadr.off,formalArg.objSize
+                                        ,formalArg.OG.super.ATd.OG.IS.newDescNo 
+                                        )
+                                          -> cd.pushValue;
                                         1 -> cd.pushConst
                                     if)
                                  else
@@ -2861,18 +2966,13 @@ generator: codeGenMarker
             #);
           invoke:: 
             (# 
-            do cd.com(#do 'ptn:invoke:' -> TT; sig.dopt -> TQ;
+            do cd.fcom(#do 'ptn:invoke:' -> TT; sig.dopt -> TQ;
                          'E:'->TT; E.dopt -> TQ;
                          'ptnKind:'->TT; ptnKind -> II;
                          'useRtnV:' -> TT; useRtnVal -> BB #);
-               (if false then
-                   '**** ptn:invoke: ' -> puttext; PtnKind -> putint;
-                   ' ' -> put;
-                   dopt -> putheadN;
-                   E.father.father.father.dopt -> putheadN;
-               if);
                (rec[],E[],useRtnVal,staticOff,adr[]) 
                  -> currentPtnKind.invoke 
+                 -> OIadr[]
             #);
           popReturn:
             (* perhaps this should be the same virtual as in dataItem!?
@@ -2914,26 +3014,79 @@ generator: codeGenMarker
                 else
                    (if off > 0 then
                        cd.com(#do 'load:'->TT; this(Address).print -> TT #);
-                       (if isValue then
-                           (if originIsValue then
+                       cd.com(# do 'isCompositeValueObj:'->TT;
+                                 isCompositeValueObj -> BB;
+                                 'E:'->TT; E.dopt -> TQ;
+                                 E.atd.dopt -> TQ;
+                                 E.ATd.OG.isValueObj -> BB;
+                              #);
+                       cd.com
+                       (#do 'E.ATd.isValueObj:'->TT;
+                          (E.ATd.ORIGIN.ogOfScope).isValueObj -> BB;
+                          'rec:' -> TT;
+                          (if rec[] = none then
+                              'none'->TQ
+                           else
+                              rec.dopt -> TQ
+                          if)                         
+                       #);
+                       (if isValue then (* primitive or valueObj *)
+                           (if originIsValue 
+                               or (E.ATd.origin.ogOfScope).isValueObj
+                               and withValueProxy then
                                (if isFloat then
-                                   ('',off) -> cd.fovpushg
+                                   (if withValueProxy then
+                                       (nameOfE_OG,off) -> cd.fvpushg;
+                                    else
+                                       ('',off) -> cd.fovpushg
+                                   if)
                                 else
-                                   ('',off) -> cd.ovpushg
-                               if)
+                                   (if withValueProxy then
+                                       'valueProxy:'->dumptN;
+                                       (if not originIsValue then
+                                           (* we are in 
+                                            * (1) a valueObj: mainpart
+                                            *     accessing attribute liek X
+                                            * (2) an object with a value Obj
+                                            *    P1: var Point
+                                            *    accessing P1.Y
+                                            *)
+                                           (if (rec[] <> none)
+                                               and (rec[] <> E[]) then (* (2) *)
+                                               cd.com
+                                               (#
+                                               do 'ObjWithValObj:rec:'->TT;
+                                                  (if rec[] <> none then
+                                                      rec.dopt -> TQ;
+                                                      rec.ATd.off -> II;
+                                                   else
+                                                      'none'->TT
+                                                  if);
+                                                  'E:'->TT;
+                                                  E.dopt -> TQ;
+                                                  off -> II
+                                               #);
+                                               (nameOfE_OG,off) -> cd.pushg;
+                                            else
+                                               cd.com(#do 'koks:A:'->TT #);
+                                               (nameOfE_OG,off) -> cd.vpushg;
+                                           if)
+                                        else
+                                           (* isValue & originIsValue 
+                                            * must use cd.vpushg
+                                            *)
+                                           cd.com(#do 'koks:C:'->TT #);
+                                           (nameOfE_OG,off) -> cd.vpushg
+                                       if)
+                                    else
+                                       ('',off) -> cd.ovpushg
+                               if)if)
                             else
-                               cd.com(#do 'isFloat:B: '->TT; isFloat->BB #);
                                (if isFloat then
                                    ('',off) -> cd.fpushg
                                 else
-                                   '' -> T[];
-                                   (if rec[] <> none then 
-                                       rec.dopt -> T.append if);
-                                   '/'-> T.put;
-                                   (if E[] <>none then E.dopt->T.append if);
                                    (* problem here!*)
                                    (nameOfE_OG,off) -> cd.pushg;
-                                   cd.com(#do 'BOBS!'->TT #)
                                if)
                            if)
                         else
@@ -2955,6 +3108,7 @@ generator: codeGenMarker
                        if)
                     else
                        '**** Address:load:off = 0 ' -> puttext; 
+                       E.label -> dumpT;
                        (if E[] <> none then E.dopt -> putline else newline if);
                        cd.com(#
                               do 'Address:load:off = 0 '->TT;
@@ -2971,27 +3125,37 @@ generator: codeGenMarker
                    (if isValue then
                        (if isUnitVal and not isCompositeValueObj then
                            (* isUnitVal should be enough, but is not!? *)
+                           cd.fcom(#do 'loadAdr:push:valOff:descNo:A:'->TT #);
                            ('',off) -> cd.fpushg
                         else
                            (if originIsValue then
-                               cd.swap;
-                               off - 1 -> cd.pushConst;
-                               61 (*plus*) -> cd.op;
-                               cd.swap
+                               cd.fcom(#do 'loadAdr:push:valOff:descNo:C:'->TT #);
+                                (if true or not withValueProxy then
+                                    cd.swap;
+                                    off - 1 -> cd.pushConst;
+                                    61 (*plus*) -> cd.op;
+                                    cd.swap
+                                if)
                             else
-                               off -> cd.pushConst;
-                               valDescNo -> cd.pushConst
-                       if)if)
+                               cd.fcom(#do 'loadAdr:push:valOff:descNo:B:'->TT #);
+                               (if true or not withValueProxy then
+                                   off -> cd.pushConst;
+                                   valDescNo -> cd.pushConst
+                       if)if)if)
                     else
                        (nameOfE_OG,off) -> cd.rpushg
                    if)
                 else
-                   '**** Address:loadAdr:off = 0 ' -> puttext; 
-                   (if E[] <> none then E.dopt -> putline else newline if);
+                   (if false then
+                       '**** Address:loadAdr:off = 0 ' -> puttext; 
+                       E.label -> dumpT;
+                       (if E[] <> none then E.dopt -> putline else newline if);
+                   if);
                    cd.com(#
                           do 'Address:loadAdr:off = 0 '->TT;
                              (if E[] <> none then E.dopt-> TQ if)
-               #)if)
+                          #)
+               if)
             #);
           store::
             (# mode: @integer
@@ -3024,8 +3188,10 @@ generator: codeGenMarker
                                         * X.ATd.OG = Point descriptor
                                         *)
                                        ((((E.ATd.asDecl).OG.super.last).ATd.asDecl).OG.OGid
-                                       ,descNo,off - 1) 
+                                       ,descNo,off - 1
+                                       ,inValueObj)
                                          -> cd.invokeVal;
+                                       (if withValueProxy then cd.rpop if);
                                        cd.restoreThis
                                    if)
                                 else
@@ -3038,22 +3204,37 @@ generator: codeGenMarker
                                        (* (if srcIsVal then 1 -> mode if);
                                         * (if destIsVal then mode + 2 -> mode if);*)
                                        (if originIsValue then 1 -> mode if);
-                                       cd.com(#do 'Address:store::srcIsVal:'->TT; 
-                                                srcIsVal -> BB;
-                                                ' destIsVal:'->TT;originIsValue->BB;
-                                                ' mode:' -> TT; mode -> II #);
-                                       off -> cd.pushConst;
-                                       (size,mode) -> cd.vassign
+                                       cd.com
+                                       (#do 'Address:store::srcIsVal:'->TT; 
+                                          srcIsVal -> BB;
+                                          ' destIsVal:'->TT;originIsValue->BB;
+                                          ' mode:' -> TT; mode -> II 
+                                       #);
+                                       cd.fcom
+                                       (#do 'vassign:A:'->TT; E.dopt->TQ;
+                                          'off:'->TT; off -> II;
+                                          'size:'->TT; size -> II;
+                                          'mode:'->TT; mode -> II
+                                       #);
+                                       (if false then off -> cd.pushConst; if);
+                                       (off,size,mode) -> cd.vassign
                                    if)
                                if)
                             else
                                (if originIsValue then
-                                   cd.com(#do 'Address:store:originIsValue:'->TT #);
-                                   (if isFloat then
-                                       ('',off) -> cd.fovstoreg
+                                   cd.com(#do 'Address:store:originIsVal:'->TT #);
+                                   (if withValueProxy then
+                                       (if isFloat then
+                                           ('',off) -> cd.fvstoreg
+                                        else
+                                           ('',off) -> cd.vstoreg
+                                       if)
                                     else
-                                       ('',off) -> cd.ovstoreg
-                                   if)
+                                       (if isFloat then
+                                           ('',off) -> cd.fovstoreg
+                                        else
+                                           ('',off) -> cd.ovstoreg
+                                   if)if)
                                 else
                                    cd.com(#do 'isFloat:D: '->TT; isFloat->BB #);
                                    (if isUnitVal or isFloat then
@@ -3166,8 +3347,10 @@ generator: codeGenMarker
                       // string_prim // inner_prim then
                       else
                          (* Perhaps virtual E.pushValId is better? *)
-                         cd.pushValId;
-                         (* push const 1 & thisValObjDescInx *)
+                         (if not withValueProxy then
+                             cd.pushValId;
+                             (* push const 1 & thisValObjDescInx *)
+                         if)
                  if)if);
                  A.superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
                  (* we should ignore rec and E - defined above 
@@ -3252,28 +3435,28 @@ generator: codeGenMarker
        (# rec,E: ^Exp; OGx: ^ObjectGenerator
        enter(rec[],E[])
        do (if (rec[] <> none) and (E.args[] <> none)  then
-              cd.fcom(#do 'checkInt2IntWithUnitArg:rec:'->TT; rec.dopt -> TQ;
+              cd.com(#do 'checkInt2IntWithUnitArg:rec:'->TT; rec.dopt -> TQ;
                      'E:'->TT; E.dopt -> TQ #);
               E.args.scanArgs(#do current[]->OGx[] #);
               (if (OGx[] <> none) and OGx.IS.isEmpty then
                   (if true
                    // OGx.super.ATd[] = integerDecl then
-                      cd.fcom(#do 'arg:integer'->TT #)
+                      cd.com(#do 'arg:integer'->TT #)
                    // OGx.super.ATd[] = floatDecl then
-                      cd.fcom(#do 'arg:float'->TT #)
+                      cd.com(#do 'arg:float'->TT #)
                    // OGx.super.ATd.OG.isUnitValueObj then
-                      cd.fcom(#do 'arg:unit'-> TT #);
+                      cd.com(#do 'arg:unit'-> TT #);
                       (if true
                        // rec.ATd[] = integerDecl then
-                          cd.fcom(#do 'rec:isInteger:'->TT #);
+                          cd.com(#do 'rec:isInteger:'->TT #);
                           true -> value
                        // rec.ATd[] = floatDecl then
-                          cd.fcom(#do 'rec:isFloat'->TT #)
+                          cd.com(#do 'rec:isFloat'->TT #)
                        else
-                          cd.fcom(#do 'rec:other:'->TT #)
+                          cd.com(#do 'rec:other:'->TT #)
                       if)
                    else
-                      cd.fcom(#do 'arg:other'-> TT #)
+                      cd.com(#do 'arg:other'-> TT #)
           if)if)if)
        #);
      Invocation::
@@ -3501,6 +3684,7 @@ generator: codeGenMarker
                         ->(current[]->E[]).invoke
                   if);
                #);
+               Adr[] -> OIadr[]
             #);
           gen:: 
             (# gdb:: 
@@ -3610,8 +3794,7 @@ generator: codeGenMarker
                     (if Ex[] <> none then
                         cd.com(#do Ex.dopt->TQ; Ex.ATd.OG.super.doPT->TQ #);
                         Ex.ATd.OG.super.scanSons
-                        (* super = Invocation = R1.R2.R3.E
-                         *)
+                        (* super = Invocation = R1.R2.R3.E *)
                         (# Ey: ^Exp
                         do current[] -> Ey[];
                            (if isFirst then
@@ -3623,7 +3806,8 @@ generator: codeGenMarker
                                cd.com(#do A.print->TT #);
                                A.loadAdr; (* if super = ptn, *)
                                cd.com(#do 'after:A.loadAdr'->TT #);
-                               (orgDescNo,rec.ATd.newOff) -> cd.mkValueProxy
+                               (orgDescNo,rec.ATd.newOff - 1,inValueObj)
+                                 -> cd.mkValueProxy
                             else
                                cd.com(#do 'next:'->TT; Ey.dopt -> TQ #)
                         if)#)
@@ -3632,9 +3816,11 @@ generator: codeGenMarker
                          * be supplied at run-time. 
                          * pushValId push these values
                          *)
-                        (orgDescNo,1) -> cd.mkValueProxy
+                        cd.com(#do 'mkValueProxy:Ex:none:orgDescNo:'->TT; 
+                                  orgDescNo->II #);
+                        (orgDescNo,1,inValueObj) -> cd.mkValueProxy
                     if)
-                 #);               
+                 #);
                handleBracketedExp:
                  (# done: @boolean
                  do scanSons
@@ -3666,6 +3852,7 @@ generator: codeGenMarker
                    '**** Invocation:gen: '->puttext; doPT -> putline;
                    cd.com(#do 'Invocation:gen:'->TT; doPT ->TQ#)
                if);
+               cd.fcom(#do 'INV:gen:'->TT; dopt -> TQ #);
                cd.bcPos -> beginBCP;
                (* We should rewrite computeAdr to include handling
                 * of constants, patterns with no origin and bracketedExp
@@ -3680,16 +3867,22 @@ generator: codeGenMarker
                if);
                (if withValueProxy then
                    (if originIsValueObj then
-                       mkValueProxy
+                       cd.com(#do 'originIsValueObj_'->TT; origin.dopt->TQ #);
+                       cd.com(#do 'rec = E:'->TT; rec[] = E[] -> BB #);
+                       (if (rec[] = none) or (rec[] <> E[]) then
+                           mkValueProxy
+                       if)
                     else
                        (if origin## = Items## then
                            (# org: ^Items
                            do origin[] -> org[]; 
                               (if org.hasGlobals then
-                                  'BUM:'->dumpT; org.dopt->putheadN;
-                                  mkValueProxy
+                                  (* org is not a valueObject, so why proxy? *)
+                                  (* cd.com(#do 'org:items:hasGlobals:'->TT;
+                                            org.dopt->TQ #);*)
+                                  (*mkValueProxy*)
                if)#)if)if)if);
-               cd.com(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
+               cd.fcom(#do 'IV:after:computeAdr:superAdj:'->TT; superAdj->II;
                         (if A[] <>  none then A.print->TT if); nl;
                         'rec: '->TT; rec.dopt->TQ; 'E: '->TT; E.dopt->TQ;
                      #);
@@ -3700,15 +3893,20 @@ generator: codeGenMarker
                 * For X := exp and foo(exp), E.loadArgs load exp
                 * E.invoke generates assigment for := and invocation for foo
                 *)
-               cd.com(#do 'INV:gen:E.loadArgs'->TT; E.dopt->TQ #);
+               cd.fcom(#do 'INV:gen:E.loadArgs'->TT; E.dopt->TQ #);
                (superAdj,off) -> E.loadArgs; (* only if E is pattern *)
+               cd.fcom(#do 'aaa'->TT #);
+               A[] -> OIadr[];
+               
                (if noOrigin and (IVinx < IVlength) then
                    (* we come here if E does not need an origin
                     * For IV = I1.I2.,,,.In, E  = Ej, j = IVinx, n = IVlength
                     * IVinx and IVlength set by needOrigin
                     *)
                    (* We do come here! *)
+                   cd.fcom(#do 'aaaB'->TT #);
                    (rec[],E[],true,staticOff,A[],false) -> E.invoke;
+                   cd.fcom(#do 'aaaC'->TT #);
                    (* The code below is only relevant 
                     * if E does not need an origin.
                     * We then have to call invoke for Ej+1,...,En
@@ -3717,7 +3915,7 @@ generator: codeGenMarker
                    scanSons
                    (# found: @boolean; Ey: ^Exp;
                    do (if found then
-                          cd.com(#do 'IV:gen:checkTail:'->TT; dopt -> TQ;
+                          cd.fcom(#do 'IV:gen:checkTail:'->TT; dopt -> TQ;
                                    'E:'->TT; E.doPT -> TQ;
                                    'tail:' -> TT; current.dopt -> TQ;
                                    ' not isLast:' -> TT; not isLast -> BB;
@@ -3736,11 +3934,17 @@ generator: codeGenMarker
                       (if current[] = E[] then true -> found if);
                    #);
                 else
-                   cd.com(#do 'IV:E.invoke:useRtnVal:' -> TT; 
-                            useRtnVal -> BB; 'E:' -> TT; E.dopt -> TQ;
+                   cd.fcom(#do 'IV:E.invoke:useRtnVal:' -> TT; 
+                             useRtnVal -> BB; 'E:' -> TT; E.label -> TT; 
+                             E.dopt -> TQ;
                          #);
-                   (rec[],E[],useRtnVal,staticOff,A[],false) -> E.invoke;
+                   (rec[],E[],useRtnVal,staticOff,A[],false) 
+                     -> E.invoke
+                     -> OIadr[];
+                   cd.fcom(#do 'aaaC'->TT #);
                if);
+               cd.fcom(#do 'INV:gen:end:off:'->TT; 
+                         (if OIadr[] <> none then OIadr.off -> II if) #);
                cd.bcPos -> endBCP
             #);
           loadArgs::
@@ -3848,8 +4052,11 @@ generator: codeGenMarker
                            // string_prim // inner_prim then
                            else
                               (* Perhaps virtual E.pushValId is better? *)
-                              cd.pushValId;
-                              (* push const 1 & thisValObjDescInx *)
+                              cd.com(#do 'pushValId:'->TT; E.dopt -> TQ #);
+                              (if not withValueProxy then
+                                  cd.pushValId;
+                                  (* push const 1 & thisValObjDescInx *)
+                              if)
                       if)if);
                       A.superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
                       (* we should ignore rec and E - defined above 
@@ -4385,9 +4592,12 @@ generator: codeGenMarker
                     ' E.ATd:' -> TT; E.ATd.sig.doPT -> TQ;
                     ' unique:' -> TT; E.ATd.OG.IS.isUnique -> BB;
                  #);
-               orig: ^Scope; org: ^Items; stubDescNo: @integer; ATdx: ^Decl
+               orig: ^Scope; org: ^Items; stubDescNo: @integer; ATdx: ^Decl;
+               adrX: ^Address; rtnOff: @integer
             do (* rec is a dataItem *)   
                cd.com(# do 'OI:invoke:'->TT; dopt -> TQ #);
+               (if adr[] <> none then rec[] -> adr.rec[]; if);
+               cd.com(#do (if adr[] <> none then adr.print->TT if)#);
                ATd.origin[] -> orig[];
                (if orig.isItems then
                    (if ((orig[]->org[]) <> none) and org.encOG.isValueObj then
@@ -4438,7 +4648,8 @@ generator: codeGenMarker
                    (if (ATd.asDecl).isPattern then stubDescNo ->handleVargs if);
                    ('stub',stubDescNo,4,0,false) ->  cd.invoke;
                    (if useRtnVal then
-                       (ATdx.OG[],'stub') -> pushOut
+                       (ATdx.OG[],'stub') -> pushOut -> rtnOff;
+                       cd.fcom(#do 'OI:after:pushOut:'->TT; rtnOff->II #);
                    if);
                 else 
                    cd.com
@@ -4447,17 +4658,33 @@ generator: codeGenMarker
                       ' rec:' -> TT; (if rec[] <> none then rec.dopt -> TQ if);
                       ' useRtnV:' -> TT; useRtnVal -> BB; ATd.dopt -> TQ
                    #);
-                   cd.com(#do (if adr[] = none then
-                            'adr:none' -> TT else adr.print -> TT if)#);
-                   (rec[],E[],useRtnVal,staticOff,adr[],false) -> ATdx.invoke;
+                   cd.fcom(#do 'OI:invoke:before:ATdx.invoke:'->TT; 
+                            ATdx.label-> TT; atdx.sig.dopt -> TT
+                         #);
+                   (rec[],E[],useRtnVal,staticOff,adr[],false) 
+                     -> ATdx.invoke
+                     -> adrX[];
+                   cd.fcom(#do 'OI:invoke:V:'->TT; 
+                             (if adr[] <> none then 
+                                 'adr:'->TT; adr.print -> TT; nl if);
+                             (if adrx[] <> none then 
+                                 'adrx:'->TT; adrx.print -> TT if); 
+                          #);
                if);
+               cd.fcom(#do 'OI:invoke:X:'->TT; 
+                         (if adr[] <> none then 'adr:'->TT; 
+                             adr.print -> TT; nl if);
+                         (if adrx[] <> none then 
+                             'adrx:'->TT; adrx.print -> TT if); 
+                      #);
                cd.com
                (#do 'OI:invoke:C:'->TT; dopt->TT; ':unit: '->TT; unit.T[]->TT;
                   ' convFactor: ' -> TT; convFactor -> FF #);
                (if convFactor <> 0 then
                    convFactor -> cd.pushFloatConst;
                    112 -> cd.op
-               if)
+               if);
+               adr[] -> OIadr[]
             #);
           loadArgs:: 
             (# gdb:: 
@@ -4596,9 +4823,9 @@ generator: codeGenMarker
                            '**** checkI2F:' -> dumpT; dopt -> dumpT;
                            ' lU:'->dumpT; lU[] -> dumpT;
                        if);
-                       cd.fcom(#do 'left:#I' -> TT; dopt->TQ #);
+                       cd.com(#do 'left:#I' -> TT; dopt->TQ #);
                        (if unitOfRightArg then
-                           cd.fcom(#do 'left:#I2F' -> TT;#);
+                           cd.com(#do 'left:#I2F' -> TT;#);
                            (* true-> putBoolean; newline;*)
                            cd.I2F
                        if)                            
@@ -4614,7 +4841,7 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:gen: ' -> puttext; dopt -> putline;
                if);
-               cd.fcom(#do 'BinaryExp:gen:'->TT; dopt->TQ#);               
+               cd.com(#do 'BinaryExp:gen:'->TT; dopt->TQ#);               
                (true,0,0) -> leftRec.gen;
                (M[],superAdj,staticOff) -> (M.ATd.asDecl).loadArgs;
                Address->A[]; (* ??? *)
@@ -4625,7 +4852,7 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:loadOrigin:empty:' -> puttext; doPT->putline
                if);
-               cd.fcom(#do 'BinaryExp:loadOrigin:empty:'->TT; dopt->TQ;
+               cd.com(#do 'BinaryExp:loadOrigin:empty:'->TT; dopt->TQ;
                       'superAdj:'->TT; superAdj->II #);
             #);
           loadArgs::
@@ -4636,7 +4863,7 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:loadArgs: ' -> puttext; doPT -> putline;
                if);
-               cd.fcom(#do 'BinaryExp:loadArgs:'->TT; dopt->TQ;
+               cd.com(#do 'BinaryExp:loadArgs:'->TT; dopt->TQ;
                          'superAdj:'->TT; superAdj->II #);
                (true,superAdj,0) -> leftRec.gen;
                checkI2F;
@@ -4670,9 +4897,9 @@ generator: codeGenMarker
                          // '#I'->lU.equal then
                             '**** checkI2F:' -> dumpT; dopt -> dumpT;
                             ' lU:'->dumpT; lU[] -> dumpT;
-                            cd.fcom(#do 'left:#I' -> TT; dopt->TQ #);
+                            cd.com(#do 'left:#I' -> TT; dopt->TQ #);
                             (if unitOfRightArg then
-                                cd.fcom(#do 'left:#I2F' -> TT;#);
+                                cd.com(#do 'left:#I2F' -> TT;#);
                                 true-> putBoolean; newline;
                                 cd.I2F
                             if)                            
@@ -4687,13 +4914,13 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:invoke: ' -> puttext; dopt -> putline;
                if);
-               cd.fcom(#do 'BinaryExp:invoke:'->TT; leftRec.dopt->TQ;
+               cd.com(#do 'BinaryExp:invoke:'->TT; leftRec.dopt->TQ;
                          'rec:'->TT; 
                          (if rec[] <> none then rec.dopt->TQ 
                           else 'none'->TQ if);
                       #);
                
-               cd.fcom(#do 'M:'->TT; M.doPT -> TQ #);
+               cd.com(#do 'M:'->TT; M.doPT -> TQ #);
                Address->A[]; (* ??? *)
                (leftRec[],M[],true,staticOff,A[],false) -> M.invoke;
             #);
@@ -4719,14 +4946,19 @@ generator: codeGenMarker
             do (if false then
                    'UnaryExp:loadArgs:'->dumpT; dopt -> dumpTN;
                if);
-               cd.fcom(#do 'UnaryExp:loadArgs:'-> TT; dopt->TQ #);
+               cd.com(#do 'UnaryExp:loadArgs:'-> TT; dopt->TQ #);
                (true,superAdj,0) -> trm.gen;
-               cd.fcom(#do 'UnaryExp:loadArgs:after:'-> TT; dopt->TQ #);
+               cd.com(#do 'UnaryExp:loadArgs:after:'-> TT; dopt->TQ #);
                (if true 
                 // '!' -> op.T.equal then
                    not_prim -> cd.op
                 // '-' -> op.T.equal then
-                   cd.uMinus (* may be fminus *)
+                   (if theQual.primNo
+                    // integer_prim then
+                       cd.uMinus 
+                    // float_prim then
+                       137 (*fUnaryMinus*)  -> cd.op;
+                   if)
                 // '+' -> op.T.equal then
                if)
             #);
@@ -4736,9 +4968,9 @@ generator: codeGenMarker
                    'UnaryExp:invoke:'->dumpT; dopt -> dumpTN;
                if);
                (if false then
-                   cd.fcom(#do 'UnaryExp:invoke:'-> TT; dopt->TQ #);
+                   cd.com(#do 'UnaryExp:invoke:'-> TT; dopt->TQ #);
                    (rec[],trm[],true,staticOff,Address,false) -> trm.invoke;
-                   cd.fcom(#do 'UnaryExp:invoke:after:'-> TT; dopt->TQ #);
+                   cd.com(#do 'UnaryExp:invoke:after:'-> TT; dopt->TQ #);
                if);
             #);
           bracketedListElement:: (#do 1 -> value #)          
@@ -5017,7 +5249,8 @@ generator: codeGenMarker
           pushReturn:
             (# DI: ^DataItem
             enter DI[]
-            do cd.com(#do 'pushReturn'->TT; DI.sig.dopt->TT  #);
+            do cd.fcom(#do 'global:pushOut:'->TT; DI.sig.dopt->TT;
+                         'off:'->TT; DI.newOff -> II #);
                (if true
                 // DI.OG.isBasicValue then
                    (if DI.OG.isFloat then
@@ -5041,29 +5274,35 @@ generator: codeGenMarker
                            if)
                    if)if)
                 // DI.OG.isValueObj then
-                   (if nameListInDcl then
-                       (DI.sig.names.firstDecl).newOff -> cd.pushConst;
-                    else
-                       DI.newOff -> cd.pushConst;
-                   if);
-                   DI.OG.IS.newDescNo -> cd.pushConst
+                   (if not withValueProxy then
+                       (if nameListInDcl then
+                           (DI.sig.names.firstDecl).newOff -> cd.pushConst;
+                        else
+                           DI.newOff -> cd.pushConst;
+                       if);
+                       DI.OG.IS.newDescNo -> cd.pushConst
+                   if)
                 else
                    (if nameListInDcl then
                        (id[],(DI.sig.names.firstDecl).newOff)
                          -> cd.rPushg;
                     else
                        (id[],DI.newOff) -> cd.rPushg;
-            if)if)#);
-          DI: ^Decl
+               if)if);
+               DI.newOff -> rtnOff
+            #);
+          DI: ^Decl; rtnOff: @integer
        enter(OGx[],id[])
        do (if OGx.isValueObj then
               '!!!! pushOut:OG.isValueObj:NOT handled! ' -> puttext; 
               OGx.dopt -> putline;
            else
+              -1 -> rtnOff;              
               (if (OGx.getReturnDecl -> DI[]) <> none then 
-                  DI[] -> pushReturn;
+                  DI[] -> pushReturn
                   (*Apparenly pushOut is called even if no returnDecl*)
           if)if)
+       exit rtnOff
        #);
      genVstub:
        (# stubN,stubT: ^text; dNo: @integer; OG: ^ObjectSpecification;
