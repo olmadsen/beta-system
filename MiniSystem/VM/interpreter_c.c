@@ -2815,6 +2815,7 @@ bool traceThreads = true;
 #endif
 	break;
       case vEq:
+	off = op2(bc,&glsc);    // off when withValueProxy
 	arg1 = op1(bc,&glsc);   // size, mode?
 #ifdef TRACE
 	fprintf(trace,"vEq %i\n",arg1);
