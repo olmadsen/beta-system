@@ -91,6 +91,12 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case pushg:
 	fprintf(trace,"pushg %i",op1(bc,&glsc));
 	break;
+      case vpushg:
+	fprintf(trace,"vpushg %i",op1(bc,&glsc));
+	break;
+      case vstoreg:
+	fprintf(trace,"vstoreg %i",op1(bc,&glsc));
+	break; 
       case ovpushg:
 	fprintf(trace,"ovpushg %i",op1(bc,&glsc));
 	break;
@@ -207,7 +213,8 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case invokeVal:
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);
-	fprintf(trace,"invokeVal %i %i",arg1,arg2);
+	arg3 = op1(bc,&glsc);
+	fprintf(trace,"invokeVal %i %i %i",arg1,arg2,arg3);
 	break;
       case boxedInvokeVal:
 	arg1 = op2(bc,&glsc);

@@ -41,6 +41,8 @@ bool isXbeta;
 
 bool newAlloc = false;
 int newAllocOff = 0;
+bool withValueProxy = false;
+int valueProxyDescNo = 0;
 
 //for Arduino, typdef apparently must be in the beginning of the file!?
 typedef unsigned char byte;
@@ -271,7 +273,12 @@ enum {
   pushValId = 130,
   rshiftup = 131,
   rshiftdown = 132,
-  vEq = 150
+  vEq = 150,
+  mkValueProxy = 135,
+  vpushg = 138,
+  vstoreg = 139,
+  fvpushg = 140,
+  fvstoreg = 141
 };
 
 

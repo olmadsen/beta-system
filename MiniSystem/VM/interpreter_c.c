@@ -1238,6 +1238,31 @@ Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, 
   return obj;
 }
 
+Btemplate *allocValueProxyTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
+  int objS = objSize(getDesc(valueProxyDescNo)); // valueProxyDescNo
+  int size = sizeof(Btemplate) + (objS + 1 + vInxSize) * sizeof(int);
+ 
+  //printf("BT:%i objSize:%i vInxSize:%i size:%i xs:%i\n",sizeof(Btemplate),objSz,vInxSize,size,xsize);
+
+  hSize = hSize + size;
+  //fprintf(trace,"allocTemplate(%i,%i) ",size, hSize);
+  Btemplate *obj = (Btemplate*)heapAlloc(ctx,size);
+  //fprintf(ctx->trace,"\ntemplate obj: %x: %i %i %i\n",(int)obj,descNo,vInxSize,size);
+  obj->desc = getDesc(descNo);
+  obj->id = ID; 
+  obj->valOff = 0;
+  obj->isObj = isObj;
+  obj->vtop = 0; 
+  obj->rtop = 0;
+  obj->lscTop = -1;
+  obj->lsc = 0;
+  int i = 0;
+  for (i = 0; i < objS + 1 +vInxSize; i++) obj->vfields[i] = 0; 
+
+  return obj;
+  
+}
+
 void dumpRstack(FILE *trace,Btemplate *stack);
 void dumpVstack(FILE *trace,Btemplate *stack);
 void dumpLscStack(FILE *trace,Btemplate * obj);
@@ -1261,7 +1286,7 @@ void dumpObj(FILE *trace,char *name,Btemplate *X){
     fprintf(trace,"Object: %s = NULL \n",name);
     return;
   }
-  fprintf(trace,"Object: %s %s\n",name,nameOf(X));
+  fprintf(trace,"Object: %s %s %i\n",name,nameOf(X),(int)X);
 
   fprintf(trace,"Fields: ");
   for (i = 0; i < 20; i++){
@@ -1645,7 +1670,7 @@ void *interpreter(void *B);
 void allocMain(Block *thisBlock,int descNo){ 
   mainObj = allocTemplate(thisBlock,1000,descNo,true,0,0);
   thisBlock->thisModule = mainObj;
-  thisBlock->thisObj = thisBlock->thisModule;
+  thisBlock->thisObj = thisBlock->thisModule; 
   thisBlock->thisStack = thisBlock->thisModule;
   thisBlock->callee = NULL;
   thisBlock->enablee = NULL;
@@ -1660,7 +1685,9 @@ FILE *trace_t;
 #ifdef __arm__
 #else
 // Only called from betaVM and runbeta.c
-void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
+void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc,bool withValProx
+		      ,int valProxDescNo)
+{
   FILE *trace;
   trace = fopen("code.s","w");
   setbuf(trace, NULL);
@@ -1678,6 +1705,8 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc) {
 
   newAlloc = newAlc;
   if (newAlloc) newAllocOff = 1;
+  withValueProxy = withValProx;
+  valueProxyDescNo = valProxDescNo;
 }
 #endif
 
@@ -1935,24 +1964,85 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #endif  
 };
 
-void invokeValObj(Block *ctx,int descNo,int staticOff){
+void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
+  Btemplate *callee;
+  
 #ifdef TRACE
-  fprintf(ctx->trace,"invokeVal %i %i\n",descNo,staticOff);
+  fprintf(ctx->trace,"invokeVal %i %i %i\n",descNo,staticOff,isValueObj);
 #endif
-  cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
-  lscPush(ctx->thisObj,staticOff);
-  ctx->currentDescNo = descNo;
-  ctx->thisObj->valOff = ctx->thisObj->valOff + staticOff;
-  //ctx->currentDescNo = descNo;
-
-  ctx->bc = (ObjDesc) codeFromDescNo(descNo);
-  ctx->glsc = getAllocE(getDesc(descNo));
-  //ctx->bc = (ObjDesc) myCode(ctx->thisObj);
-  //ctx->glsc = getAllocE(ctx->thisObj->desc);
-  isValObj = true;
-  thisValObjDesc = getDesc(descNo);
-  thisValObjDescInx = descNo;
+  //printf("invokeVal %i %i %i %i\n",descNo,staticOff,isValueObj,withValueProxy);
+  if (withValueProxy) {
+    callee = allocValueProxyTemplate(ctx,newId(ctx),descNo,false,0,0);
+    callee->vfields[1] = 0;
+    //printf("invokeValObj:A\n");
+    if (isValueObj == 1) {
+      //callee->myDescInx = ctx->thisObj->vfields[4];
+      callee->vfields[2] = ctx->thisObj->vfields[2];
+      callee->vfields[3] = staticOff + ctx->thisObj->vfields[3];
+      callee->vfields[4] = descNo;
+    }else{
+      //printf("invokeValObj:B\n");
+      //callee->myDescInx = descNo;
+      callee->vfields[2] = (int)ctx->thisObj;
+      callee->vfields[3] = staticOff;
+      callee->vfields[4] = descNo;
+      //printf("invokeValObj:C\n");
+    }
+    dumpObj(ctx->trace,"invokeValObj:callee",callee);
+    dumpObj(ctx->trace,"invokeValObj:thisObj",ctx->thisObj);
+    
+    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+    ctx->bc = (ObjDesc) codeFromDescNo(descNo);
+    rPush(callee,ctx->thisObj);
+    rPush(callee,ctx->thisStack);
+    ctx->glsc = getAllocE(getDesc(descNo));
+    ctx->thisObj = callee;
+    ctx->currentDescNo = descNo;
+    //lscPush(ctx->thisObj,staticOff);
+  }else{
+    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
+    lscPush(ctx->thisObj,staticOff);
+    ctx->currentDescNo = descNo;
+    ctx->thisObj->valOff = ctx->thisObj->valOff + staticOff;
+    //ctx->currentDescNo = descNo;
+    
+    ctx->bc = (ObjDesc) codeFromDescNo(descNo);
+    ctx->glsc = getAllocE(getDesc(descNo));
+    //ctx->bc = (ObjDesc) myCode(ctx->thisObj);
+    //ctx->glsc = getAllocE(ctx->thisObj->desc);
+    isValObj = true;
+    thisValObjDesc = getDesc(descNo);
+    thisValObjDescInx = descNo;
+  }
 }
+void mkValueProxyObj(Block *ctx,int descNo,int staticOff
+		  ,int isValueObj,int originIsValueObj){
+  Btemplate * VP,*X,*Y,*Z;
+    VP = allocValueProxyTemplate(ctx,newId(ctx),descNo,false,0,0);
+    if (originIsValueObj == 1) {
+      Z = (Btemplate *)ctx->thisObj->vfields[1];
+      X = rPop(ctx->thisStack);
+      Y = rPop(ctx->thisStack);
+      VP->vfields[1] = (int)X;
+      VP->vfields[2] = Z->vfields[2];
+      VP->vfields[3] = Z->vfields[3] + staticOff;
+      VP->vfields[4] = descNo;      
+    }else{
+      X = rPop(ctx->thisStack);
+      VP->vfields[1] = (int)X;
+      Y = rPop(ctx->thisStack);
+      VP->vfields[2] = (int)Y;
+      VP->vfields[3] = staticOff;
+      VP->vfields[4] = descNo;    
+    }
+    rPush(ctx->thisStack,VP);
+    
+    
+    //callee->vfields[1] = 0;
+  
+
+}
+
 void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
 #ifdef TRACE
   fprintf(ctx->trace,"allocIndexedObj(%i,%i,%i) ",dinx,rangee,isRindexed);
@@ -2475,8 +2565,9 @@ bool traceThreads = true;
     threadId = thisBlock->threadId;
   }
 
-  int opCode,off,inx,value,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode;
-  int dinx,isRindexed,rangee,i;
+  int opCode,off,inx,value,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode
+    ,originIsValueObj;
+  int dinx,isRindexed,rangee,i,top1,top2;
   double float1, float2, float3;
   bool running = true, doTrace = false; 
   Btemplate *X, *Y;
@@ -2610,6 +2701,25 @@ bool traceThreads = true;
 #endif
 	rPush(thisStack,X);
 	break;
+      case vpushg: 
+	off = op1(bc,&glsc);
+	//printf("vpushg %i \n",off);
+#ifdef TRACE
+	fprintf(trace,"vpushg %i ",arg1);
+#endif
+	X = rPop(thisStack);
+	if (X == NULL)
+	  runTimeErrorX("\n*** rpushg",thisObj,glsc);
+	Y = (Btemplate *)X->vfields[2];
+	inx = X->vfields[3];
+	//printf("vpushg %i %i %x\n",off,inx,(int)Y);
+	value = Y->vfields[off + inx];
+	//printf("vpushg %i %i %i\n",off,inx,value);
+	vPush(thisStack,value);
+	//printf("vpushg:done\n");
+	
+	// vPushEvent
+	break;
       case pushg:
 	arg1 = op1(bc,&glsc);
 	X = rPop(thisStack);
@@ -2620,7 +2730,7 @@ bool traceThreads = true;
 #endif
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
-	arg2 = X->vfields[arg1 + X->valOff];
+	arg2 =  X->vfields[arg1 + X->valOff];
 #ifdef TRACE
 	fprintf(trace,"pushg %s[%i + %i] = %i\n",nameOf(X),arg1,X->valOff,arg2);
 #endif 
@@ -2775,6 +2885,27 @@ bool traceThreads = true;
 	fprintf(trace,"storeg %s[%i+%i] = %i \n",nameOf(X),arg1,X->valOff,arg2);
 #endif
 	X->vfields[arg1 + X->valOff] = arg2;
+	// event
+	break;
+      case vstoreg:
+	//printf("vstoreg\n");
+	off = op1(bc,&glsc);
+	//printf("vstoreg %i\n",off);
+	X = rPop(thisStack);
+	dumpObj(trace,"proxy",X);
+	Y = (Btemplate *)X->vfields[2];
+	inx = X->vfields[3];
+	//printf("vstoreg %i %i\n",off,inx);
+#ifdef TRACE
+	fprintf(trace,"vstoreg %i %i\n",off,inx);
+#endif
+	dumpObj(trace,"holder",Y);
+	value = vPop(thisStack);
+	//printf("vstoreg %i %i %i\n",off,inx,value);
+	Y->vfields[off + inx] = value;
+	dumpObj(trace,"vstoreg:A",Y);
+	//printf("vstoreg:done\n");
+	// event
 	break;
       case ovstoreg:
 	off = op1(bc,&glsc);
@@ -2825,9 +2956,11 @@ bool traceThreads = true;
 	for (i = 1; i <= arg1; i++){
 	  R[arg1 - i + 1] = vPop(thisStack);
 	};
-	di = vPop(thisStack);
-	X = rPop(thisStack); // leftside object holding value object
-	off = vPop(thisStack);
+	if (! withValueProxy) {	    
+	    di = vPop(thisStack);
+	    off = vPop(thisStack);
+	}	 
+	X = rPop(thisStack); // leftside object holding value object		
 	for (i = 1; i <= arg1; i++) {
 	  if (X->vfields[off + i - 1] != R[i]){
 	    B = 0;
@@ -2902,8 +3035,10 @@ bool traceThreads = true;
       case pushValue:
 	arg2 = op2(bc,&glsc);   // srcOff
 	arg1 = op1(bc,&glsc);   // size
-	arg3 = vPop(thisStack); //descInx of valObj, not used	
-	V = vPop(thisStack);    // srcOff - not used
+	if (! withValueProxy) {
+	  arg3 = vPop(thisStack); //descInx of valObj, not used	
+	  V = vPop(thisStack);    // srcOff - not used
+	}	
 	X = rPop(thisStack);    // srcObj
 #ifdef TRACE
 	fprintf(trace,"pushValue %s %i %i ",nameOf(X), arg1,arg2);
@@ -3128,7 +3263,7 @@ bool traceThreads = true;
 	fprintf(trace,"mkVindexed %i ", arg1);
 #endif
 	saveContext();
-	mkIndexed(arg1,false,thisBlock);
+	mkIndexed(arg1,false,thisBlock); 
 	restoreContext(true,thisBlock);
 	break;
       case mkRindexed:
@@ -3145,9 +3280,9 @@ bool traceThreads = true;
 	arg2 = op2(bc,&glsc);
 	arg3 = op1(bc,&glsc);
 	saveContext();
-        invokeValObj(thisBlock,arg1,arg2);
+        invokeValObj(thisBlock,arg1,arg2,arg3);
 	restoreContext();
-	break;
+	break; 
       case boxedInvokeVal:
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);
@@ -3157,7 +3292,19 @@ bool traceThreads = true;
 	rPush(callee,thisStack);
 	thisObj = callee;
 	saveContext();
-        invokeValObj(thisBlock,arg1,arg2);
+        invokeValObj(thisBlock,arg1,arg2,0);
+	restoreContext();
+	break;
+      case mkValueProxy:
+	//printf("mkValueProxy \n");
+	dscNo = op2(bc,&glsc);
+	off = op2(bc,&glsc);
+	isValueObj = op1(bc,&glsc);
+	originIsValueObj = op1(bc,&glsc);
+	//printf("mkValueProxy %i %i %i %i %i\n"
+	//       ,dscNo,off,isValueObj,originIsValueObj);
+	saveContext();
+	mkValueProxyObj(thisBlock,dscNo,off,isValueObj,originIsValueObj);
 	restoreContext();
 	break;
       case invokeExternal:
@@ -4008,7 +4155,8 @@ bool traceThreads = true;
 	    
 	  }
 	} 
-	thisBlock->origin = rPop(thisStack);
+	//thisBlock->origin = rPop(thisStack);
+	X = rPop(thisStack);
 	// looks wrong with X below?
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	
@@ -4030,10 +4178,19 @@ bool traceThreads = true;
 #else
 	    fprintf(trace,"\ninvokev: origin:isValObj");
 #endif
-	    arg3 = desc_getInt4(getDesc(vTopElm(thisStack,0))
+	    if (withValueProxy) {
+	      inx = X->vfields[4];
+	      arg3 = desc_getInt4(getDesc(inx)
+				  ,vdtTable_index + (arg1 - 1)* 4);
+	      
+	    }else
+	      { arg3 = desc_getInt4(getDesc(vTopElm(thisStack,0))
 				     ,vdtTable_index + (arg1 - 1)* 4);
+
+	      }	    
 	  }else
-	    arg3  = vdtTable(trace,thisBlock->origin,arg1); // descNo
+	    //arg3  = vdtTable(trace,thisBlock->origin,arg1); // descNo
+	    arg3  = vdtTable(trace,X,arg1); // descNo
 	}
 
 #ifdef TRACE
@@ -4041,7 +4198,8 @@ bool traceThreads = true;
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
-	allocQObj(thisBlock,thisBlock->origin,arg3,false,0,0);
+	//allocQObj(thisBlock,thisBlock->origin,arg3,false,0,0);
+	allocQObj(thisBlock,X,arg3,false,0,0);
 	restoreContext();
 	if (arg2 > 0) {
 	  for (i = 1; i <= arg2; i++) {
@@ -4389,6 +4547,19 @@ bool traceThreads = true;
 	X->vfields[off + X->valOff] = arg1;
 	X->vfields[off + 1 + X->valOff] = arg2;
 	break;
+      case fvstoreg:
+	off = op1(bc,&glsc);	
+	X = rPop(thisStack);
+	if (X == NULL)  {
+	  runTimeErrorX("Reference is NONE",thisObj,glsc);
+	}
+	top2 = vPop(thisStack);
+	top1 = vPop(thisStack);
+	Y = (Btemplate *)X->vfields[2];
+	inx = X->vfields[3];
+	Y->vfields[off + inx] = top1;
+	Y->vfields[off + inx + 1] = top2;
+	break;       
       case fpushg:
 	off = op1(bc,&glsc);
 	X = rPop(thisStack);
@@ -4404,7 +4575,17 @@ bool traceThreads = true;
 	//printf("fpushg %i %x %x\n",off,arg1,arg2);
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg2);
-	break; 
+	break;
+      case fvpushg:
+	off = op1(bc,&glsc);
+	X = rPop(thisStack);	
+	Y = (Btemplate *)X->vfields[2];
+	inx = X->vfields[3];
+	top1 = Y->vfields[off + inx];
+	top2 = Y->vfields[off + inx + 1];
+	vPush(thisStack,top1);
+	vPush(thisStack,top2);
+	break;	
       case i2f:
 	//printf("i2f\n");
 	arg1 = vPop(thisStack);
