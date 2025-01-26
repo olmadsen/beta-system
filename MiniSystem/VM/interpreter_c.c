@@ -1995,6 +1995,7 @@ void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
     ctx->bc = (ObjDesc) codeFromDescNo(descNo);
     rPush(callee,ctx->thisObj);
     rPush(callee,ctx->thisStack);
+    ctx->callee = callee;
     ctx->glsc = getAllocE(getDesc(descNo));
     ctx->thisObj = callee;
     ctx->currentDescNo = descNo;
@@ -2035,12 +2036,9 @@ void mkValueProxyObj(Block *ctx,int descNo,int staticOff
       VP->vfields[3] = staticOff;
       VP->vfields[4] = descNo;    
     }
+    //ctx->currentDescNo = descNo;
     rPush(ctx->thisStack,VP);
-    
-    
     //callee->vfields[1] = 0;
-  
-
 }
 
 void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
@@ -2888,24 +2886,21 @@ bool traceThreads = true;
 	// event
 	break;
       case vstoreg:
-	//printf("vstoreg\n");
+#ifdef TRACE
+	fprintf(trace,"vstoreg ");
+#endif
 	off = op1(bc,&glsc);
-	//printf("vstoreg %i\n",off);
 	X = rPop(thisStack);
-	dumpObj(trace,"proxy",X);
 	Y = (Btemplate *)X->vfields[2];
 	inx = X->vfields[3];
-	//printf("vstoreg %i %i\n",off,inx);
 #ifdef TRACE
 	fprintf(trace,"vstoreg %i %i\n",off,inx);
-#endif
+	dumpObj(trace,"proxy",X);
 	dumpObj(trace,"holder",Y);
+#endif
 	value = vPop(thisStack);
-	//printf("vstoreg %i %i %i\n",off,inx,value);
 	Y->vfields[off + inx] = value;
-	dumpObj(trace,"vstoreg:A",Y);
-	//printf("vstoreg:done\n");
-	// event
+	// remember event!
 	break;
       case ovstoreg:
 	off = op1(bc,&glsc);
