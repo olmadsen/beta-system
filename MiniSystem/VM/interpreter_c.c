@@ -4162,7 +4162,6 @@ bool traceThreads = true;
 	    fprintf(trace,"\ninvokev: isValObj\n");
 	    StacksToOut(trace,thisObj,thisStack);
 #endif
-	    //dscNo = desc_getInt4(thisValObjDesc,vdtTable_index + (dinx - 1) * 4);
 	    dscNo = vdtTableOfDesc(trace,thisValObjDesc,dinx);
 	    break;
 	default:
@@ -4172,11 +4171,10 @@ bool traceThreads = true;
 #endif
 	    if (withValueProxy) {
 	      arg1 = X->vfields[4]; // descNo of valueObj
-	      //dscNo = desc_getInt4(getDesc(arg1),vdtTable_index + (dinx - 1)* 4);
 	      dscNo = vdtTableOfDesc(trace,getDesc(arg1),dinx);
 	    }else{
 	      dscNo = vdtTableOfDesc(trace,getDesc(vTopElm(thisStack,0)),dinx);
-	      }	    
+	    }
 	  }else
 	    dscNo  = vdtTable(trace,X,dinx); 
 	}
