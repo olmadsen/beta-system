@@ -1988,9 +1988,10 @@ void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
       callee->vfields[4] = descNo;
       //printf("invokeValObj:C\n");
     }
+#ifdef TRACE
     dumpObj(ctx->trace,"invokeValObj:callee",callee);
     dumpObj(ctx->trace,"invokeValObj:thisObj",ctx->thisObj);
-    
+#endif
     cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
     ctx->bc = (ObjDesc) codeFromDescNo(descNo);
     rPush(callee,ctx->thisObj);
@@ -2828,8 +2829,10 @@ bool traceThreads = true;
 	X = rPop(thisStack); 
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
+#ifdef TRACE
 	fprintf(trace,"xrpushg: %i %i\n",arg1,arg2);
 	dumpObj(trace,"xrpushg:X",X);
+#endif
 	Y = getR(X,arg1 + arg2 + newAllocOff); // need range check - do we adjust for range?
 #ifdef TRACE
 	fprintf(trace,"after: %i\n",(int)Y);
@@ -3274,6 +3277,9 @@ bool traceThreads = true;
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);
 	arg3 = op1(bc,&glsc);
+#ifdef TRACE
+	fprintf(trace,"invokeval %i %i %i",arg1,arg2,arg3);
+#endif
 	saveContext();
         invokeValObj(thisBlock,arg1,arg2,arg3);
 	restoreContext();
@@ -3291,13 +3297,14 @@ bool traceThreads = true;
 	restoreContext();
 	break;
       case mkValueProxy:
-	//printf("mkValueProxy \n");
 	dscNo = op2(bc,&glsc);
 	off = op2(bc,&glsc);
 	isValueObj = op1(bc,&glsc);
 	originIsValueObj = op1(bc,&glsc);
-	//printf("mkValueProxy %i %i %i %i %i\n"
-	//       ,dscNo,off,isValueObj,originIsValueObj);
+#ifdef TRACE
+	fprintf(trace,"mkValueProxy %i %i %i %i %i\n"
+		,dscNo,off,isValueObj,originIsValueObj);
+#endif
 	saveContext();
 	mkValueProxyObj(thisBlock,dscNo,off,isValueObj,originIsValueObj);
 	restoreContext();
@@ -4155,7 +4162,8 @@ bool traceThreads = true;
 	    fprintf(trace,"\ninvokev: isValObj\n");
 	    StacksToOut(trace,thisObj,thisStack);
 #endif
-	    dscNo = desc_getInt4(thisValObjDesc,vdtTable_index + (dinx - 1) * 4);
+	    //dscNo = desc_getInt4(thisValObjDesc,vdtTable_index + (dinx - 1) * 4);
+	    dscNo = vdtTableOfDesc(trace,thisValObjDesc,dinx);
 	    break;
 	default:
 	  if (recIsValObj == 1){
