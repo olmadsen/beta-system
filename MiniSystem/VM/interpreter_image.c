@@ -489,6 +489,10 @@ int vdtTable(FILE *trace,Btemplate *obj,int inx){
   return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
 }
 
+int vdtTableOfDesc(FILE *trace,ObjDesc desc,int inx){
+  return desc_getInt4(desc,vdtTable_index + (inx -1 ) * 4);
+}
+
 int getLiteralStart(Btemplate *obj){
   return desc_getInt4(obj->desc,literal_index);
 };

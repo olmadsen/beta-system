@@ -2564,7 +2564,7 @@ bool traceThreads = true;
   }
 
   int opCode,off,inx,value,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode
-    ,originIsValueObj;
+    ,originIsValueObj,recIsValObj;
   int dinx,isRindexed,rangee,i,top1,top2;
   double float1, float2, float3;
   bool running = true, doTrace = false; 
@@ -4133,78 +4133,60 @@ bool traceThreads = true;
 #endif
 	break;
       case invokev: 
-	arg1 = op1(bc,&glsc);
-	arg2 = op1(bc,&glsc);
-	arg3 = op1(bc,&glsc); // origin is value object
+	dinx = op1(bc,&glsc);
+	inx = op1(bc,&glsc); // noOfRefArgs
+	recIsValObj = op1(bc,&glsc); // origin is value object
 #ifdef TRACE
-	fprintf(trace,"invokev %i %i %i",arg1,arg2,arg3);
+	fprintf(trace,"invokev %i %i %i",dinx,inx,recIsValObj);
 #endif	
 	refArgsTop = 0;
-	if (arg2 > 0) {
-	  for (i = 1; i <= arg2; i++) {   
+	if (inx > 0) {
+	  for (i = 1; i <= inx; i++) {   
 	    refArgsTop = refArgsTop + 1;
 	    refArgs[refArgsTop] = rPop(thisStack);
-#ifdef TRACE	    
-	    fprintf(trace,"\top ref:A:  %x\n",(int)refArgs[refArgsTop]);
-#endif
-	    
 	  }
 	} 
-	//thisBlock->origin = rPop(thisStack);
 	X = rPop(thisStack);
-	// looks wrong with X below?
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	
 	switch(isValObj){
 	  case true:
-#ifdef __arm__
-#else	    
+#ifdef TRACE
 	    fprintf(trace,"\ninvokev: isValObj\n");
-	    StacksToOut(trace,thisObj,thisStack);//,thisBlock);
+	    StacksToOut(trace,thisObj,thisStack);
 #endif
-	    //arg3 = vdtTable(trace,thisBlock->origin,vTopElm(thisStack,0));
-	    //arg3 = vdtTable(trace,thisValObjDesc,arg1);
-	    arg3 = desc_getInt4(thisValObjDesc,vdtTable_index + (arg1 - 1) * 4);
-	    //vPush(thisStack,thisValObjDescInx);
+	    dscNo = desc_getInt4(thisValObjDesc,vdtTable_index + (dinx - 1) * 4);
 	    break;
 	default:
-	  if (arg3 == 1){
-#ifdef __arm__
-#else
+	  if (recIsValObj == 1){
+#ifdef TRACE
 	    fprintf(trace,"\ninvokev: origin:isValObj");
 #endif
 	    if (withValueProxy) {
-	      inx = X->vfields[4];
-	      arg3 = desc_getInt4(getDesc(inx)
-				  ,vdtTable_index + (arg1 - 1)* 4);
-	      
-	    }else
-	      { arg3 = desc_getInt4(getDesc(vTopElm(thisStack,0))
-				     ,vdtTable_index + (arg1 - 1)* 4);
-
+	      arg1 = X->vfields[4]; // descNo of valueObj
+	      //dscNo = desc_getInt4(getDesc(arg1),vdtTable_index + (dinx - 1)* 4);
+	      dscNo = vdtTableOfDesc(trace,getDesc(arg1),dinx);
+	    }else{
+	      dscNo = vdtTableOfDesc(trace,getDesc(vTopElm(thisStack,0)),dinx);
 	      }	    
 	  }else
-	    //arg3  = vdtTable(trace,thisBlock->origin,arg1); // descNo
-	    arg3  = vdtTable(trace,X,arg1); // descNo
+	    dscNo  = vdtTable(trace,X,dinx); 
 	}
-
 #ifdef TRACE
 	fprintf(trace,"Virtual:desc:binding: %i\n",arg3);
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
-	//allocQObj(thisBlock,thisBlock->origin,arg3,false,0,0);
-	allocQObj(thisBlock,X,arg3,false,0,0);
+	allocQObj(thisBlock,X,dscNo,false,0,0);
 	restoreContext();
-	if (arg2 > 0) {
-	  for (i = 1; i <= arg2; i++) {
+	if (inx > 0) {
+	  for (i = 1; i <= inx; i++) {
 	    rPush(thisStack,refArgs[refArgsTop - i  + 1]);
 #ifdef TRACE
 	    fprintf(trace,"\top ref:B:  %x\n",(int)refArgs[i]);
 #endif
-	  }
+	  } 
 	}	
-	//if (isValObj) vPush(thisStack,thisValObjDescInx);
 	isValObj = false;
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
