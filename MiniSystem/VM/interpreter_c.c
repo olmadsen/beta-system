@@ -2933,8 +2933,13 @@ bool traceThreads = true;
 	  D[i] = vPop(thisStack);
 	}
 	if (mode == 1) { // originIsValObj
-	  arg3 = vPop(thisStack); //descInx of valObj,not used
-	  arg2 = arg2 + vPop(thisStack) - 1;
+	  if (withValueProxy){	    
+	    arg2 = arg2 + Y->vfields[3];
+	    Y = (Btemplate *)Y->vfields[2];
+	  }else{ 
+	    arg3 = vPop(thisStack); //descInx of valObj,not used
+	    arg2 = arg2 + vPop(thisStack) - 1;
+	    }
 	}
         for (i = 1; i <= arg1; i++) {
 	  putV(Y,arg2 + arg1 - i,D[i]);
