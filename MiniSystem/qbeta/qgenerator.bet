@@ -3316,6 +3316,37 @@ generator: codeGenMarker
        enter superAdj
        exit this(Address)[]
        #);
+     newAddress:
+       (# 
+          head,last:  ^accessor;
+          accessor:
+            (# Ex: ^Exp; off: @integer; size: ^Exp; next: ^accessor;
+            enter Ex[]
+            exit this(accessor)[]
+            #);
+          add:
+            (# Ex: ^Exp;
+            enter Ex[]
+            do (if head[] = none then
+                   Ex[] -> accessor -> head[] -> last[]
+                else
+                   Ex[] -> accessor -> last.next[] -> last[]
+               if)
+            exit this(newAddress)[]
+            #);
+          scan:
+            (# current: ^Exp; L: ^accessor;
+            do head[] -> L[];
+               loop:
+                 (if L[] <> none then
+                     L.Ex[] -> current[];
+                     inner scan;
+                     L.next[] -> L[];
+                     restart Loop
+                 if)
+            #);
+       exit this(newAddress)[]
+       #);
      computeAdrG:
        (* R.S.foo(exp).Q
         * X := Y + (Z +117)
@@ -3411,10 +3442,8 @@ generator: codeGenMarker
                  (* really getOffSet of E.ATd *)
                  (if (E.ATd.asDecl).isPattern then
                      E.ATd.asDecl -> ptn[];
-                     cd.com(#do 'ptn.isUnitValueObj:'->TT; 
-                              ptn.OG.isUnitValueObj -> BB;
-                              ' isFloat:E:' -> TT; 
-                              ptn.OG.isFloat -> BB #);
+                     cd.com(#do 'ptn.isUnitValueObj:'->TT;ptn.OG.isUnitValueObj->BB;
+                              ' isFloat:E:' -> TT; ptn.OG.isFloat -> BB #);
                      (if ptn.OG.isUnitValueObj 
                          or ptn.OG.isFloat then
                          (# UN: ^NewProperty
@@ -3446,7 +3475,10 @@ generator: codeGenMarker
                      (superAdj,0) -> rec.loadArgs;
                      (* Perhaps a combined invoke & getAdr *)
                      (* A is the address of E - not of rec!!!!!! *)
+                     cd.fcom(#do 'computeAdrG:pRec:'->TT; pRec.dopt->TL;
+                                'E:'->TT; E.dopt->TL #);
                      (pRec[],E[],true,0,recA[],false) -> rec.invoke;
+
                      (if (pRec[],E[]) -> checkInt2IntWithUnitArg then
                          cd.I2F
              if)if)if);
@@ -3737,7 +3769,7 @@ generator: codeGenMarker
                needOrigin: 
                  (# IT: ^Items; Ex: ^Exp; value,originIsValueObj: @Boolean
                  do true -> value;
-                    cd.fcom(#do 'needorigin:'-> TT; dopt -> TL #);
+                    cTracer(#do 'needorigin:'-> TT; dopt -> TL #);
                     scanSons
                     (#
                     do IVlength + 1 -> IVlength;
@@ -3756,8 +3788,18 @@ generator: codeGenMarker
                                E[] -> rec[] -> Ex[];
                                IVlength -> IVinx
                     if)if)#);
-                    cd.fcom(#do 'needOrigin:E:'->TT; E.dopt -> TQ;
-                             ' E.ATd:'-> TT; E.ATd.dopt -> TL #);
+                    ctracer
+                    (#do 'needOrigin:E:'->TT; E.dopt -> TL;
+                       ' E.ATd:'-> TT; E.ATd.dopt -> TL;
+                       'Ex:'->TT;
+                       (if Ex[] <> none then
+                           EX.dopt -> TL
+                        else
+                           'none'->TT
+                       if);
+                       'rec:'->TT;
+                       (if rec[] <> none then rec.dopt -> TL else 'none'-> TL if)
+                    #);
 
                     (if not (E.ATd.asDecl).isPattern then (* DataItem *)
                         cd.fcom(#do 'needOrigin:dataItem:leave'->TT #);
@@ -3891,6 +3933,48 @@ generator: codeGenMarker
                     if)if)#)
                  exit done
                  #);
+               isConst: BooleanValue
+                 (# E: ^Exp; DI: ^SuperDataItem; T: @text; cst: @integer
+                 enter E[]
+                 do (if (E.ATd.asDecl).isDataItem then
+                        E.ATd.asDecl -> DI[];
+                        (if DI.isConst and DI.OG.isBasicValue then
+                            true -> value;
+                            DI.getConst -> cst -> cd.pushConst;
+                            pcTracer(#do 'const:'->TT; E.doPT->TL; cst->II #)
+                    if)if)
+                 #);
+               handleInv:
+                 (# E,rec,pRec: ^Exp; newAdr: ^NewAddress   ; exps: [1] ^Exp
+                 do pcTracer
+                    (#do 'handleInv:' -> TT; doPT -> TL #);
+                    getExps -> exps[];
+                    L:
+                      (for i: exps.range repeat
+                           (#
+                           do rec[] -> pRec[]; E[] -> rec[]; exps[i][] -> E[];
+                              pcTracer(#do E.label -> TT; E.doPT -> TL #);
+                              (if E[] -> isConst then
+                                  (if i < exps.range then
+                                      '\n!!!! isConst:not:last: '->dumpT; 
+                                      E.doPT->dumpTN
+                                  if);
+                                  leave L
+                              if);
+                              (if i = 1 then
+                                  E[] -> (NewAddress).add -> newAdr[]
+                               else 
+                                  E[] -> newAdr.add
+                              if);
+                           #);
+                           (if newAdr[] <> none then
+                               newAdr.scan
+                               (#
+                               do pCTracer(#do 'NA:'->TT; current.dopt -> TL #)
+                               #)
+                           if)
+                      for)
+                 #);
                done,hasValueObj: @boolean; T1: ^Text;
                A: ^Address; off,argNo: @integer; 
                doNeedOrigin,originIsValueObj: @boolean
@@ -3905,6 +3989,9 @@ generator: codeGenMarker
                (if false then
                    '**** Invocation:gen: '->puttext; doPT -> putline;
                    cd.com(#do 'Invocation:gen:'->TT; doPT ->TQ#)
+               if);
+               (if false then
+                   handleInv;
                if);
                cd.fcom(#do 'INV:gen:'->TT; dopt -> TL #);
                cd.bcPos -> beginBCP;
@@ -4024,7 +4111,7 @@ generator: codeGenMarker
              * V: obj 12; W: obj 87; X: obj V + W;
              * we dont push 12 for V, but 87 for W
              *)
-            (# T: @text
+            (# T: @text; cst: @integer
             do cd.com(#do 'isConstant:'->TT; label->TQ; dopt->TQ #);
                L:
                  scanSons
@@ -4036,16 +4123,22 @@ generator: codeGenMarker
                             (if isLast then
                                 (if DI.OG.isBasicValue then
                                     (if (DI.OG.super.last->E[]).isConstLiteral then
-                                        DI.OG.super.dopt -> T.puttext;
-                                        cd.com
-                                        (#
-                                        do 'const literal: ' -> TT;
-                                           T[] -> TT;
-                                           ' ' -> TT;
-                                           (DI.OG.super.last).label -> TT
-                                        #);
-                                        T.setPos; 
-                                        T.getInt -> cd.pushConst;
+                                        (if true then
+                                            DI.getConst -> cst -> cd.pushConst;
+                                            cTracer
+                                            (#do 'constLiteral:'->TT; cst->II #);
+                                         else
+                                            DI.OG.super.dopt -> T.puttext;
+                                            cd.com
+                                            (#
+                                            do 'const literal: ' -> TT;
+                                               T[] -> TT;
+                                               ' ' -> TT;
+                                               (DI.OG.super.last).label -> TT
+                                            #);
+                                            T.setPos; 
+                                            T.getInt -> cd.pushConst;
+                                        if);
                                         true -> value
                                     if)
                                  else
