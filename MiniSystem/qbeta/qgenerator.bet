@@ -3856,9 +3856,13 @@ generator: codeGenMarker
                   * But probably not for R1.R2.rec.E
                   * And it does not work for E - perhaps it does now!
                   *)
-                 (# org: ^Items; Ex: ^Exp; orgDescNo: @integer;
-                    loadRec,originIsValueObj: @Boolean; A: ^Address
-                 do cTracer(#do 'mkValueProxy:'-> TT; E.Atd.dopt -> TL #);
+                 (# org: ^Items; recOfE: ^Exp; orgDescNo: @integer;
+                    loadRec,originIsValueObj: @Boolean; A: ^Address; D: ^Decl
+                 do fCtracer
+                    (#do 'mkValueProxy:INV:' -> TT; doPT -> TL;
+                       'E:'-> TT; E.doPT->TL;
+                       'rec:'->TT; rec.dopt -> TL; 'E.ATd:'->TT;
+                       E.ATd.dopt -> TL #);
                     E.ATd.origin[]->org[];
                     (if rec.ATD.OG.IS.isEmpty then
                         rec.ATd.OG.super.ATD.OG.IS.newDescNo -> orgDescNo
@@ -3876,43 +3880,71 @@ generator: codeGenMarker
                               rec.ATd.OG.IS.newdescNo -> II
                            #);
                     cd.rdouble;
-                    scansons(#do (if not isLast then current[]->Ex[] if) #);
-                    (if Ex[] <> none then
-                        cTracer(#do Ex.dopt->TQ; Ex.ATd.OG.super.doPT->TQ #);
-                        Ex.ATd.OG.super.scanSons
-                        (* super = Invocation = R1.R2.R3.E *)
-                        (# Ey: ^Exp
-                        do current[] -> Ey[];
-                           (if isFirst then
-                               fcTracer
-                               (#do 'first:'->TT; Ey.dopt->TQ; Ey.label->TT;
-                                  'first.origin.encOG:'->TT; 
-                                  Ey.origin.encOG.OGid->TQ
-                               #);
-                               (if Ey.origin.encOG.isValueObj then
-                                   fcTracer(#do 'FIX:origin:isValueObj:'->TT; #);
-                                   true -> originIsValueObj
+                    (* find receiver of E - assumes that E is last, 
+                     * which may not be the case - see mkValueProxyX
+                     *)
+                    (if true then
+                        findRecOfE:
+                          scansons
+                          (#do fcTracer(#do 'son:'->TT; current.doPT -> TL #);
+                             (if current[] = E[] then
+                                 leave findRecOfE
+                              else
+                                 current[]->recOfE[]
+                             if) 
+                          #);
+                     else
+                        scansons
+                        (#do fcTracer(#do 'son:'->TT; current.doPT -> TL #);
+                           (if not isLast then current[]->recOfE[] if)
+                        #);
+                    if);
+                    (if recOfE[] <> none then
+                        fcTracer
+                        (#do  'recOfE:'->TT; recOfE.dopt->TQ; 
+                           'recOfE.ATd:'->TT; recOfE.ATd.doPT->TL #);
+                        (if (recOfE.ATd.OG.getReturnDecl->D[])  <> none then
+                            fcTracer
+                            (#do 'recOfE:has:rtnValue:'->TT; D.dopt->TL #);
+                            (orgDescNo,D.newOff - 1
+                            ,inValueObj,originIsValueObj)
+                              -> cd.mkValueProxy
+                         else                            
+                            recOfE.ATd.OG.super.scanSons
+                            (* super = Invocation = R1.R2.R3.E *)
+                            (# Ey: ^Exp
+                            do current[] -> Ey[];
+                               (if isFirst then
+                                   fcTracer
+                                   (#do 'first:'->TT; Ey.dopt->TQ; Ey.label->TT;
+                                      'first.origin.encOG:'->TT; 
+                                      Ey.origin.encOG.OGid->TQ
+                                   #);
+                                   (if Ey.origin.encOG.isValueObj then
+                                       true -> originIsValueObj
+                                    else
+                                       Ey.loadOrigin;
+                                       fcTracer(#do 'after:Ey.loadOrigin:'->TT #)
+                                   if);
+                                   &Address[] -> Ey.getAdr -> (loadRec,A[]);
+                                   fcTracer(#do 'Adr:'->TT; A.toString->TT #);
+                                   fcTracer(#do A.toString->TT #);
+                                   A.loadAdr; (* if super = ptn, *)
+                                   fcTracer(#do 'after:A.loadAdr'->TT #);
+                                   (orgDescNo,rec.ATd.newOff - 1
+                                   ,inValueObj,originIsValueObj)
+                                     -> cd.mkValueProxy
                                 else
-                                   Ey.loadOrigin;
-                                   fcTracer(#do 'after:Ey.loadOrigin:'->TT #);
-                               if);
-                               &Address[] -> Ey.getAdr -> (loadRec,A[]);
-                               fcTracer(#do A.toString->TT #);
-                               A.loadAdr; (* if super = ptn, *)
-                               fcTracer(#do 'after:A.loadAdr'->TT #);
-                               (orgDescNo,rec.ATd.newOff - 1
-                               ,inValueObj,originIsValueObj)
-                                 -> cd.mkValueProxy
-                            else
-                               cTracer(#do 'next:'->TT; Ey.dopt -> TQ #)
-                        if)#)
+                                   cTracer(#do 'next:'->TT; Ey.dopt -> TQ #)
+                            if)#)
+                        if)
                      else
                         (* Perhaps the arguments are not static but must
                          * be supplied at run-time. 
                          * pushValId push these values
                          *)
-                        fcTracer(#do 'mkValueProxy:Ex:none:orgDescNo:'->TT; 
-                                  orgDescNo->II #);
+                        fcTracer(#do 'mkValueProxy:recOfE:none:orgDescNo:'->TT; 
+                                   orgDescNo->II #);
                         (orgDescNo,1,inValueObj,false) -> cd.mkValueProxy
                     if)
                  #);
@@ -4158,18 +4190,19 @@ generator: codeGenMarker
                         leave L
                  if)#)
             #);
-            mkValueProxyX:
+          mkValueProxyX:
             (* create a proxy object for the the valueObj being the
              * origin of the method E;
              * So far it works for rec.E
              * But probably not for R1.R2.rec.E
              * And it does not work for E - perhaps it does now!
              *)
-            (# org: ^Items; rec,E,Ex: ^Exp; orgDescNo: @integer;
-               loadRec,originIsValueObj: @Boolean; A: ^Address
+            (# org: ^Items; rec,E,recOfE: ^Exp; orgDescNo: @integer;
+               loadRec,originIsValueObj: @Boolean; A: ^Address; D: ^Decl
             enter(rec[],E[])
             do fCtracer
-               (#do 'mkValueProxy:E:'-> TT; E.doPT->TL;
+               (#do 'mkValueProxy:INV:' -> TT; doPT -> TL;
+                  'E:'-> TT; E.doPT->TL;
                   'rec:'->TT; rec.dopt -> TL; 'E.ATd:'->TT;
                   E.ATd.dopt -> TL #);
                E.ATd.origin[]->org[];
@@ -4189,43 +4222,60 @@ generator: codeGenMarker
                          rec.ATd.OG.IS.newdescNo -> II
                       #);
                cd.rdouble;
-               scansons(#do (if not isLast then current[]->Ex[] if) #);
-               (if Ex[] <> none then
-                   cTracer(#do Ex.dopt->TQ; Ex.ATd.OG.super.doPT->TQ #);
-                   Ex.ATd.OG.super.scanSons
-                   (* super = Invocation = R1.R2.R3.E *)
-                   (# Ey: ^Exp
-                   do current[] -> Ey[];
-                      (if isFirst then
-                          fcTracer
-                          (#do 'first:'->TT; Ey.dopt->TQ; Ey.label->TT;
-                             'first.origin.encOG:'->TT; 
-                             Ey.origin.encOG.OGid->TQ
-                          #);
-                          (if Ey.origin.encOG.isValueObj then
-                              fcTracer(#do 'FIX:origin:isValueObj:'->TT; #);
-                              true -> originIsValueObj
+               findRecOfE:
+                 scansons
+                 (#do fcTracer(#do 'son:'->TT; current.doPT -> TL #);
+                    (if current[] = E[] then
+                        leave findRecOfE
+                     else
+                        current[]->recOfE[]
+                    if) 
+                 #);
+               (if recOfE[] <> none then
+                   fcTracer
+                   (#do 'recOfE:'->TT; recOfE.dopt->TQ; 
+                      'recOfE.ATd:'->TT; recOfE.ATd.doPT->TL #);
+                   (if (recOfE.ATd.OG.getReturnDecl->D[])  <> none then
+                       fcTracer
+                       (#do 'recOfE:has:rtnValue:'->TT; D.dopt->TL #);
+                            (orgDescNo,D.newOff - 1
+                            ,inValueObj,originIsValueObj)
+                              -> cd.mkValueProxy                       
+                    else                       
+                       recOfE.ATd.OG.super.scanSons
+                       (* super = Invocation = R1.R2.R3.E *)
+                       (# Ey: ^Exp
+                       do current[] -> Ey[];
+                          (if isFirst then
+                              fcTracer
+                              (#do 'first:'->TT; Ey.dopt->TQ; Ey.label->TT;
+                                 'first.origin.encOG:'->TT; 
+                                 Ey.origin.encOG.OGid->TQ
+                              #);
+                              (if Ey.origin.encOG.isValueObj then
+                                  true -> originIsValueObj
+                               else
+                                  Ey.loadOrigin;
+                                  fcTracer(#do 'after:Ey.loadOrigin:'->TT #)
+                              if);
+                              &Address[] -> Ey.getAdr -> (loadRec,A[]);
+                              fcTracer(#do 'Adr:'->TT; A.toString->TT #);
+                              fcTracer(#do A.toString->TT #);
+                              A.loadAdr; (* if super = ptn, *)
+                              fcTracer(#do 'after:A.loadAdr'->TT #);
+                              (orgDescNo,rec.ATd.newOff - 1
+                              ,inValueObj,originIsValueObj)
+                                -> cd.mkValueProxy
                            else
-                              Ey.loadOrigin;
-                              fcTracer(#do 'after:Ey.loadOrigin:'->TT #);
-                          if);
-                          &Address[] -> Ey.getAdr -> (loadRec,A[]);
-                          fcTracer(#do 'Adr:'->TT; A.toString->TT #);
-                          fcTracer(#do A.toString->TT #);
-                          A.loadAdr; (* if super = ptn, *)
-                          fcTracer(#do 'after:A.loadAdr'->TT #);
-                          (orgDescNo,rec.ATd.newOff - 1
-                          ,inValueObj,originIsValueObj)
-                            -> cd.mkValueProxy
-                       else
-                          cTracer(#do 'next:'->TT; Ey.dopt -> TQ #)
-                   if)#)
+                              cTracer(#do 'next:'->TT; Ey.dopt -> TQ #)
+                       if)#)
+                   if)
                 else
                    (* Perhaps the arguments are not static but must
                     * be supplied at run-time. 
                     * pushValId push these values
                     *)
-                   fcTracer(#do 'mkValueProxy:Ex:none:orgDescNo:'->TT; 
+                   fcTracer(#do 'mkValueProxy:recOfE:none:orgDescNo:'->TT; 
                              orgDescNo->II #);
                    (orgDescNo,1,inValueObj,false) -> cd.mkValueProxy
                if)
@@ -4376,18 +4426,22 @@ generator: codeGenMarker
                                  pRecA.toString-> TT else 'none'->TT if);
                           #);
 
-                          (superAdj,0) -> rec.loadArgs;
-                          (* must be rec.ATd.OG.origin.encOG.isvalueObj
-                           * NOPE!!!!
-                           * and perhaps not isFirst?
-                           *)
-                          (if withValueProxy 
-                              and rec.ATD.OG.origin.encOG.isValueObj 
-                              and not isFirst and not isLast then
-                              fcTracer(#do 'pRec:'->TT; pRec.dopt->TL;
-                                         'rec:'->TT; rec.doPt -> TL #);
-                             (pRec[],rec[]) -> mkValueProxyX
+                          (if withValueProxy then
+                              fcTracer
+                              (#do ('pRec:',pRec[])->PT(#do pRec.dopt->TL#);
+                                 ('rec:',rec[])->PT(#do rec.dopt->TL#);
+                                 ('E:',E[])->PT(#do E.dopt->TL#); nl;
+                                 (pRec[] <> rec[]) -> BB;
+                                 pRec.ATd.OG.isValueObj -> BB
+                              #);
+                              (if (pRec[] <> rec[]) and
+                                  pRec.ATd.OG.isValueObj then
+                                  fcTracer(#do 'goOrign:'->TT; rec.dopt->TL #);
+                                  (pRec[],rec[]) -> mkValueProxyX
+                              if);
                           if);
+                          (superAdj,0) -> rec.loadArgs;
+                          
                           (* Perhaps a combined invoke & getAdr *)
                           (* A is the address of E - not of rec!!!!!! *)
                           fctracer
