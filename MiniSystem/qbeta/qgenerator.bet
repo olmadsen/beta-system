@@ -2595,8 +2595,8 @@ generator: codeGenMarker
                        '!!!! encOG.IS.newOriginOff = 0:'->dumpTN;
                        fcTracer(#do '!!!! encOG.IS.newOriginOff = 0:'->TT #);
                        fcTracer(#do (if sig[] <> none then sig.dopt -> TQ
-                               else dopt -> TT if)#);
-                       fcTracer(#do encOG.dopt -> TT #);
+                               else dopt -> TL if)#);
+                       fcTracer(#do encOG.dopt -> TL #);
                        encOG.dopt -> putheadN;
                    if);
                    (if true then
@@ -3331,7 +3331,9 @@ generator: codeGenMarker
        (# 
           head,last:  ^accessor;
           accessor:
-            (# Ex: ^Exp; off: @integer; size: ^Exp; next: ^accessor;
+            (# Ex: ^Exp; off: @integer; size: ^Exp; 
+               isValueObj,isPtn: @boolean;
+               next: ^accessor;
             enter Ex[]
             exit this(accessor)[]
             #);
@@ -3342,15 +3344,17 @@ generator: codeGenMarker
                    Ex[] -> accessor -> head[] -> last[]
                 else
                    Ex[] -> accessor -> last.next[] -> last[]
-               if)
+               if);
+               (Ex.ATd.asDecl).OG.isValueObj -> last.isValueObj;
+               (Ex.ATd.asDecl).isPattern -> last.isPtn
             exit this(newAddress)[]
             #);
           scan:
-            (# current: ^Exp; L: ^accessor;
+            (# current: ^Accessor; L: ^accessor;
             do head[] -> L[];
                loop:
                  (if L[] <> none then
-                     L.Ex[] -> current[];
+                     L[] -> current[];
                      inner scan;
                      L.next[] -> L[];
                      restart Loop
@@ -3763,6 +3767,110 @@ generator: codeGenMarker
                #);
                Adr[] -> OIadr[]
             #);
+          isConst: BooleanValue
+            (* E = C in V := C where C: val 117
+             * E = 117 in C: val 117
+             *)
+            (# E: ^Exp; DI: ^SuperDataItem; cst: @integer
+            enter E[]
+            do fcTracer(#do 'handleINV:isConst:A:'->TT; E.doPT->TL;
+                          E.label -> TT; (E.ATd.asDecl).dopt -> TL #);
+               (if true 
+                // E.isConstLiteral then 
+                   fcTracer
+                   (#do 'handleINV:isConstLiteral:'-> TT; E.dopt->TL #);
+                   E.pushConst -> cst;
+                // (E.ATd.asDecl).isDataItem  then
+                   E.ATd.asDecl -> DI[];
+                   fcTracer
+                   (#do 'handleINV:isConst:DI:'-> TT; DI.dopt->TL #);
+                   (if DI.isConst and DI.OG.isBasicValue then
+                       fcTracer
+                       (#do 'handleINV:DI:isConst:'-> TT; DI.dopt->TL #);
+                       true -> value;
+                       DI.pushConst -> cst;
+               if)if);
+               (if value then
+                   fcTracer(#do 'const:'->TT; E.doPT->TL; cst->II #)
+               if)
+            #);
+          handleInv:
+            (# loadOrigin:
+                 (# IT:  ^Items;
+                 do E.ATd.desc -> IT[];
+                    fcTracer
+                    (#do 'handleINV:first:'->TT; E.doPT->Tl;
+                       'E:isValueObj:'->TT;
+                       (E.ATd.asDecl).OG.isValueObj -> BB;
+                       'E:isPattern:'->TT; (E.Atd.asDecl).isPattern -> BB;
+                       'globRestric:'->TT;
+                       IT.globalRestrictionsInMain 
+                       and not IT.inVirtualPtn -> BB
+                    #);
+                    (if not IT.globalRestrictionsInMain 
+                        and not IT.inVirtualPtn then
+                        E.pushThis;
+                        fcTracer(#do 'handleINV:loadOrigin:before:'->TT #);
+                        superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
+                        fcTracer(#do 'handleINV:loadOrigin:after:'->TT #);
+                    if)
+                 #);
+               E,rec,pRec: ^Exp; newAdr: ^NewAddress; exps: [1] ^Exp;
+               superAdj: @integer; orgIsVal: @boolean; 
+            enter superAdj
+            do pcTracer(#do 'handleInv:' -> TT; doPT -> TL #);
+               getExps -> exps[];
+               L:
+                 (for i: exps.range repeat
+                      (# isValueObj: @Boolean
+                      do rec[] -> pRec[]; E[] -> rec[]; exps[i][] -> E[];
+                         fcTracer(#do E.label -> TT; E.doPT -> TL #);
+                         (if E[] -> isConst then
+                             (if i < exps.range then
+                                 (* may happen in C := cst+3 for cst: val 100 *)
+                                 (if false then
+                                     '\n!!!! isConst:not:last: '->dumpT; 
+                                     E.doPT->dumpTN
+                             if)if);
+                             leave L
+                         if);
+                         (if i = 1 then
+                             E[] -> (NewAddress).add -> newAdr[]
+                          else 
+                             E[] -> newAdr.add
+                         if);
+                      #);
+                      (if newAdr[] <> none then
+                          newAdr.scan
+                          (#
+                          do fcTracer
+                             (#do 'NA:'->TT; current.Ex.dopt -> TL;
+                                'isPtn:'->TT; current.isPtn->BB;
+                                'isValueObj:'->TT; current.isValueObj-> BB;
+                             #)
+                          #)
+                      if);
+                      
+                      (* first: 
+                       *    E.pushThis
+                       *    superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal)
+                       *    A -> E.getAdr -> (loadRec,A[])
+                       * else:
+                       *    handleUnit
+                       *    if loadRec
+                       *        if originIsValueObj then mkValueProxy
+                       *        rec.loadArgs
+                       *        rec.invoke
+                       *        if isLast and not useRtnValue then vPop
+                       *        handle I2F
+                       *)
+                      (if i = 1 then
+                          loadOrigin
+                       else
+                          
+                      if);                               
+                 for)
+            #);
           gen:: 
             (# gdb:: 
                  (# 
@@ -3973,49 +4081,7 @@ generator: codeGenMarker
                                true -> done;
                     if)if)#)
                  exit done
-                 #);
-               isConst: BooleanValue
-                 (# E: ^Exp; DI: ^SuperDataItem; T: @text; cst: @integer
-                 enter E[]
-                 do (if (E.ATd.asDecl).isDataItem then
-                        E.ATd.asDecl -> DI[];
-                        (if DI.isConst and DI.OG.isBasicValue then
-                            true -> value;
-                            DI.getConst -> cst -> cd.pushConst;
-                            pcTracer(#do 'const:'->TT; E.doPT->TL; cst->II #)
-                    if)if)
-                 #);
-               handleInv:
-                 (# E,rec,pRec: ^Exp; newAdr: ^NewAddress   ; exps: [1] ^Exp
-                 do pcTracer
-                    (#do 'handleInv:' -> TT; doPT -> TL #);
-                    getExps -> exps[];
-                    L:
-                      (for i: exps.range repeat
-                           (#
-                           do rec[] -> pRec[]; E[] -> rec[]; exps[i][] -> E[];
-                              pcTracer(#do E.label -> TT; E.doPT -> TL #);
-                              (if E[] -> isConst then
-                                  (if i < exps.range then
-                                      '\n!!!! isConst:not:last: '->dumpT; 
-                                      E.doPT->dumpTN
-                                  if);
-                                  leave L
-                              if);
-                              (if i = 1 then
-                                  E[] -> (NewAddress).add -> newAdr[]
-                               else 
-                                  E[] -> newAdr.add
-                              if);
-                           #);
-                           (if newAdr[] <> none then
-                               newAdr.scan
-                               (#
-                               do pCTracer(#do 'NA:'->TT; current.dopt -> TL #)
-                               #)
-                           if)
-                      for)
-                 #);
+                 #);               
                done,hasValueObj: @boolean; T1: ^Text;
                A: ^Address; off,argNo: @integer; 
                doNeedOrigin,originIsValueObj: @boolean
@@ -4027,12 +4093,9 @@ generator: codeGenMarker
                 * load adr of R
                 * How about: R.S.T.Q ? Q globalRestrictions, or globals?
                 *)
-               (if false then
-                   '**** Invocation:gen: '->puttext; doPT -> putline;
-                   cTracer(#do 'Invocation:gen:'->TT; doPT ->TQ#)
-               if);
-               (if false then
-                   handleInv;
+               (if newINVgen then
+                   superADj -> handleInv;
+                   leave gen
                if);
                fcTracer(#do 'INV:gen:'->TT; dopt -> TL #);
                cd.bcPos -> beginBCP;
@@ -4172,7 +4235,7 @@ generator: codeGenMarker
                                 (if DI.OG.isBasicValue then
                                     (if (DI.OG.super.last->E[]).isConstLiteral then
                                         (if true then
-                                            DI.getConst -> cst -> cd.pushConst;
+                                            DI.pushConst -> cst;
                                             cTracer
                                             (#do 'constLiteral:'->TT; cst->II #);
                                          else
@@ -4642,19 +4705,16 @@ generator: codeGenMarker
                  #);                  
                Ax: ^Address; OG: ^ObjectGenerator; DI: ^DataItem;
                qual: ^ObjectGenerator; T: ^Text
-            do (*superAdj -> A.superAdj;*)
-               (if stringAsVal then
-                   getOIqual -> qual[];
-               if);
+            do (if stringAsVal then getOIqual -> qual[] if);
                (if stringAsVal
                    and origin.isItems
                    and (origin.origin.encOG.primNo = String_prim)
                    or stringAsVal and ((qual.primNo = String_prim))
 		   (* can we elim the first or-clause? *)
                    then
-                   cTracer(#do 'PING:String'->TT;
-                            origin.encOG.primNo -> II;
-                            origin.encOG.dopt ->TT #);
+                   cTracer
+                   (#do 'PING:String'->TT; origin.encOG.primNo -> II;
+                      origin.encOG.dopt ->TT #);
                    L:
                      (if (origin[]->isVeqDI) or (qual.primNo = String_prim) then
                        cTracer(#do'BOBS:ATd:'->TT; ATd.dopt->TQ; #);
@@ -5419,7 +5479,12 @@ generator: codeGenMarker
                if)
             #);
           load:: (# do T.setpos; T.getReal -> cd.pushConst #);
-          bracketedListElement:: (# do 1 -> value #);
+          bracketedListElement:: (# do 1 -> value #);          
+          pushConst::
+            (#
+            do T.setPos; 
+               T.getInt -> value -> cd.pushConst
+            #)
        #);
      FloatConst::
        (# gen:: (# do invoke #);
@@ -5446,6 +5511,10 @@ generator: codeGenMarker
                '!!!! Float:bracketedListElement may not work! ' -> puttext;
                dopt -> putline
             #);
+          pushConst::
+            (#
+            do '!!!! FloatConst:pushConst!'->dumpTN
+            #)
        #);
      CharObj::
        (# gen:: (* Never called? *) (# do invoke #);
@@ -5469,6 +5538,11 @@ generator: codeGenMarker
                if)if)
             #);
           bracketedListElement:: (# do 1 -> value #);
+          pushConst:: 
+            (#
+            do 1 -> T.inxGet -> value -> cd.pushConst
+            #);
+
        #);
      getStringPlus:
        (# D: ^Decl
