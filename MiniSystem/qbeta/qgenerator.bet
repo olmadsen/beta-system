@@ -67,6 +67,10 @@ generator: codeGenMarker
             do true -> loadRec;
                0 -> Address -> A[];
                newOff -> A.off
+            #);         
+          getNewAdr::
+            (#
+            do (newOff,1) -> adr.addAtt
             #);
           invoke::
             (#
@@ -109,6 +113,10 @@ generator: codeGenMarker
           getAdr::
             (#
             do A[] -> MD.getAdr -> (loadRec,A[])
+            #);
+          getNewAdr::
+            (#
+            do adr[] -> MD.getNewAdr -> (loadRec,adr[])
             #);
           pushThis:: (# do cd.pushThis #);
           invoke:: (# do cTracer(#do 'ModuleItem:invoke:'->TT #); MD.invoke #);
@@ -559,6 +567,30 @@ generator: codeGenMarker
                         newOff -> A.off
                if)if)
             #);
+          getNewAdr::
+            (#
+            do pfcTracer
+               (#do 'DI:getNewAdr:'->TT; sig.dopt -> TL;
+                  'primitive:'->TT; OG.isBasicValue -> BB; 
+                  'valueObj:' -> TT; OG.isValueObj -> BB;
+                  'unit:'->TT; 
+               #);
+               (* cases:
+                * A: primitiveValue:
+                * B: unitValue
+                * C: valueObj
+                * D: String value -- is not valueObj but ref
+                * E: reference
+                *)
+               (if true
+                // OG.isBasicValue then
+                   (newOff,objSize) -> adr.addAtt
+                // OG.isValueObj then
+                   (newOff,objSize) -> adr.addAtt
+                else (* reference *)
+                   (newOff,1) -> adr.addAtt
+               if)
+            #);
           invoke::
             (* called when not receiver - i.e. value to be pushed *)
             (# gdb::(#do '>newOff:'-> TT; newOff -> II #);
@@ -812,6 +844,11 @@ generator: codeGenMarker
                A[] -> ATd.getAdr -> (loadRec,A[]);
                (if A.off = 0 then off -> A.off if)
             #);
+          getNewAdr::
+            (#
+            do (*'**** NameDecl:getAdr:'->puttext; dopt -> putline;*)
+               (off,ATd.objSize) -> adr.addAtt
+            #);
           invoke::
             (#
             do '**** NameDecl:invoke:'->puttext; dopt -> putline;
@@ -824,7 +861,17 @@ generator: codeGenMarker
        #);
      Arguments:: (##);
      AssignmentStatement::
-       (# gen::
+       (# handleAssign:
+            (# MP:  ^Module; OIadr:  ^Address; (* newAddress ?*)
+            do fcTracer(#do 'handleAssign:'->TT; dopt -> TL #);
+               cd.bcPos -> beginBCP;
+               0 (*superAdj*) -> left.handleINV;
+               
+               (true(*useRtnVal*),0,0 (*staticOff*))
+                 -> right.gen
+                 -> (mp[],OIadr[]);
+            #);
+          gen::
             (# isArgOfAssignI2IwithUniValArg: BooleanValue
                  (* for the case: a3 := 3 * a2 where a3 and a2 are UnitValueObj
                   * and * is int2int, typeOf('* a2') is unit and not int;
@@ -921,10 +968,11 @@ generator: codeGenMarker
                dstDI,srcDI: ^DataItem; ptn: ^Pattern;
                MP:  ^Module; OIadr:  ^Address; 
                OIadrOff: @integer; rightDescNo: @integer
-            do (if false then
-                   '**** AssignmentStatement:gen: '->puttext; dopt ->putline;
+            do (if newInvGen then
+                   handleAssign;
+                   leave gen
                if);
-               fcTracer(#do 'assign:'->TT; dopt -> TL; #);
+               fcTracer(#do 'AssignmentStatement:gen:'->TT; dopt -> TL; #);
                cd.bcPos -> beginBCP;
                
                (left[],superAdj) -> computeAdrG -> (rec[],dstE[],adr[]);
@@ -2660,18 +2708,22 @@ generator: codeGenMarker
      Pattern::
        (# GeneralPattern::
             (# invoke:: (# <<SLOT GeneralPattern_invoke:doPart>> #);
+               newInvoke:: (# <<SLOT GeneralPattern_newInvoke:doPart>> #);
             #);
           AssignmentPattern::
             (# invoke:: (# <<SLOT AssignMentPattern_invoke:doPart>> #);
             #);
           BreakPattern::
-            (# invoke:: (# << SLOT BreakPatternInvoke:doPart>> #)
+            (# invoke:: (# << SLOT BreakPatternInvoke:doPart>> #);
+               newInvoke:: (# << SLOT BreakPattern_NewInvoke:doPart>> #);
             #);
           IndexedPattern::
             (# invoke:: (# <<SLOT IndexPattern_invoke:doPart>> #);
+               newInvoke:: (# <<SLOT IndexPattern_newInvoke:doPart>> #);
             #);
           OtherPrimPattern:: 
             (# invoke:: (# <<SLOT OtherPrim_invoke:doPart>> #); 
+               newInvoke:: (# <<SLOT OtherPrim_newInvoke:doPart>> #); 
                org: ^Items; Tlab,exitLab: @labelHandler.label;
             #);
           virtualDone: @boolean;
@@ -2971,6 +3023,10 @@ generator: codeGenMarker
                    true -> A.isAdr
                if);
             #);
+          getNewAdr::
+            (#
+            do (* ??? *)
+            #);
           invoke:: 
             (# 
             do fcTracer(#do 'ptn:invoke:' -> TT; sig.dopt -> TQ;
@@ -2980,6 +3036,13 @@ generator: codeGenMarker
                (rec[],E[],useRtnVal,staticOff,adr[]) 
                  -> currentPtnKind.invoke 
                  -> OIadr[]
+            #);
+          newInvoke::
+            (#
+            do fcTracer(#do 'ptn:newInvoke:'->TT; sig.dopt -> TL; #);
+               (rec[],E[],useRtnVal,staticOff,adr[]) 
+                 -> currentPtnKind.newInvoke 
+                 -> OIadr[]  
             #);
           popReturn:
             (* perhaps this should be the same virtual as in dataItem!?
@@ -3321,11 +3384,11 @@ generator: codeGenMarker
        enter superAdj
        exit this(Address)[]
        #);
-     newAddress:
+     newAddress: SuperNewAdr
        (# 
           head,last:  ^accessor;
           accessor:
-            (# Ex: ^Exp; off: @integer; size: ^Exp; 
+            (# Ex: ^Exp; off: @integer; size: @integer; 
                isValueObj,isPtn: @boolean;
                next: ^accessor;
             enter Ex[]
@@ -3343,6 +3406,10 @@ generator: codeGenMarker
                (Ex.ATd.asDecl).isPattern -> last.isPtn
             exit this(newAddress)[]
             #);
+          addAtt::
+            (#
+            do off -> last.off; size -> last.size;
+            #);
           scan:
             (# current: ^Accessor; L: ^accessor;
             do head[] -> L[];
@@ -3354,6 +3421,18 @@ generator: codeGenMarker
                      restart Loop
                  if)
             #);
+          toString:
+            (# S: @Text;
+            do 'Adr:'->S.puttext;
+               scan
+               (#
+               do current.Ex.dopt -> S.append;
+                  ' off:'->S.append; current.off -> S.putint;
+                  ' size:'->S.append; current.size -> S.putint;
+               #)
+            exit S[]
+            #)
+                  
        exit this(newAddress)[]
        #);
      computeAdrG:
@@ -3810,7 +3889,7 @@ generator: codeGenMarker
                     if)
                  #);
                E,rec,pRec: ^Exp; newAdr: ^NewAddress; exps: [1] ^Exp;
-               superAdj: @integer; orgIsVal: @boolean; 
+               superAdj: @integer; orgIsVal,loadRec: @boolean; 
             enter superAdj
             do pcTracer(#do 'handleInv:' -> TT; doPT -> TL #);
                getExps -> exps[];
@@ -3848,7 +3927,7 @@ generator: codeGenMarker
                       (* first: 
                        *    E.pushThis
                        *    superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal)
-                       *    A -> E.getAdr -> (loadRec,A[])
+                       *    A -> E.getAdr -> (loadRec,A[]);
                        * else:
                        *    handleUnit
                        *    if loadRec
@@ -3859,10 +3938,12 @@ generator: codeGenMarker
                        *        handle I2F
                        *)
                       (if i = 1 then
-                          loadOrigin
-                       else
-                          
-                      if);                               
+                          loadOrigin;
+                      if);
+                      newAdr[] -> E.getNewAdr -> (loadRec,newAdr[]);
+                      pfcTracer
+                      (#do 'getNewAdr:after:'->TT; newAdr.toString->TT#);
+                      (rec[],E[],true,0,newAdr[]) -> E.newInvoke
                  for)
             #);
           gen:: 
@@ -4661,8 +4742,6 @@ generator: codeGenMarker
                  (# org: ^Items; eOG: ^ObjectGenerator
                  enter org[]
                  do (if org.superDesc[] <> none then
-                        (*'**** isVeq:'->puttext; 
-                         * org.superDesc.primNo -> putint; newline;*)
                         ((org.superDesc.primNo = vEq_prim) 
                           or (org.superDesc.primNo = vLE_prim))
                          and (ATd.asDecl).isDataitem
@@ -4750,6 +4829,16 @@ generator: codeGenMarker
                 else
                    Ax[] -> ATd.getAdr -> (loadRec,adr[]);
                if);
+            #);
+          getNewAdr::
+            (#
+            do pfcTracer(#do'OI:getNewAdr:'->TT; dopt ->TL #);
+               (* Cases:
+                * A: String::Veq, Vlt, ...
+                * B: Ax[] -> ATd.getNewAdr -> (loadRec,adr[]);
+                *    but depends on nameList or not
+                *)
+               adr[] -> (ATd.asDecl).getNewAdr -> (loadRec,adr[])
             #);
           loadOrigin::
             (# gdb::
@@ -5077,6 +5166,14 @@ generator: codeGenMarker
                    112 -> cd.op
                if);
                adr[] -> OIadr[]
+            #);
+          newInvoke::
+            (#
+            do fcTracer(#do 'OI:newInvoke:'->TT; doPT -> TL #);
+               
+               (rec[],E[],useRtnVal,staticOff,adr[]) 
+                 -> ATd.newInvoke
+                 -> adr[];
             #);
           loadArgs:: 
             (# gdb:: 
@@ -5429,6 +5526,11 @@ generator: codeGenMarker
                (adr.superAdj,0) -> E.loadArgs; 
                (* do we need staticOff here? *)
                (* (rec[],E[],true,0,0,none,adr[],false) -> E.invoke;*)
+            #);
+          getNewAdr::
+            (#
+            do
+               (* ??? *) 
             #);
           pushThis:: 
             (* Skip, since loadOrigin below includes pushThis *)  
