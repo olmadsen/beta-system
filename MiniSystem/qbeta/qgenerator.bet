@@ -939,7 +939,7 @@ generator: codeGenMarker
                leftE: ^Exp; leftDI:  ^DataItem;
             do fcTracer(#do 'handleAssign:'->TT; dopt -> TL #);
                cd.bcPos -> beginBCP;
-               (0 (*superAdj*),0,false) -> left.handleINV -> leftE[];
+               (false,0 (*superAdj*),0,false) -> left.handleINV -> leftE[];
                fcTracer(#do 'handleAssign:after:left:'->TT; dopt -> TL;
                        'leftE:'->TT; leftE.dopt->TL #);
                (true(*useRtnVal*),0,0 (*staticOff*))
@@ -3116,7 +3116,8 @@ generator: codeGenMarker
             #);
           newInvoke::
             (#
-            do fcTracer(#do 'ptn:newInvoke:'->TT; sig.dopt -> TL; #);
+            do fcTracer(#do 'ptn:newInvoke:'->TT; sig.dopt -> TL;
+                       'staticOff:'->TT; staticOff->II #);
                (rec[],E[],useRtnVal,staticOff,adr[]) 
                  -> currentPtnKind.newInvoke 
                  -> OIadr[]  
@@ -3947,7 +3948,13 @@ generator: codeGenMarker
             #);
           handleInv:
             (# loadOrigin:
-                 (# D: ^Decl; IT:  ^Items;
+                 (* not Pattern / isDataItem     ==> loadOrigin
+                  * IT.globalRestrictionsInMain 
+                  *    and not IT.inVirtualPtn   ==> no loadOrigin
+                  * not IT.globalsRestrictionsInMain
+                  *    or IT.inVirtualPtn        ==> loadOrigin
+                  *)
+                 (# D: ^Decl; IT:  ^Items; originIsValueObj: @Boolean
                  do E.ATd.asDecl -> D[]; D.OG.IS[] -> IT[];
                     fcTracer
                     (#do 'handleINV:loadOrigin:E:'->TT; E.doPT->Tl;
@@ -3958,16 +3965,24 @@ generator: codeGenMarker
                        'globRestric:'->TT;
                        IT.globalRestrictionsInMain 
                        and not IT.inVirtualPtn -> BB
-                    #);
-                    (if D.OG.isDataItem or
-                        D.OG.isValueObj and not D.OG.isBasicValue or
+                    #); 
+                    (if (*D.OG.isValueObj and not D.OG.isBasicValue 
+                         or*)
+                        not (E.ATd.asDecl).isPattern (* DataItem *)
+                        or 
                         not IT.globalRestrictionsInMain 
-                        and not IT.inVirtualPtn then
+                        or IT.inVirtualPtn then
                         E.pushThis;
                         fcTracer(#do 'handleINV:loadOrigin:before:'->TT #);
                         superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
                         fcTracer(#do 'handleINV:loadOrigin:after:'->TT #);
+                     else
+                        (*
+                        IT.origin.encOG.isValueObj
+                        and not origin.isPrimitive
+                               -> originIsValueObj *)
                     if)
+                 exit originIsValueObj
                  #);
                checkForProxy:
                  (* rstack[rtop] = adr(E) 
@@ -4005,8 +4020,8 @@ generator: codeGenMarker
                E,rec,pRec: ^Exp; newAdr: ^NewAddress; exps: [1] ^Exp;
                superAdj,staticOff: @integer;
                isValueObj,doLoad,orgIsVal,loadRec: @boolean;
-               wasConst: @Boolean
-            enter(superAdj,staticOff,doLoad)
+               useRtnVal,wasConst,originIsValueObj: @Boolean
+            enter(useRtnVal,superAdj,staticOff,doLoad)
             do fcTracer
                (#do 'handleInv:'->TT;doPT->TL; 'staticOff:'->TT;staticOff->II#);
                getExps -> exps[];
@@ -4054,7 +4069,7 @@ generator: codeGenMarker
                       if);    
                       (if not wasConst then
                           (if i = 1 then
-                              loadOrigin
+                              loadOrigin -> originIsValueObj
                           if);
                           newAdr[] -> E.getNewAdr -> (loadRec,newAdr[]);
                           fcTracer
@@ -4067,7 +4082,14 @@ generator: codeGenMarker
                           (superAdj,0) -> E.loadArgs; 
                           (if doLoad or (i < exps.range) then
                               checkForProxy;
-                              (rec[],E[],true,0,newAdr[]) -> E.newInvoke
+                              (rec[],E[]
+                              ,(i < exps.range) or doLoad and useRtnVal
+                              ,staticOff,newAdr[])
+                                -> E.newInvoke;
+                           else
+                              (* we shall load adr(E) *)
+                              fCtracer(#do 'handleINV:last:loadAdr:'->TT;
+                                         E.dopt -> TL #)
                           if)
                       if)
                  for);
@@ -4099,13 +4121,14 @@ generator: codeGenMarker
                     (#
                     do IVlength + 1 -> IVlength;
                        current[] -> E[]; 
-                       (if (E.ATd.asDecl).isPattern and not E.isConstLiteral 
+                       (if (E.ATd.asDecl).isPattern 
+                           and not E.isConstLiteral 
                            and (Ex[] = none) then 
                            E[] -> Ex[];
                            IVlength -> IVinx
                        if);
-                       (* if-stmt below is superflouos?
-                        * not clear why superflouos!? And what goes non here?
+                       (* if-stmt below is superflouos? But  why superflouos!? 
+                        * And what goes on here?
                         *)
                        (if not isLast then E[] -> rec[] 
                         else
@@ -4115,15 +4138,9 @@ generator: codeGenMarker
                     if)if)#);
                     ctracer
                     (#do 'needOrigin:E:'->TT; E.dopt -> TL;
-                       ' E.ATd:'-> TT; E.ATd.dopt -> TL;
-                       'Ex:'->TT;
-                       (if Ex[] <> none then
-                           EX.dopt -> TL
-                        else
-                           'none'->TT
-                       if);
-                       'rec:'->TT;
-                       (if rec[] <> none then rec.dopt -> TL else 'none'-> TL if)
+                       ' E.ATd:'-> TT; E.ATd.dopt -> TL; 
+                       ('Ex:', Ex[])->PT(#do EX.dopt -> TL #);
+                       ('rec:',rec[])->PT(#do rec.dopt -> TL #)
                     #);
 
                     (if not (E.ATd.asDecl).isPattern then (* DataItem *)
@@ -4298,7 +4315,7 @@ generator: codeGenMarker
                 * How about: R.S.T.Q ? Q globalRestrictions, or globals?
                 *)
                (if newINVgen then
-                   (superAdj,staticOff,true) -> handleInv; (* doLoad ? *)
+                   (useRtnVal,superAdj,staticOff,true) -> handleInv; (* doLoad ? *)
                    leave gen
                if);
                fcTracer(#do 'INV:gen:'->TT; dopt -> TL #);
