@@ -721,6 +721,10 @@ generator: codeGenMarker
                         (#do 'DI:newInvoke:loadPrimitive:size>1:missing'->TT;
                            dopt -> TL #);
                     if)
+                 #);
+               loadObj:
+                 (#
+                 do ('newInvoke',NewOff) -> cd.rpushg
                  #)
             do fcTracer(#do 'DI:newInvoke:'->TT; dopt->TL #); 
                (if true 
@@ -735,8 +739,9 @@ generator: codeGenMarker
                    pfcTracer(#do 'DI:newInvoke:valueObj:missing'->TT;
                                dopt -> TL#);
                 else
-                       
-                   if)
+                   fctracer(#do 'DI:newInvoke:else:loadObj:'->TT;dopt->TL #);
+                   loadObj
+               if)
             #);
 
           newStore:
@@ -3954,7 +3959,8 @@ generator: codeGenMarker
                   * not IT.globalsRestrictionsInMain
                   *    or IT.inVirtualPtn        ==> loadOrigin
                   *)
-                 (# D: ^Decl; IT:  ^Items; originIsValueObj: @Boolean
+                 (# E: ^Exp; D: ^Decl; IT:  ^Items; originIsValueObj: @Boolean
+                 enter E[]
                  do E.ATd.asDecl -> D[]; D.OG.IS[] -> IT[];
                     fcTracer
                     (#do 'handleINV:loadOrigin:E:'->TT; E.doPT->Tl;
@@ -4017,16 +4023,51 @@ generator: codeGenMarker
                     if)
                         
                  #);
+               loadPath:
+                 (# lastIx,ix: @integer; E,rec,pRec: ^Exp
+                 enter lastIx
+                 do fcTracer(#do 'loadPath:lastIx:'->TT; lastIx->II;
+                            'doLoad:'->TT; doLoad -> BB #);
+                    (for i: exps.range - lastIx + 1 repeat
+                         lastIx - 1 + i -> ix;
+                         rec[] -> pRec[]; E[] -> rec[]; exps[ix][] -> E[];
+                         fcTracer(#do 'load:'->TT; E.dopt -> TL #);
+                         (if ix = 1 then
+                             E[] -> loadOrigin -> originIsValueObj
+                         if);
+                         (superAdj,0) -> E.loadArgs; 
+                         (if doLoad or (ix < exps.range) then
+                             checkForProxy;
+                             (rec[],E[]
+                             ,(ix < exps.range) or doLoad and useRtnVal
+                             ,staticOff,newAdr[])
+                               -> E.newInvoke;
+                         if)
+                    for)
+                 #);
                E,rec,pRec: ^Exp; newAdr: ^NewAddress; exps: [1] ^Exp;
-               superAdj,staticOff: @integer;
+               superAdj,staticOff,lastIx: @integer;
                isValueObj,doLoad,orgIsVal,loadRec: @boolean;
                useRtnVal,wasConst,originIsValueObj: @Boolean
             enter(useRtnVal,superAdj,staticOff,doLoad)
             do fcTracer
-               (#do 'handleInv:'->TT;doPT->TL; 'staticOff:'->TT;staticOff->II#);
+               (#do'handleInv:'->TT;doPT->TL;'staticOff:'->TT;staticOff->II#);
                getExps -> exps[];
+               1 -> lastIx;
                L:
                  (for i: exps.range repeat
+                      (* General: I1 I2 ... In 
+                       * With const: I1 I2 ... Ij CST Ij+2 ... In
+                       * lastIx := 1
+                       * for i: 1 to n repeat
+                       *     If Ii isConst then
+                       *        pushConst
+                       *        lastIx := i + 1
+                       *     else
+                       *       if i = n then
+                       *          if lastIx = 1 then loadOrigin
+                       *          push from lastIx to n/n - 1
+                       *)
                       rec[] -> pRec[]; E[] -> rec[]; exps[i][] -> E[];
                       false -> wasConst;
                       fcTracer(#do E.label -> TT; E.doPT -> TL #);
@@ -4050,8 +4091,14 @@ generator: codeGenMarker
                                   '\n!!!! isConst:not:last: '->dumpT; 
                                   E.doPT->dumpTN
                           if)if);
-                          true -> wasConst (*leave L*)
+                          true -> wasConst; (*leave L*)
+                          i + 1 -> lastIx;
                       if);
+                      (if true then
+                          (if i = exps.range then
+                              lastIx -> loadPath
+                          if)
+                       else
                       (if i = 1 then
                           E[] -> (NewAddress).add -> newAdr[]
                        else 
@@ -4069,7 +4116,7 @@ generator: codeGenMarker
                       if);    
                       (if not wasConst then
                           (if i = 1 then
-                              loadOrigin -> originIsValueObj
+                              E[] -> loadOrigin -> originIsValueObj
                           if);
                           newAdr[] -> E.getNewAdr -> (loadRec,newAdr[]);
                           fcTracer
@@ -4089,9 +4136,23 @@ generator: codeGenMarker
                            else
                               (* we shall load adr(E) *)
                               fCtracer(#do 'handleINV:last:loadAdr:'->TT;
-                                         E.dopt -> TL #)
+                                         E.dopt -> TL;
+                                         'doLoad:'->TT; doLoad -> BB;
+                                         'i < exps.range:'->TT;
+                                         i < exps.range -> BB
+                                      #);
+                              (* assuming E is a reference - we should probably
+                               * have a E.loadadr
+                               *)
+                              (* newline := nl - dont work 
+                              (if not doLoad and (i = exps.range) then
+                                  ('E:',E.ATd.newOff) -> cd.rpushg
+                              if);
+                               *)
                           if)
-                      if)
+                       else
+                          fcTracer(#do 'wasConst:'->TT; E.dopt->TL; #)
+                      if)if)
                  for);
                fcTracer(#do 'handleINV:end:'->TT; 
                           ('newAdr',newAdr[])->PT(#do newAdr.toString->TT#)#)
