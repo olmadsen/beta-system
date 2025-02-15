@@ -733,6 +733,27 @@ generator: codeGenMarker
                         if);
                     if)
                  #);
+               invokeValueObj:
+                 (#
+                 do (if false then
+                        cd.vpop;
+                        cd.saveAndSetThis;
+                        (* quite complex 1st arg, 
+                         * ex: E = P, where
+                         * P: var Point(0,0)
+                         * E.ATd.OG.super.last = Point(0,0) = X
+                         * X.ATd.OG = Point descriptor
+                         *)
+                        (sig.dopt,OG.IS.newDescNo,newOff - 1,inValueObj)
+                          -> cd.invokeVal;
+                        cd.rpop;
+                        cd.restoreThis
+                     else
+                        fcTracer
+                        (#do 'newInvoke:invokeValueObj:'->TT; dopt -> TL #);
+                        (newOff,OG.objSize,OG.IS.newDescNo) -> cd.pushValue;
+                    if)
+                 #);
                loadObj:
                  (#
                  do ('newInvoke',NewOff + valueOff) -> cd.rpushg
@@ -751,6 +772,7 @@ generator: codeGenMarker
                 // OG.isValueObj then
                    pfcTracer(#do 'DI:newInvoke:valueObj:missing'->TT;
                                dopt -> TL#);
+                   invokeValueObj
                 else
                    fctracer(#do 'DI:newInvoke:else:loadObj:'->TT;dopt->TL #);
                    loadObj
@@ -758,8 +780,9 @@ generator: codeGenMarker
             #);
 
           newStore:
-            (# valueOff: @integer; isNotRemote,originIsValueObj: @Boolean;
-            enter(valueOff,isNotRemote)
+            (# valueOff,mode: @integer; isNotRemote,originIsValueObj: @Boolean;
+               ptn: ^Pattern; 
+            enter(valueOff,isNotRemote,ptn[])
             do fcTracer(#do 'DI:newStore:'->TT; sig.dopt->TL;
                           ('off:',newOff)->TI; ('valueOff:',valueOff)->TI;
                           'isNotRemote:'->TT; isNotRemote->BB #);
@@ -775,9 +798,9 @@ generator: codeGenMarker
                            (if this(DataItem).origin.encOG.isValueObj then
                                fcTracer
                                (#do 'DI.origin.encOG.OG.isValueObj'->TT #);
-                               (OG.OGidWdNo,NewOff + valueOff) -> cd.fvstoreg
+                               (OG.OGidWdNo,newOff + valueOff) -> cd.fvstoreg
                             else
-                               (sig.id[],NewOff + valueOff) -> cd.fstoreg
+                               (sig.id[],newOff + valueOff) -> cd.fstoreg
                        if)if)
                     else
                        (if true then
@@ -788,32 +811,44 @@ generator: codeGenMarker
                                    this(DataItem).origin.encOG.isValueObj then
                                    cTracer(#do 'DI.origin.encOG.OG.isValueObj'
                                                ->TT #);
-                                   (OG.OGidWdNo,NewOff + valueOff) -> cd.vstoreg
+                                   (OG.OGidWdNo,newOff + valueOff) -> cd.vstoreg
                                 else
-                                   (OG.OGidWdNo,NewOff + valueOff) -> cd.storeg
+                                   (OG.OGidWdNo,newOff + valueOff) -> cd.storeg
                            if)if)
                         else
-                           (sig.id[],NewOff + valueOff) -> cd.storeg
+                           (sig.id[],newOff + valueOff) -> cd.storeg
                    if)if)
                 // OG.isValueObj then
-                   pfcTracer(#do 'DI:newStore:valueObj:missing'->TT;
-                               dopt -> TL #);
-                   (* // OG.primNo = string_prim then*)
-                else
+                   pfcTracer(#do 'DI:newStore:valueObj:missing'->TT;dopt->TL #);
+                   (* Two situations
+                    *   P1 := Point(5,6)   ptn[] <> none
+                    *   P1 := P2
+                    * should be handled in a more clean way
+                    *)
+                   (if ptn[] <> none then
+                       fcTracer(#do 'DI.newStore:valuePtn:'->TT #);
+                       (*cd.vpop;*)
+                       cd.saveAndSetThis;
+                       (sig.id[],ptn.OG.IS.newDescNo,newOff - 1,inValueObj)
+                         -> cd.invokeVal;
+                       cd.rpop;
+                       cd.restoreThis
+                    else
+                       (if originIsValueObj then 1 -> mode if);
+                       (newOff(*+ valueOff*),OG.objSize,mode) -> cd.vassign
+                   if)
+                else (* including OG.primNo = string_prim then*)
                    fcTracer
                    (#do 'DI:newStore:ref/String:'->TT; dopt -> TL #);
                    (if originIsValueObj then
-                        pfcTracer
+                       pfcTracer
                        (#do 'DI:newStore:String:no:rvstoreg:'->TT; dopt->TL #);
-                       (*(OG.OGidWdNo,NewOff + valueOff) -> cd.rvstoreg*)
+                       (*(OG.OGidWdNo,newOff + valueOff) -> cd.rvstoreg*)
                     else
                        cd.rswap;
-                       (OG.OGidWdNo,NewOff + valueOff) -> cd.rstoreg
-                   if);
-                   (*fcTracer
-                   (#do 'DI:newStore:elsePart:missing'->TT; dopt -> TL #);*)
-               if)
-            #); 
+                       (OG.OGidWdNo,newOff + valueOff) -> cd.rstoreg
+               if)if)
+               #); 
           store::
             (# gdb::(#do '>newOff:'->TT; newOff -> II;
                        ',isVirtualObject:' -> TT; isVirtualObject -> BB;
@@ -970,7 +1005,7 @@ generator: codeGenMarker
        (# handleAssign:
             (# MP:  ^Module; OIadr:  ^Address; (* newAddress ?*)
                leftE: ^Exp; leftDI:  ^DataItem; valueOff: @integer;
-               isNotRemote: @Boolean
+               isNotRemote: @Boolean; D: ^Decl
             do fcTracer(#do 'handleAssign:'->TT; dopt -> TL #);
                cd.bcPos -> beginBCP;
                (false,0 (*superAdj*),0,false) 
@@ -983,9 +1018,22 @@ generator: codeGenMarker
                  -> (mp[],OIadr[]);
                fcTracer
                (#do 'handleAssign:after:right:'->TT; dopt->TL;
-                  ('',OIadr[])->PT(#do OIadr.toString->TT #)#);
+                  ('OIadr:',OIadr[])->PT(#do OIadr.toString->TT #)#);
                leftE.ATd.asDecl -> leftDI[];
-               (valueOff,isNotRemote) -> leftDI.newStore
+               (* Two situations
+                *   P1 := Point(5,6)   ptn[] <> none
+                *   P1 := P2
+                * should be handled in a more clean way
+                *)
+               (if (right.super.ATd.asDecl -> D[]).isPattern then 
+                   (if D.OG.isValueObj and not D.OG.isBasicValue then
+                       pfcTracer
+                       (#do 'right:isPattern:valueObj:'-> TT; dopt -> TL #);
+                   if)
+                else
+                   none -> D[]
+               if);
+               (valueOff,isNotRemote,D[]) -> leftDI.newStore
             #);
           gen::
             (# isArgOfAssignI2IwithUniValArg: BooleanValue
@@ -3419,8 +3467,6 @@ generator: codeGenMarker
                                        cd.rswap;
                                        (nameOfE_OG,off) -> cd.rstoreg
                                     else
-                                       (* (if srcIsVal then 1 -> mode if);
-                                        * (if destIsVal then mode+2->mode if);*)
                                        (if originIsValue then 1 -> mode if);
                                        cTracer
                                        (#do 'Address:store::srcIsVal:'->TT; 
@@ -3434,7 +3480,6 @@ generator: codeGenMarker
                                           'size:'->TT; size -> II;
                                           'mode:'->TT; mode -> II
                                        #);
-                                       (if false then off -> cd.pushConst; if);
                                        (off,size,mode) -> cd.vassign
                                if)if)
                             else
@@ -4050,43 +4095,39 @@ generator: codeGenMarker
                     (if (staticOff = 0) 
                         and not (E.ATd.asDecl).OG.isBasicValue
                         and (E.ATd.asDecl).origin.encOG.isValueObj then
-                        (if true then
-                            (if (rec[] <> none) 
-                                and not (rec.ATd.asDecl).OG.isBasicValue then
-                                (if rec.ATd.OG.IS.isEmpty then
-                                    rec.ATd.OG.super.ATd.OG.IS.newDescNo -> dNo
-                                 else
-                                    (rec.ATd.asDecl).OG.IS.newDescNo->dNo
-                                if);
-                                cd.rdouble;
-                                fcTracer
-                                (#do 'rec.ATd.OG.super:'->TT; 
-                                   rec.ATd.OG.super.dopt -> TT;
-                                #);
-                                rec.ATd.OG.super.scanSons
-                                (# Ex: ^Exp
-                                do (if isFirst then
-                                       (current[]->E[]).loadOrigin
-                                   if)
-                                #);
-                                (dNo,(rec.ATd.asDecl).newOff - 1,false,false)
-                                  -> cd.mkValueProxy
+                        (if (rec[] <> none) 
+                            and not (rec.ATd.asDecl).OG.isBasicValue then
+                            (if rec.ATd.OG.IS.isEmpty then
+                                rec.ATd.OG.super.ATd.OG.IS.newDescNo -> dNo
                              else
-                                pfcTracer(#do 'checkForProxy:rec is none'->TT;
-                                            E.dopt -> TL #)
+                                (rec.ATd.asDecl).OG.IS.newDescNo->dNo
                             if);
-                         else
                             cd.rdouble;
-                            (dNo,(E.ATd.asDecl).newOff - 1,false,false)
+                            fcTracer
+                            (#do 'rec.ATd.OG.super:'->TT; 
+                               rec.ATd.OG.super.dopt -> TT;
+                            #);
+                            (* the next is probably not ok in general *)
+                            rec.ATd.OG.super.scanSons
+                            (# Ex: ^Exp
+                            do (if isFirst then
+                                   (current[]->E[]).loadOrigin
+                               if)
+                            #);
+                            (dNo,(rec.ATd.asDecl).newOff - 1,false,false)
                               -> cd.mkValueProxy
-                        if)
-                    if)
+                         else
+                            pfcTracer(#do 'checkForProxy:rec is none'->TT;
+                                        E.dopt -> TL #)
+                    if)if)
                  #);
                loadPath:
                  (# lastIx,ix: @integer; E,rec,pRec: ^Exp
                  enter lastIx
                  do fcTracer(#do 'loadPath:lastIx:'->TT; lastIx->II;
-                            'doLoad:'->TT; doLoad -> BB #);
+                               'doLoad:'->TT; doLoad -> BB;
+                               ('valueOff',valueOff)->TI;
+                               ('staticOff:',staticOff)->TI #);
                     (for i: exps.range - lastIx + 1 repeat
                          lastIx - 1 + i -> ix;
                          rec[] -> pRec[]; E[] -> rec[]; exps[ix][] -> E[];
@@ -4096,18 +4137,16 @@ generator: codeGenMarker
                          if);
                          (superAdj,0) -> E.loadArgs; 
                          (if doLoad or (ix < exps.range) then
-                             (if valueOff > 0 then
-                                 fcTracer
-                                 (#do('handleINV:doLoad:valueOff',valueOff)->TI;
-                                    ('staticOff:',staticOff)->TI #)
-                             if);
-                             (rec[],E[]) -> checkForProxy;
-                             (rec[],E[]
-                             ,(ix < exps.range) or doLoad and useRtnVal
-                             ,valueOff,staticOff,newAdr[])
-                               -> E.newInvoke;
-                         if)
-                    for)
+                             (if doLoad and (ix = exps.range)
+                                 or (ix < exps.range) and
+                                 (not (E.ATd.asDecl).OG.isValueObj
+                                 or (E.ATd.asDecl).OG.isBasicValue) then
+                                 (rec[],E[]) -> checkForProxy;
+                                 (rec[],E[]
+                                 ,(ix < exps.range) or doLoad and useRtnVal
+                                 ,valueOff,staticOff,newAdr[])
+                                   -> E.newInvoke;
+                    if)if)for)
                  #);
                E,rec,pRec: ^Exp; newAdr: ^NewAddress; exps: [1] ^Exp;
                superAdj,staticOff,lastIx,valueOff: @integer;
@@ -4233,7 +4272,6 @@ generator: codeGenMarker
                               fcTracer(#do 'wasConst:'->TT; E.dopt->TL; #)
                       if)if)
                  for);
-               (*exps.range = 1 -> isNotRemote;*)
                fcTracer
                (#do 'handleINV:end:'->TT; 'isNotRemote:'->TT; isNotRemote->BB;
                   ('newAdr',newAdr[])->PT(#do newAdr.toString->TT #)#)
