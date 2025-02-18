@@ -730,10 +730,16 @@ generator: codeGenMarker
                     if)if)
                  #);
                invokeValueObj:
-                 (#
+                 (# dn: @integer
                  do fcTracer
-                    (#do 'newInvoke:invokeValueObj:'->TT; dopt->TL #);
-                    (newOff,OG.objSize,OG.IS.newDescNo) -> cd.pushValue;
+                    (#do 'newInvoke:invokeValueObj:'->TT; dopt->TL;
+                    'E.ATd:'->TT; E.ATd.dopt -> TL #);
+                    (if OG.IS.isEmpty then
+                        (OG.super.ATd.asDecl).OG.IS.newDescNo -> dn
+                     else
+                        OG.IS.newDescNo -> dn
+                    if);
+                    (newOff,OG.objSize,dn) -> cd.pushValue;
                  #);
                loadObj:
                  (#
@@ -2909,9 +2915,10 @@ generator: codeGenMarker
                      * this(Pattern) = E.ATd
                      * formalArg is arg no. argInx of this(Pattern)
                      *)
-                    fcTracer(#do 'NonVirt:'->TT; E.doPT -> TQ; E.label->TQ;
-                             'ActArg: ' -> TT;actualArg.dopt->TQ;
-                             'isValue: ' -> TT;  actualArg.isValueObj->BB;
+                    fcTracer(#do 'NonVirt:'->TT; E.doPT -> TL; E.label->TL;
+                               'ActArg:' -> TT;actualArg.dopt->TQ;
+                               'isValue:' -> TT;  actualArg.isValueObj->BB;
+                               'formalArg:'->TT; formalArg.doPT->TL
                           #);
                     fcTracer(#do 'formalArg.OG.isBasicValue:' -> TT;
                              formalArg.OG.isBasicValue -> BB;
@@ -2970,26 +2977,31 @@ generator: codeGenMarker
                             then
                             fcTracer
                             (#do 'composite:valueObj:or:not:unitValue '->TT;
-                            ('OIadr:',OIadr[])->PT(#do OIadr.toString->TT #)#);
+                               ('OIadr:',OIadr[])->PT(#do OIadr.toString->TT #)#);
                             (*11 -> cd.pushConst;*)
-                            'C' -> mkCom;
-                            (OIadr.off,actualArg.objSize
-                            ,formalArg.OG.super.ATd.OG.IS.newDescNo)
-                              -> cd.pushValue;
+                                'C' -> mkCom;
+                            (if not newINVgen then
+                                (OIadr.off,actualArg.objSize
+                                ,formalArg.OG.super.ATd.OG.IS.newDescNo)
+                                  -> cd.pushValue;
+                            if);
                             1 -> cd.pushConst
                          else
                             fcTracer(#do 'actualArg:UnitOne?:'-> TT; 
-                                     actualArg.dopt-> TT #)
-                        if);
+                                       actualArg.dopt-> TT #)
+                        if)
                      else (* not NonBasicValueobj or not data-item *)
                         (if true     
                          // (this(Pattern).primNo = vEq_prim)
 			 // (this(Pattern).primNo = vLE_prim) then
                             cTracer(#do 'vEq:'->TT; #);
                          else (* this pattern is not assignment *)
-                            fcTracer(#do 'formalArg:isPtn:' -> TT; 
-                                     formalArg.doPT->TQ; 
-                                     ':isBasicVal:'->TT; 
+                            (* OBS! seems that actualArg is pattern *)
+                            fcTracer
+                            (#do 'actualArg:isPtn:' -> TT;
+                               (actualArg.super.ATd.asDecl).isPattern -> BB;
+                               'formalArg:isPtn:' -> TT; formalArg.doPT->TQ; 
+                               ':isBasicVal:'->TT; 
                                      formalArg.isBasicValue -> BB;
                                      ':valueObj:' -> TT; 
                                      formalArg.OG.isValueObj -> BB; nl;
@@ -3056,6 +3068,22 @@ generator: codeGenMarker
                                         1 -> cd.pushConst
                                     if);
                                  else
+                                    fcTracer
+                                    (#do 'other:isValueObj:'->TT;
+                                       (formalArg.OG.super.ATd.asDecl).OG.isValueObj 
+                                       and 
+                                       not (formalArg.OG.super.ATd.asDecl).isBasicValue  
+                                         -> BB;
+                                    #);
+                                    (if newINVgen
+                                        and
+                                        (formalArg.OG.super.ATd.asDecl)
+                                        .OG.isValueObj 
+                                        and 
+                                        not (formalArg.OG.super.ATd.asDecl)
+                                        .isBasicValue   then
+                                        0 -> cd.pushConst
+                                     else
                                     (formalArg.OG.super.ATD.asDecl).OG[] 
                                       -> superOG[];
                                     (if superOG.primNo 
@@ -3083,7 +3111,7 @@ generator: codeGenMarker
                                              else
                                                 superOG.IS.newDescNo 
                                                   -> cd.mkVindexed
-                    if)if)if)if)if)if)if);
+                    if)if)if)if)if)if)if)if);
                     fcTracer(#do 'end:loadArgs:NonVirt:' -> TT; E.dopt -> TQ #);
                  #);
                actArgs: [6] ^ObjectSpecification; (* actual arguments *)
@@ -4107,10 +4135,8 @@ generator: codeGenMarker
                  (# lastIx,ix: @integer; E,rec,pRec: ^Exp
                  enter lastIx
                  do fcTracer
-                    (#do 'loadPath:'->TT; doPT->TL;
-                       'lastIx:'->TT; lastIx->II;
-                       'doLoad:'->TT; doLoad -> BB;
-                       ('valueOff',valueOff)->TI;
+                    (#do 'loadPath:'->TT; doPT->TL; 'lastIx:'->TT; lastIx->II;
+                       'doLoad:'->TT; doLoad -> BB; ('valueOff',valueOff)->TI;
                        ('staticOff:',staticOff)->TI #);
                     (if lastIx > 1 then
                         exps[lastIx - 1][] -> E[]; (* becomes rec below *)
@@ -4118,21 +4144,22 @@ generator: codeGenMarker
                     (for i: exps.range - lastIx + 1 repeat
                          lastIx - 1 + i -> ix;
                          rec[] -> pRec[]; E[] -> rec[]; exps[ix][] -> E[];
-                         fcTracer(#do 'load:'->TT; E.dopt -> TL #);
+                         fcTracer(#do 'loadPath:E:'->TT; E.dopt -> TL #);
                          (if ix = 1 then
+                             fcTracer(#do 'loadOrigin:E:'->TT; E.dopt -> TL #);
                              E[] -> loadOrigin -> originIsValueObj
                          if);
+                         fcTracer
+                         (#do 'loadPath:before:E.loadArgs:'->TT; E.dopt->TL #);
                          (superAdj,0) -> E.loadArgs; 
                          (if doLoad or (ix < exps.range) then
                              (if doLoad and (ix = exps.range)
                                  or (ix < exps.range) and
                                  (not (E.ATd.asDecl).OG.isValueObj
                                  or (E.ATd.asDecl).OG.isBasicValue) then
-                                 (if true or (rec[] = none) then
-                                     fcTracer
-                                     (#do 'before:'->TT; E.dopt->TL; 
-                                        lastIX->II; i->II; staticOff -> II #)
-                                 if);
+                                 fcTracer
+                                 (#do 'before:checkForProxy:'->TT; E.dopt->TL; 
+                                    lastIX->II; i->II; staticOff -> II #);
                                  (rec[],E[]) -> checkForProxy;
                                  (rec[],E[]
                                  ,(ix < exps.range) or doLoad and useRtnVal
@@ -4293,7 +4320,7 @@ generator: codeGenMarker
                needOrigin: 
                  (# IT: ^Items; Ex: ^Exp; value,originIsValueObj: @Boolean
                  do true -> value;
-                    cTracer(#do 'needorigin:'-> TT; dopt -> TL #);
+                    fcTracer(#do 'needorigin:'-> TT; dopt -> TL #);
                     scanSons
                     (#
                     do IVlength + 1 -> IVlength;
@@ -4313,7 +4340,7 @@ generator: codeGenMarker
                                E[] -> rec[] -> Ex[];
                                IVlength -> IVinx
                     if)if)#);
-                    ctracer
+                    fctracer
                     (#do 'needOrigin:E:'->TT; E.dopt -> TL;
                        ' E.ATd:'-> TT; E.ATd.dopt -> TL; 
                        ('Ex:', Ex[])->PT(#do EX.dopt -> TL #);
@@ -4352,14 +4379,23 @@ generator: codeGenMarker
                             ' E: ' -> puttext; E.dopt -> puttext;
                             ' Ex: ' -> puttext; Ex.dopt -> putline
                         if); 
-                        fcTracer(#do 'doNeedOrigin:Ex:'->TT; Ex.dopt -> TQ #);
+                        fcTracer
+                        (#  org: ^Items
+                        do 'doNeedOrigin:Ex:'->TT; Ex.dopt -> TQ;
+                           'originIsValueObj:'->TT;
+                           IT.origin.encOG.isValueObj -> BB;
+                           'origin.isPrimitive:'->TT; 
+                           (origin[]->org[]).isPrimitive -> BB
+                        #);
                         (# org: ^Items
                         do (if (IT.origin[]->org[]).encOG.isValueObj
                                and not org.isPrimitive
                                -> originIsValueObj then
-                               cTracer(#do 'origin:isValueObj:'->TT;
+                               fcTracer(#do 'origin:isValueObj:'->TT;
                                          (IT.origin[]->org[]).encOG.OGid -> TQ 
-                                      #)
+                                       #)
+                            else
+                               fcTracer(#do 'KUK' -> TT #)
                         if)#)
                     if);
                     not value -> noOrigin
@@ -4513,9 +4549,9 @@ generator: codeGenMarker
                (if done then leave gen if);
                
                needOrigin -> (doNeedOrigin,originIsValueObj);
-               cTracer(#do 'after:needOrigin:'->TT; E.dopt -> TL #);
+               fcTracer(#do 'after:needOrigin:'->TT; E.dopt -> TL #);
                (if doNeedOrigin then
-                   ctracer(#do 'doNeedOrigin:E:'->TT; E.dopt->TL #);
+                   fctracer(#do 'doNeedOrigin:E:'->TT; E.dopt->TL #);
                    (if true then
                        superAdj -> computeAdrX -> (rec[],E[],A[]);
                     else
@@ -4933,7 +4969,7 @@ generator: codeGenMarker
                               cd.I2F
                   if)if)if);
                   (if isLast then
-                      cTracer(#do 'computeAdrX:isLast:E: '->TT; E.dopt->TQ #)
+                      fcTracer(#do 'computeAdrX:isLast:E: '->TT; E.dopt->TQ #)
                if)#);
             exit(rec[],E[],A[])
             #);          
