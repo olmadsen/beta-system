@@ -65,6 +65,7 @@ close_interpreter: external(# do callC #);
 
 betaVM:
   (# ready: @boolean;
+     withDumps: (#exit true #);
      testConc: (# exit false #);
      withValueProxy: @boolean;
      valueProxyDescNo: @integer;
@@ -350,6 +351,7 @@ betaVM:
      thisValObjDesc: ^ObjDesc;
      thisValObjDescInx: @integer;
      
+     arrayStrucSize: (#exit 2 #); (* size of origin+length of Array object *)
      newAllocOff: @integer;
      
      runMode: @integer;
@@ -944,7 +946,7 @@ betaVM:
             (# descNo,off,isValueObj,originIsValueObj: @integer;
                VP,X,Y,Z: ^objDesc.template;
             enter(descNo,off,isValueObj,originIsValueObj)
-            do (if false then
+            do (if withDumps then
                    (if isValueObj = 1 then
                        '\n**** mkValueProxy:valueProxyDescNo: ' -> puttext;
                        valueProxyDescNo -> putint;
@@ -973,7 +975,7 @@ betaVM:
                    (4,descNo) -> VP.put;
                if);
                VP[] -> thisStack.rPush;
-               (if false then
+               (if withDumps then
                    ('ValueProxy',true,out[]) -> VP.dump;
                    (if X[] <> none then
                        ('ValueOrigin',true,out[]) -> X.dump;
@@ -2070,38 +2072,54 @@ betaVM:
                         (thisObj[],thisObj[],false,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.rTopElm)
                           -> rPushEvent
                      // codes.xpushg then
+                        (* rStack: ... X = Array-object
+                         * vStack: ... inx = size(Array.elm)
+                         *)
                         (# ix: @integer
-                        do 'xpushg' -> exe; op1 -> off; 
-                           op1 -> isValueObj; op1 -> size;
+                        do 'xpushg' -> exe; 
+                           'off: ' -> out.puttext; op1 -> off; 
+                           (* off is always 1 and can be eliminated *)
+                           'isValueObj: ' -> out.puttext; op1 -> isValueObj; 
+                           'size: ' -> out.puttext; op1 -> size;
+                           'newAllocOff: ' -> out.puttext;
+                           newAllocOff -> out.putint;
                            thisStack.rpop -> X[];
                            thisStack.vpop -> inx;
-                           'inx: ' -> out.puttext; inx ->out.putint;
+                           ' inx: ' -> out.puttext; inx -> out.putint;
                            out.newline;                           
                            ('xpushg:',true,out[]) -> X.dump;
                            (if (isValueObj = 0) and (size = 1) then
                                (* basic object: imply size = 1
                                 * off = 1, probably the same value
                                 * as used in QallocIndexed and
-                                * off newAllocOff = 2, always!?
+                                * off + newAllocOff = 2, always!?
                                 *)
-                               inx + off + newAllocOff -> ix;
-                               ix -> X.get -> value -> thisStack.vpush;
+                               (*inx + newAllocOff + off -> ix;*)
+                               arrayStrucSize + inx -> ix 
+                                 -> X.get -> value -> thisStack.vpush;
                                (X[],ix,value) -> VtoOut;
                             else (* valueObject *)
                                (if size > 1 then
                                    (for i: size repeat
-                                        inx + off + newAllocOff + i - 2 
-                                          -> ix -> X.get
+                                        (*off + newAllocOff + inx + i - 2 
+                                          -> ix -> X.get -> value
+                                         -> thisStack.vPush;*)
+                                        (* size = 2: inx = 2,4,6, ...
+                                         * size = 3: inx = 3,6,9, ...
+                                         *)
+                                        arrayStrucSize + inx + i - 2 -> ix 
+                                          -> X.get -> value
                                           -> thisStack.vPush;
+                                        ' val: ' -> out.puttext;
+                                        ix -> out.putint; ':' -> out.put;
+                                        value -> out.putint; 
                                    for)
-                                else
-                                   inx + off + newAllocOff + 1 - 2  -> ix 
+                                else (* should never happen: size = '*)
+                                   '\n!!! should not happen: size = 0'->putline;
+                                   inx + newAllocOff + off + 1 - 2  -> ix 
                                      -> thisStack.vPush;
                                    X[] -> thisStack.rpush
-                               if);
-                               (*X[] -> thisStack.rpush - why ? *)
-                           if);
-                           (*('xpushg:',true,out[]) -> thisStack.dump;*)
+                           if)if);
                            (thisObj[],X[],true,thisStack[],off,true,inx
                            ,thisCode.descInx,glsc,thisStack.vTopElm)
                              -> vPushEvent  
@@ -2415,7 +2433,7 @@ betaVM:
                            if);
                         #);
                         (X[],off + inx + newAllocOff,value) -> VtoOut;
-                        (*('xstoreg:',true,out[]) -> R.dump;*)
+                        ('xstoreg:',true,out[]) -> R.dump;
                         (thisObj[],thisStack[],true,R[],off,true,inx,thisCode.descInx,glsc,value) -> vStoreEvent
                        // codes.xrstoreg then
                         'xrstoreg' -> exe; op1 -> off;
