@@ -2814,8 +2814,7 @@ generator: codeGenMarker
                           #);
                    NA[] -> checkGlobalsViolations;
                    (if encOG.IS.newOriginOff = 0 then 
-                       '!!!! encOG.IS.newOriginOff = 0:'->dumpTN;
-                       fcTracer(#do '!!!! encOG.IS.newOriginOff = 0:'->TT #);
+                       pfcTracer(#do '!!!! encOG.IS.newOriginOff = 0:'->TT #);
                        fcTracer(#do (if sig[] <> none then sig.dopt -> TQ
                                else dopt -> TL if)#);
                        fcTracer(#do encOG.dopt -> TL #);
@@ -4188,8 +4187,19 @@ generator: codeGenMarker
                checkForProxy:
                  (* rstack[rtop] = adr(E) 
                   *)
-                 (# pRec,rec,E: ^Exp;  dNo,off: @integer; 
-                    typeAsOG: ^ObjectGenerator;
+                 (# recDeclInValueObj: BooleanValue
+                      (#
+                      do L: rec.ATd.OG.super.scanSons
+                           (* super = Invocation = R1.R2.R3.E *)
+                           (# Ey: ^Exp
+                           do (current[]->Ey[]).origin.encOG.isValueObj
+                                -> value;
+                              (* only check R1 ? probably no! *)
+                              leave L
+                           #);
+                      #);
+                    pRec,rec,E: ^Exp;  dNo,off: @integer; 
+                    typeAsOG: ^ObjectGenerator
                  enter(pRec[],rec[],E[])
                  do (if E.ATd.OG.IS.isEmpty then
                         E.ATd.OG.super.ATd.OG.IS.newDescNo -> dNo
@@ -4198,12 +4208,10 @@ generator: codeGenMarker
                     if);
                     fcTracer
                     (#do 'checkForProxy:'->TT; E.dopt->TL;
-                       'isBasicValue:'->TT;
-                       (E.ATd.asDecl).OG.isBasicValue -> BB;
+                       'isBasicValue:'->TT;(E.ATd.asDecl).OG.isBasicValue -> BB;
                        'origin.isValueObj:'->TT;
                        (E.ATd.asDecl).origin.encOG.isValueObj -> BB;
-                       'staticOff:'->TT; staticOff->II;
-                       'descNo:'->TT; dNo->II;
+                       'staticOff:'->TT; staticOff->II; 'descNo:'->TT; dNo->II;
                        ('rec:',rec[])->PT(#do rec.dopt->TL #);
                        'rec=E'->TT; rec[] = E[] -> BB
                     #);
@@ -4222,14 +4230,25 @@ generator: codeGenMarker
                                   -> (typeAsOG[],off);
                                 typeAsOG.IS.newDescNo -> dNo;
                                 cd.rdouble;
-                                (* the next is probably not ok in general *)
-                                rec.ATd.OG.super.scanSons
-                                (# Ex: ^Exp
-                                do (if isFirst then
-                                       (current[]->E[]).loadOrigin
-                                   if)
+                                fcTracer
+                                (#do 'rec:'->TT; rec.dopt -> TL;
+                                   'rec.origin:'->TT; rec.origin.dopt -> TL; 
+                                   'E:'->TT; E.dopt->TL;
                                 #);
-                                (dNo,off - 1,false,false) -> cd.mkValueProxy
+                                (if recDeclInValueObj then
+                                    pfcTracer
+                                    (#do 'originIsValueObj:'->TT;rec.dopt->TL#);
+                                    true -> originIsValueObj
+                                 else
+                                    (* the next is probably not ok in general *)
+                                    rec.ATd.OG.super.scanSons
+                                    (# Ex: ^Exp
+                                    do (if isFirst then
+                                           (current[]->E[]).loadOrigin
+                                       if)
+                                #)if);
+                                (dNo,off - 1,false,originIsValueObj)
+                                  -> cd.mkValueProxy
                              else
                                 (if rec.ATd.OG.IS.isEmpty then
                                     rec.ATd.OG.super.ATd.OG.IS.newDescNo -> dNo
@@ -4567,16 +4586,15 @@ generator: codeGenMarker
                      else
                         rec.ATd.OG.IS.newDescNo -> orgDescNo
                     if);
-                    fcTracer(#do 'CreateProxyW:E:'->TT; E.dopt->TQ;
-                              'E.ATd.origin.encOG:OGid'->TT; 
-                              org.encOG.OGid -> TQ;
-                              'origin:descNo:'->TT; orgDescNo -> II;
-                              (org.origin[] -> org[]).encOG.OGid -> TQ;
-                              dopt -> TL; nl;
-                              'rec.ATd:'->TT; rec.ATd.dopt->TQ; 
-                              'rec.ATd.newOff:'->TT; rec.ATd.newOff -> II;
-                              rec.ATd.OG.IS.newdescNo -> II
-                           #);
+                    fcTracer
+                    (#do 'CreateProxyW:E:'->TT; E.dopt->TQ;
+                       'E.ATd.origin.encOG:OGid'->TT; org.encOG.OGid -> TQ;
+                       'origin:descNo:'->TT; orgDescNo -> II;
+                       (org.origin[] -> org[]).encOG.OGid -> TQ; dopt->TL; nl;
+                       'rec.ATd:'->TT; rec.ATd.dopt->TQ; 
+                       'rec.ATd.newOff:'->TT; rec.ATd.newOff -> II;
+                       rec.ATd.OG.IS.newdescNo -> II
+                    #);
                     cd.rdouble;
                     (* find receiver of E - assumes that E is last, 
                      * which may not be the case - see mkValueProxyX
@@ -4599,13 +4617,12 @@ generator: codeGenMarker
                     if);
                     (if recOfE[] <> none then
                         fcTracer
-                        (#do  'recOfE:'->TT; recOfE.dopt->TQ; 
+                        (#do 'recOfE:'->TT; recOfE.dopt->TQ; 
                            'recOfE.ATd:'->TT; recOfE.ATd.doPT->TL #);
                         (if (recOfE.ATd.OG.getReturnDecl->D[])  <> none then
                             fcTracer
                             (#do 'recOfE:has:rtnValue:'->TT; D.dopt->TL #);
-                            (orgDescNo,D.newOff - 1
-                            ,inValueObj,originIsValueObj)
+                            (orgDescNo,D.newOff - 1,inValueObj,originIsValueObj)
                               -> cd.mkValueProxy
                          else                            
                             recOfE.ATd.OG.super.scanSons
@@ -4634,8 +4651,7 @@ generator: codeGenMarker
                                      -> cd.mkValueProxy
                                 else
                                    cTracer(#do 'next:'->TT; Ey.dopt -> TQ #)
-                            if)#)
-                        if)
+                        if)#)if)
                      else
                         (* Perhaps the arguments are not static but must
                          * be supplied at run-time. 
