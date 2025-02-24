@@ -725,8 +725,8 @@ generator: codeGenMarker
           newInvoke::
             (# invokeCmpAndSwap:
                  (#
-                 do pfcTracer
-                    (#do 'DI:newInvoke:cmpAndSwaP:missing'->TT; dopt -> TL;
+                 do fcTracer
+                    (#do 'DI:newInvoke:cmpAndSwap:'->TT; dopt -> TL;
                        ('next:',next[]) -> PT(#do next.dopt -> TL #)#);
                     newOff -> cd.pushconst
                  #);
@@ -840,9 +840,13 @@ generator: codeGenMarker
             enter(valueOff,isNotRemote,ptn[],rightQual[])
             do fcTracer(#do 'DI:newStore:'->TT; sig.dopt->TL;
                           ('off:',newOff)->TI; ('valueOff:',valueOff)->TI;
-                          'isNotRemote:'->TT; isNotRemote->BB #);
-               not isNotRemote and this(DataItem).origin.encOG.isValueObj
+                          'isNotRemote:'->TT; isNotRemote->BB;
+                          'originIsValueObj:'->TT;
+                          this(DataItem).origin.encOG.isValueObj -> BB;
+                       #);
+               (*not isNotRemote and*) this(DataItem).origin.encOG.isValueObj
                  -> originIsValueObj;
+               fcTracer(#do 'originIsValueObj:'->TT; originIsValueObj->BB #);
                (if valueOff > 0 then valueOff - 1 -> valueOff if);
                (if true 
                 // OG.isBasicValue // OG.primNo = value_prim then
@@ -1057,8 +1061,8 @@ generator: codeGenMarker
      AssignmentStatement::
        (# handleAssign:
             (# MP:  ^Module; OIadr:  ^Address; (* newAddress ?*)
-               leftE: ^Exp; leftDI:  ^DataItem; valueOff: @integer;
-               isNotRemote: @Boolean; D: ^Decl
+               leftE: ^Exp; leftDI,DI:  ^DataItem; valueOff: @integer;
+               isNotRemote: @Boolean; D: ^Decl; ptn: ^Pattern
             do fcTracer(#do 'handleAssign:'->TT; dopt -> TL #);
                cd.bcPos -> beginBCP;
                (false,0 (*superAdj*),0,false) 
@@ -1073,15 +1077,30 @@ generator: codeGenMarker
                (#do 'handleAssign:after:right:'->TT; dopt->TL;
                   ('OIadr:',OIadr[])->PT(#do OIadr.toString->TT #)#);
                leftE.ATd.asDecl -> leftDI[];
-               (* Two situations
+               (* Three situations
                 *   P1 := Point(5,6)   ptn[] <> none
                 *   P1 := P2
+                *   P1 := mkPoint(e1,e2) - returns a Point
                 * should be handled in a more clean way
+                * Case (1) is handled by passing D[] to newStore below
+                * Case (3) is handled by pushValue below
+                * (3) and perhaps (1) should perhapsd be handler by gen above!?
                 *)
                (if (right.super.ATd.asDecl -> D[]).isPattern then 
                    (if D.OG.isValueObj and not D.OG.isBasicValue then
                        fcTracer(#do 'right:isPattern:valueObj:'->TT;dopt->TL #);
-                   if);
+                    else
+                       (D[]->ptn[]).getReturnDecl -> D[];
+                       (if D[] <> none then
+                           fcTracer
+                           (#do 'right:isPTN:not:valueObj:'->TT; D.dopt -> TL#);
+                           (if (D[]->DI[]).OG.isValueobj 
+                               and not D.OG.isBasicValue then
+                               (D.newOff,D.OG.objSize,D.OG.IS.newDescNo) 
+                                 -> cd.pushValue
+                           if);
+                           none -> D[]
+                   if)if)
                 else
                    none -> D[]
                if);
@@ -4297,6 +4316,11 @@ generator: codeGenMarker
                  #);
                loadPath:
                  (# next:
+                      (* we need to pass the next exp to newInvoke fo
+                       *    mutex.cmpAndSwap(1)
+                       * we shall push mutex.off and not load its value
+                       * This is a bit clumsy
+                       *)
                       (# ix:@integer; succ: ^Exp
                       enter ix
                       do fcTracer(#do 'loadPath:next:'->TT; ix->II; 
