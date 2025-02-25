@@ -756,6 +756,15 @@ generator: codeGenMarker
                                 ('newInvoke',newOff + valueOff) -> cd.pushg
                     if)if)if)
                  #);
+               invokeUnitValueObj:
+                 (#
+                 do fcTracer
+                    (#do 'DI:invokeUnitValueObj:'->TT; dopt->TT; 'isAdr:'->TT; isAdr->BB #);
+                    (if not isAdr or 
+                        (next[] <> none) and (next.ATd.asDecl).OG.isBasicValue then
+                        ('newInvoke',newOff (*+ valueOff*)) -> cd.fpushg
+                    if)
+                 #);
                invokeValueObj:
                  (# dn: @integer; ITx:  ^Items
                  do fcTracer
@@ -798,6 +807,8 @@ generator: codeGenMarker
                     else
                        loadPrimitive
                    if)
+                // OG.isUnitValueObj then
+                   invokeUnitValueObj
                 // OG.isValueObj then
                    invokeValueObj
                 else
@@ -843,13 +854,17 @@ generator: codeGenMarker
                           'isNotRemote:'->TT; isNotRemote->BB;
                           'originIsValueObj:'->TT;
                           this(DataItem).origin.encOG.isValueObj -> BB;
+                          'isUnitValueObj:'->TT; OG.isUnitValueObj-> BB
                        #);
                (*not isNotRemote and*) this(DataItem).origin.encOG.isValueObj
                  -> originIsValueObj;
                fcTracer(#do 'originIsValueObj:'->TT; originIsValueObj->BB #);
                (if valueOff > 0 then valueOff - 1 -> valueOff if);
                (if true 
-                // OG.isBasicValue // OG.primNo = value_prim then
+                // OG.isBasicValue 
+                // OG.isUnitValueObj
+                // OG.primNo = value_prim then
+                   (if OG.isUnitValueObj then 0 -> valueOff if); (* hack! *)
                    (if (OG.primno = float_prim) or OG.isUnitValueObj then
                        checkForI2F;
                        (if nameListInDcl then
@@ -4148,26 +4163,53 @@ generator: codeGenMarker
                if)
             #);
           handleInv:
-            (# loadOrigin:
+            (# needOrigin: BooleanValue
+                 (# lastE: ^Exp; D: ^Decl; IT: ^Items;
+                 do exps[exps.range][] -> lastE[];
+                    lastE.ATd.asDecl -> D[]; D.OG.IS[] -> IT[];
+                    (if true
+                     // not D.isPattern then
+                        true -> value;
+                     // IT.globalRestrictionsInMain and not IT.inVirtualPtn then
+                        false -> value
+                     else
+                        true -> value
+                    if);
+                    fcTracer
+                    (#do 'needOrigin:lastE:'->TT; lastE.dopt->TL; 
+                       'needOrigin:'->TT; value->BB; #);
+                 #);
+               loadOriginII:
+                 (# E: ^Exp;
+                 enter E[]
+                 do fcTracer(#do 'loadOriginII:'->TT; E.dopt-> TL#);
+                    E.pushThis;
+                    superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
+                 #);
+               loadOrigin:
                  (* not Pattern / isDataItem     ==> loadOrigin
                   * IT.globalRestrictionsInMain 
                   *    and not IT.inVirtualPtn   ==> no loadOrigin
                   * not IT.globalsRestrictionsInMain
                   *    or IT.inVirtualPtn        ==> loadOrigin
                   *)
-                 (# E: ^Exp; D: ^Decl; IT:  ^Items; originIsValueObj: @Boolean
+                 (# E: ^Exp; D: ^Decl; IT:  ^Items; originIsValueObj: @Boolean;
+                    I: @integer
                  enter E[]
                  do E.ATd.asDecl -> D[]; D.OG.IS[] -> IT[];
                     fcTracer
                     (#do 'handleINV:loadOrigin:E:'->TT; E.doPT->Tl;
                        'isPattern:'->TT; (E.Atd.asDecl).isPattern -> BB;
                        'isDataItem:'->TT; (E.Atd.asDecl).isDataItem -> BB;
-                       'isValueObj:'->TT;
-                       (E.ATd.asDecl).OG.isValueObj -> BB;
-                       'globRestric:'->TT;
-                       IT.globalRestrictionsInMain 
-                       and not IT.inVirtualPtn -> BB
+                       D.father.father.dopt -> TL;
+                       'E.decl:'->TT; D.dopt -> TL;
+                       'D.isValueObj:'->TT;
+                       D.OG.isValueObj -> BB;
+                       'globRestricInMain:'->TT;
+                       IT.globalRestrictionsInMain ->BB; 
+                       'IT.inVirtualPtn:'->TT; not IT.inVirtualPtn -> BB
                     #); 
+                    (* M.isDataItem = false for a Module *)
                     (if (*D.OG.isValueObj and not D.OG.isBasicValue 
                          or*)
                         not (E.ATd.asDecl).isPattern (* DataItem *)
@@ -4279,7 +4321,10 @@ generator: codeGenMarker
                      *)
                     (if (staticOff = 0) 
                         and not (E.ATd.asDecl).OG.isBasicValue
-                        and (E.ATd.asDecl).origin.encOG.isValueObj then
+                        and (E.ATd.asDecl).origin.encOG.isValueObj
+                       
+                        (*and not (E.ATd.asDecl).origin.encOG.isUnitValueObj*)
+                        then
                         (if (rec[] <> none) 
                             and not (rec.ATd.asDecl).OG.isBasicValue then
                             (prec[],rec[]) -> getTypeAsOG -> (typeAsOG[],off);
@@ -4330,7 +4375,7 @@ generator: codeGenMarker
                          if)
                       exit succ[]
                       #);
-                    lastIx,ix: @integer; E,rec,pRec: ^Exp
+                    lastIx,ix: @integer; E,rec,pRec: ^Exp; Ed: ^Decl;
                  enter lastIx
                  do fcTracer
                     (#do 'loadPath:'->TT; doPT->TL; 'lastIx:'->TT; lastIx->II;
@@ -4339,29 +4384,42 @@ generator: codeGenMarker
                     (if lastIx > 1 then
                         exps[lastIx - 1][] -> E[]; (* becomes rec below *)
                     if);
+
                     (for i: exps.range - lastIx + 1 repeat
                          lastIx - 1 + i -> ix;
                          rec[] -> pRec[]; E[] -> rec[]; exps[ix][] -> E[];
+                         E.ATd.asDecl -> Ed[];
                          fcTracer
                          (#do 'loadPath:E:'->TT; E.dopt->TL; lastIX->II; i->II; 
-                                    'exps.range:'->TT; exps.range->II;
-                                    'staticOff:'->TT; staticOff -> II #);
+                            'exps.range:'->TT; exps.range->II;
+                            'staticOff:'->TT; staticOff -> II #);
                          (if ix = 1 then
-                             fcTracer(#do 'loadOrigin:E:'->TT; E.dopt -> TL #);
-                             E[] -> loadOrigin -> originIsValueObj
-                         if);
+                             (if true then
+                                 (if doNeedOrigin then
+                                     E[] -> loadOriginII
+                                 if)
+                              else
+                                 fcTracer(#do 'loadOrigin:E:'->TT;E.dopt->TL #);
+                                 E[] -> loadOrigin -> originIsValueObj
+                         if)if);
                          fcTracer
                          (#do 'loadPath:before:E.loadArgs:'->TT; E.dopt->TL #);
                          (superAdj,0) -> E.loadArgs; 
                          (if doLoad or (ix < exps.range) then
-                             fcTracer(#do 'E:'->TT; E.doPT->TL; 'primNo:'->TT;
-                                        (E.ATd.asDecl).OG.primNo -> II #);
+                             fcTracer
+                             (#do 'E:'->TT; E.doPT->TL; 
+                                'E.isBasicValue:'->TT;Ed.OG.isBasicValue->BB;
+                                'E.isValueObj'->TT; Ed.OG.isValueObj->BB;
+                                'E.isUnitValueObj:'->TT;Ed.OG.isUnitValueObj->BB;
+                                'primNo:'->TT; Ed.OG.primNo->II;
+                             #);
                              (if doLoad and (ix = exps.range)
                                  or (ix < exps.range) 
                                  and
-                                   ((not (E.ATd.asDecl).OG.isValueObj
-                                      or ((E.ATd.asDecl).OG.primNo = 18))
-                                 or (E.ATd.asDecl).OG.isBasicValue) then
+                                 ((not (E.ATd.asDecl).OG.isValueObj
+                                 or ((E.ATd.asDecl).OG.primNo = this_prim))
+                                 or (E.ATd.asDecl).OG.isBasicValue)
+                                 or Ed.OG.isUnitValueObj then
                                  fcTracer
                                  (#do 'before:checkForProxy:'->TT; E.dopt->TL#);
                                  fcTracer
@@ -4382,18 +4440,21 @@ generator: codeGenMarker
                E,rec,pRec: ^Exp; newAdr: ^NewAddress; exps: [1] ^Exp;
                superAdj,staticOff,lastIx,valueOff: @integer;
                isValueObj,doLoad,orgIsVal,loadRec,isNotRemote: @boolean;
-               useRtnVal,wasConst,originIsValueObj: @Boolean
+               useRtnVal,wasConst,originIsValueObj,doNeedOrigin: @Boolean
             enter(useRtnVal,superAdj,staticOff,doLoad)
             do fcTracer
                (#do'handleInv:'->TT;doPT->TL;'staticOff:'->TT;staticOff->II;
                   'doLoad:'->TT; doLoad-> BB#);
                getExps -> exps[];
+               needOrigin -> doNeedOrigin;
                fctracer
                (#do 'exps.range:'->TT; exps.range -> II;
                   (for i: exps.range repeat
                        ('exps[i]:',exps[i][]) -> PT(#do exps[i].dopt->TL #)
-                  for)
+                  for);
+                  'needOrigin:'->TT; doNeedOrigin->BB
                #);
+
                1 -> lastIx;
                L:
                  (for i: exps.range repeat
@@ -4519,7 +4580,7 @@ generator: codeGenMarker
                          * or also %globals P1,P2,P3
                          * If the latter is covered, this check is not correct
                          *)
-                        fcTracer(#do 'Ex:loadOrign:no:loadOrigin: ' -> TT;
+                        fcTracer(#do 'Ex:loadOrgin:no:loadOrigin: ' -> TT;
                                  IT.encOG.doPT -> TL #);
                         (if value and false then
                             '!!! needOrigin:conflict:A: ' -> puttext; 
