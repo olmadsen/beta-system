@@ -330,8 +330,8 @@ generator: codeGenMarker
                     (#
                     do 'DI:gen:' -> TT; doPT -> TL;
                        'DI:isConst:' -> TT; isConst -> BB;
-                       ':isBasicValue:'->TT; OG.isBasicValue->BB;
-                       ':primNo:'->TT; OG.primNo -> II;
+                       'isBasicValue:'->TT; OG.isBasicValue->BB;
+                       'primNo:'->TT; OG.primNo -> II;
                  #)#);
                T: @text; org: ^Items; D: ^DataItem; rtnOff: @integer
             do trace1;
@@ -339,7 +339,7 @@ generator: codeGenMarker
                 // OG.isBasicPattern and not OG.isConstLiteral then
                    (* No OG.gen for X: var/val integer
                     * Cf the discussion of #foo versus foo  *)
-                   fcTracer(#do 'DI:add:BP1: ' -> TT; sig.dopt -> TT #);
+                   fcTracer(#do 'DI:gen:primitiveType:'->TT; sig.dopt->TT #);
                 // OG.isBasicValue then 
                    (* C1,C2,V1,V2                
                     * X: val integer(7)
@@ -357,7 +357,7 @@ generator: codeGenMarker
                        (* If OG is valueObj then
                         * newOff = 0 does not work
                         *)
-                       fcTracer(#do 'DI:add:BP2: ' -> TT; sig.dopt -> TT #);
+                       fcTracer(#do 'DI:valueObj:' -> TT; sig.dopt -> TT #);
                        (true,0,0) -> OG.gen 
                     else (* when is newOff needed here? *)
                        cTracer(#do 'DI:add:BP3: ' -> TT; sig.dopt -> TT #);
@@ -367,8 +367,8 @@ generator: codeGenMarker
                         else
                            (true,0,this(DataItem).NewOff) -> OG.gen;
                    if)if);
-                   cTracer
-                   (#do 'dataItem:store:basicValue:' -> TT; 
+                   fcTracer
+                   (#do 'DI:store:basicValue:' -> TT; 
                       'off:' -> TT; off -> II; 'NewOff:' -> TT; NewOff -> II
                          #);
                    cd.pushThis;
@@ -406,13 +406,13 @@ generator: codeGenMarker
                        (sig.id[],this(DataItem).NewOff) -> cd.rstoreg
                    if);
                 // (OG.primNo = String_prim) and (not isInArg) then
-                   fcTracer(#do 'StringVar' -> TT; dopt -> TQ #);
+                   fcTracer(#do 'DI:StringVar' -> TT; dopt -> TQ #);
                    ('',(stringDecl.desc).newDescNo) -> cd.pushText;
                    cd.pushThis;
                    (sig.id[],this(DataItem).NewOff) -> cd.rstoreg
                 // isConst or not OG.IS.isEmpty or isValue then
                    (* isConst: obj, val, isValue: val, var *)
-                   fcTracer(#do 'DI:add:BP4: ' -> TT; sig.dopt -> TT #);
+                   fcTracer(#do 'DI:isConst:' -> TT; sig.dopt -> TT #);
                    (* C3,C4,V4 *)
                    (* All objects/patterns being embedded must be handled by
                     * Alloc and gen since we must know the size *)
@@ -779,13 +779,16 @@ generator: codeGenMarker
                      // vEq_prim // vLE_prim then
                         loadPrimitive
                      else
-                        (if OG.IS.isEmpty then
-                            (OG.super.ATd.asDecl).OG.IS.newDescNo -> dn
+                        (if isAdr then
+                           (* ('newInvoke',newOff) -> cd.rpushg*)
                          else
-                            OG.IS.newDescNo -> dn
-                        if);
-                        (newOff,OG.objSize,dn) -> cd.pushValue;
-                    if)
+                            (if OG.IS.isEmpty then
+                                (OG.super.ATd.asDecl).OG.IS.newDescNo -> dn
+                             else
+                                OG.IS.newDescNo -> dn
+                            if);
+                            (newOff,OG.objSize,dn) -> cd.pushValue;
+                    if)if)
                  #);
                loadObj:
                  (#
@@ -4321,7 +4324,7 @@ generator: codeGenMarker
                          (if ix < exps.range then exps[ix + 1][] -> succ[] if)
                       exit succ[]
                       #);
-                    lastIx,ix: @integer; E,rec,pRec: ^Exp; Ed: ^Decl;
+                    lastIx,ix: @integer; E,rec,pRec,nextE: ^Exp; Ed: ^Decl;
                  enter lastIx
                  do fcTracer
                     (#do 'loadPath:'->TT; doPT->TL; 'lastIx:'->TT; lastIx->II;
@@ -4349,6 +4352,9 @@ generator: codeGenMarker
                                 'E.isValueObj'->TT; Ed.OG.isValueObj->BB;
                                 'E.isUnitValueOb:'->TT;Ed.OG.isUnitValueObj->BB;
                                 'primNo:'->TT; Ed.OG.primNo->II;
+                                'E.isUnitValueObj:'->TT;
+                                Ed.OG.isUnitValueObj->BB;
+                                'E.isPattern:'->TT; Ed.isPattern->BB;
                              #);
                              (if true
                               // doLoad and (ix = exps.range)
@@ -4356,21 +4362,31 @@ generator: codeGenMarker
                                     ((not (E.ATd.asDecl).OG.isValueObj
                                       or ((E.ATd.asDecl).OG.primNo = this_prim))
                                       or (E.ATd.asDecl).OG.isBasicValue)
-                              // (ix < exps.range) and Ed.OG.isUnitValueObj then
+                              // (ix < exps.range) (*and Ed.OG.isUnitValueObj*)
+                                 and not Ed.isPattern then
+                                 ix -> next -> nextE[];
                                  fcTracer
-                                 (#do doLoad and (ix = exps.range)->BB;
-                                    (ix < exps.range) and
-                                    not (E.ATd.asDecl).OG.isValueObj -> BB;
-                                    (E.ATd.asDecl).OG.isBasicValue -> BB
+                                 (#do 'isBaicValue:'->TT;
+                                    Ed.OG.isBasicValue -> BB;
+                                    'isUnitValObj:'->TT;
+                                    Ed.OG.isUnitValueObj->BB;
+                                    'isValueObj:'->TT; Ed.OG.isValueObj -> BB;
+                                    'Ed.isPattern:'->TT; Ed.isPattern->BB;
+                                    ('nextE:',nextE[])->PT(#do nextE.doPT->TL#);
                                  #);
-                                 (pRec[],rec[],E[]) -> checkForProxy;
-                                 (* newInvoke: arg for load value or address *)
-                                 (rec[],E[]
-                                 ,(ix < exps.range) or doLoad and useRtnVal
-                                 ,valueOff,staticOff,newAdr[], ix < exps.range
-                                 ,ix->next)
-                                   -> E.newInvoke;
-                    if)if)for)
+                                 (if (nextE[] = none) 
+                                         or 
+                                          (not nextE.ATd.OG.isValueObj 
+                                          or nextE.ATd.OG.isBasicValue)
+                                     then
+                                     (pRec[],rec[],E[]) -> checkForProxy;
+                                     (rec[],E[]
+                                     ,(ix < exps.range) or doLoad and useRtnVal
+                                     ,valueOff,staticOff,newAdr[]
+                                     ,ix < exps.range
+                                     ,ix->next)
+                                       -> E.newInvoke;
+                    if)if)if)for)
                  #);
                E,rec,pRec: ^Exp; newAdr: ^NewAddress; exps: [1] ^Exp;
                superAdj,staticOff,lastIx,valueOff: @integer;
