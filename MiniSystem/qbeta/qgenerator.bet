@@ -90,11 +90,8 @@ generator: codeGenMarker
             #);
           loadAccessor::
             (#
-            do pfcTracer(#do 'Module:loadAccessor:'->TT; sig.dopt->TL #)
-            #);
-          newInvokeII::
-            (# 
-            do pfcTracer(#do 'Module:invokeII:'->TT; sig.dopt->TL #);
+            do fcTracer(#do 'Module:loadAccessor:'->TT; sig.dopt->TL #);
+               (sig.id[],newOff) -> cd.rpushg
             #);
           newInvoke::
             (#
@@ -142,11 +139,8 @@ generator: codeGenMarker
           invoke:: (# do cTracer(#do 'ModuleItem:invoke:'->TT #); MD.invoke #);
           loadAccessor::
             (#
-            do pfcTracer(#do 'MI:loadAccessor:'->TT; sig.dopt->TL #)
-            #);
-          newInvokeII::
-            (# 
-            do pfcTracer(#do 'MI:invokeII:'->TT; sig.dopt->TL #);
+            do fcTracer(#do 'MI:loadAccessor:'->TT; sig.dopt->TL #);
+               valueOff -> MD.loadAccessor
             #);
           newInvoke:: 
             (#
@@ -761,8 +755,8 @@ generator: codeGenMarker
                                 ('newInvoke',newOff + valueOff) -> cd.fpushg
                             if);
                          else (* integer, boolean, char *)
-                            (if false (*and (rec[] = none) 
-                                and (origin.ogOfScope).isValueObj*) then
+                            (if (*false and (rec[] = none) 
+                                and *) (origin.ogOfScope).isValueObj then
                                 ('newInvoke',newOff + valueOff) -> cd.vpushg
                              else
                                 ('newInvoke',newOff + valueOff) -> cd.pushg
@@ -772,11 +766,30 @@ generator: codeGenMarker
                  (#
                  do pfcTracer(#do 'DI:loadAccessor:accessUnitValueObj:NOT'->TT;
                                 sig.dopt->TL #);
+                   (* 0->valueOff; accessPrimitive*)
                  #);
                accessValueObj:
-                 (#
-                 do pfcTracer(#do 'DI:loadAccessor:accessValObj:NOT'->TT;
-                                sig.dopt->TL #);
+                 (# dn: @integer; ITx:  ^Items
+                 do fcTracer(#do 'DI:loadAccessor:accessValObj:'->TT;
+                               sig.dopt->TL #);
+                    (if (origin[] -> ITx[]).primNo
+                     // vEq_prim // vLE_prim then
+                        (if true then
+                            ('newInvoke',newOff) -> cd.rpushg
+                         else
+                            accessPrimitive
+                        if)
+                     else
+                        (if true (*isAdr*) then
+                           (* ('newInvoke',newOff) -> cd.rpushg*)
+                         else
+                            (if OG.IS.isEmpty then
+                                (OG.super.ATd.asDecl).OG.IS.newDescNo -> dn
+                             else
+                                OG.IS.newDescNo -> dn
+                            if);
+                            (newOff,OG.objSize,dn) -> cd.pushValue;
+                    if)if)
                  #);
                accessObj:
                  (#
@@ -3052,22 +3065,18 @@ generator: codeGenMarker
        (# GeneralPattern::
             (# invoke:: (# <<SLOT GeneralPattern_invoke:doPart>> #);
                newInvoke:: (# <<SLOT GeneralPattern_newInvoke:doPart>> #);
-               newInvokeII:: (# <<SLOT GeneralPattern_newInvokeII:doPart>> #);
             #);
           BreakPattern::
             (# invoke:: (# << SLOT BreakPatternInvoke:doPart>> #);
                newInvoke:: (# << SLOT BreakPattern_NewInvoke:doPart>> #);
-               newInvokeII:: (# << SLOT BreakPattern_NewInvokeII:doPart>> #);
             #);
           IndexedPattern::
             (# invoke:: (# <<SLOT IndexPattern_invoke:doPart>> #);
                newInvoke:: (# <<SLOT IndexPattern_newInvoke:doPart>> #);
-               newInvokeII:: (# <<SLOT IndexPattern_newInvokeII:doPart>> #);
             #);
           OtherPrimPattern:: 
             (# invoke:: (# <<SLOT OtherPrim_invoke:doPart>> #); 
                newInvoke:: (# <<SLOT OtherPrim_newInvoke:doPart>> #); 
-               newInvokeII:: (# <<SLOT OtherPrim_newInvokeII:doPart>> #); 
                org: ^Items; Tlab,exitLab: @labelHandler.label;
             #);
           virtualDone: @boolean;
@@ -3421,11 +3430,6 @@ generator: codeGenMarker
          loadAccessor::
             (#
             do fcTracer(#do 'PTN:loadAccessor:'->TT; sig.dopt->TL #)
-            #);
-          newInvokeII::
-            (# 
-            do fcTracer(#do 'PTN:newInvokeII:'->TT; sig.dopt->TL #);
-               (E[],staticOff,valueOff) -> currentPtnKind.newInvokeII;
             #);
           newInvoke::
             (#
@@ -4427,7 +4431,7 @@ generator: codeGenMarker
                          (if ix < exps.range then exps[ix + 1][] -> succ[] if)
                       exit succ[]
                       #);
-                    E,rec: ^Exp; adr: ^NewAddress; lastIx,ix: @integer;  
+                    E,rec,pRec: ^Exp; adr: ^NewAddress; lastIx,ix: @integer;  
                     Ed: ^Decl;
                  enter lastIx
                  do cTracer
@@ -4441,7 +4445,7 @@ generator: codeGenMarker
                     if);
                     (for i: exps.range - lastIx + 1 repeat
                          lastIx - 1 + i -> ix;
-                         E[] -> rec[]; exps[ix][] -> E[];
+                         rec[] -> pRec[]; E[] -> rec[]; exps[ix][] -> E[];
                          E.ATd.asDecl -> Ed[];
                          fcTracer
                          (#do 'loadPathII:E:'->TT; E.dopt->TL;lastIX->II;i->II; 
@@ -4451,12 +4455,15 @@ generator: codeGenMarker
                              E[] -> loadOriginII
                          if);
                          (superAdj,0) -> E.loadArgs;
+
+                         (pRec[],rec[],E[]) -> checkForProxy;
+
                          (if ix < exps.range then
                              valueOff -> E.loadAccessor -> adr[];
                           else
                              (*adr.load;*)
                              (if doLoad then
-                                 (rec[],E[],true,valueOff,staticOff,newAdr[]
+                                 (rec[],E[],useRtnVal,valueOff,staticOff,newAdr[]
                                  ,false,ix->next)
                                    -> E.newInvoke;
                     if)if)for)
@@ -5839,11 +5846,6 @@ generator: codeGenMarker
             do fcTracer(#do 'OI:loadAccessor:'->TT; dopt->TL #);
                valueOff -> ATd.loadAccessor
             #);
-          newInvokeII::
-            (# 
-            do fcTracer(#do 'OI:invokeII:'->TT; dopt->TL #);
-               (E[],staticOff,ValueOff) -> ATd.newInvokeII
-            #);
           newInvoke::
             (#
             do fcTracer(#do 'OI:newInvoke:'->TT; doPT -> TL #);               
@@ -5934,10 +5936,7 @@ generator: codeGenMarker
             (#
             do pfcTracer(#do 'IfThen:loadAccessor:'->TT; dopt->TL #)
             #);
-          newInvokeII::
-            (# 
-            do pfcTracer(#do 'IfThen:invokeII:'->TT; dopt->TL #);
-            #);
+
           newInvoke::
             (#
             do fcTracer(#do 'IfThen:newInvoke:'->TT; dopt -> TL #);
@@ -5972,10 +5971,6 @@ generator: codeGenMarker
          loadAccessor::
             (#
             do pfcTracer(#do 'IfThenElse:loadAccessor:'->TT; dopt->TL #)
-            #);
-          newInvokeII::
-            (# 
-            do pfcTracer(#do 'IfThenElse:invokeII:'->TT; dopt->TL #);
             #);
           newInvoke::
             (#
@@ -6129,10 +6124,6 @@ generator: codeGenMarker
           loadAccessor::
             (#
             do fcTracer(#do 'BinaryExp:loadAccessor:'->TT; dopt->TL #)
-            #);
-          newInvokeII::
-            (# 
-            do fcTracer(#do 'BinaryExp:invokeII:'->TT; dopt->TL #);
             #);
           newInvoke:: 
             (#do fcTracer(#do 'BinaryExp:newInvoke:missing'->TT; dopt->TL #)
@@ -6351,10 +6342,6 @@ generator: codeGenMarker
             (#
             do pfcTracer(#do 'CharObj:loadAccessor:'->TT; T[]->TL #)
             #);
-          newInvokeII::
-            (# 
-            do pfcTracer(#do 'CharObj:invokeII:'->TT; T[]->TL #);
-            #);
           newInvoke:: 
             (# ch: @char
             do (if T.length = 1 then
@@ -6493,11 +6480,8 @@ generator: codeGenMarker
             #);
          loadAccessor::
             (#
-            do pfcTracer(#do 'StrinObj:loadAccessor:'->TT; T[]->TL #)
-            #);
-          newInvokeII::
-            (# 
-            do pfcTracer(#do 'StringObj:invokeII:'->TT; dopt->TL #);
+            do fcTracer(#do 'StringObj:loadAccessor:'->TT; T[]->TL #);
+               (none,none,true,0,none,false) -> invoke
             #);
           newInvoke::
             (#
