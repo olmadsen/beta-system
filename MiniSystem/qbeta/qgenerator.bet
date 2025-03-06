@@ -145,7 +145,7 @@ generator: codeGenMarker
           newInvoke:: 
             (#
             do fcTracer(#do 'ModuleItem:invoke:'->TT #);
-               (rec[],E[],useRtnVal,valueOff,staticOff,adr[],isAdr,none)
+               (rec[],E[],useRtnVal,valueOff,staticOff,isAdr,none)
                  -> MD.newInvoke 
             #);
           store:: (# do '\nModuleItem:store'->putline #);
@@ -743,25 +743,21 @@ generator: codeGenMarker
                        (*'isAdr:' -> TT; isAdr->BB;
                        'valueOff:'->TT; valueOff -> II*)
                     #);
-                    (if valueOff > 0 then valueOff -1 -> valueOff if);
-                    (if false (*and isAdr and not isBasicValue*) then
-                        (* valueOff may be > 0 !? *)
-                        ('newInvoke',newOff) -> cd.rpushg
-                     else
-                        (if OG.isFloat then
-                            (if (rec[] = none)
-                                and (origin.ogOfScope).isValueObj then
-                                ('newInvoke',newOff + valueOff) -> cd.fvpushg
-                             else
-                                ('newInvoke',newOff + valueOff) -> cd.fpushg
-                            if);
-                         else (* integer, boolean, char *)
-                            (if (rec[] = none) 
-                                and (origin.ogOfScope).isValueObj then
-                                ('newInvoke',newOff + valueOff) -> cd.vpushg
-                             else
-                                ('newInvoke',newOff + valueOff) -> cd.pushg
-                    if)if)if)
+                    (if valueOff > 0 then valueOff - 1 -> valueOff if);
+                    (if OG.isFloat then
+                        (if (rec[] = none)
+                            and (origin.ogOfScope).isValueObj then
+                            ('newInvoke',newOff + valueOff) -> cd.fvpushg
+                         else
+                            ('newInvoke',newOff + valueOff) -> cd.fpushg
+                        if);
+                     else (* integer, boolean, char *)
+                        (if (rec[] = none) 
+                            and (origin.ogOfScope).isValueObj then
+                            ('newInvoke',newOff + valueOff) -> cd.vpushg
+                         else
+                            ('newInvoke',newOff + valueOff) -> cd.pushg
+                    if)if)
                  #);
                accessUnitValueObj:
                  (#
@@ -778,11 +774,7 @@ generator: codeGenMarker
                                sig.dopt->TL #);
                     (if (origin[] -> ITx[]).primNo
                      // vEq_prim // vLE_prim then
-                        (if true then
-                            ('newInvoke',newOff) -> cd.rpushg
-                         else
-                            accessPrimitive
-                        if)
+                        ('newInvoke',newOff) -> cd.rpushg
                      else
                         (if true (*isAdr*) then
                            (* ('newInvoke',newOff) -> cd.rpushg*)
@@ -892,6 +884,9 @@ generator: codeGenMarker
                   ('valueOff:',valueOff)->TI; 'E:'->TT; E.dopt -> TL;
                   ('next:',next[])->PT(#do next.dopt->TL #);
                   'isAdr:'->TT; isAdr->BB #); 
+               (if isAdr then
+                   pfcTracer(#do 'DI:newInvoke:isAdr=TRUE:'->TT; dopt->TL; #)
+               if);
                (if valueOff > 0 then valueOff - 1 -> valueOff if);
                (if true 
                 // OG.isBasicValue 
@@ -3429,9 +3424,8 @@ generator: codeGenMarker
                          'E:'->TT; E.dopt -> TQ;
                          'ptnKind:'->TT; ptnKind -> II;
                          'useRtnV:' -> TT; useRtnVal -> BB #);
-               (rec[],E[],useRtnVal,staticOff,adr[]) 
+               (rec[],E[],useRtnVal,adr[],staticOff) 
                  -> currentPtnKind.invoke 
-                 -> OIadr[]
             #);
          loadAccessor::
             (#
@@ -3442,9 +3436,8 @@ generator: codeGenMarker
             (#
             do fcTracer(#do 'ptn:newInvoke:'->TT; sig.dopt -> TL;
                        'staticOff:'->TT; staticOff->II #);
-               (rec[],E[],useRtnVal,valueOff,staticOff,adr[],isAdr) 
+               (rec[],E[],useRtnVal,valueOff,staticOff,isAdr) 
                  -> currentPtnKind.newInvoke 
-                 -> OIadr[]  
             #);
           popReturn:
             (* perhaps this should be the same virtual as in dataItem!?
@@ -4438,7 +4431,7 @@ generator: codeGenMarker
                          (if ix < exps.range then exps[ix + 1][] -> succ[] if)
                       exit succ[]
                       #);
-                    E,rec,pRec: ^Exp; adr: ^NewAddress; lastIx,ix: @integer;  
+                    E,rec,pRec: ^Exp; lastIx,ix: @integer;  
                     Ed: ^Decl;
                  enter lastIx
                  do cTracer
@@ -4446,7 +4439,6 @@ generator: codeGenMarker
                        'doLoad:'->TT; doLoad -> BB; ('valueOff',valueOff)->TI;
                        ('staticOff:',staticOff)->TI #);
                     
-                    &NewAddress[] -> adr[];
                     (if lastIx > 1 then
                         exps[lastIx - 1][] -> E[]; (* becomes rec below *)
                     if);
@@ -4472,19 +4464,29 @@ generator: codeGenMarker
                                      (#do 'loadPathII:loadAccessor:isPTN:'->TT;
                                         E.dopt -> TL #);
                                      (*(pRec[],rec[],E[]) -> checkForProxy;*)
+                                     
+                                     (* the invocation of newInvoke should
+                                      * be moved to PTN::loadAccessor
+                                      * We need additional parameters for that:
+                                      * rec: ok
+                                      * E: double below - OK
+                                      * usRtnVal: true here
+                                      * valueOff: OK
+                                      * staticOff: missing or not needed?
+                                      * isAdr: redundant/ true here, always?
+                                      * next: OK
+                                      *)
                                      (rec[],E[],true,valueOff,staticOff
-                                     ,newAdr[]
                                      ,false,ix->next)
                                        -> E.newInvoke;
                                   else
-                                     (rec[],valueOff,ix->next) 
-                                       -> E.loadAccessor -> adr[];
+                                     (rec[],valueOff,ix->next) -> E.loadAccessor
                              if)if)
                           else
                              (*adr.load;*)
                              (if doLoad then
                                  (pRec[],rec[],E[]) -> checkForProxy;
-                                 (rec[],E[],useRtnVal,valueOff,staticOff,newAdr[]
+                                 (rec[],E[],useRtnVal,valueOff,staticOff
                                  ,false,ix->next)
                                    -> E.newInvoke;
                     if)if)for)
@@ -4561,7 +4563,7 @@ generator: codeGenMarker
                                      (pRec[],rec[],E[]) -> checkForProxy;
                                      (rec[],E[]
                                      ,(ix < exps.range) or doLoad and useRtnVal
-                                     ,valueOff,staticOff,newAdr[]
+                                     ,valueOff,staticOff
                                      ,ix < exps.range
                                      ,ix->next)
                                        -> E.newInvoke;
@@ -4617,11 +4619,7 @@ generator: codeGenMarker
                                          'valueOff:'->TT; valueOff->II #)
                       if)if);
                       (if i = exps.range then
-                          (if newINVgenX then
-                              lastIx -> loadPathII;
-                           else
-                              lastIx -> loadPath
-                          if)
+                          lastIx -> loadPathII
                  if)for);
                fcTracer
                (#do 'handleINV:end:'->TT; 'isNotRemote:'->TT; isNotRemote->BB;
@@ -5870,9 +5868,8 @@ generator: codeGenMarker
           newInvoke::
             (#
             do fcTracer(#do 'OI:newInvoke:'->TT; doPT -> TL #);               
-               (rec[],E[],useRtnVal,valueOff,staticOff,adr[],isAdr,next[]) 
+               (rec[],E[],useRtnVal,valueOff,staticOff,isAdr,next[]) 
                  -> ATd.newInvoke
-                 -> adr[];
             #);
           loadArgs:: 
             (# gdb:: 
