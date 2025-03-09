@@ -1203,17 +1203,21 @@ generator: codeGenMarker
      AssignmentStatement::
        (# checkI2F2I:
             (#
-            do (if left.isFloat then
+            do fcTracer(#do 'checkI2F2I:'->TT; dopt->TL;
+                          'left.isFloat:'->TT; left.isFloat->BB;
+                          'right.isFloat:'->TT; right.isFloat->BB;
+                          right.isPrimitiveIntWithFloatArg->BB #);
+               (if left.isFloat then
                    (if not right.isFloat then
-                       pfcTracer(#do 'assign:I2F:'->TT; dopt->TL;
+                       fcTracer(#do 'assign:I2F:'->TT; dopt->TL;
                                    'right.isFloat:'->TT; right.isFloat -> BB;
                                    right.label->TT
                                 #);
                        cd.I2F
                    if);
                 else
-                   (if right.isFloat then
-                       pfcTracer(#do 'assign:F2I:'->TT; dopt->TL #);
+                   (if right.isFloat or right.isPrimitiveIntWithFloatArg then
+                       fcTracer(#do 'assign:F2I:'->TT; dopt->TL #);
                        cd.F2I
             if)if)#);          
           handleAssign:
@@ -3309,13 +3313,19 @@ generator: codeGenMarker
                                          (actualArg.desc).encOG.primNo -> II;
                                          formalArg.OG.isNonBasicValueObj ->BB;
                                          actualArg.isValueObj ->BB
-                                      #);
-                                (if not actualArg.int2floatDone then
-                                    formalArg[] 
-                                      -> actualArg.checkNumberConvert
-                                    (# I2F:: (#do cd.I2f #);
-                                       F2I:: (# do cd.F2I #);
-                                #)if);
+                                        #);
+                                (if not newI2F2I then
+                                    (if not actualArg.int2floatDone then
+                                        formalArg[] 
+                                          -> actualArg.checkNumberConvert
+                                        (# I2F:: (#do cd.I2f #);
+                                           F2I:: (# do cd.F2I #);
+                                    #)if)
+                                 else
+                                    (if formalArg[] 
+                                          -> actualArg.isIntForFloatArg then
+                                        cd.I2F
+                                if)if);
                                 (if formalArg.OG.isNonBasicValueObj 
                                     and not actualArg.isValueObj 
                                     then
@@ -4039,7 +4049,17 @@ generator: codeGenMarker
         *)
        (# rec,E: ^Exp; OGx: ^ObjectGenerator
        enter(rec[],E[])
-       do (if (rec[] <> none) and (E.args[] <> none)  then
+       do (if newI2F2I then
+              (if rec[] <> none then
+                  fcTracer
+                  (#do 'checkInt2IntWithUnitArg:E:'->TT; E.doPT->TL;
+                     E.isPrimitiveIntWithFloatArg -> BB;
+                     rec.isFloat -> BB;
+                  #);
+                  E.isPrimitiveIntWithFloatArg and not rec.isFloat -> value
+              if)
+           else
+              (if (rec[] <> none) and (E.args[] <> none)  then
               cTracer(#do 'checkInt2IntWithUnitArg:rec:'->TT; rec.dopt -> TQ;
                      'E:'->TT; E.dopt -> TQ #);
               E.args.scanArgs(#do current[]->OGx[] #);
@@ -4062,7 +4082,7 @@ generator: codeGenMarker
                       if)
                    else
                       cTracer(#do 'arg:other'-> TT #)
-          if)if)if)
+          if)if)if)if)
        #);
      Invocation::
        (* E1.E2.E3
@@ -4392,7 +4412,7 @@ generator: codeGenMarker
                         (Ex.ATd.asDecl).OG[] -> typeAsOG[];
                         typeAsOG.IS.newDescNo -> dn; (* IS.isEmpty? *)
                         (if (typeAsOG.getReturnDecl -> D[]) <> none then
-                            pfcTracer
+                            fcTracer
                             (#do 'getTypeAsOG:hasReturn:'->TT; D.dopt->TL #);
                             D.OG[] -> typeAsOG[];
                         if);
@@ -4433,7 +4453,7 @@ generator: codeGenMarker
                  enter(pRec[],rec[],E[])
                  do fcTracer
                     (#do 'checkForProxy:E:'->TT; E.dopt->TL;
-                       'isBasicValue:'->TT;(E.ATd.asDecl).OG.isBasicValue -> BB;
+                       'isBasicValue:'->TT;(E.ATd.asDecl).OG.isBasicValue->BB;
                        'origin.isValueObj:'->TT;
                        (E.ATd.asDecl).origin.encOG.isValueObj -> BB;
                        'staticOff:'->TT; staticOff->II; 
@@ -4465,7 +4485,7 @@ generator: codeGenMarker
                                 true -> originIsValueObj
                              else
                                 (* the next is probably not ok in general *)
-                                fcTracer(#do 'rec.ATd:'->TT; rec.ATd.dopt->TL#);
+                                fcTracer(#do 'rec.ATd:'->TT;rec.ATd.dopt->TL#);
                                 rec.ATd.OG.super.scanSons
                                 (# Ex: ^Exp
                                 do current[]-> E[];
@@ -4501,7 +4521,7 @@ generator: codeGenMarker
                       (# ix:@integer; succ: ^Exp
                       enter ix
                       do fcTracer
-                         (#do 'loadPathII:next:'->TT; ix->II; exps.range->II #);
+                         (#do 'loadPathII:next:'->TT; ix->II; exps.range->II#);
                          (if ix < exps.range then exps[ix + 1][] -> succ[] if)
                       exit succ[]
                       #);
@@ -4521,11 +4541,23 @@ generator: codeGenMarker
                          rec[] -> pRec[]; E[] -> rec[]; exps[ix][] -> E[];
                          E.ATd.asDecl -> Ed[];
                          fcTracer
-                         (#do 'loadPathII:E:'->TT; E.dopt->TL;lastIX->II;i->II; 
+                         (#do 'loadPathII:E:'->TT; E.dopt->TL;lastIX->II;i->II;
                             'exps.range:'->TT; exps.range->II;
                             'staticOff:'->TT; staticOff -> II #);
                          (if (ix = 1) and doNeedOrigin then
                              E[] -> loadOriginII
+                         if);
+                         (if rec[] <> none then
+                             (if E.isPrimitiveIntWithFloatArg
+                                 and not rec.isFloat then
+                                 cd.I2F
+                             if);
+                             fcTracer
+                             (#do 'E:'->TT; E.dopt->TL;
+                                'E:isPrimitiveIntWithFloatArg:'->TT; 
+                                E.isPrimitiveIntWithFloatArg->BB;
+                                'rec:'->TT; rec.dopt->TL; 
+                                'isFloat:'->TT; rec.isFloat-> BB#);
                          if);
                          (superAdj,0) -> E.loadArgs;
 
@@ -4652,7 +4684,7 @@ generator: codeGenMarker
                     (if (E.ATd.asDecl->D[]).isPattern then
                         (if ((D[]->ptn[]).OG.getReturnDecl -> D[]) <> none then
                             (if D.OG.isValueObj and not D.OG.isBasicValue then
-                                pfcTracer(#do'updateOffset:D:'->TT;D.dopt->TL#);
+                                fcTracer(#do'updateOffset:D:'->TT;D.dopt->TL#);
                                 D.newOff -> valueOff;
                         if)if);
                      (*else
