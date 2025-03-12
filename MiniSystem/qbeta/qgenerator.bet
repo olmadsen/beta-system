@@ -3161,6 +3161,11 @@ generator: codeGenMarker
                org: ^Items; Tlab,exitLab: @labelHandler.label;
             #);
           virtualDone: @boolean;
+          isPtnWithOrigin::
+            (#
+            do not (OG.IS.globalRestrictionsInMain and not OG.IS.inVirtualPtn)
+                 -> value
+            #);
           gen:: (##);
           pushThis::
             (# T: @text
@@ -4408,11 +4413,18 @@ generator: codeGenMarker
                   *    or IT.inVirtualPtn        ==> loadOrigin
                   *)
                  (# lastE,E: ^Exp; D: ^Decl; IT: ^Items;
-                 do (if false then
+                 do (if true then
                         fcTracer(#do 'needOriginII:'->TT; dopt->TL #);
                         true -> value;
                         L:(for i: exps.range repeat
-                               (exps[i][]->E[]).ATd.asDecl -> D[];
+                               exps[i][]->E[];
+                               (if (E.bracketedListElement > 1) then
+                                   false -> value;
+                                   leave L
+                               if);
+                               E.ATd.asDecl -> D[];
+                               fcTracer(#do 'E:'->TT; E.label->TT;
+                                          'D:'->TT; D.doPT->TL #);
                                (if D.isPattern and not E.isConstLiteral
                                    and not E.isStringLiteral then
                                  D.OG.desc -> IT[];
@@ -4423,7 +4435,7 @@ generator: codeGenMarker
                              if)if)
                         for);
                         fcTracer
-                        (#do 'needOrigin:'->TT;  value->BB; D.dopt->TL #)
+                        (#do 'needOrigin:'->TT;  value->BB; E.dopt->TL #)
                      else
                         exps[exps.range][] -> lastE[];
                         lastE.ATd.asDecl -> D[]; D.OG.desc -> IT[];
@@ -4617,7 +4629,8 @@ generator: codeGenMarker
                             'exps.range:'->TT; exps.range->II;
                             'staticOff:'->TT; staticOff -> II #);
                          
-                         (if (ix = 1) and doNeedOrigin then
+                         (if (ix = 1) and (*(1 -> nextNeedOrigin)*)
+                             doNeedOrigin then
                              E[] -> loadOriginII
                          if);
                          (if rec[] <> none then
@@ -4643,18 +4656,6 @@ generator: codeGenMarker
                                      (#do 'loadPathII:loadAccessor:isPTN:'->TT;
                                         E.dopt -> TL #);
                                      (pRec[],rec[],E[]) -> checkForProxy;
-                                     
-                                     (* the invocation of newInvoke should
-                                      * be moved to PTN::loadAccessor
-                                      * We need additional parameters for that:
-                                      * rec: ok
-                                      * E: double below - OK
-                                      * usRtnVal: true here
-                                      * valueOff: OK
-                                      * staticOff: missing or not needed?
-                                      * isAdr: redundant/ true here, always?
-                                      * next: OK
-                                      *)
                                      (rec[],E[],true,valueOff,staticOff
                                      ,false,ix->next)
                                        -> E.newInvoke;
@@ -4789,6 +4790,12 @@ generator: codeGenMarker
                   'useRtnVal:'->TT; useRtnVal->BB
                #);
                getExps -> exps[];
+               fcTracer
+               (#do 'isPtnWithOrigin:'->TT; dopt->TL; nl;
+                  (for i: exps.range repeat
+                       exps[i][] -> E[]; E.doPT->TL;
+                       E.isPtnWithOrigin -> BB
+               for)#);
                needOrigin -> doNeedOrigin;
                fctracer
                (#do 'exps.range:'->TT; exps.range -> II;
@@ -5639,6 +5646,7 @@ generator: codeGenMarker
         *  ATd = operator.Decl
         *)
        (# pushThis:: (# do (ATd.asDecl).pushThis #);
+          isPtnWithOrigin:: (# do ATd.isPtnWithOrigin -> value #);
           getAdr::
             (# gdb:: 
                  (# DI: ^DataItem
@@ -6499,7 +6507,7 @@ generator: codeGenMarker
           loadArgs:: 
             (* Skip, since loadOrigin includes loadArgs *)              
             (# 
-            do fcTracer(#do 'BracketedExp:loadArgs: ' -> TT; dopt -> TT #);
+            do pfcTracer(#do 'BracketedExp:loadArgs: ' -> TT; dopt -> TT #);
             #);
           invoke::
             (# 
@@ -6507,17 +6515,17 @@ generator: codeGenMarker
               (if noOfSons = 1 then
                    (useRtnVal,0,staticOff) -> IV.gen ;
                else
-                  doPP -> putline;
                   scanSons(#do (useRtnVal,0,staticOff) -> current.gen #)
                if)
             #);
           newInvoke::
             (#
-            do pfcTracer(#do 'Bracketed newInvoke: ' -> TT; dopt->TT #);
+            do pfcTracer(#do 'Bracketed newInvoke: ' -> TT; dopt->TT;
+                           'useRtnVal:'->TT; useRtnVal-> BB;
+                           'staticOff:'->TT; staticOff->II #);
               (if noOfSons = 1 then
                    (useRtnVal,0,staticOff) -> IV.gen ;
                else
-                  doPP -> putline;
                   scanSons(#do (useRtnVal,0,staticOff) -> current.gen #)
                if)
             #);
@@ -6568,8 +6576,8 @@ generator: codeGenMarker
           bracketedListElement:: 
             (# 
             do 1 -> value;
-               '!!!! Float:bracketedListElement may not work! ' -> puttext;
-               dopt -> putline
+               fcTracer(#do 'Float:bracketedListElement may not work!'->TT;
+                          dopt -> TL #)
             #);
           pushConst::
             (# F: @Real
