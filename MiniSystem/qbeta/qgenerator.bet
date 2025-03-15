@@ -1071,7 +1071,7 @@ generator: codeGenMarker
             if)if)#);          
           gen::
             (# MP:  ^Module; OIadr:  ^Address; 
-               leftE: ^Exp; leftDI,DI:  ^DataItem; valueOff: @integer;
+               leftE: ^Exp; leftDI,DI:  ^DataItem; valueOff,rvOff: @integer;
                isNotRemote: @Boolean; D: ^Decl; ptn: ^Pattern
             do fcTracer(#do 'handleAssign:'->TT; dopt -> TL #);
                cd.bcPos -> beginBCP;
@@ -1080,7 +1080,7 @@ generator: codeGenMarker
                  -> (leftE[],valueOff,isNotRemote);
                fcTracer(#do 'handleAssign:after:left:'->TT; dopt -> TL;
                        'leftE:'->TT; leftE.dopt->TL #);
-               (true,0,0) -> right.gen -> (mp[],OIadr[]);
+               (true,0,0) -> right.gen -> (mp[],rvOff); (*OIadr[];*)
                fcTracer
                (#do 'handleAssign:after:right:'->TT; dopt->TL;
                   ('OIadr:',OIadr[])->PT(#do OIadr.toString->TT #)#);
@@ -1445,7 +1445,7 @@ generator: codeGenMarker
                name: ^text; head: @boolean;
                on,pn: @integer;
                E: ^Exp; OI: ^ObjectInvocation;
-               mp:  ^Module; rtnOff: @integer;
+               mp:  ^Module; rtnOff,vOff: @integer;
                trace: (# exit false #);
             do (if not genIsDone or true then
                    cTracer(#do 'OG:gen:'->TT; dopt -> TL #);
@@ -1476,7 +1476,7 @@ generator: codeGenMarker
                        fcTracer(#do 'OG:before:super.gen:'->TT;super.dopt->TQ#);
                        (useRtnVal,superAdj,staticOff) 
                          -> super.gen
-                         -> (mp[],OIadr[]);
+                         -> (mp[],valueOff(*OIadr[]*));
                     else
                        (* Perhaps move check for virtuals to here!? *)
                        (* Singular object like R.foo{ }
@@ -1493,7 +1493,11 @@ generator: codeGenMarker
                        (this(ObjectGenerator)[],staticOff,false) 
                          -> callInvoke
                          -> rtnOff;
-                       Address -> OIadr[]; rtnOff -> OIadr.off;
+                       (if true then
+                           rtnOff -> valueOff
+                        else
+                           Address -> OIadr[]; rtnOff -> OIadr.off;
+                       if);
                        L:
                          (if not useRtnVal then 
                              IS.scanAllItemDecls
@@ -1506,7 +1510,7 @@ generator: codeGenMarker
                              cd.rPop 
                    if)if);
                    fcTracer
-                   (#do 'OG:gen:end:'->TT;
+                   (#do 'OG:gen:end:valueOff'->TT; valueOff->II;
                       ('OIadr:',OIadr[])->PT(#do OIadr.toString->TT#)#);
                    cd.bcPos -> endBCP;     
                if)
@@ -2365,7 +2369,7 @@ generator: codeGenMarker
                     if)if)
                  #);
                genAttributes:
-                 (# theIS: ^Items; OIadrX: ^Address
+                 (# theIS: ^Items; OIadrX: ^Address; vOff: @integer
                  enter theIS[]
                  do (if (theIS[] -> hasRealSuper)
                         and (theIS.superDesc[] <> objectDecl.desc) then
@@ -2377,7 +2381,7 @@ generator: codeGenMarker
                        (if true
                         // I.isDecl and (I## <> LabelDecl##) then
                            (if not I.isPattern or I.isVirtual then
-                               (false,0,0) -> current.gen -> (MP[],OIadrX[]);
+                               (false,0,0) -> current.gen -> (MP[],vOff(*OIadrX[]*));
                                (if MP[] <> none then
                                    MP[] -> mainPathModule[];
                                if)
@@ -2386,7 +2390,7 @@ generator: codeGenMarker
                                    (false,0,0) -> current.gen if) 
                            if)
                         // I.isNewProp then
-                           (false,0,0) -> current.gen -> (MP[],OIadrX[]);
+                           (false,0,0) -> current.gen -> (MP[],vOff(*OIadrX[]*));
                            (if MP[] <> none then
                                MP[] -> mainPathModule[];
                            if)
@@ -2802,7 +2806,8 @@ generator: codeGenMarker
                          #);            
                       #);
                     formalArg: ^DataItem; actualArg: ^ObjectSpecification;
-                    superOG: ^ObjectGenerator; mp:  ^Module; OIadr: ^Address
+                    superOG: ^ObjectGenerator; mp:  ^Module; OIadr: ^Address;
+                    (*valueOff: @integer*)
                  enter(formalArg[],actualArg[])
                  do (* E is the exp with arguments actArgs 
                      * this(Pattern) = E.ATd
@@ -2853,7 +2858,7 @@ generator: codeGenMarker
                     if);
                     (true,superAdj,staticOff) 
                       -> actualArg.gen 
-                      -> (mp[],OIadr[]);
+                      -> (mp[],valueOff(*OIadr[]*));
                     (if actualArg.isNonBasicValueObj 
                         and (actualArg.super.ATd.asDecl).isDataItem then
                         (* actualArg is a data-item being 
@@ -2937,7 +2942,8 @@ generator: codeGenMarker
                                          actualArg.primno->II;
                                          (actualArg.desc).encOG.primNo -> II;
                                          formalArg.OG.isNonBasicValueObj ->BB;
-                                         actualArg.isValueObj ->BB
+                                           actualArg.isValueObj ->BB;
+                                           'valueOff:'->TT; valueOff->II
                                         #);
                                 (if not isBasicPattern then
                                     formalArg[] -> actualArg.isIntForFloatArg
@@ -2956,13 +2962,13 @@ generator: codeGenMarker
                                                   formalArg.dopt-> TT #);
                                      else
                                         'D' -> mkCom;
-                                        (if OIadr[] = none then
-                                            fcTracer
-                                            (#do 'OIadr:none'->TT; doPT->TT#);
+                                        (if valueOff = 0 (*OIadr[] = none*) then
+                                            pfcTracer
+                                            (#do 'valueOff=0:'->TT; doPT->TT#);
                                             (0,formalArg.objSize,0)
                                               -> cd.pushValue;
                                          else
-                                            (OIadr.off,formalArg.objSize
+                                            (valueOff,formalArg.objSize
                                             ,formalArg.OG.super.ATd.OG.IS.newDescNo 
                                             )
                                               -> cd.pushValue;
@@ -4035,7 +4041,7 @@ generator: codeGenMarker
             exit(E[],valueOff,isNotRemote)
             #);
           gen:: 
-            (# Ex: ^Exp; valueOff: @Integer; isNotRemote: @Boolean;
+            (# Ex: ^Exp; isNotRemote: @Boolean;
             do (* for P1.X := P2.Y,
                 * we need no origin for P1 (and X!?)
                 * we need adress of P1 to be added address of X to get embedded
@@ -4047,6 +4053,8 @@ generator: codeGenMarker
                (useRtnVal,superAdj,staticOff,true) 
                  -> handleInv
                  -> (Ex[],valueOff,isNotRemote);
+               fcTracer(#do 'INV:gen:end:'->TT; dopt->TL; valueOff->II #);
+                   
                (* this is a temporary solution - OIadr.off is used by
                 * pushValue in handleNonVirtualArg - gen should probably
                 * return valueOff instead of OIadr
@@ -4729,12 +4737,12 @@ generator: codeGenMarker
                if)if)if)
             #);
           gen:: 
-            (# A,Madr: ^Address; MP: ^Module
+            (# A,Madr: ^Address; MP: ^Module; vOff: @integer
             do (if trace then
                    '**** BinaryExp:gen: ' -> puttext; dopt -> putline;
                if);
                fcTracer(#do 'BinaryExp:gen:'->TT; dopt->TQ#);               
-               (true,0,0) -> leftRec.gen -> (MP[],A[]);
+               (true,0,0) -> leftRec.gen -> (MP[],vOff(*A[]*));
                fcTracer(#do 'BinaryExp:gen:before:loadargs'->TT; dopt->TQ#);
                fcTracer(#do 'A:'->TT; (if A[] <> none then A.toString -> TT if)#);
                (M[],superAdj,staticOff) -> (M.ATd.asDecl).loadArgs;
@@ -4756,13 +4764,13 @@ generator: codeGenMarker
             (*  V := BE where BE = this(BE)
              *  V := e1 + e2, thrm(BE) e1 + e2
              *)
-            (# MP: ^Module; A: ^Address
+            (# MP: ^Module; A: ^Address; valueOff: @integer
             do (if trace then
                    '**** BinaryExp:loadArgs: ' -> puttext; doPT -> putline;
                if);
                fcTracer(#do 'BinaryExp:loadArgs:'->TT; dopt->TL;
                          'superAdj:'->TT; superAdj->II #);
-               (true,superAdj,0) -> leftRec.gen ->(MP[],A[]);
+               (true,superAdj,0) -> leftRec.gen ->(MP[],valueOff(*A[]*));
                
                checkI2F;
                fcTracer(#do 'BinaryExp:loadArgs:after:leftRec.gen:'->TT;
