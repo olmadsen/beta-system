@@ -2735,10 +2735,8 @@ generator: codeGenMarker
           clear::< (# do false -> done -> codeGenDone #)
        #);
      Pattern::
-       (# <<SLOT GeneralPatternLib:attributes>>;
-          GeneralPattern::
+       (# GeneralPattern::
             (# newInvoke:: (# <<SLOT GeneralPattern_newInvoke:doPart>> #);
-               loadAccessor:: (# <<SLOT GeneralPattern_loadAccessor:doPart>> #);
             #);
           BreakPattern::
             (# newInvoke:: (# << SLOT BreakPattern_NewInvoke:doPart>> #);
@@ -3450,149 +3448,7 @@ generator: codeGenMarker
        enter superAdj
        exit this(Address)[]
        #);
-
-     computeAdrG:
-       (* R.S.foo(exp).Q
-        * X := Y + (Z +117)
-        * aLine.aPoint.X
-        * (4) @if ascii.isLetter(ch1) || ascii.isDigit(ch2) :then ...
-        *)
-       (# A,recA: ^Address; E,rec,pRec: ^Exp; j: @integer; 
-          loadRec,orgIsVal: @boolean; ptn: ^Pattern;
-          superAdj: @integer;
-          thisE:  ^Exp
-       enter(thisE[],superAdj)
-       do cTracer
-          (#do 'computeAdrG:superAdj:'->TT; superAdj->II; thisE.dopt->TQ #);
-          superAdj -> Address -> A[];
-          (* for (4) above, A.superAdj may be non-zero when computing 
-           * address of ascii.isLetter(ch1) || ascii.isDigit(ch2)
-           * We must thus save A.superAdj to be used when calling 
-           * rec.loadArgs below to load ch1.
-           * If || ascii.isDigit(ch2) is not present, loadArgs is not 
-           * called here but in IV:gen
-           *)
-          thisE.scanSons
-          (# org: ^Items
-          do rec[] -> pRec[]; E[] -> rec[]; current[] -> E[];
-             cTracer
-             (#do 'computeAdrG:'->TT; j+1->j->II; ':rec:'->TT;
-                (if rec[]<> none then rec.dopt->TQ else 'none'->TQ if);
-                ' E:'->TT; E.dopt -> TQ;  
-                (if A.E[] <> none then ' A.E:' -> TT; A.E.dopt->TQ if);
-                nl; A.toString -> TT;
-             #);
-             (if isFirst then
-                 E[] -> rec[];
-                 E.pushThis; (* why E? we should pushThis for thisObj!
-                              * So just cd.pushThis? TST fails if 
-                              * cd.pushThis
-                              *)
-                 (if (E.ATd.asDecl).isPattern 
-                     and (thisE.origin->org[]).encOG.isValueObj then  
-                     (* origin is a value object;
-                      * E is a pattern invoked in the mainpart
-                      * of the value object;
-                      * we thus must push an extended origin for E
-                      * with holder ref, offset to value obj and
-                      * descNo of the actual value pattern.
-                      * The offset must be 1 (one) since the bytecodes
-                      * pushg, etc adds the offset stored in 
-                      * thisObj = holder
-                      * We do not know the descNo of the value pattern
-                      * here, since the actual value pattern may
-                      * be a subpatttern of the one we are generating
-                      * code for here.
-                      * The actual descNo is saved by a subsequent 
-                      * invokeVal and pushed by a possible invoke
-                      * or sendv
-                      *)
-                     cTracer
-                     (#do 'computeAdrG:orgIsValue:'->TT; E.dopt->TQ;
-                        E.label->TQ; E.ATd.primNo->II#);
-                     (if (E.ATd.asDecl).primNo
-                      // string_prim // inner_prim then
-                      else
-                         (* Perhaps virtual E.pushValId is better? *)
-                         (if not withValueProxy then
-                             cd.pushValId;
-                             (* push const 1 & thisValObjDescInx *)
-                         if)
-                 if)if);
-                 A.superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
-                 (* we should ignore rec and E - defined above 
-                  * And A.superAdj should be eliminated *)
-                 inner computeAdrG;
-                 (* start of problem *)
-                 A[] -> E.getAdr -> (loadRec,A[]);
-                 (* really getOffSet of E.ATd *)
-                 cTracer(#do 'E.on:' -> TT; E.on -> II #);
-                 (if (E.on > 0) or (A.superadj > 0) then
-                     cTracer(#do 'beforeIsValueObj:E:'->TT; E.dopt->TQ;
-                              ' ATd:'->TT; E.ATd.dopt -> TL;
-                           #);
-                     ((E.ATd.asDecl).enclosingObjectGenerator).isValueObj 
-                       -> A.originIsValue
-                     (* should probably be for each receiver in
-                      * R.S.foo(exp).Q, i.e. R, S and foo
-                      *)
-                 if);
-                 cTracer(#do 'computeAdrG:isFirst:' -> TT; A.toString->TT #)
-              else
-                 (* mutex.cmpAndSwap 
-                  * rec = mutex, cmpAndSwap = E
-                  *)
-                 (*needOrigin;*)
-                 A[] -> recA[] -> E.getAdr -> (loadRec,A[]);
-                 (* really getOffSet of E.ATd *)
-                 (if (E.ATd.asDecl).isPattern then
-                     E.ATd.asDecl -> ptn[];
-                     cTracer(#do 'ptn.isUnitValueObj:'->TT;ptn.OG.isUnitValueObj->BB;
-                              ' isFloat:E:' -> TT; ptn.OG.isFloat -> BB #);
-                     (if ptn.OG.isUnitValueObj 
-                         or ptn.OG.isFloat then
-                         (# UN: ^NewProperty
-                         do ptn.OG.getUnitProp -> UN[];
-                            (if (UN[] <> none) 
-                                and 
-                                ('%unit "U*U"' -> (UN.doPT).equal)
-                                then
-                                cTracer
-                                (#
-                                do 'Generic:unit:' -> TT;
-                                   UN.dopt -> TT; nl;
-                                   'ptn: ' -> TT; ptn.dopt -> TL; 
-                                #);
-                                false -> A.isUnitVal    
-                         if)#)
-                      else
-                         false -> A.isUnitVal 
-                 if)if);
-                 (if loadRec then
-                     (* In R.foo, rec = R, E = foo
-                      *    P.print, rec = P, E = print
-                      *    R.S,      rec = R, E = S
-                      * E is a pattern or dataItem 
-                      * For ascii.isLetter(ch1) 
-                      * || ascii.isDigit(ch2)
-                      * see comment at the beginning of computeAdrG
-                      *)
-                     (superAdj,0) -> rec.loadArgs;
-                     (* Perhaps a combined invoke & getAdr *)
-                     (* A is the address of E - not of rec!!!!!! *)
-                     fcTracer(#do 'computeAdrG:pRec:'->TT; pRec.dopt->TL;
-                               'E:'->TT; E.dopt->TL #);
-
-                     (pRec[],E[],true,0,0,false,none) -> rec.newInvoke;
-
-                     (if (pRec[],E[]) -> checkInt2IntWithUnitArg then
-                         cd.I2F
-             if)if)if);
-             (if isLast then
-                 cTracer(#do 'computeAdrG:isLast:E: '->TT; E.dopt->TQ #)
-          if)#);
-       exit(rec[],E[],A[])
-       #);          
+                    
      checkInt2IntWithUnitArg: booleanValue
        (* Apparently we have a binary method mapping and int to an int,
         * but not sure where and how this is checked!?
@@ -5007,23 +4863,16 @@ generator: codeGenMarker
             #);
           getAdr::
             (# rec,E: ^Exp
-            do cTracer(#do 'BracketedExp:getAdr:'->TT;
-                         ('adr:',adr[])->PT(#do adr.toString -> TL #)#);
-               (*adr[] -> IV.computeAdr -> (rec[],E[],adr[]);*)
-               '\n!!!! Koks!Bexp:getAdr'->dumpT; dopt -> dumpTN;
-               (adr.superAdj,0) -> E.loadArgs; 
-               (* do we need staticOff here? *)
-               (* (rec[],E[],true,0,0,none,adr[],false) -> E.invoke;*)
+            do pfcTracer
+               (#do '!!!! Should not com here:'->TT; nl;
+                  'BracketedExp:getAdr:'->TT; dopt -> TL; #)
             #);
           pushThis:: 
             (* Skip, since loadOrigin below includes pushThis *)  
             (# #);
           loadOrigin:: 
             (# off: @integer; A: ^Address
-            do (* OBS! useRtnVal, staticOff must be handled! *)
-               pfcTracer(#do 'bracketedExp:loadOrigin:'->TT; dopt->TL #);
-               (IV[],superAdj) -> computeAdrG -> (rec[],E[],A[]);
-               fcTracer(#do 'BE:loadOrigin:E:'->TT; E.doPT->TT #);
+            do pfcTracer(#do 'bracketedExp:loadOrigin:'->TT; dopt->TL #);
             #);
           loadArgs:: 
             (* Skip, since loadOrigin includes loadArgs *)              
