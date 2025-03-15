@@ -1049,6 +1049,28 @@ generator: codeGenMarker
                        (if originIsValueObj then 1 -> mode if);
                        (newOff(*+ valueOff*),OG.objSize,mode) -> cd.vassign
                    if)
+                // OG.primNo = indexed_prim then
+                   fcTracer
+                   (#do 'DI:newStore:indexed:'->TT; dopt->TL; 
+                      'right:'->TT; right.dopt->TL
+                   #);
+                   (if right.bracketedListElement > 0 then
+                       right.bracketedListElement -> cd.pushConst;
+                       (OG.super.ATd.asDecl).OG.IS.newDescNo -> cd.mkVindexed
+                   if);
+                   cd.rswap;
+                   (sig.dopt,newOff) -> cd.rstoreg
+                // rindexed_prim then
+                   fcTracer
+                   (#do 'DI:newStore:rIndexed:'->TT; dopt->TL; 
+                      'right:'->TT; right.dopt->TL
+                   #);
+                   (if right.bracketedListElement > 0 then
+                       right.bracketedListElement -> cd.pushConst;
+                       (OG.super.ATd.asDecl).OG.IS.newDescNo -> cd.mkVindexed
+                   if);
+                   cd.rswap;
+                   (sig.dopt,newOff) -> cd.rstoreg
                 else (* including OG.primNo = string_prim then*)
                    fcTracer(#do 'DI:newStore:ref/String:'->TT; dopt -> TL #);
                    (if originIsValueObj then
@@ -2653,17 +2675,30 @@ generator: codeGenMarker
                        * if superAdj > 0
                        *)
                       (# super: ^Invocation; E,rec: ^Exp; A: ^Address;
+                         valueOff: @integer; isNotRemote: @Boolean
                       enter super[]
                       do (if globalRestrictionsInSuper then
                              super.last -> E[]
                           else
-                             theIS.newOriginOff
-                               -> super.computeAdrX(#do addOG #)
-                               -> (rec[],E[],A[]);
-                             cTracer
-                             (#do 'genClass:after:pushAddress:'-> TT; 
+                             (if newInvGen then 
+                                 fcTracer
+                                 (#do 'genClass:before:super.handleInv:'-> TT; 
+                                    super.doPT -> TL; #);
+                                 (false,theIS.newOriginOff,0,false) 
+                                   -> super.handleInv 
+                                   -> (E[],valueOff,isNotRemote);
+                                  valueOff -> (&Address[] -> A[]).off;
+                                 fcTracer
+                                 (#do 'genClass:after:super.handleInv:'-> TT; 
+                                    super.doPT->TL; 'E:'->TT; E.dopt->TL #)
+                             else
+                                 theIS.newOriginOff
+                                   -> super.computeAdrX(#do addOG #)
+                                   -> (rec[],E[],A[]);
+                                 cTracer
+                                 (#do 'genClass:after:pushAddress:'-> TT; 
                                 E.doPT -> TQ; A.toString -> TT #);
-                         if)
+                         if)if)
                       exit E[]
                       #);
                     handleSuperArgs:
@@ -4368,8 +4403,10 @@ generator: codeGenMarker
             (# E: ^Exp; DI: ^SuperDataItem; cst: @integer
             enter E[]
             do fcTracer(#do 'isConst:'->TT; E.doPT->TL;
-                          E.label -> TL; (E.ATd.asDecl).dopt -> TL #);
+                          E.label -> TL; (E.ATd.asDecl).dopt -> TL;
+                          E.bracketedListElement-> II #);
                (if true 
+                // E.bracketedListElement > 1 then
                 // E.isConstLiteral then
                    fcTracer
                    (#do 'isConstLiteral:'-> TT; E.dopt->TL #);
@@ -6353,7 +6390,7 @@ generator: codeGenMarker
                             dopt -> TQ; ' ATd.OG.primNo: '-> TT;
                             ATd.OG.primNo -> II;
                             'return:'->TT;
-                            ((ATd.asDecl).OG.getReturnDecl).dopt -> TT
+                            (*((ATd.asDecl).OG.getReturnDecl).dopt -> TT*)
                          #);
                    1 -> value 
                if)
@@ -6676,7 +6713,8 @@ generator: codeGenMarker
             #);
           getAdr::
             (# rec,E: ^Exp
-            do cTracer(#do 'BracketedExp:getAdr:'->TT;adr.toString -> TT #);
+            do cTracer(#do 'BracketedExp:getAdr:'->TT;
+                         ('adr:',adr[])->PT(#do adr.toString -> TL #)#);
                (*adr[] -> IV.computeAdr -> (rec[],E[],adr[]);*)
                '\n!!!! Koks!Bexp:getAdr'->dumpT; dopt -> dumpTN;
                (adr.superAdj,0) -> E.loadArgs; 
@@ -6700,7 +6738,7 @@ generator: codeGenMarker
           loadArgs:: 
             (* Skip, since loadOrigin includes loadArgs *)              
             (# 
-            do pfcTracer(#do 'BracketedExp:loadArgs: ' -> TT; dopt -> TT #);
+            do fcTracer(#do 'BracketedExp:loadArgs: ' -> TT; dopt -> TT #);
             #);
           invoke::
             (# 
@@ -6713,7 +6751,7 @@ generator: codeGenMarker
             #);
           newInvoke::
             (#
-            do pfcTracer(#do 'Bracketed newInvoke: ' -> TT; dopt->TT;
+            do fcTracer(#do 'Bracketed newInvoke: ' -> TT; dopt->TT;
                            'useRtnVal:'->TT; useRtnVal-> BB;
                            'staticOff:'->TT; staticOff->II #);
               (if noOfSons = 1 then
@@ -6802,7 +6840,7 @@ generator: codeGenMarker
             #);
          loadAccessor::
             (#
-            do pfcTracer(#do 'CharObj:loadAccessor:'->TT; T[]->TL #)
+            do fcTracer(#do 'CharObj:loadAccessor:'->TT; T[]->TL #)
             #);
           newInvoke:: 
             (# ch: @char
@@ -7016,7 +7054,7 @@ generator: codeGenMarker
           DI: ^Decl; rtnOff: @integer
        enter(OGx[],id[])
        do (if OGx.isValueObj then
-              pfcTracer(#do 'pushOut:OG.isValueObj:NOT handled!OGx:'->TT;
+              fcTracer(#do 'pushOut:OG.isValueObj:NOT handled!OGx:'->TT;
                           OGx.dopt ->TL; 'id:'->TT; id[]->TT #)
            else
               -1 -> rtnOff;              
