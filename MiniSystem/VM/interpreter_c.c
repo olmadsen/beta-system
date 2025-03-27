@@ -4482,6 +4482,24 @@ bool traceThreads = true;
 	//printf("fdiv: %f %f %f\n",float1,float2, float3);
 	fPush(thisStack,float3);
 	break;
+      case fexp:
+	top1 = vPop(thisStack);
+	float1 = fPop(thisStack);
+	//printf("**** fexp: %f %i\n",float1,top1);
+	float2 = float1;
+	if (top1 > 0) {
+	  for (i = 1; i < top1; i++) {
+	    float2 = float2 * float1;
+	  }
+	}else {
+	  for (i = 1; i < -top1; i++) {
+	    float2 = float2 * float1;
+	  }
+	  float2 = 1 / float2;
+	}
+	//printf("**** fexp:res: %f\n",float2); 
+	fPush(thisStack,float2);
+	break;
       case feq:
 	float2 = fPop(thisStack);
 	float1 = fPop(thisStack);
@@ -4489,7 +4507,7 @@ bool traceThreads = true;
 	//printf("feq: %f %f %b\n",float1,float2,float1 == float2);
 	break;
       case flt:
-	float2 = fPop(thisStack);
+	float2 = fPop(thisStack); 
 	float1 = fPop(thisStack);
 	if (float1 < float2) vPush(thisStack,1); else vPush(thisStack,0);
 	//printf("flt: %f %f %b\n",float1,float2,float1 < float2);

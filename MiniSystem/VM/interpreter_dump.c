@@ -148,7 +148,9 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case xrstoreg:
 	fprintf(trace,"xrstoreg %i ",op1(bc,&glsc));
 	break;
-	
+      case fstoreg:
+	fprintf(trace,"fstoreg %i ",op1(bc,&glsc));
+	break;
       case pushFloatConst:
 	arg1 = op4(bc,&glsc); // should read the flaot const
 	arg2 = op4(bc,&glsc);
@@ -203,6 +205,12 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break;
       case tstOriginNone:
 	fprintf(trace,"tstOriginNone");
+	break;
+      case fmult:
+	fprintf(trace,"fmult");
+	break; 
+      case fexp:
+	fprintf(trace,"fexp");
 	break;
       case invoke:
 	arg1 = op2(bc,&glsc);

@@ -261,6 +261,7 @@ enum {
   fgt = 125,
   fge = 126,
   fne = 127,
+  fexp = 136,
   pushFloatConst = 113,
   fstoreg = 114,
   fpushg = 115,
