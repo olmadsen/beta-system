@@ -3075,10 +3075,11 @@ bool traceThreads = true;
 	rPush(thisStack,X);
 	break;
       case swap:
+	arg3 = op1(bc,&glsc);   // off
         arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
 #ifdef TRACE
-	fprintf(trace,"swap top-1: %i top: %i\n",arg2,arg1);
+	fprintf(trace,"swap top-1: %i %i top: %i\n",arg3,arg2,arg1);
 #endif
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg2);

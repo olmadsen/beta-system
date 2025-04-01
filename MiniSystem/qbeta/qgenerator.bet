@@ -1055,6 +1055,30 @@ generator: codeGenMarker
        #);
      Signature:: (##);
      Arguments:: (##);
+     checkUnitConv:
+       (# left: ^Exp; right: ^ObjectSpecification; dstBV,srcBV: ^BaseVector
+       enter(left[],right[])
+       do (if traceUnit then
+              '**** checkUnitConv:'->dumpT; left.doPT->dumpT; right.doPT->dumpTN
+          if);
+          (if false (*and left.unit[] = none*) then
+              '!!!! left.unit is none'->dumptn if);
+          (if (left.unit[] <> none) and left.unit.isEmpty then
+              leave checkUnitConv if);
+          left[]->getBaseVector -> dstBV[];
+          right[]->getBaseVector -> srcBV[];
+          (if srcBV.convFactor <> dstBV.convFactor then
+              (if unitConv then
+                  fcTracer
+                  (#do 'checkUnitConv:convFactor:differ:'->TT; 
+                     left.dopt -> TL; right.doPT -> TL;
+                     dstBV.asSymbols->TT; srcBV.asSymbols->TT;
+                     'CF:'->TT;
+                     srcBV.convFactor / dstBV.convFactor -> FF
+              #)if);
+              srcBV.convFactor / dstBV.convFactor -> cd.pushFloatConst;
+              112 (* fmult *) -> cd.op
+       if)#);
      AssignmentStatement::
        (# checkI2F2I:
             (#
@@ -1071,22 +1095,6 @@ generator: codeGenMarker
                    (if right.isFloat or right.isPrimitiveIntWithFloatArg then
                        cd.F2I
             if)if)#);  
-          checkUnitConv:
-            (# dstBV,srcBV: ^BaseVector
-            do left[]->getBaseVector -> dstBV[];
-               right[]->getBaseVector->srcBV[];
-               (if srcBV.convFactor <> dstBV.convFactor then
-                   (if unitConv then
-                       '**** unit:convFactor:differ:'->dumpt;
-                       dopt -> dumpTN;
-                       dstBV.asSymbols->dumpT;
-                       srcBV.asSymbols->dumpTN;
-                   if);
-                   (if srcBV.convFactor <> 1.0 then
-                       srcBV.convFactor -> cd.pushFloatConst;
-                       112 (* fmult *) -> cd.op
-                   if);
-            if)#);
           gen::
             (# MP:  ^Module;
                leftE: ^Exp; leftDI,DI:  ^DataItem; valueOff,rvOff: @integer;
@@ -1130,7 +1138,10 @@ generator: codeGenMarker
                    none -> D[]
                if);
                checkI2F2I;
-               checkUnitConv;
+               (if traceUnit then
+                   '**** before:checkUnitConv:X:'->puttext; dopt -> putline
+               if);
+               (left[],right[]) -> checkUnitConv;
                ctracer
                (# OGs:  ^OGsequence; qual: ^ObjectGenerator;
                do 'Assign:end:'->TT; dopt->TL; 
@@ -4755,7 +4766,7 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:gen: ' -> puttext; dopt -> putline;
                if);
-               ctracer(#do 'BinaryExp:gen:'->TT; dopt->TQ#);               
+               fctracer(#do 'BinaryExp:gen:'->TT; dopt->TQ#);               
                (true,0,0) -> leftRec.gen -> (MP[],vOff(*A[]*));
                ctracer(#do 'BinaryExp:gen:before:loadargs'->TT; dopt->TQ#);
                ctracer(#do 'A:'->TT; (if A[] <> none then A.toString -> TT if)#);
@@ -4771,7 +4782,7 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:loadOrigin:empty:' -> puttext; doPT->putline
                if);
-               ctracer(#do 'BinaryExp:loadOrigin:empty:'->TT; dopt->TQ;
+               fctracer(#do 'BinaryExp:loadOrigin:empty:'->TT; dopt->TQ;
                       'superAdj:'->TT; superAdj->II #);
             #);
           loadArgs::
@@ -4782,7 +4793,7 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:loadArgs: ' -> puttext; doPT -> putline;
                if);
-               ctracer(#do 'BinaryExp:loadArgs:'->TT; dopt->TL;
+               fctracer(#do 'BinaryExp:loadArgs:'->TT; dopt->TL;
                          'superAdj:'->TT; superAdj->II #);
                (true,superAdj,0) -> leftRec.gen ->(MP[],valueOff(*A[]*));
                
@@ -4796,10 +4807,10 @@ generator: codeGenMarker
           bracketedListElement:: (#do 1 -> value #);
           loadAccessor::
             (#
-            do ctracer(#do 'BinaryExp:loadAccessor:'->TT; dopt->TL #)
+            do fctracer(#do 'BinaryExp:loadAccessor:'->TT; dopt->TL #)
             #);
           newInvoke:: 
-            (#do ctracer(#do 'BinaryExp:newInvoke:missing'->TT; dopt->TL #)
+            (#do fctracer(#do 'BinaryExp:newInvoke:missing'->TT; dopt->TL #)
             #)
        #);
      UnaryExp::
@@ -4926,15 +4937,15 @@ generator: codeGenMarker
           pushConst::
             (#
             do T.setPos; 
-               T.getInt -> value -> cd.pushConst;
-               (if not unit.isEmpty then
-                   (if unitConv then
-                       '**** Const:pushConst:'->dumpT; value -> dumpI;
-                       unit.dopt->dumpT;
-                       (if expUnit[] <> none then expUnit[] -> dumpT if);
-                       newline
-               if)if)
-            #)
+               T.getInt -> value -> cd.pushConst; 
+               (if unitConv and not unit.isEmpty then
+                   fcTracer
+                   (#do 'Const:pushConst:'->TT; value -> II; 
+                      'unit:'->TT; unit.dopt->TT;
+                      ('expUnit:',expUnit[])->PT(#do expUnit[] -> TT #)
+                   #);
+                   (*cd.I2F*)
+            if)#)
        #);
      FloatConst::
        (# gen:: (# do newInvoke #);
@@ -4944,10 +4955,9 @@ generator: codeGenMarker
             #);
           newInvoke:: 
             (# 
-            do (if false then               
-                   '****newInvoke ' -> puttext; dopt -> putline;
-                   ' unit: ' -> puttext; unit.T[] -> putline;
-               if);
+            do fcTracer
+               (#do 'FloatConst:newInvoke:'->TT; dopt->TL;
+                  'unit:'->TT; unit.T[]->TL; convFactor->FF #);
                T.setpos; T.getReal-> cd.pushFloatConst; 
                (if convFactor <> 0 then
                    convFactor -> cd.pushFloatConst;
@@ -4957,21 +4967,26 @@ generator: codeGenMarker
           bracketedListElement:: 
             (# 
             do 1 -> value;
-               ctracer(#do 'Float:bracketedListElement may not work!'->TT;
-                          dopt -> TL #)
+               ctracer
+               (#do 'Float:bracketedListElement may not work!'->TT;dopt->TL #)
             #);
           pushConst::
             (# F: @Real
             do T.setPos; 
                T.getReal -> F -> cd.pushFloatConst;
-               F -> value (* is truncated to integer *)
-            #)
+               F -> value; (* is truncated to integer *) 
+               (if unitConv and not unit.isEmpty then
+                   fcTracer
+                   (#do 'FloatConst:pushConst:'->TT; F -> FF; 
+                      'unit:'->TT; unit.dopt->TT;
+                      ('expUnit:',expUnit[])->PT(#do expUnit[] -> TT #)
+            #)if)#)
        #);
      CharObj::
        (# gen:: (* Never called? *) (# do newInvoke #);
           pushThis:: (##);
           getAdr:: (#do this(CharObj)[] -> adr.E[] #);
-         loadAccessor::
+          loadAccessor::
             (#
             do ctracer(#do 'CharObj:loadAccessor:'->TT; T[]->TL #)
             #);

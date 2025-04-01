@@ -165,7 +165,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"rdouble");
 	break;
       case swap:
-	fprintf(trace,"swap");
+	fprintf(trace,"swap %i",op1(bc,&glsc));
 	break;
       case _rswap:
 	fprintf(trace,"rswap %i",op1(bc,&glsc));
