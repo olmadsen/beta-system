@@ -1,4 +1,4 @@
-ORIGIN '~beta/basiclib/betaenv';
+ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qprimitives';
 INCLUDE 'qlexer';
 INCLUDE 'qtracer';
@@ -2137,7 +2137,7 @@ AbstractSyntaxTree: Tree
           OG: ^(*ObjectGenerator*)ObjectSpecification;
           off: @integer;
           qoff: [1] @integer;
-          inSig,isInArg,isOutArg: @boolean;
+          inSig,isInArg,isOutArg,isDesignator: @boolean;
           setNewId:< (#do inner #);
           objSize:< IntegerValue;
           isDecl:: TrueValue;
@@ -2334,6 +2334,7 @@ AbstractSyntaxTree: Tree
        (# PT:: (#do T[] -> lx.append #);
           label:: (# do 'NameDecl'-> lab[] #);
           PP:: (# do label -> lx.append; ':' -> lx.put; T[] -> lx.append #);
+          copyAst:: (#do T.copy -> NameDecl -> nAst[]; #);
           isNameDecl:: TrueValue;
           asDecl:: (#do ATd[] -> D[] #);
           newOff::
@@ -2355,7 +2356,11 @@ AbstractSyntaxTree: Tree
                #)
             #);
           label:: (# do 'NameList'-> lab[] #);
-          PP:: (# do label -> lx.append #);   
+          PP:: (# do label -> lx.append #);
+          copyAst::
+            (#
+            do NameList -> nAst[]; scanSons(#do current.copyAst -> nAst.append #)
+            #);
           scan:
             (# current: ^NameDecl
             do (*(for i: top repeat Ns[i][] -> current[]; inner scan for)*)
@@ -2443,8 +2448,17 @@ AbstractSyntaxTree: Tree
             #);
           copyAST::<
             (#
-            do (*'signature:' -> puttext; dopt -> putline; *)
-               (id.copy,names.copyAst,paramItems.copyAst) ->  Signature-> nAST[]
+            do (id.copy,names.copyAst,paramItems.copyAst) ->  Signature-> nAST[]
+            #);
+          scanArgs:
+            (# current: ^Decl;
+            do paramItems.scanSons
+               (#
+               do (if current.isDecl then
+                      current[] -> this(scanArgs).current[];
+                      inner scanArgs
+                  if);
+               #);
             #);
           OGofScope::
             (# D: ^Decl
@@ -2769,9 +2783,9 @@ AbstractSyntaxTree: Tree
             #);  
           copyAST::<
             (# D: ^DataItem
-            do (*'DataItem:'->puttext; sig.dopt -> puttext; ' og: ' -> puttext;
+            do 'DataItem:'->puttext; sig.dopt -> puttext; ' OG: ' -> puttext;
                 OG.label -> putline;
-                *)
+               
                (isConst,isValue,sig.copyAST,OG.copyAST) -> DataItem -> D[];
                isInArg -> D.isInarg; isOutArg -> D.isOutArg;
                D[] -> nAST[];               
@@ -3290,7 +3304,18 @@ AbstractSyntaxTree: Tree
        #);
      IndexedPtnGen: PatternGen(#do ptn.IndexedPattern -> ptn.currentPtnKind[] #);
      OtherPrimPtnGen: PatternGen(#do ptn.OtherPrimPattern -> ptn.currentPtnKind[] #);
-
+     
+     Designator:< Decl
+       (# PT:: 
+            (# 
+            do '@'->lx.put;          
+               (pos,break,true) -> sig.PT; ':' -> lx.put;
+               ' ' -> lx.put;
+               (pos,break) -> OG.PT
+            #);
+          designee: ^Decl;
+       enter(sig[]->append,OG[]->append,designee[]->append)
+       #);
      Statement: Item
        (#
           enclosingImperative::
@@ -4232,10 +4257,9 @@ AbstractSyntaxTree: Tree
             #);
           copyAST::<
             (# nSuper: ^Invocation; nIS: ^Items
-            do (*'OG:' -> putline;*)
-               super.copyAST -> nSuper[]; IS.copyAST -> nIS[];
+            do super.copyAST -> nSuper[]; IS.copyAST -> nIS[];
                IS.isEmpty -> nIS.isEmpty;
-               (nSuper[],nIS[]) -> ObjectGenerator -> nAST[]
+               (nSuper[],nIS[]) -> ObjectGenerator -> nAST[];
             #);
           bracketedListElement:: 
             (# do 1 -> value; super.bracketedListElement -> value #);
@@ -4963,7 +4987,7 @@ AbstractSyntaxTree: Tree
             #);
           PU: 
             (#
-            do (if unit.T[] <> none then
+            do (if not unit.isEmpty then
                    '"' -> lx.put;
                    unit.T[] -> lx.append;
                    '"' -> lx.put
@@ -5267,8 +5291,8 @@ AbstractSyntaxTree: Tree
             do (if false then
                    '**** argBuf:add: ' -> puttext; A.label -> putline;
                    A.dopt -> putline;
-                   ('**   scope:',S[]) -> putPT;
-                   (if head[] <> none then head.print if)
+                   (' scope:',S[]) -> putPT;
+                   (*(if head[] <> none then head.print if)*)
                if);
                (if A.noOfSons > 0 then
                    (if head[] = none then
@@ -5302,7 +5326,9 @@ AbstractSyntaxTree: Tree
                  (if H[] <> none then
                      (if traceCheck then
                          '**** argBuf:check:\n' -> puttext; H.A.dopt -> putline;
-                         ('**   scope:',H.S[]) -> putPT
+                         ('scope:',H.S[]) -> putPT;
+                         '**   father:'->dumpT;
+                         H.A.father.dopt -> putheadN;
                      if);
                      (none,H.S[],H.S[],true)  -> H.A.check;
                      H.next[] -> H[];
