@@ -17,5 +17,5 @@ echo "Done"
 
 set /P V="wait:"
 cat A_trace.txt B_trace.txt C_trace.txt D_trace.txt>trace.txt
-ls -lt
+ls -lt *.txt
 

@@ -1,0 +1,248 @@
+newparser: obj
+   %visible AST
+   pModule:
+      sig: ref Signature:args
+      out DI: ref SuperDataItem:OG
+      OG: ref ObjectGenerator:Items
+      trace("pModule")
+      if(lexer.token = lexer.symbols.idf):then
+          sig := pSignature
+          if (lexer.token = lexer.symbols.colon) :then
+             lexer.next
+             if (lexer.token = lexer.symbols.constRef) :then
+                lexer.next
+                OG := pSuperDataItem
+                DI := Module(sig):OG(OG);
+             :else
+                syntaxError(1)
+          :else
+             syntaxError(2)
+      :else
+          syntaxError(3)
+   pSuperDataItem:
+      --in pSuperDataItem:< Object
+      out OG: ref ObjectGenerator:Items
+      trace("pSuperDataItem")
+      OG := pObjectGenerator
+   pSignature:
+      out sig: ref Signature:args
+      args: ref Arguments
+      tokenStr: ref String
+      prevToken: var integer
+      id: ref String
+      trace("pSignature")
+      if(lexer.token = lexer.symbols.idf):then
+         tokenStr := lexer.tokenStr
+         lexer.next
+         switch(lexer.token)
+             case((lexer.symbols.begin
+                   ,lexer.symbols.leftBrack
+                   ,lexer.symbols.leftSquare))
+                prevToken := lexer.token
+                lexer.next
+                trace("pSignature:brack")
+                -- missing save of return value
+                args := pSigArgs(tokenStr):leftB(prevToken)
+                sig := Signature(tokenStr):args(args)
+             trace("pSignature:unarySig")
+             sig := Signature(tokenstr):args(args)
+   pArgs(tokenStr: ref String):leftB(leftB: var char):
+      out args: ref Arguments
+      id: ref String
+      rightB: var char
+      comma: ref String
+      trace("pArgs")
+      rightB := leftB + 1
+      args := Arguments
+      id := lexer.tokenStr
+      args.addsep(brackAsText(leftB))
+      pArg: do
+         inner(#pArgs:leftB)
+         trace("pArgs:after:inner")	 
+         switch(lexer.token)
+             case(rightB)
+                trace("pArgs:rightB")
+                lexer.next
+                if(lexer.token = lexer.symbols.fatComma) :then
+                   -- check what we append ')' :foo '('
+                   -- or '):foo('		   
+                   comma := brackAsText(rightB) + lexer.tokenStr
+                   id := id + lexer.tokenStr		   
+                   trace("pArg:got:fatComma")
+                   lexer.next
+                   trace("pArg:got:fatComma:B")		   
+                   switch(lexer.token)
+                        case((lexer.symbols.leftBrack
+                             ,lexer.symbols.leftSquare
+                             ,lexer.symbols.begin))
+                             leftB := lexer.token
+                             rightB := leftB + 1
+                             lexer.next			     
+                             trace("pArg:getParenth:A");
+                             comma := comma + brackAsText(leftB)
+                             trace("pArg:getParenth:B");
+                             args.addSep(comma)
+                             trace("pArg:getParenth:C");
+                             restart(pArg)
+                        syntaxError(111)
+                :else
+                   trace("pArg:else")		
+                   args.addSep(brackAsText(rightB))
+             case(lexer.symbols.comma)
+                 args.addSep(",")
+                 lexer.next
+                 restart(pArg)
+             case(lexer.symbols.semicolon)
+                 -- skip
+             case(lexer.symbols.eos)
+                 "\nEOS\n".print
+                 args.addSep("\}")		 
+             syntaxError(112)
+         args.id := id
+         --args.id.print
+   pSigArgs(tokenStr: ref String):leftB(leftB: var char): pArgs(tokenStr):leftB(leftB)
+      D: ref Decl:OG
+      trace("pSigArgs:main")
+      D := pDecl
+      args.append(D)
+   pDecl -> D: ref Decl:OG:
+      D := parser.pDecl
+   pObjectGenerator -> OG: ref ObjectGenerator:items:
+      IV: ref Invocation
+      IS: ref Items
+      trace("pObjectGenerator")
+      IV := pInvocation
+      if (IV.isEmpty) :then
+         IS := pMainPart
+      :else
+         IS := Items
+         IS.isEmpty := true
+      -- must check if IV.last.args is actually a mainpart using convertLastArg
+      OG := ObjectGenerator(IV):Items(IS)
+   pInvocation ->  out IV: ref Invocation:
+      IV := parser.pInvocation
+   pMainPart -> IS: ref Items:
+      trace("pMainPart")
+      if (lexer.token = lexer.symbols.begin) :then
+         lexer.next
+         IS := pItems
+         trace("pMainPart:after:pItems")
+         switch(lexer.token)
+            case((lexer.symbols.end,lexer.symbols.eos))
+                 lexer.next
+            SyntaxError(4)
+      :else
+         trace("pMainPart:IS.isEmpty")
+         IS := Items
+         IS.isEmpty := true
+   pItems -> IS: ref Items:
+      trace("pItems")
+      IS := Items
+      trace("pItems:loop")
+      Loop: do
+         IS.append(pItem)
+         if (lexer.token = lexer.symbols.semicolon) :then
+            lexer.next
+            trace("pItems:after:semicolon:next")
+            restart(Loop)	 
+   pItem -> IT: ref Node:
+      switch (lexer.token)
+         case((lexer.symbols.inArg,lexer.symbols.outArg))
+            "in/out arg".print
+            IT := pDecl
+         case(lexer.symbols.idf)
+            switch(lexer.peekNext(1))
+               case((lexer.symbols.colon
+                    ,lexer.symbols.virtual
+                    ,lexer.symbols.further
+                    ,lexer.symbols.final))
+                   IT := pDecl
+               case(lexer.symbols.leftBrack)
+                  switch (lexer.peekNext(3))
+                      case((lexer.symbols.colon,lexer.symbols.virtual))
+                          IT := pDecl
+                  IT := pObjectGenerator
+               trace("pItems:before:pObjectGenerator")
+               --IT := pObjectGenerator
+               IT := pNewInv
+         case(lexer.symbols.special)
+              trace("pItems:got:special")
+              lexer.next
+         case(lexer.symbols.property)
+             propId: ref String
+             propId :=  lexer.tokenStr
+             lexer.next
+             IT := parser.pProperty(propId)
+         case(lexer.symbols.leftBrack)
+             lexer.next
+             IT := pObjectGenerator -- should be bracketedExp
+             if (lexer.token = lexer.symbols.rightBrack) :then
+                 lexer.next
+             :else
+                 "Syntax error - missign brackets\n".print
+         case(lexer.symbols.StringSy)
+             trace("pItems:got:String")
+             --IS.append(StringSy(lexer.TokenStr))
+             --lexer.next
+             IT := pObjectGenerator
+         case((lexer.symbols.const           -- are these meaningful?
+              ,lexer.symbols.floatConst
+              ,lexer.symbols.charSy))
+              trace("pItems:got:charSy")
+              IT := pObjectGenerator
+   pNewInv -> asg: ref Assignment:
+      trace("pNewInv")
+      asg := Assignment
+      L: do
+         N: ref Node
+         N := parser.pExp
+         N.doPT(false)
+         asg.append(N)
+         if (lexer.token = lexer.symbols.vAssign) :then
+            lexer.next
+            restart(L)
+
+   syntaxError(no: var integer):
+      "\nsyntax error: ".print
+      putint(no)
+      " at token: \"".print
+      lexer.symbols.asText(lexer.token).print
+      put('"')
+      newline
+      lexer.printLines(5)
+      hasSyntaxError := true
+
+   brackAsText(sy: var integer):
+         out T: ref String
+         switch(sy)
+            case((lexer.symbols.leftBrack))
+               T := "("
+            case((lexer.symbols.rightBrack))
+               T := ")"
+            case((lexer.symbols.begin))
+               T := "{"
+            case((lexer.symbols.end))
+               T := "\}"
+            case((lexer.symbols.leftSquare))
+               T := "["
+            case((lexer.symbols.rightSquare))
+               T := "]"      
+   trace(msg: ref String):
+      if (true) :then
+         put('%')
+         msg.print
+         put(':')
+         put(' ' )
+         putint(lexer.token)
+         put(' ' )
+         lexer.symbols.asText(lexer.token).print
+         put(' ')
+         lexer.tokenStr.print
+         newline
+   go:
+      out N: ref Node
+      --genTokenStream
+      "***parser.go:\n".print      
+      lexer.next
+      N := pModule
+      
