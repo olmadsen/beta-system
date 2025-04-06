@@ -5,3 +5,6 @@ small: obj
    V := 117
    V := W := 119
    B := V = W
+   R.foo
+   if (B) :then
+      V := 21
