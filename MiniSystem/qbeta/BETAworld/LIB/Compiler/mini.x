@@ -8,3 +8,6 @@ small: obj
    R.foo
    if (B) :then
       V := 21
+   V := if (B):then{12}:else{13}
+   (V,w) := (100,200)
+   
