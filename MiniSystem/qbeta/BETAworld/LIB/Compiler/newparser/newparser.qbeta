@@ -106,7 +106,64 @@ newparser: obj
       D := pDecl
       args.append(D)
    pDecl -> D: ref Decl:OG:
-      D := parser.pDecl
+       sig: ref Signature:args
+       OD: ref ObjectGenerator:Items
+       isInArg: var Boolean
+       isOutArg: var Boolean
+       ptnKind: var integer
+       trace("pDecl")
+       switch(lexer.token)
+          case(lexer.symbols.inArg)
+              lexer.next	  
+              isInArg := true
+          case(lexer.symbols.outArg)
+              lexer.next	  
+              isOutArg := true
+       sig := pSignature
+       L: do
+          switch(lexer.token)
+             case(lexer.symbols.colon)
+                lexer.next       
+                switch(lexer.token)
+                   case(lexer.symbols.constRef)
+                       lexer.next
+                       D := parser.pDataItem(sig):isConst(true):isValue(false)
+                       leave(L)
+                   case(lexer.symbols.varRef)
+                       trace("pDecl:ref")
+                       lexer.next
+                       --D := pDataItem(sig):isConst(false):isValue(false)
+                       -- OBS unfinished business!
+                       D := parser.pVarRefDI(sig):isConst(false):isValue(false)
+                       leave(L)
+                   case(lexer.symbols.constVal)
+                       trace("pDecl:val")  
+                       lexer.next
+                       D := parser.pDataItem(sig):isConst(true):isValue(true)
+                       leave(L)
+                   case(lexer.symbols.varVal)
+                       trace("pDecl:var")
+                       lexer.next
+                       D := parser.pDataItem(sig):isConst(false):isValue(true)
+                       leave(L)
+                   case(lexer.symbols.doSy)
+                       trace("pDecl:doSy")
+                       lexer.next
+                       D := parser.pLabelDecl(sig)
+                       leave(L)
+                   ptnKind := plainPtn
+             case(lexer.symbols.virtual)
+                trace("ptn:virtual")
+                lexer.next
+                ptnKind := virtualPtn
+             case(lexer.symbols.further)
+                lexer.next
+                ptnKind := furtherPtn
+             case(lexer.symbols.final)
+                lexer.next
+                ptnKind := finalPtn
+          OD := pObjectGenerator
+          D := PatternGen(sig):OG(OD):kind(ptnKind)
    pObjectGenerator -> OG: ref ObjectGenerator:items:
       IV: ref Invocation
       IS: ref Items
@@ -119,6 +176,7 @@ newparser: obj
          IS.isEmpty := true
       -- must check if IV.last.args is actually a mainpart using convertLastArg
       OG := ObjectGenerator(IV):Items(IS)
+      trace("pObjectGenerator:end")
    pInvocation ->  out IV: ref Invocation:
       IV := parser.pInvocation
    pMainPart -> IS: ref Items:
@@ -128,6 +186,8 @@ newparser: obj
          IS := pItems
          trace("pMainPart:after:pItems")
          switch(lexer.token)
+            case((lexer.symbols.end))
+                lexer.next	    
             case((lexer.symbols.end,lexer.symbols.eos))
                  lexer.next
             SyntaxError(6)
@@ -135,17 +195,20 @@ newparser: obj
          trace("pMainPart:IS.isEmpty")
          IS := Items
          IS.isEmpty := true
+      trace("pMainPart:end")
    pItems -> IS: ref Items:
+      IT: ref Item
       trace("pItems")
       IS := Items
-      trace("pItems:loop")
       Loop: do
-         IS.append(pItem)
+         trace("pItems:loop")
+         IT := pItem
+         IS.append(IT)
          if (lexer.token = lexer.symbols.semicolon) :then
             lexer.next
             trace("pItems:after:semicolon:next")
             restart(Loop)
-      trace("pItems:end")	    
+      trace("pItems:end")
    pItem -> IT: ref Item:
       trace("pItem")
       switch (lexer.token)
@@ -154,19 +217,21 @@ newparser: obj
             IT := pDecl
          case(lexer.symbols.idf)
             switch(lexer.peekNext(1))
+               trace("pItem:idf")
                case((lexer.symbols.colon
                     ,lexer.symbols.virtual
                     ,lexer.symbols.further
                     ,lexer.symbols.final))
                    IT := pDecl
                case(lexer.symbols.leftBrack)
+                  trace("pItem:idf:leftBrack")
                   switch (lexer.peekNext(3))
                       case((lexer.symbols.colon,lexer.symbols.virtual))
                           IT := pDecl
-                  trace("pItem:idf:leftBrack")
-                  IT := pExp
-                  trace("pItem:idf:leftBrack:after:pExp")
-               trace("pItems:before:pObjectGenerator")
+                          trace("pItem:efter:colon,virtual")
+                      IT := pTransaction
+                      trace("pItem:idf:leftBrack:after:pExp")
+               trace("pItems:before:pTransaction")
                --IT := pObjectGenerator
                IT := pTransaction
          case(lexer.symbols.special) -- probably not here but in pPrimary
@@ -259,11 +324,12 @@ newparser: obj
       rightB: var integer
       args: ref Arguments
       E: ref Exp
+      trace("pInvocations")
       IVs := Invocations
       L: do
          symb:= lexer.tokenStr
          lexer.next
-         trace("pPrimary:before:switch")
+         trace("pInvocations:before:switch")
          switch(lexer.token)
             case((lexer.symbols.begin, -- need to fix!
                  lexer.symbols.leftBrack
@@ -271,18 +337,18 @@ newparser: obj
                prevToken := lexer.token
                rightB := prevToken + 1
                lexer.next
-               trace("pPrimary:keyWord")
+               trace("pInvocations:keyWord")
                args := pExpArgs(symb):leftB(prevToken):prevT(prevToken)
                E := KeyWordGen(symb,args)
                IVs.append(E)
                if (lexer.token = rightB) :then
-                  trace("pPrimary:got:rightB")
+                  trace("pInvocations:got:rightB")
                   lexer.next
             trace("pPrimary:unary")
             E := UnaryGen(symb,Arguments) -- should be UnaryGen
             IVs.append(E)
             if (lexer.token = lexer.symbols.dot) :then
-               trace("pPrimary:got:dot")
+               trace("pInvocatios:got:dot")
                lexer.next
                if (lexer.token = lexer.symbols.idf) :then
                   restart(L)
@@ -344,6 +410,11 @@ newparser: obj
          lexer.symbols.asText(lexer.token).print
          put(' ')
          lexer.tokenStr.print
+         if (lexer.tokenBuf.getTokenNo(1) <> 0) :then
+            put(' ')
+            putint(lexer.tokenBuf.getTokenNo(1))
+            put(' ')
+            lexer.symbols.asText(lexer.tokenBuf.getTokenNo(1)).print
          newline
    go:
       out N: ref Item
