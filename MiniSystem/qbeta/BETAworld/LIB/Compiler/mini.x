@@ -1,4 +1,6 @@
 small: obj
+   %globals
+   %id "small"
    V: var integer
    W: var integer
    B: var Boolean
@@ -14,3 +16,5 @@ small: obj
    (V,w) := (100,200)
    put(4):at[8]:doIt
       koks
+   run: do
+      R.fisk(3)
