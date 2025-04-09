@@ -6,6 +6,8 @@ small: obj
    B: var Boolean
    put(v: var integer):at[ix: var integer]:doit{StmtX:< Object}:
       StmtY
+   R: ref put:at:exe
+   S: ref #record:get 
    V := 117
    V := W := 119
    B := V = W
@@ -18,3 +20,4 @@ small: obj
       koks
    run: do
       R.fisk(3)
+   foo ?+ fisk ?* hest
