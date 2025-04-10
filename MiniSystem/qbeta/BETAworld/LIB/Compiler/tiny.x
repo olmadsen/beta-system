@@ -4,3 +4,4 @@ tiny: obj
    V := abe * hest + fisk
    foo ?+ fisk ?* hest
    --vvv: val 117
+   --R.17

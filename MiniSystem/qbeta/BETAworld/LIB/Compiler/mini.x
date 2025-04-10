@@ -21,3 +21,4 @@ small: obj
    run: do
       R.fisk(3)
    foo ?+ fisk ?* hest
+   V := W ^3
