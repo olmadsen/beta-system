@@ -1,7 +1,4 @@
 tiny: obj
-   R: ref put:at:exe
-   S: ref #record:get 
-   V := abe * hest + fisk
-   foo ?+ fisk ?* hest
-   --vvv: val 117
-   --R.17
+   vvv: val 117
+   if (B) :then
+      V := 21

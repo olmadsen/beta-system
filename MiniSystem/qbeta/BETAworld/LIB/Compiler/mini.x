@@ -4,6 +4,7 @@ small: obj
    V: var integer
    W: var integer
    B: var Boolean
+   C: val 117
    put(v: var integer):at[ix: var integer]:doit{StmtX:< Object}:
       StmtY
    R: ref put:at:exe
