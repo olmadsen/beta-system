@@ -43,3 +43,5 @@ small: obj
           xx := 8
    :else
       xx := xx - 13
+   V := if (B):then{12}:else{13}
+   (V,w) := (100,200)

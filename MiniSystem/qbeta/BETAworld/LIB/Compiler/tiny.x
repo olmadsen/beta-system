@@ -1,4 +1,4 @@
-tiny: obj
-   vvv: val 117
+tiny: obj 
+   foo(a,12,b)
    if (B) :then
-      V := 21
+      a := a * b
