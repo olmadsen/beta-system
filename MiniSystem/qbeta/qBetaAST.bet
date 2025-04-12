@@ -1,0 +1,363 @@
+ORIGIN 'qabstractSyntaxTree';
+--AstLib:attributes--
+SimpleBetaModule: Decl
+  (# PT::
+       (#
+       do 'BetaModule:'->lx.append; filePath[] -> lx.append; 
+          (pos,true) -> mkBreak
+       #);
+     moduleName:  ^Name;      
+     filePath: ^text;
+     inFile: ^file;
+  enter filePath[]
+  do inner
+  #);
+
+BetaProperties: Item
+  (# PT::
+       (#
+       do 'BetaProperties: ' -> lx.append; (pos,true)->mkBreak;
+          scanSons(#do (pos,break)->current.PT; (pos,true)->mkBreak #);
+       #)
+  #);
+BetaProperty: Item
+  (# PT::
+       (#
+       do 'BetaProperty: '->lx.append; 
+          scanSons(#do (pos,break)->current.PT #)
+       #)
+  do
+  #);
+BetaFragments: Item
+  (# PT::
+       (#
+       do
+          'BetaFragments:'->lx.append; (pos,true)->mkBreak;
+          scanSons(#do (pos,break)->current.PT #)
+       #)
+  #);
+BetaFragment: Item
+  (#  PT::<
+       (#
+       do 'BetaFragment:'->lx.append; (pos,true)->mkBreak;
+          scanSons(#do (pos,break)->current.PT #);
+          inner PT
+       #);
+     theName,cat,language: ^Name
+  enter(theName[]->append,cat[]->append,language[]->append)
+  #);
+
+
+BetaModule: Decl (* should probaly be qBetaModule? *)
+  (# moduleName:  ^Name;           inFile: ^file;
+  enter moduleName[]
+  do inner
+  #);
+FragmentEntry: BetaModule
+  (# PT::<
+       (#
+       do (pos,length) -> block
+          (#
+          do '\nBetaFragmentEntry:path:' -> lx.append;
+             path[] -> lx.append; 
+             ' name:'->lx.append; fileName[]->lx.append;
+             inner PT
+          #);
+       #);
+     path,fileName: ^text; (* Perhaps superflous since 
+                            * we have name and pathToFN in Module;
+                            * Module also has inFile
+                            * fileName and inFile are defined during
+                            * parsing in FragmentFile
+                            * Are not defined for a FragmentDirectory
+                            *)
+  enter(path[],fileName[])
+  do inner
+  #);
+FragmentDir: FragmentEntry
+  (# PT::
+       (#
+       do (if false and ( not expand) then
+              true -> expand; doExpand 
+          if);
+          '  dir: '->lx.append; 
+          (pos,true) -> mkBreak;
+          scanSons
+          (# 
+          do (pos,break) -> current.PT;
+             (pos,break) -> mkBreak
+          #)
+       #);    
+     doExpand:
+       (# trace: (#exit false #);
+          D: @directory;  FN,ext: ^text;
+       do (if trace then
+              '**** expand:'->dumpT; path[] -> dumpTN
+          if);
+          (if true then
+              path[] -> D.name;
+              D.scanEntries
+              (# N: ^Name; FG: ^FragmentEntry
+              do found.path -> FN[];
+                 (if true
+                  // '.' -> FN.equal
+                  // '..' -> FN.equal
+                  // (1 -> FN.inxGet) = '.'
+                  // (fn.length -> FN.inxGet) = '~' then
+                  else           
+                     select
+                     (# whenFile:: 
+                          (# 
+                          do 'file:'->dumpT;
+                             FN[] -> Name -> N[];
+                             (N[],FN[] -> (path.copy).append ,FN[])
+                               -> FragmentFile -> FG[]
+                               -> append;
+                             (if false and (FG.inFile[] = none) then
+                                 '**** FG.inFile is none' -> putline
+                             if)
+                          #);
+                        whenDir:: 
+                          (# 
+                          do 'dir:'->dumpT;
+                             FN[] -> Name -> N[];
+                             (N[],FN[] -> (path.copy).append,FN[],false) 
+                               -> FragmentDir
+                               -> append
+                          #);
+                     #);
+                     FN[] -> dumpT
+                 if)
+              #);
+              newline
+           else
+              (path[],true) -> getBetaDirectories
+              (#
+              do scan
+                 (# N: ^Name; FG: ^FragmentEntry
+                 do (if currentIsFile then
+                        (if trace then
+                        'File: ' -> puttext; 
+                        current[] -> (path.copy).append -> putline;
+                    if);
+                    current[] -> Name -> N[];
+                    (N[],current[] -> (path.copy).append ,current[])
+                      ->  FragmentFile -> FG[]
+                      -> append;
+                    (if FG.inFile[] = none then
+                        '**** FG.inFile is none' -> putline
+                    if)
+                 else
+                    (if trace then
+                        'Dir: ' -> puttext;
+                    if);
+                    (*current[] -> (path.copy).append -> dirs.add;*)
+                    'FragmentDir' -> Name -> N[];
+                    (N[],current[] 
+                      -> (path.copy).append,current[],false) 
+                      -> FragmentDir -> append
+                if);
+                (if trace then  current[] -> putline if);
+          #)#);if);
+       #);
+     expand: @boolean
+  enter expand
+  do  '/' -> path.put; (*path[] -> putline;*)
+     (if expand then
+         doExpand
+     if);
+     (* fils.parse;
+      dirs.handle     *)
+  #);
+FragmentFile: FragmentEntry
+  (# PP:: (# do 'FragmentFile' -> lx.puttext #);
+     PT:: 
+       (# 
+       do ' file:'->lx.append;
+          (pos,break) -> mkBreak;          
+          (if props[] <> none then (pos,break) -> props.PT; if);
+          (if pos > 0 then 
+              (* A comment with no linebreak may have been printed in props *)
+              (pos,true) -> mkBreak
+          if);
+          (* basiclib has no framents ==> frag[] = none *)
+          (if frags[] <> none then (pos,break) -> frags.PT if)
+       #);
+     label:: (#do 'fragmentFile:' -> lab[] #);
+     Props:  ^NewProperty;
+     Frags: ^Fragments;
+     trace: (# exit false #)
+  do (if trace then
+         '**** FragmentFile:' -> dumpT; fileName[] -> dumpTN;
+     if);
+     (*path[] -> superParser
+     (#
+     do
+     #)*)
+  #);
+FragmentModule: BetaModule
+  (# PT::
+       (#
+       do 'FragmentModule: ' -> lx.append; (pos,break) -> frag.PT 
+       #);     
+     frag: ^FragmentEntry
+  enter frag[] -> append
+  #);
+
+Fragments: Item
+  (# theName,cat,language: ^Name;      frag: ^Fragment
+  do loop:
+       (if lex.symb = lex.symbols.idf then
+          lex.sym[] -> Name -> theName[];
+          lex; 
+          (if lex.symb = lex.symbols.colon then
+              lex;
+              (if lex.symb = lex.symbols.idf then
+                  lex.sym[] -> Name -> cat[];
+                  lex;
+                  (if lex.symb = lex.symbols.colon then
+                      lex;
+                      (if lex.symb = lex.symbols.idf then 
+                          (* --- x:objectDesc:beta --- *)
+                          lex.sym[] -> Name -> language[];
+                          lex;                          
+                       else
+                          SyntaxError
+                      if)
+                   else
+                      'BETA'-> Name -> language[];
+                  if);
+                  (if lex.symb = lex.symbols.frag then
+                      lex;
+                      (if true 
+                       // 'descriptor' -> cat.T.equalNCS 
+                       // 'descriptorForm' -> cat.T.equalNCS then
+                          (theName[],cat[],language[]) 
+                            -> ObjDescFrag -> frag[] -> append;
+                       // 'attributes' -> cat.T.equalNCS 
+                       // 'attribute' -> cat.T.equalNCS then
+                          (theName[],cat[],language[]) 
+                            -> AttFrag -> frag[] -> append
+                       // 'doPart' -> cat.T.equalNCS then 
+                          (theName[],cat[],language[]) 
+                            -> doPartFrag -> frag[] -> append
+                       // 'mainPart' -> cat.T.equalNCS then
+                          '\n!!!! MainPart category is not implemented' 
+                            -> putline
+                       else
+                          'Unknown category: ' -> puttext; 
+                          cat.T[] -> putline
+                      if);
+                      (if lex.symb = lex.symbols.frag then 
+                          lex;
+                          restart loop
+                      if);
+                   else
+                      SyntaxError
+                  if)
+               else
+                  SyntaxError
+              if)
+           else
+              SyntaxError
+          if)
+       else
+          SyntaxError
+       if);
+     (if frag[] <> none then (*frag.addCommentAfter*) if)
+  #);
+Fragment: Item
+  (* Super pattern for ObjDescFrag, AttFrag and doPartFrag *)
+  (# PT::< (# do(* breakIfNotAtEol;*) inner  #);
+     (*label:: (#do 'Fragment'-> lab[] #); bound in subpatterns *)
+     entity:: (# do this(Fragment)[] -> E[] #);
+     (*sort:: (# do this(Fragment)[] -> S[] #);*)
+     kind:: (# do '-' -> ch #);
+     skind:: (# do ': -' -> S[] #);
+     replaceEntity::<
+       (#
+       do '**** Fragment:replaceEntry: ' -> putline;
+          inner
+       #);
+     theName,cat,language: ^Name
+  enter(theName[]->append,cat[]->append,language[]->append)
+  (*do inner*)
+  #);
+ObjDescFrag: BetaFragment
+  (# PT:: 
+       (# 
+       do '---' -> lx.append; theName.T[] -> lx.append;
+          ':descriptor---' -> lx.append;
+          (pos,break) -> OD.PT
+       #);
+     label:: (# do 'ObjDescFrag' -> lab[] #);
+     getentries::(#do OD.getentries -> (names[],entries[]) #);
+     (*entity:: (# do this(ObjDescFrag)[] -> E[] #);
+      sort:: (# do this(ObjDescFrag)[] -> S[] #);*)
+     replaceEntity::
+       (#
+       do '**** ObjDescFrag:replaceEntry: ' -> putline;
+          inner
+       #);
+     OD: ^ObjectDesc
+  (*do (*PatternDen -> * ) ObjectDesc -> OD[] -> append;*)
+  #);
+AttFrag: BetaFragment
+  (# PT:: 
+       (# 
+       do '---' -> lx.append; 
+          theName.T[] -> lx.append;
+          ':attributes---\n' -> lx.append;
+          (if att[] <> none then (pos,break) -> att.PT;  if)
+       #);
+     label:: (#do 'AttFrag'->lab[] #);
+     length:: (# do att.length -> value #);
+     getentries::(#do att.getEntries -> (names[],entries[]) #);
+     (* entity:: (# do this(AttFrag)[] -> E[] #);
+     sort:: (# do this(AttFrag)[] -> S[] #);*)
+     replaceEntity::
+       (#
+       do '**** AttFrag:replaceEntry: ' -> putline;
+          inner
+       #);     
+     att: ^Attributes
+  (*do Attributes -> att[] -> append*)
+  #);
+doPartFrag: BetaFragment
+  (# PT:: 
+       (# 
+       do '---' -> lx.append; theName.T[] -> lx.append;
+          ':doPart---\n' -> lx.append;
+          (pos,break) -> ACP.PT 
+       #);
+     label:: (# do 'doPartFrag' -> lab[] #);
+     length::(# #);
+     getEntries:: (# do ('Do-part',ACP[]) -> add #);
+     (*entity:: (# do this(DoPartFrag)[] -> E[] #);
+     sort:: (# do this(DoPartFrag)[] -> S[] #);*)
+     replaceEntity::
+       (#
+       do '**** doPartFrag:replaceEntry: ' -> putline;
+          inner
+       #);
+     ACP: ^ActionPart
+  (*do ActionPart -> ACP[] -> append;*)
+  #);
+ObjectDesc: Item
+  (#
+  #);
+Attributes: Item
+  (#
+  #);
+ActionPart: Item
+  (#
+  #);
+
+syntaxError:
+  (#
+  do
+     '**** syntax error'->putline
+  #);
+
+
+

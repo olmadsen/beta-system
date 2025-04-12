@@ -1,0 +1,238 @@
+ORIGIN 'qabstractSyntaxTree';
+INCLUDE 'qBetaAST';
+INCLUDE '~beta/sysutils/envstring';
+(*INCLUDE 'qabstractSyntaxTree'*)
+--AstLib:attributes--
+parseStdBeta: 
+  (# prop: ^NewProperty;
+  enter prop[]
+  do '**** parseStdBeta:'->dumpT;
+     prop.args.scanSons
+     (# INV: ^Invocation; 
+     do 
+        current[] -> INV[];
+        INV.scanSons
+        (# S: ^StringObj; 
+        do (if current.isStringLiteral then
+               current[] -> S[];
+               S.doPT -> dumpTN;
+               (if true then
+                   S[] -> openBetaModule
+                else
+                   S[] -> openFragmentFile
+               if)
+           if)
+        #)
+     #)
+  #);
+openBetaModule:
+  (# S: ^StringObj; StdPath,fragPath: ^text;
+     FD: ^FragmentDir;
+     NM: ^Name;
+     BM: ^SimpleBetaModule;
+  enter S[]
+  do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
+     (if stdpath[] = none then '!!!! Did not find BETALIB!'->putline if);
+     '**** BETALIB: ' -> puttext; StdPath[] -> putline;
+     'A fragment' -> Name -> NM[];
+     '/' -> (StdPath.copy).append -> fragPath[];
+     S.T[] -> fragPath.append -> fragPath[];
+     fragPath[] -> SimpleBetaModule -> BM[];
+     BM.doPT -> dumpTN;
+     BM.filePath[] -> superParser
+     (# BPS: ^BetaProperties;  frags: ^BetaFragments
+     do pProperties -> BPS[];
+        'after:pProperties'->trace;
+        
+        pFragments -> frags[];
+        
+        'after:pFragments:'->trace;
+        BPS.dopt -> putline;
+        frags.doPT -> putline;
+     #)
+  #);
+
+pProperties:
+  (# BPS:  ^BetaProperties; prop: ^BetaProperty; gotOne: @boolean
+  do 'pProperties'->trace;
+     BetaProperties -> BPS[];
+     L:
+       (if lex.symb
+        // lex.symbols.idf  then
+           lex;
+           pProperty -> prop[] -> BPS.append;
+           (if lex.symb = lex.symbols.semicolon then 
+               true -> gotOne;
+               'pProperties:repeat:before:lex'->trace;
+               lex; 
+               '?'->put; lex.symb -> putint; newline;
+               'pProperties:repeat'->trace; 
+               restart L
+           if)
+        // lex.symbols.frag then (* no properties *)
+        // lex.symbols.eos then (* empty file *)
+        else
+           (if not gotOne then SyntaxError if)
+       if)
+  exit BPS[]
+  #);
+     
+pProperty:
+  (# prop: ^BetaProperty;
+  do 'pProperty'->trace;
+     BetaProperty -> prop[];
+     L:
+       (if lex.symb
+        // lex.symbols.string then
+           lex.sym[] -> Name -> prop.append;
+           lex;
+           restart L
+        // lex.symbols.charSy then
+           lex.sym[] -> Name -> prop.append;
+           lex;
+           restart L
+        // lex.symbols.idf 
+
+        // lex.symbols.const then
+           lex.sym[] -> Name -> prop.append;
+           lex;
+           restart L
+       if);
+     'pProperty:end'->trace
+  exit prop[]
+  #);
+
+pFragments: 
+  (# frags: ^BetaFragments
+  do 'pFragments'->trace;
+     BetaFragments -> frags[];
+     (if lex.symb = lex.symbols.frag then 
+         lex;
+         pFragment -> frags.append
+     if);
+     'pFragments:end'->trace
+  exit frags[]
+  #);
+pFragment:
+  (# frag: ^BetaFragment; theName,cat,language: ^Lexem;
+  do 'pFragment'->trace; 
+     loop:
+       (if lex.symb = lex.symbols.idf then
+           lex.sym[] -> Name -> theName[];
+           lex; 
+           'pFragment:idf'->trace; 
+           (if lex.symb = lex.symbols.colon then
+               lex;
+               'pFragment:colon'->trace; 
+               (if lex.symb = lex.symbols.idf then
+                   'pFragment:idf:colon:idf'->trace; 
+                   lex.sym[] -> Name -> cat[];
+                   lex;
+                   (if lex.symb = lex.symbols.colon then
+                       'pFragment:idf:colon:idf:colon'->trace; 
+                       lex;
+                      (if lex.symb = lex.symbols.idf then 
+                          (* --- x:objectDesc:beta --- *)
+                          lex.sym[] -> Name -> language[];
+                          lex;                          
+                       else
+                          SyntaxError
+                      if)
+                    else
+                       'pFragment:idf:colon:BETA'->trace; 
+                       'BETA'-> Name -> language[];
+                   if);
+                   (if lex.symb = lex.symbols.frag then
+                       'pFragment:frag:last'->trace; 
+                      lex;
+                      (if true 
+                       // 'descriptor' -> cat.T.equalNCS 
+                       // 'descriptorForm' -> cat.T.equalNCS then
+                          (theName[],cat[],language[]) 
+                            -> ObjDescFrag -> frag[]
+                       // 'attributes' -> cat.T.equalNCS 
+                       // 'attribute' -> cat.T.equalNCS then
+                          (theName[],cat[],language[]) 
+                            -> AttFrag -> frag[]
+                       // 'doPart' -> cat.T.equalNCS then 
+                          (theName[],cat[],language[]) 
+                            -> doPartFrag -> frag[]
+                       // 'mainPart' -> cat.T.equalNCS then
+                          '\n!!!! MainPart category is not implemented' 
+                            -> putline
+                       else
+                          'Unknown category: ' -> puttext; 
+                          cat.T[] -> putline
+                      if);
+                      (if lex.symb = lex.symbols.frag then 
+                          lex;
+                          restart loop
+                      if);
+                   else
+                      SyntaxError
+                  if)
+               else
+                  SyntaxError
+              if)
+           else
+              SyntaxError
+          if)
+       else
+          SyntaxError
+       if)
+  exit frag[]
+  #);
+superParser:
+  (# fileName,pathToFN: ^text; 
+     inFile: ^file;
+     oldLex: ^lexer;
+     (*objMd: ^objectModule;*)
+  enter fileName[]
+  do (* all the lex setup stuff *) 
+     (*'Pos: ' -> puttext; beginPos -> putint; newline;*)
+     (*'Module: ' -> puttext; fileName[] -> putline;*)
+     (path.append).copy -> pathToFN[];
+     lex[] -> oldLex[];
+     &lexer[] -> lex[];
+     &file[] -> inFile[];
+     fileName[]  -> inFile.name;
+     inFile.openRead;
+     (fileName[],inFile[]) -> lex.init;
+     true -> lex.isOldBeta;
+     lex;
+     INNER;
+     inFile.close;
+     oldLex[] -> lex[];
+  #);
+
+trace:
+  (# S: ^Text
+  enter S[]
+  do (if true then
+         S[] -> puttext; ':'->put;
+         lex.symb -> putint; ' ' -> put;
+         lex.symb -> lex.symbols.asText -> puttext;
+         ' "'->puttext; lex.sym[] -> puttext; '"\n'->puttext;
+         inner trace
+     if)
+  #);
+
+openFragmentFile:
+  (# S: ^StringObj; StdPath,fragPath: ^text;
+     FD: ^FragmentDir;
+     NM: ^Name;
+     betaLib: ^Item;
+  enter S[]
+  do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
+     (if stdpath[] = none then '!!!! Di not find BETALIB!'->putline if);
+     '**** BETALIB: ' -> puttext; StdPath[] -> putline;
+     'A fragment' -> Name -> NM[];
+     '/' -> (StdPath.copy).append -> fragPath[];
+     S.T[] -> fragPath.append -> fragPath[];
+     (NM[],fragPath[],'',true) -> FragmentDir -> FD[];
+     (NM[],FD[]) -> FragmentModule -> betaLib[];
+     '\n**   FD.dopt:'->dumpTN;
+     FD.doPT -> putline;
+     '\n**   betaLIB:'->dumpTN;
+     betaLib.doPT->dumpT;
+  #);

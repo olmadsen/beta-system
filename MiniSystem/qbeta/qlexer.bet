@@ -32,7 +32,7 @@ Lexer:
      fileName: ^Text;
      hasLexError: @boolean;
      errorStream: ^text;
-     isXbeta: @boolean;
+     isOldBeta,isXbeta: @boolean;
      buffer: [1000] @ char; bTop: @integer;
      nextCh: @
        (# pos,linePos,posBeforeName: @ integer;
@@ -203,10 +203,11 @@ Lexer:
                     i -> putint; ':'->put;
                     (for i: top repeat istack[i] -> putint; ','->put for);
                     newline*)
-               if)
-            exit inOut 
-            #);
-          atStartOfLine: @ boolean;
+            if);
+          (if isOldBeta then 0 -> inOut if)
+       exit inOut 
+       #);
+     atStartOfLine: @ boolean;
 
           iStack: [4] @ integer; top: @integer;
           push:
@@ -289,6 +290,10 @@ Lexer:
             (if ch
              // '"' then
                 (* end  of  text *)
+             // '\'' then
+                (if isOldBeta  then
+                    (* end of text *)
+                if)
              // '\\' then
                 ch -> sym.put;
                 nextCh;
@@ -532,6 +537,7 @@ Lexer:
                 // rAssign then ':- ' -> T    
                 // slotBegin then '<<'-> T
                 // slotEnd then '>>'-> T
+                // frag then '--'->T 
                 // eos then  '-eos-' -> T
                 else
                    sy -> T.putint
@@ -741,7 +747,7 @@ Lexer:
                     if);
                     true -> inDecl
                  else
-                    (if ch -> ascii.isLetter then
+                    (if not isOldBeta and (ch -> ascii.isLetter) then
                         ':' -> readName;
                         symbols.fatcomma -> symb
                      else
@@ -791,18 +797,26 @@ Lexer:
                  // '>' then 
                     symbols.return -> symb; nextCh;
                     (*'\n*** got value' -> putline; 5 -> printlines;*)
-                 // '-' then                                    
-                    Skipcomment; (* nextCh moved to skipComment to avoid
-                                  * onlyWhiteSpace being set to false.
-                                  * Will happen for: "   --snorf"
-                                  * but not for: "   -- snorf"
-                                  *)
-                    (* We need to call skipBlanks at outer level *)
-                    (if isXbeta then
-                        true -> hasComment
+                 // '-' then
+                    (if isOldBeta then 
+                        '!!! oldBeta:frag'->putline;
+                        symbols.frag -> symb;
+                        nextCh;
+                        L: (if ch = '-' then nextCh; restart L if);
+                        symb -> putint; ' ' ->put;
+                        symb->symbols.asText->putline;
                      else
-                        true -> hasComment
-                    if)
+                        Skipcomment; (* nextCh moved to skipComment to avoid
+                                      * onlyWhiteSpace being set to false.
+                                      * Will happen for: "   --snorf"
+                                      * but not for: "   -- snorf"
+                                      *)
+                        (* We need to call skipBlanks at outer level *)
+                        (if isXbeta then
+                            true -> hasComment
+                         else
+                            true -> hasComment
+                    if)if)
                  else 
                     '-' -> special.read
                 if)
@@ -861,19 +875,23 @@ Lexer:
                     (* what happen here? *)
                 if)
              // '\'' then 
-                nextch; 
-                (if ch = '\\' then
-                    ch -> sym.put;
-                    nextch                    
-                if);
-                ch -> sym.put;
-                nextCh;
-                (if ch = '\'' then 
-                    symbols.charSy -> symb
+                (if isOldBeta then
+                    readText -> symb; nextCh
                  else
-                    symbols.illegalCh -> symb
-                if);
-                nextCh
+                    nextch;
+                    (if ch = '\\' then
+                        ch -> sym.put;
+                        nextch
+                    if);
+                    ch -> sym.put;
+                    nextCh;
+                    (if ch = '\'' then
+                        symbols.charSy -> symb
+                     else
+                        symbols.illegalCh -> symb
+                    if);
+                    nextCh
+                if)
              // '"' then
                 readText -> symb; nextCh   
              // 255 then symbols.eos -> symb
@@ -952,7 +970,7 @@ Lexer:
           currentSymT[] -> sym[]
        exit T
        #);
-  do (if not tokenBuf.isEmpty then 
+  do (if not tokenBuf.isEmpty then
            tokenBuf.get -> (symb,sym[])
       else
          nextTokens;
