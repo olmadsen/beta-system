@@ -1,16 +1,46 @@
 ORIGIN 'qabstractSyntaxTree';
 --AstLib:attributes--
-SimpleBetaModule: Decl
+BetaDecl: Item
+  (# PT::<
+       (#
+       do (pos,break) -> NS.PT;  ':' -> lx.put;  inner PT
+       #);
+     NS: ^NameDecls; 
+  enter NS[]->append
+  #);
+BetaDataItem: BetaDecl
+  (# PT::<
+       (#do (pos,break) -> IT.PT; inner PT #);
+     IT: ^Item 
+  enter IT[] -> append
+  #);
+NameDecls: Item
+  (# PT:: 
+       (# 
+       do scanSons
+          (#do (pos,break) -> current.PT; (if not isLast then ','->lx.put if)#)
+       #)
+  #);
+NameDecl: Item
+  (# 
+  #);
+BetaLexem: Item
+  (# T: ^text;
+  enter T[]
+  #);
+BetaName: BetaLexem
+  (# PT:: (#do T[] -> lx.append #);
+  #);
+SimpleBetaModule: Item
   (# PT::
        (#
        do 'BetaModule:'->lx.append; filePath[] -> lx.append; 
           (pos,true) -> mkBreak
        #);
-     moduleName:  ^Name;      
+     moduleName:  ^BetaName;      
      filePath: ^text;
      inFile: ^file;
   enter filePath[]
-  do inner
   #);
 
 BetaProperties: Item
@@ -26,7 +56,6 @@ BetaProperty: Item
        do 'BetaProperty: '->lx.append; 
           scanSons(#do (pos,break)->current.PT; ' ' -> lx.put #)
        #)
-  do
   #);
 BetaFragments: Item
   (# PT::
@@ -44,15 +73,14 @@ BetaFragment: Item
           scanSons(#do (pos,break)->current.PT; ':' -> lx.put #);*)
           inner PT
        #);
-     theName,cat,language: ^Name
+     theName,cat,language: ^BetaName
   enter(theName[]->append,cat[]->append,language[]->append)
   #);
 
 
-BetaModule: Decl (* should probaly be qBetaModule? *)
-  (# moduleName:  ^Name;           inFile: ^file;
+BetaModule: Item (* should probaly be qBetaModule? *)
+  (# moduleName:  ^BetaName;           inFile: ^file;
   enter moduleName[]
-  do inner
   #);
 FragmentEntry: BetaModule
   (# PT::<
@@ -73,7 +101,6 @@ FragmentEntry: BetaModule
                             * Are not defined for a FragmentDirectory
                             *)
   enter(path[],fileName[])
-  do inner
   #);
 FragmentDir: FragmentEntry
   (# PT::
@@ -98,7 +125,7 @@ FragmentDir: FragmentEntry
           (if true then
               path[] -> D.name;
               D.scanEntries
-              (# N: ^Name; FG: ^FragmentEntry
+              (# N: ^BetaName; FG: ^FragmentEntry
               do found.path -> FN[];
                  (if true
                   // '.' -> FN.equal
@@ -110,7 +137,7 @@ FragmentDir: FragmentEntry
                      (# whenFile:: 
                           (# 
                           do 'file:'->dumpT;
-                             FN[] -> Name -> N[];
+                             FN[] -> BetaName -> N[];
                              (N[],FN[] -> (path.copy).append ,FN[])
                                -> FragmentFile -> FG[]
                                -> append;
@@ -121,7 +148,7 @@ FragmentDir: FragmentEntry
                         whenDir:: 
                           (# 
                           do 'dir:'->dumpT;
-                             FN[] -> Name -> N[];
+                             FN[] -> BetaName -> N[];
                              (N[],FN[] -> (path.copy).append,FN[],false) 
                                -> FragmentDir
                                -> append
@@ -135,40 +162,34 @@ FragmentDir: FragmentEntry
               (path[],true) -> getBetaDirectories
               (#
               do scan
-                 (# N: ^Name; FG: ^FragmentEntry
+                 (# N: ^BetaName; FG: ^FragmentEntry
                  do (if currentIsFile then
                         (if trace then
-                        'File: ' -> puttext; 
-                        current[] -> (path.copy).append -> putline;
+                            'File: ' -> puttext; 
+                            current[] -> (path.copy).append -> putline;
+                        if);
+                        current[] -> BetaName -> N[];
+                        (N[],current[] -> (path.copy).append ,current[])
+                          ->  FragmentFile -> FG[]
+                          -> append;
+                        (if FG.inFile[] = none then
+                            '**** FG.inFile is none' -> putline
+                        if)
+                     else
+                        (if trace then
+                            'Dir: ' -> puttext;
+                        if);
+                        (*current[] -> (path.copy).append -> dirs.add;*)
+                        'FragmentDir' -> BetaName -> N[];
+                        (N[],current[] 
+                          -> (path.copy).append,current[],false) 
+                          -> FragmentDir -> append
                     if);
-                    current[] -> Name -> N[];
-                    (N[],current[] -> (path.copy).append ,current[])
-                      ->  FragmentFile -> FG[]
-                      -> append;
-                    (if FG.inFile[] = none then
-                        '**** FG.inFile is none' -> putline
-                    if)
-                 else
-                    (if trace then
-                        'Dir: ' -> puttext;
-                    if);
-                    (*current[] -> (path.copy).append -> dirs.add;*)
-                    'FragmentDir' -> Name -> N[];
-                    (N[],current[] 
-                      -> (path.copy).append,current[],false) 
-                      -> FragmentDir -> append
-                if);
-                (if trace then  current[] -> putline if);
+                    (if trace then  current[] -> putline if);
           #)#);if);
        #);
      expand: @boolean
   enter expand
-  do  '/' -> path.put; (*path[] -> putline;*)
-     (if expand then
-         doExpand
-     if);
-     (* fils.parse;
-      dirs.handle     *)
   #);
 FragmentFile: FragmentEntry
   (# PP:: (# do 'FragmentFile' -> lx.puttext #);
@@ -188,13 +209,7 @@ FragmentFile: FragmentEntry
      Props:  ^NewProperty;
      Frags: ^Fragments;
      trace: (# exit false #)
-  do (if trace then
-         '**** FragmentFile:' -> dumpT; fileName[] -> dumpTN;
-     if);
-     (*path[] -> superParser
-     (#
-     do
-     #)*)
+
   #);
 FragmentModule: BetaModule
   (# PT::
@@ -206,27 +221,27 @@ FragmentModule: BetaModule
   #);
 
 Fragments: Item
-  (# theName,cat,language: ^Name;      frag: ^Fragment
+  (# theName,cat,language: ^BetaName;      frag: ^Fragment
   do loop:
        (if lex.symb = lex.symbols.idf then
-          lex.sym[] -> Name -> theName[];
+          lex.sym[] -> BetaName -> theName[];
           lex; 
           (if lex.symb = lex.symbols.colon then
               lex;
               (if lex.symb = lex.symbols.idf then
-                  lex.sym[] -> Name -> cat[];
+                  lex.sym[] -> BetaName -> cat[];
                   lex;
                   (if lex.symb = lex.symbols.colon then
                       lex;
                       (if lex.symb = lex.symbols.idf then 
                           (* --- x:objectDesc:beta --- *)
-                          lex.sym[] -> Name -> language[];
+                          lex.sym[] -> BetaName -> language[];
                           lex;                          
                        else
                           SyntaxError
                       if)
                    else
-                      'BETA'-> Name -> language[];
+                      'BETA'-> BetaName -> language[];
                   if);
                   (if lex.symb = lex.symbols.frag then
                       lex;
@@ -280,7 +295,7 @@ Fragment: Item
        do '**** Fragment:replaceEntry: ' -> putline;
           inner
        #);
-     theName,cat,language: ^Name
+     theName,cat,language: ^BetaName
   enter(theName[]->append,cat[]->append,language[]->append)
   (*do inner*)
   #);
@@ -344,23 +359,76 @@ doPartFrag: BetaFragment
      ACP: ^ActionPart
   (*do ActionPart -> ACP[] -> append;*)
   #);
-ObjectDesc: Item
-  (# PT::
-       (#
-       do '(# #)'->lx.append
-       #)
+BetaObjectSpecification: Item
+  (# PT::< (#do inner PT #)
   #);
-BetaPattern: Decl
+ObjectDesc: BetaObjectSpecification
   (# PT::
        (#
-       do (pos,break) -> id.PT; ':' -> lx.put; 
+       do (if sup[] <> none then  (pos,break) -> sup.PT; if);
+          '(# '->lx.append;
+              (if att[] <> none then  (pos,break) -> att.PT; if);
+              '#)'->lx.append
+       #);
+     sup: ^PatternDen;
+     props: ^BetaProperties;
+     restricts: ^Restrictions;
+     att: ^Attributes;
+     acp: ^ActionPart;
+     slt: ^Slot;
+  enter(sup[]->append,att[]->append,acp[]->append)
+  #);
+Restrictions: Item(##);
+BetaPattern: BetaDecl
+  (# PT::
+       (#
+       do 
           (pos,break) -> OD.PT
        #);
-     id: ^Name; OD: ^ObjectDesc;
-  enter(id[]->append, OD[]->append)
+     OD: ^ObjectDesc;
+  enter(OD[]->append)
   #);
+PatternDen: BetaObjectSpecification
+  (# (* lex.symb = idf *)
+     PP:: (#do 'PatternDen' -> lx.puttext #);
+     length:: (# do AD.length -> value #);
+     PT:: (# do (if AD[] <> none then (pos,break) -> AD.PT if) #);
+     label:: (# do 'PatternDen' -> lab[] #);
+     markAsSuper:
+       (# 
+       do (*'patternDen:markAsSuper:'->puttext; dopt -> putline;*)
+          AD.markAsSuper 
+       #);
+     (*name: (# exit AD.name #);*)
+     AD: ^AttributeDenotation;
+     (*isSuper: (# enter AD.isSuper #)*)
+  enter AD[] -> append
+  #);
+AttributeDenotation: Item
+  (# PP:: (#do 'PatternDen' -> lx.puttext #);
+     length:: (# do NA.length -> value #);
+     PT:: (# do (pos,break) -> NA.PT  #);
+     label:: (# do 'PatternDen' -> lab[] #);
+     markAsSuper:
+       (# 
+       do (*NA.markAsSuper *)
+       #);
+     
+     NA: ^BetaName;
+     (*isSuper: (# enter AD.isSuper #);*)
+  enter NA[] -> append
+  #);
+     
 Attributes: Item
-  (# PT:: (#do scanSons(#do (pos,break) -> current.PT #)#);
+  (# PT:: 
+       (#
+       do scanSons
+          (#
+          do (pos,break) -> current.PT;
+             (if not isLast then
+                 ';' -> lx.put;
+                 (pos,true) -> mkBreak
+       if)#)#);
   #);
 Attribute: Item
   (#
@@ -368,7 +436,21 @@ Attribute: Item
 ActionPart: Item
   (#
   #);
+Slot: Item(##);
 
+StaticItem: Item
+  (# PT:: 
+       (# 
+       do ' '-> lx.put; '@' -> lx.put; ' ' -> lx.put;  
+          (if OS[] <> none then
+              (pos + 2,break) -> OS.PT
+           else
+              '-none-' -> lx.append
+          if);
+       #);
+     OS: ^BetaObjectSpecification
+  enter OS[]
+  #);
 syntaxError:
   (# no: @integer
   enter no

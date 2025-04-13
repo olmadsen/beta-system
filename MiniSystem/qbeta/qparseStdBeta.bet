@@ -1,9 +1,10 @@
 ORIGIN 'qabstractSyntaxTree';
 INCLUDE 'qBetaAST';
+INCLUDE 'qStdBetaLexer';
 INCLUDE '~beta/sysutils/envstring';
 (*INCLUDE 'qabstractSyntaxTree'*)
 --AstLib:attributes--
-
+doTrace: (# exit false #);
 parseStdBeta: 
   (# superParser:
        (# fileName,pathToFN: ^text; 
@@ -15,29 +16,29 @@ parseStdBeta:
           (*'Pos: ' -> puttext; beginPos -> putint; newline;*)
           (*'Module: ' -> puttext; fileName[] -> putline;*)
           (path.append).copy -> pathToFN[];
-          lex[] -> oldLex[];
-          &lexer[] -> lex[];
+          (*lex[] -> oldLex[];*)
+          &StdBetaLexer[] -> lex[];
           &file[] -> inFile[];
           fileName[]  -> inFile.name;
           inFile.openRead;
           (fileName[],inFile[]) -> lex.init;
-          true -> lex.isOldBeta;
+          (*true -> lex.isOldBeta;*)
           lex;
           INNER;
           inFile.close;
-          oldLex[] -> lex[];
+          (*oldLex[] -> lex[];*)
        #);
-     lex: ^lexer;
+     lex: ^StdBetaLexer;
      openBetaModule:
        (# S: ^StringObj; StdPath,fragPath: ^text;
           FD: ^FragmentDir;
-          NM: ^Name;
+          NM: ^BetaName;
           BM: ^SimpleBetaModule;
        enter S[]
        do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
           (if stdpath[] = none then '!!!! Did not find BETALIB!'->putline if);
           '**** BETALIB: ' -> puttext; StdPath[] -> putline;
-          'A fragment' -> Name -> NM[];
+          'A fragment' -> BetaName -> NM[];
           '/' -> (StdPath.copy).append -> fragPath[];
           S.T[] -> fragPath.append -> fragPath[];
           fragPath[] -> SimpleBetaModule -> BM[];
@@ -45,13 +46,13 @@ parseStdBeta:
           BM.filePath[] -> superParser
           (# BPS: ^BetaProperties;  frags: ^BetaFragments
           do pProperties -> BPS[];
-             'after:pProperties'->trace;
-             
-             pFragments -> frags[];
-             
-             'after:pFragments:'->trace;
-             BPS.dopt -> putline;
-             frags.doPT -> putline;
+             (if doTrace then
+                 'after:pProperties'->trace;             
+                 pFragments -> frags[];                 
+                 'after:pFragments:'->trace;
+                 BPS.dopt -> putline;
+                 frags.doPT -> putline;
+             if)
           #)
        #);
 
@@ -84,21 +85,21 @@ parseStdBeta:
        (# symb: ^Text;  prop: ^BetaProperty;
        enter symb[]
        do 'pProperty'->trace;
-          BetaProperty -> prop[]; symb[] -> Name -> prop.append;
+          BetaProperty -> prop[]; symb[] -> BetaName -> prop.append;
           L:
             (if lex.symb
-             // lex.symbols.string then
+             // lex.symbols.textSy then
                 lex.sym[] -> StringObj -> prop.append;
                 lex;
                 restart L
              // lex.symbols.charSy then
-                lex.sym[] -> Name -> prop.append;
+                lex.sym[] -> BetaName -> prop.append;
                 lex;
                 restart L
              // lex.symbols.idf 
 
              // lex.symbols.const then
-                lex.sym[] -> Name -> prop.append;
+                lex.sym[] -> BetaName -> prop.append;
                 lex;
                 restart L
             if);
@@ -118,11 +119,11 @@ parseStdBeta:
        exit frags[]
        #);
      pFragment:
-       (# frag: ^BetaFragment; theName,cat,language: ^Lexem;
+       (# frag: ^BetaFragment; theName,cat,language: ^BetaLexem;
        do 'pFragment'->trace; 
           loop:
             (if lex.symb = lex.symbols.idf then
-                lex.sym[] -> Name -> theName[];
+                lex.sym[] -> BetaName -> theName[];
                 lex; 
                 'pFragment:idf'->trace; 
                 (if lex.symb = lex.symbols.colon then
@@ -130,21 +131,21 @@ parseStdBeta:
                     'pFragment:colon'->trace; 
                     (if lex.symb = lex.symbols.idf then
                         'pFragment:idf:colon:idf'->trace; 
-                        lex.sym[] -> Name -> cat[];
+                        lex.sym[] -> BetaName -> cat[];
                         lex;
                         (if lex.symb = lex.symbols.colon then
                             'pFragment:idf:colon:idf:colon'->trace; 
                             lex;
                             (if lex.symb = lex.symbols.idf then 
                                 (* --- x:objectDesc:beta --- *)
-                                lex.sym[] -> Name -> language[];
+                                lex.sym[] -> BetaName -> language[];
                                 lex;                          
                              else
                                 SyntaxError
                             if)
                          else
                             'pFragment:idf:colon:BETA'->trace; 
-                            'BETA'-> Name -> language[];
+                            'BETA'-> BetaName -> language[];
                         if);
                         (if lex.symb = lex.symbols.frag then
                             'pFragment:frag:last'->trace; 
@@ -157,7 +158,7 @@ parseStdBeta:
                              // 'attributes' -> cat.T.equalNCS 
                              // 'attribute' -> cat.T.equalNCS then
                                 (theName[],cat[],language[]) 
-                                  -> pAttributes
+                                  -> pAttFrag
                                   -> frag[]
                              // 'doPart' -> cat.T.equalNCS then 
                                 (theName[],cat[],language[]) 
@@ -187,47 +188,163 @@ parseStdBeta:
             if)
        exit frag[]
        #);
-     pAttributes:
-       (# theName,cat,language: ^Name; frag: ^AttFrag;
+     pAttFrag:
+       (# theName,cat,language: ^BetaName; frag: ^AttFrag;
        enter(theName[],cat[],language[])
        do 'pAttributes'->trace;
           (theName[],cat[],language[]) -> AttFrag -> frag[];
           Attributes -> frag.att[];
-          pAttribute -> frag.att.append
+          pAttributes -> frag.att.append
        exit frag[]
        #);
-     pAttribute:
-       (# dcl: ^Decl; symb: ^Text; OD: ^ObjectDesc;
-       do 'pAttribute' -> trace;
-          (if lex.symb
-           // lex.symbols.idf then
-              lex.sym[] -> symb[];
+     pAttributes:
+       (# theName,cat,language: ^BetaName; att: ^Attributes;
+       enter(theName[],cat[],language[])
+       do 'pAttributes'->trace;
+          Attributes -> att[];
+          Loop:
+            (#
+            do
+               (if lex.symb 
+                // lex.symbols.semicolon then
+                   lex;
+                   restart Loop
+                // lex.symbols.nonTbegin then
+                   lex;
+                   (*Slot -> append;*)
+                   restart Loop
+                // lex.symbols.doSy
+                // lex.symbols.end
+                // lex.symbols.enterSy
+                // lex.symbols.exitSy 
+                // lex.symbols.frag
+                // lex.symbols.eos (* obs ok if attributes slot not in objDesc *) then 
+                   leave Loop 
+                else
+                   pBetaDecl -> att.append;
+                   restart Loop
+               if)               
+            #)
+       exit att[]
+       #);
+     pBetaDecl:
+       (# dcl: ^BetaDecl; symb: ^Text; NS: ^NameDecls; IT: ^StaticItem
+       do 'pBetaDecl' -> trace;
+          pNameDecls -> NS[]; 
+          (if lex.symb = lex.symbols.colon then
               lex;
-              (if lex.symb = lex.symbols.colon then
+              'pBetaDecl:colon'->trace;
+              (if lex.symb
+               // lex.symbols.object then
                   lex;
-                  'pAttribute:idf:colon'->trace;
-                  (if lex.symb
-                   // lex.symbols.object then
-                   else
-                      'pAttribute:idf:colon:PTN'->trace;
-                      pOD -> OD[];
-                      (symb[]-> Name,OD[]) -> BetaPattern -> dcl[];
-                  if)
+                  pStaticItem -> IT[];
+                  (NS[],IT[]) -> BetaDataItem -> dcl[]
                else
-                  112->syntaxError
+                  'pAttribute:idf:colon:PTN'->trace;
+                  NS[] -> pPattern -> dcl[];
               if)
            else
               111 -> SyntaxError
           if)
        exit dcl[]
        #);
-
-     pOd:
-       (#  symb: ^Text;  OD: ^ObjectDesc;
-       enter symb[]
-       do ObjectDesc -> OD[]
+     pNameDecls:
+       (# NS:  ^NameDecls
+       do 'pNameDecls'->trace;
+          NameDecls -> NS[];
+          L:
+            (#
+            do pNameDecl -> NS.append;
+               (if Lex.Symb = Lex.Symbols.Comma Then 
+                   Lex;
+                   restart L
+            if)#)
+       exit NS[]
+       #);
+     pNameDecl:
+       (# N: ^NameDecl
+       do 'pNameDecl'->trace;
+          (if Lex.Symb = Lex.Symbols.Idf Then
+              'pNameDecl:idf'->trace;
+              Lex.sym[] -> NameDecl -> N[];
+              Lex;
+           else
+              199 -> SyntaxError
+          if)
+       exit N[]
+       #);
+     pStaticItem:
+       (# nl:  ^NameList;  IT: ^StaticItem; 
+          PD: ^PatternDen;  OS: ^BetaObjectSpecification
+       enter nl[]
+       do 'pStaticItem'->trace;
+          pPatternDen -> PD[];
+          (if lex.symb = lex.symbols.begin then
+              PD[] -> pObjectDesc -> OS[]
+           else
+              PD[] -> OS[]
+          if);
+          OS[] -> StaticItem -> IT[]
+       exit IT[]
+       #);
+     pPattern:
+       (# NS: ^NameDecls; OD: ^ObjectDesc; dcl: ^BetaDecl;
+       enter NS[]
+       do 'pPattern'->trace;
+          pPatternDen -> pObjectDesc -> OD[];
+          (NS[],OD[]) -> BetaPattern -> dcl[];
+       exit dcl[]
+       #);
+     pObjectDesc:
+       (# sup: ^PatternDen; symb: ^Text;  OD: ^ObjectDesc;
+          att: ^Attributes;
+          acp: ^ActionPart;
+       enter sup[]
+       do 'pObjectDesc'->trace;
+          (if lex.symb = lex.symbols.begin then
+              lex;
+              'pObjectDesc:begin'->trace;
+              pAttributes -> att[];
+              ActionPart -> acp[];
+              (sup[],att[],acp[]) -> ObjectDesc -> OD[];
+              (if lex.symb = lex.symbols.end then
+                  lex
+               else
+                  113 -> syntaxError
+          if)if)
        exit OD[]
        #);
+     pPatternDen:
+       (# ptnDen: ^PatternDen; 
+       do 'pPatternDen'->trace;
+          true -> pAttributeDenotation -> PatternDen->ptnDen[]
+          (*lex*)
+       exit ptnDen[]
+       #);
+     pAttributeDenotation:
+       (# B: @Boolean; attDen: ^AttributeDenotation; 
+       enter B
+       do 'pAttributeDenotation'->trace;
+          (if lex.symb = lex.symbols.idf then
+              lex.sym[] -> BetaName -> AttributeDenotation -> attDen[];
+              lex;
+           else
+              '' -> BetaName -> AttributeDenotation -> attDen[]
+          if)
+       exit attDen[]
+       #);
+     trace:
+       (# S: ^Text
+       enter S[]
+       do (if doTrace then
+              S[] -> puttext; ':'->put; '\t'->put;
+              lex.symb -> putint; ' ' -> put;
+              lex.symb -> lex.symbols.asText -> puttext;
+              ' "'->puttext; lex.sym[] -> puttext; '"\n'->puttext;
+              inner trace
+          if)
+       #);
+
      prop: ^NewProperty;
   enter prop[]
   do '**** parseStdBeta:'->dumpT;
@@ -242,8 +359,8 @@ parseStdBeta:
                S.doPT -> dumpTN;
                (if true then
                    S[] -> openBetaModule
-                else
-                   S[] -> openFragmentFile
+                (*else
+                   S[] -> openFragmentFile*)
                if)
            if)
         #)
@@ -264,13 +381,13 @@ trace:
 openFragmentFile:
   (# S: ^StringObj; StdPath,fragPath: ^text;
      FD: ^FragmentDir;
-     NM: ^Name;
+     NM: ^BetaName;
      betaLib: ^Item;
   enter S[]
   do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
      (if stdpath[] = none then '!!!! Di not find BETALIB!'->putline if);
      '**** BETALIB: ' -> puttext; StdPath[] -> putline;
-     'A fragment' -> Name -> NM[];
+     'A fragment' -> BetaName -> NM[];
      '/' -> (StdPath.copy).append -> fragPath[];
      S.T[] -> fragPath.append -> fragPath[];
      (NM[],fragPath[],'',true) -> FragmentDir -> FD[];
