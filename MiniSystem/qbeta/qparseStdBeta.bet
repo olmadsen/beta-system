@@ -228,6 +228,356 @@ parseStdBeta:
             #)
        exit att[]
        #);
+     pActionPart:
+       (# acp: ^ActionPart; 
+          enterP: ^EnterPart; exitP: ^ExitPart; imps: ^Imperatives; slt: ^Slot;
+       do 'pActionPart'->trace;
+          pEnterPart -> enterP[];
+          Imperatives -> imps[];
+          (if lex.symb 
+           // lex.symbols.doSy then
+              lex;
+              pImperatives -> imps[]
+           // lex.symbols.nonTbegin then
+              lex;
+              pSlot -> slt[] (* we should mark that this is a slot *)
+          if);
+          pExitPart -> exitP[];
+          (enterP[],imps[],exitP[]) -> ActionPart -> acp[]
+       exit acp[]
+       #);
+     pEnterPart:
+       (# enterP: ^EnterPart; eval: ^Evaluation; 
+       do (if lex.symb = lex.symbols.enterSy then
+              lex; 
+              pEvaluation -> eval[]
+           else
+              Evaluation -> eval[]
+          if);
+          eval[] -> EnterPart -> enterP[]
+       exit enterP[]
+       #);
+     pImperatives:
+       (# imps: ^Imperatives;
+       do 'pImperatives'->trace;
+          Imperatives -> imps[];
+          Loop:
+            (#
+            do (if lex.symb 
+                // lex.symbols.semiColon then (* empty imp *) lex; restart Loop 
+                // lex.symbols.nonTbegin then
+                   lex;
+                   pSlot
+                // lex.symbols.end 
+                // lex.symbols.ifSy
+                // lex.symbols.alternative
+                // lex.symbols.elseSy
+                // lex.symbols.forSy 
+                // lex.symbols.exitSy 
+                // lex.symbols.eos 
+                // lex.symbols.frag then leave Loop 
+                   (* perhaps we need to test positive for symbols that may
+                    * begin en imperative
+                    *)
+                else
+                   pImperative -> imps.Append
+               if);
+               restart Loop
+            #)
+       exit imps[]
+       #);
+     pImperative:
+       (# imp: ^Item
+       do 'pImperative'->trace;
+          (if lex.symb
+           // lex.symbols.leftBrack then
+              (if lex.nextIsForOrIf then
+                  lex;
+                  (if lex.symb
+                   // lex.symbols.forSy then
+                      lex;
+                      (*pForImp -> imp[] *)
+                   // lex.symbols.ifSy then
+                      lex;
+                      (*pIfImp -> imp[]*)
+                  if)
+               else
+                 pEvaluation -> imp[]
+              if)
+           // lex.symbols.leaveSy then
+              lex; 
+              (*pLeaveImp -> imp[] *)
+           // lex.symbols.restartSy then
+              lex; 
+              (*pRestartImp -> imp[] *)
+              (* LabelledImp?
+               * L: 3 -> a;
+               * A -> B;
+               *)
+           // lex.symbols.innerSy then
+              lex;
+              (*pInnerImp -> imp[] *)
+           // lex.symbols.idf then
+              (if lex.peek = ':' then
+                  (*pLabelledImp -> imp[] *)
+               else
+                  pEvaluation -> imp[]
+              if)
+           else 
+              pEvaluation -> imp[]
+          if); 
+       exit imp[]
+       #);
+     pExitPart:
+       (# exitP: ^ExitPart; eval: ^Evaluation; 
+       do 'pExitPart'->trace; 
+          (if lex.symb = lex.symbols.exitSy then
+              lex; 
+              pEvaluation -> eval[]
+           else
+              Evaluation -> eval[]
+          if);
+          eval[] -> ExitPart -> exitP[]
+       exit exitP[]
+       #);
+     pSlot:
+       (# slt: ^Slot;
+       do
+       exit slt[]
+       #);
+     pEvaluation:
+       (# eval: ^Evaluation; tra: ^Transaction
+       do 'pEvaluation:'->trace;
+          Transaction -> tra[];
+          pExp -> tra.append;
+          L:
+            (if lex.symb = lex.symbols.assign then
+                lex;
+                pTransaction -> tra.append;
+                restart L
+            if);
+          Evaluation -> eval[];
+          tra[] -> eval.append;
+       exit eval[]
+       #);
+        
+     ExpParser: 
+       (# lE,rE: ^Expr; op: @integer;
+       do inner 
+       exit lE[] 
+       #);
+     pExp: ExpParser
+       (# 
+       do pSimpleExp -> lE[];
+          (if lex.isRelOp then
+              lex.symb -> op;
+              lex; 
+              pSimpleExp -> rE[];
+              (lE[],op,rE[]) -> BetaBinaryExp -> lE[]
+          if);
+       #);
+     pSimpleExp: ExpParser
+       (#  
+       do (if lex.isAddOrSub (*or (lex.symb = lex.symbols.adr (* @@X *)
+              then 
+              lex.Symb -> op;
+              lex;
+              pTerm -> lE[];
+              (op,lE[]) -> BetaUnaryExp -> lE[];
+           else
+              pTerm -> lE[];
+          if);
+          Loop:
+            (if lex.isAddOp then 
+                lex.symb -> op;
+                lex; 
+                pTerm -> rE[];
+                (lE[],op,rE[]) -> BetaBinaryExp -> lE[]; 
+                restart Loop
+            if);
+       #);
+     pTerm: ExpParser
+       (#
+       do pFactor -> lE[];
+          Loop:
+            (if lex.isMultOp or (lex.symb = lex.symbols.prim) then
+                (if lex.symb = lex.symbols.prim then
+                    (* we should mark the operator as primitive for PT *)
+                    lex;
+                    (if lex.symb <> lex.symbols.idf then
+                        SyntaxError
+                if)if);
+                lex.symb -> op;
+                lex; 
+                pFactor -> rE[];
+                (lE[],op,rE[]) -> BetaBinaryExp -> lE[];
+                restart Loop
+            if)
+       #);
+     pFactor: ExpParser
+       (* textConst, IntegerConst, NoneExp, 
+        *          * not EXP, RepetitionSlice,
+        *          * Transaction, UnaryPrimitiveExp
+        *          * Are they alle sub of exp/term?
+        *          *)
+       (#
+       do pTransaction -> Term -> lE[]
+       #);     
+
+     pTransaction:
+       (* T:: ObjEval 
+        *   | ComputedEval     - R.S!
+        *   | ObjRef           - R.S[]
+        *   | EvalList         - (E1, E2,E3)
+        *   | StrucRef         - R.S##
+        *   | Primitive        - tos foo
+        *   | Address          - @@ X
+        * ObjEval :: InsItem   - R.P(# ... #) 
+        *          |           - (# ... #) 
+        *          | Reference 
+        * Reference:: ObjDen    - R.P
+        *           | DynObjGen - R.P&
+        * ObjDen:: AttDen       - R.P
+        *)
+       (# tra: ^Transaction;
+          op: @integer; lE: ^expr;
+       do 'pTransaction'->trace;
+          (if lex.symb 
+           // lex.symbols.idf // lex.symbols.begin // lex.symbols.thisObj 
+           // lex.symbols.textSy then
+              pObjEval -> tra[];
+              (if lex.symb 
+               // lex.symbols.objRef then
+                  (*tra[] -> pReference -> tra[];*)
+                  lex
+               // lex.symbols.strucVar then
+                  (*tra[] -> pStructureRef -> tra[];*)
+                  lex
+              if);
+           // lex.symbols.nott then 
+              lex.symb -> op;
+              lex;
+              pFactor -> lE[];
+              (*(op,lE[]) -> pUnaryExp -> tra[]*)
+           // lex.symbols.const then
+              'pTransaction:const'->trace;
+              lex.sym[] -> BetaLexem -> BetaConst -> tra[];
+              'const:'->puttext; tra.dopt -> dumpTN;
+              lex;
+           // lex.symbols.charSy then
+              lex.sym[] -> BetaLexem -> aChar -> tra[];
+              lex;
+           // lex.symbols.textSy then
+              lex.sym[] -> BetaLexem -> aText -> tra[];
+              lex;
+           // lex.symbols.noneSy then
+              noneValue -> tra[];
+           // lex.symbols.leftBrack then
+              lex; 
+              pEvaluationList -> tra[]; 
+              (if lex.symb = lex.symbols.dot then 
+                  (* We come here in sitations like
+                   * (if (e).f ...
+                   *)
+                  lex;
+                  tra[] -> pComputedRemote -> tra[];
+                  (if lex.symb 
+                   // lex.symbols.begin then
+                      (* '\n!!!!! In module "' -> puttext;           
+                       thisModuleName[] -> puttext;
+                       '", ComputedRemote as super may not work!\n' -> puttext;
+                       3 -> lex.printlines;
+                       newline;
+                       *)
+                      (*tra.markAsSuper;*)
+                      (# PD: ^PatternDen; AD: ^AttributeDenotation; OE: ^ObjEval
+                      do &PatternDen[] -> PD[];
+                         &AttributeDenotation[] -> AD[];
+                         &ObjEval[] -> OE[];                         
+                         tra[] 
+                           -> pComputedRemoteAsDenotation
+                           (*-> AD.NA[]
+                           -> AD.append;*);
+                         AD[] -> PD.AD[] -> PD.append;
+                         PD[] -> pObjectDesc -> ObjEval -> OE[];
+                         OE[] -> tra[]
+                      #)
+                   // lex.symbols.leftSquare then
+                      '\npTransaction:Got Indexed "[exp]" after:  ' -> puttext; 
+                      tra.dopt -> putline;
+                      lex;
+                      (if true then 'Bingo'->putline;
+                          evaluation;
+                          'banko' -> putline;
+                          (if lex.symb = lex.symbols.rightSquare then
+                              lex
+                           else
+                              201 -> SyntaxError
+                          if)
+                       else
+                          tra[]
+                            -> pComputedRemoteAsDenotation
+                            -> Indexed
+                      if)
+                  if)
+              if)
+           // lex.symbols.new then
+              lex;
+              pDynamicObjectGeneration -> tra[]
+           // lex.symbols.prim then 
+              lex;
+              (if lex.symb = lex.symbols.idf then
+                  lex;
+                  pFactor -> tra[]
+              if)
+           // lex.symbols.adr then
+              lex;
+              pFactor -> tra[]
+           else 
+              200->syntaxError;
+              (*
+              (15
+              ,(lex.symbols.idf,lex.symbols.thisObj,lex.symbols.const,lex.symbols.charSy
+              ,lex.symbols.textSy,lex.symbols.leftBrack,lex.symbols.new)
+              ,(lex.symbols.semicolon)) -> syntaxError;*)
+              &Transaction[] -> tra[]
+          if)
+       exit tra[]
+       #);
+     pObjEval:
+       (# objEV: ^ObjEval; OS: ^BetaObjectSpecification; PD: ^PatternDen;
+       do pPatternDen -> PD[];
+          (if lex.symb = lex.symbols.begin then
+              PD[] -> pObjectDesc -> OS[]
+           else
+              PD[] -> OS[]
+          if);
+          OS[] -> ObjEval -> objEV[]
+       exit objEv[]
+       #);
+     pEvaluationList:
+       (# tra: ^EvaluationList
+       do
+       exit tra[]
+       #);
+     pDynamicObjectGeneration:
+       (# tra: ^DynamicObjectGeneration
+       enter tra[]
+       do
+       exit tra[]          
+       #);
+     pComputedRemote:
+       (# tra: ^EvaluationList; CR: ^ComputedRemote
+       enter tra[]
+       do
+       exit CR[]          
+       #);
+     pComputedRemoteAsDenotation:
+       (# tra: ^EvaluationList; CRD: ^ComputedRemoteAsDenotation
+       enter tra[]
+       do
+       exit CRD[]          
+       #);
      pBetaDecl:
        (# dcl: ^BetaDecl; symb: ^Text; NS: ^NameDecls; IT: ^Item
        do 'pBetaDecl' -> trace;
@@ -382,7 +732,7 @@ parseStdBeta:
               lex;
               'pObjectDesc:begin'->trace;
               pAttributes -> att[];
-              ActionPart -> acp[];
+              pActionPart -> acp[];
               (sup[],att[],acp[]) -> ObjectDesc -> OD[];
               (if lex.symb = lex.symbols.end then
                   lex
