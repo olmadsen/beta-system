@@ -450,10 +450,10 @@ parseStdBeta:
               pObjEval -> tra[];
               (if lex.symb 
                // lex.symbols.objRef then
-                  (*tra[] -> pReference -> tra[];*)
+                  tra[] -> pReference -> tra[];
                   lex
                // lex.symbols.strucVar then
-                  (*tra[] -> pStructureRef -> tra[];*)
+                  tra[] -> pStructureRef -> tra[];
                   lex
               if);
            // lex.symbols.nott then 
@@ -464,7 +464,6 @@ parseStdBeta:
            // lex.symbols.const then
               'pTransaction:const'->trace;
               lex.sym[] -> BetaLexem -> BetaConst -> tra[];
-              'const:'->puttext; tra.dopt -> dumpTN;
               lex;
            // lex.symbols.charSy then
               lex.sym[] -> BetaLexem -> aChar -> tra[];
@@ -557,16 +556,68 @@ parseStdBeta:
           OS[] -> ObjEval -> objEV[]
        exit objEv[]
        #);
+     pReference:
+       (# OV: ^ObjEval; ref: ^Reference
+       enter OV[]
+       do OV[] -> Reference -> ref[]
+       exit ref[]
+       #);
+     pStructureRef:
+       (# OV: ^ObjEval; ref: ^StructureRef
+       enter OV[]
+       do OV[] -> StructureRef -> ref[]
+       exit ref[]
+       #);
      pEvaluationList:
        (# tra: ^EvaluationList
        do
        exit tra[]
        #);
      pDynamicObjectGeneration:
-       (# tra: ^DynamicObjectGeneration
-       enter tra[]
-       do
-       exit tra[]          
+       (# OS: ^BetaObjectSpecification; DOG: ^DynamicObjectGeneration; 
+          EV: ^Evaluation
+       do 'pDynamicObjectGeneration'->trace; 
+          (if lex.symb = lex.symbols.component then
+              lex; (* should mark as Module *)
+          if);
+          (# PD: ^PatternDen
+          do pPatternDen -> PD[];
+             (if PD[] = none then 'PD:none'->dumptn; if);
+             (if lex.symb = lex.symbols.begin then
+                 PD.markAsSuper;
+                 PD[] -> pObjectDesc -> OS[]
+              else
+                 PD[] -> OS[] 
+             if);
+
+             (if lex.symb = lex.symbols.leftBrack then
+                 (if true then
+                     pEvaluation -> EV[]
+                  else
+                     lex;
+                     pEvaluation -> EV[];
+                     (if lex.symb = lex.symbols.rightBrack then
+                         lex
+                      else                     
+                         222 -> syntaxerror
+                 if)if)
+              else
+                 Evaluation -> EV[]
+             if);
+             (if OS[] = none then 'OS:none'->dumptn; if);
+             (if EV[] = none then 'EV:none'->dumptn; if);
+             (OS[],EV[]) -> DynamicObjectGeneration -> DOG[];
+             (if lex.symb = lex.symbols.objRef then (* Note: Only &P[], not &P
+                                                     * We allow &P to be able to
+                                                     * parse std BETA
+                                                     *)
+                 lex;
+                 true -> DOG.isRef
+                 (* else
+                  (16,(0),(0)) -> SyntaxError*)
+             if)
+          #)
+       exit DOG[]          
        #);
      pComputedRemote:
        (# tra: ^EvaluationList; CR: ^ComputedRemote
@@ -614,10 +665,13 @@ parseStdBeta:
                   if)
                // lex.symbols.leftSquare then
                   lex;
-                  pRepetition -> IT[]
+                  pRepetition -> IT[];
+                  (* OBS!!! Perhaps not ok . not tested ! *)
+                  (NS[],IT[]) -> BetaDataItem -> dcl[]
                // lex.symbols.strucVar then
                   lex;
-                  pvarPtn -> IT[]
+                  pvarPtn -> IT[];
+                  (NS[],IT[]) -> BetaDataItem -> dcl[]
                else
                   'pAttribute:idf:colon:PTN'->trace;
                   NS[] -> pPattern -> dcl[];
@@ -673,14 +727,41 @@ parseStdBeta:
        exit IT[]
        #);
      pRepetition:
-       (# IT: ^StaticItem; 
-       do
+       (# inx: ^Index;
+          IT: ^Item
+       do pIndex -> inx[];
+          (if lex.symb 
+           // lex.symbols.object then
+              lex;
+              pStaticItem -> IT[] 
+           // lex.symbols.ref then
+              lex;
+              pDynamicItem -> IT[]
+           // lex.symbols.strucVar then
+              lex;
+              pvarPtn -> IT[]
+           else
+              333 ->  SyntaxError;
+              StaticItem -> IT[]
+          if);
+          (inx[],IT[]) -> Repetition -> IT[]
        exit IT[]
        #);
+     pIndex:
+       (#  INX: ^Index
+       do pEvaluation -> Index -> INX[];
+          (if lex.symb = lex.symbols.rightSquare then
+              lex
+           else
+              334 ->  SyntaxError
+          if)
+       exit INX[]
+       #);
      pVarPtn:
-       (# IT: ^StaticItem; 
-       do
-       exit IT[]
+       (# VP: ^VarPtn; 
+       do 'pVarPtn' -> trace;
+          pAttributeDenotation -> VarPtn -> VP[]
+       exit VP[]
        #);
      pPattern:
        (# NS: ^NameDecls; OD: ^ObjectDesc; dcl: ^BetaDecl;
@@ -759,7 +840,8 @@ parseStdBeta:
               lex;
            else
               '' -> BetaName -> AttributeDenotation -> attDen[]
-          if)
+          if);
+          'pAttributeDenotation:end'->trace;
        exit attDen[]
        #);
      trace:
