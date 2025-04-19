@@ -261,14 +261,17 @@ parseStdBetaModule: StdBetaAst
               pSlot -> slt[] (* we should mark that this is a slot *)
           if);
           pExitPart -> exitP[];
-          (enterP[],imps[],exitP[]) -> ActionPart -> acp[]
+          (enterP[],imps[],exitP[]) -> ActionPart -> acp[];
+          'pActionPart:end'->trace;
        exit acp[]
        #);
      pEnterPart:
        (# enterP: ^EnterPart; eval: ^Evaluation; 
-       do (if lex.symb = lex.symbols.enterSy then
+       do 'pEnterPart'->trace;
+          (if lex.symb = lex.symbols.enterSy then
               lex; 
-              pEvaluation -> eval[]
+              pEvaluation -> eval[];
+              'pEnterPart:after:pEval'->trace;              
            else
               Evaluation -> eval[]
           if);
@@ -320,7 +323,7 @@ parseStdBetaModule: StdBetaAst
                       pIfImp -> imp[]
                   if)
                else
-                 pEvaluation -> imp[]
+                  pEvaluation -> imp[];
               if)
            // lex.symbols.leaveSy then
               lex; 
@@ -338,13 +341,14 @@ parseStdBetaModule: StdBetaAst
            // lex.symbols.idf then
               'pImperative:idf'->trace;
               (if lex.peek = ':' then
-                  pLabelledImp -> imp[]
+                  pLabelledImp -> imp[];
                else
-                  pEvaluation -> imp[]
+                  pEvaluation -> imp[];
               if)
            else 
-              pEvaluation -> imp[]
+              pEvaluation -> imp[];
           if); 
+          'pImperative:end'->trace;
        exit imp[]
        #);
      pExitPart:
@@ -498,7 +502,7 @@ parseStdBetaModule: StdBetaAst
               511  -> SyntaxError
           if);
           pImperative -> imp[];
-          (lab[],imp[]) -> LabelledImp -> lImp[]
+          (lab[],imp[]) -> LabelledImp -> lImp[];
        exit lImp[]
        #);
      pBreak:
@@ -542,9 +546,11 @@ parseStdBetaModule: StdBetaAst
           L:
             (if lex.symb = lex.symbols.assign then
                 lex;
+                'pEvaluation:repeat'->trace;
                 pTransaction -> eval.append;
                 restart L
             if);
+          'pEvaluation:end'->trace;
        exit eval[]
        #);
         
@@ -560,10 +566,8 @@ parseStdBetaModule: StdBetaAst
           (if lex.isRelOp then
               lex.symb -> op;
               lex; 
-              (if rE[] = none then '%ExpBin:rE none'->dumpT;if);
               pSimpleExp -> rE[];
               (lE[],op,rE[]) -> BetaBinaryExp -> lE[];
-              (if lE[] = none then '%ExpBin:lE none'->dumpT;if);
           if);
        #);
      pSimpleExp: ExpParser
@@ -583,7 +587,6 @@ parseStdBetaModule: StdBetaAst
                 lex.symb -> op;
                 lex; 
                 pTerm -> rE[];
-                (if rE[] = none then '%pSimpleExp:rE none'->dumpT;if);
                 (lE[],op,rE[]) -> BetaBinaryExp -> lE[]; 
                 restart Loop
             if);
@@ -592,7 +595,6 @@ parseStdBetaModule: StdBetaAst
        (#
        do 'pTerm'->trace;
           pFactor -> lE[];
-          (if lE[] = none then '%Bin:lE none'->dumpT;if);
           Loop:
             (if lex.isMultOp or (lex.symb = lex.symbols.prim) then
                 (if lex.symb = lex.symbols.prim then
@@ -604,7 +606,6 @@ parseStdBetaModule: StdBetaAst
                 lex.symb -> op;
                 lex; 
                 pFactor -> rE[];
-                (if rE[] = none then '%Bin:rE none'->dumpT;if);
                 (lE[],op,rE[]) -> BetaBinaryExp -> lE[];
                 restart Loop
             if)
@@ -617,7 +618,8 @@ parseStdBetaModule: StdBetaAst
         *          *)
        (#
        do 'pFactor'->trace;
-          pTransaction -> BetaTerm -> lE[]
+          pTransaction -> BetaTerm -> lE[];
+          'pFactor:end'->trace;
        #);     
 
      pTransaction:
@@ -642,6 +644,7 @@ parseStdBetaModule: StdBetaAst
            // lex.symbols.idf // lex.symbols.begin // lex.symbols.thisObj 
            // lex.symbols.textSy then
               pObjEval -> tra[];
+              'pTransaction:A'->trace; tra.label -> dumpTN;
               (if lex.symb 
                // lex.symbols.objRef then
                   tra[] -> pReference -> tra[];
@@ -670,7 +673,7 @@ parseStdBetaModule: StdBetaAst
               lex
            // lex.symbols.leftBrack then
               lex; 
-              pEvaluationList -> EVL[]; 
+              pEvaluationList -> EVL[] -> tra[];
               (if lex.symb = lex.symbols.dot then 
                   (* We come here in sitations like
                    * (if (e).f ...
@@ -687,7 +690,7 @@ parseStdBetaModule: StdBetaAst
                        *)
                       (*tra.markAsSuper;*)
                       (# PD: ^PatternDen; AD: ^AttributeDenotation; OE: ^ObjEval
-                      do &PatternDen[] -> PD[]; 'KUK'->dumpTN;
+                      do &PatternDen[] -> PD[];
                          &AttributeDenotation[] -> AD[];
                          &ObjEval[] -> OE[];                         
                          tra[] 
@@ -713,7 +716,7 @@ parseStdBetaModule: StdBetaAst
                        else
                           tra[]
                             -> pComputedRemoteAsDenotation
-                            -> Indexed
+                           (* -> Indexed*)
                       if)
                   if)
               if)
@@ -730,25 +733,28 @@ parseStdBetaModule: StdBetaAst
               lex;
               pFactor -> tra[]
            else 
-              200->syntaxError;
+              200->syntaxError; 
               (*
               (15
               ,(lex.symbols.idf,lex.symbols.thisObj,lex.symbols.const,lex.symbols.charSy
               ,lex.symbols.textSy,lex.symbols.leftBrack,lex.symbols.new)
               ,(lex.symbols.semicolon)) -> syntaxError;*)
               &Transaction[] -> tra[]
-          if)
+          if);
+          'pTransaction:end'->trace;
        exit tra[]
        #);
      pObjEval:
        (# objEV: ^ObjEval; OS: ^BetaObjectSpecification; PD: ^PatternDen;
-       do pPatternDen -> PD[];
+       do 'pObjEval'->trace;
+          pPatternDen -> PD[];
           (if lex.symb = lex.symbols.begin then
               PD[] -> pObjectDesc -> OS[]
            else
               PD[] -> OS[]
           if);
-          OS[] -> ObjEval -> objEV[]
+          OS[] -> ObjEval -> objEV[];
+          'pObjEval:end'->trace;
        exit objEv[]
        #);
      pReference:
@@ -791,7 +797,6 @@ parseStdBetaModule: StdBetaAst
           if);
           (# PD: ^PatternDen
           do pPatternDen -> PD[];
-             (if PD[] = none then 'PD:none'->dumptn; if);
              (if lex.symb = lex.symbols.begin then
                  PD.markAsSuper;
                  PD[] -> pObjectDesc -> OS[]
@@ -813,8 +818,6 @@ parseStdBetaModule: StdBetaAst
               else
                  Evaluation -> EV[]
              if);
-             (if OS[] = none then 'OS:none'->dumptn; if);
-             (if EV[] = none then 'EV:none'->dumptn; if);
              (OS[],EV[]) -> DynamicObjectGeneration -> DOG[];
              (if lex.symb = lex.symbols.objRef then (* Note: Only &P[], not &P
                                                      * We allow &P to be able to
@@ -1038,7 +1041,8 @@ parseStdBetaModule: StdBetaAst
                   lex
                else
                   113 -> syntaxError
-          if)if)
+          if)if);
+          'pObjectDesc:end'->trace;
        exit OD[]
        #);
      pPatternDen:
@@ -1049,26 +1053,52 @@ parseStdBetaModule: StdBetaAst
        exit ptnDen[]
        #);
      pAttributeDenotation:
-       (# B: @Boolean; attDen: ^Denotation; 
+       (# B: @Boolean; NA: ^Denotation; 
        enter B
        do 'pAttributeDenotation'->trace;
+          (if lex.symb 
+           // lex.symbols.idf then
+              lex.sym.copy -> BetaName -> AttributeDenotation -> NA[];
+              lex;
+           else
+              '' -> BetaName -> AttributeDenotation -> NA[]
+          if);
           Loop: 
             (#
             do 
-               (if lex.symb 
-                // lex.symbols.idf then
-                   lex.sym.copy -> BetaName -> AttributeDenotation -> attDen[];
+               (if lex.symb               
+                // lex.symbols.leftSquare then
                    lex;
-                else
-                   '' -> BetaName -> AttributeDenotation -> attDen[]
+                   NA[] -> pIndexed -> NA[];
                if);
-               (if lex.symb = lex.symbols.dot then
+               (if lex.symb
+                // lex.symbols.dot then
                    lex;
-                   attDen[] -> pRemote -> attDen[];
-
+                   NA[] -> pRemote -> NA[];
+                   
             if)#);
           'pAttributeDenotation:end'->trace;
-       exit attDen[]
+       exit NA[]
+       #);
+     pIndexed:
+       (# NA: ^Denotation; inx: ^Indexed; EV,uE: ^Evaluation
+       enter NA[]
+       do 'pIndexed'->trace;
+          pEvaluation -> EV[];
+           (if lex.symb = lex.symbols.colon then
+              (* R[low:high] *)
+              lex;
+               pEvaluation -> uE[]
+            else
+               Evaluation -> uE[]
+          if);
+          (if lex.symb = lex.symbols.rightSquare then
+              lex
+           else
+              202 -> SyntaxError
+          if);
+          (NA[],EV[],uE[]) -> Indexed -> inx[];
+       exit inx[]
        #);
      pRemote:
        (# den: ^Denotation; rm: ^Remote; 
