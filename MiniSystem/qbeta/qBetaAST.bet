@@ -10,10 +10,13 @@ StdBetaAst: StdBetaTopAST
       *);
      BetaDecl: Node
        (# PP::< (# do 'Decl' -> lx.append; inner #);
+          length::<
+            (#
+            do NS.length + 2 -> value; inner
+            #);
           PT::<
             (#
             do (pos,break) -> NS.PT;  ':' -> lx.put;  
-               (pos,break) -> mkBreak;
                inner PT
             #);
           NS: ^NameDecls; 
@@ -21,6 +24,7 @@ StdBetaAst: StdBetaTopAST
        #);
      BetaDataItem:< BetaDecl
        (# PP:: (#do 'DataItem'-> lx.append #);
+          length:: (#do IT.length + value -> value #);
           PT::< (#do (pos,break) -> IT.PT; inner PT #);
           Label:: (#do 'DataItem' -> lab[] #);
           IT: ^Node 
@@ -28,6 +32,14 @@ StdBetaAst: StdBetaTopAST
        #);
      NameDecls: Node
        (# PP:: (#do 'NameDecls'-> lx.append #);
+          length:: 
+            (# 
+            do scanSons
+               (#
+               do current.length + value  -> value;
+                  (if not isLast then value + 1 -> value if)
+               #)
+            #);
           PT:: 
             (# 
             do scanSons
@@ -57,11 +69,14 @@ StdBetaAst: StdBetaTopAST
      BetaName:< BetaLexem
        (# PP:: (#do 'Name:'-> lx.append; T[]->lx.append #);
           PT:: (#do T[] -> lx.append #);
+          Length:: (#do T.length -> value #);
           Label:: (#do 'Name' -> lab[] #);
        #);
      BetaConst:< Transaction
        (# PP:: (#do 'Const:'-> lx.append; cst.T[] -> lx.append #);
           PT:: (#do cst.T[] -> lx.append #);
+          Length:: (#do cst.length -> value #);
+          Label :: (#do 'Const'->lab[] #);
           cst: ^BetaLexem
        enter cst[] -> append
        #);
@@ -411,13 +426,15 @@ StdBetaAst: StdBetaTopAST
             #);
           PT::
             (#
-            do (if sup[] <> none then  (pos + 3,break) -> sup.PT; if);
+            do (pos,break) -> sup.PT; '%'->lx.put; length -> lx.putint; ' ' -> lx.put;
                (pos,length) -> block
                (#
-               do '(# '->lx.append;
-                      (if att[] <> none then  (pos + 3,break) -> att.PT; if);
-                      (pos,break) -> acp.PT;
-                      '#)'->lx.append
+               do (pos,break) -> mkBreak0;
+                  '('->lx.put; '#'->lx.put;
+                  (pos + 3,break) -> att.PT;
+                  (pos,break) -> acp.PT;
+                  (pos,break) -> mkBreak1; 
+                  '#'->lx.put; ')'->lx.put
             #)#);
           label:: (#do 'ObjectDesc'-> lab[] #);
           sup: ^PatternDen;
@@ -432,7 +449,7 @@ StdBetaAst: StdBetaTopAST
      BetaPattern: BetaDecl
        (# PP:: (#do 'Pattern'-> lx.append #);
           length:: (#do 1 + OD.length -> value #);
-          PT:: (# do ' ' -> lx.put; (pos,break) -> OD.PT #);
+          PT:: (# do ' ' -> lx.put; (pos + 2 ,break) -> OD.PT #);
           label:: (#do 'PTN'-> lab[] #);
           OD: ^ObjectDesc;
        enter(OD[]->append)
@@ -442,6 +459,7 @@ StdBetaAst: StdBetaTopAST
             (#
             do '<' -> lx.put; ' ' -> lx.put; (pos,break) -> OS.PT;
             #);
+          length:: (#do value + 1 + OS.length -> value #);
           label:: (#do 'Virtual'-> lab[] #);
           OS: ^BetaObjectSpecification;
        enter(OS[]->append)
@@ -451,6 +469,7 @@ StdBetaAst: StdBetaTopAST
             (#
             do ':< ' -> lx.append;  (pos,break) -> OS.PT;
             #);
+          length:: (#do value + 1 + OS.length -> value #);
           label:: (#do 'Further'-> lab[] #);
           OS: ^BetaObjectSpecification;
        enter(OS[]->append)
@@ -460,6 +479,7 @@ StdBetaAst: StdBetaTopAST
             (#
             do ': ' -> lx.append; (pos,break) -> OS.PT;
             #);
+          length:: (#do value + 1 + OS.length -> value #);
           label:: (#do 'Final'-> lab[] #);
           OS: ^BetaObjectSpecification;
        enter(OS[]->append)
@@ -499,15 +519,27 @@ StdBetaAst: StdBetaTopAST
        #);
      Attributes: Node
        (# PP:: (#do 'Attributes'-> lx.append #);
-          PT:: 
+          length::
             (#
             do scanSons
                (#
-               do (pos,break) -> current.PT;
+               do current.length + value -> value;
                   (if not isLast then
-                      ';' -> lx.put;
-                      (pos,true) -> mkBreak
-            if)#)#);
+                      value + 2 -> value
+                  if)
+               #)
+            #);
+          PT:: 
+            (#
+            do (pos,length) -> block
+               (#
+               do scanSons
+                  (#
+                  do (pos,break) -> current.PT;
+                     (if not isLast then
+                         ';' -> lx.put;
+                         (pos,true) -> mkBreak
+            if)#)#)#);
           label:: (#do 'Attributes'-> lab[] #);
        #);
      Attribute: Node
@@ -574,10 +606,9 @@ StdBetaAst: StdBetaTopAST
        (# PP:: (#do 'Imperatives' -> lx.puttext#);
           length::
             (# l: @integer
-            do (if sons[] <> none then
-                   scanSons(# do current.length + 2 + l -> l #);
-                   l -> value
-            if)#);
+            do scanSons(# do current.length + 2 + l -> l #);
+               l -> value
+            #);
           PT:: 
             (#
             do (if true or (sons[] <> none) then
@@ -857,6 +888,7 @@ StdBetaAst: StdBetaTopAST
      BetaTerm: Expr
        (# PP:: (#do 'Term'->lx.append #);
           PT:: (# do (pos,break) -> T.PT #);
+          length:: (# do T.length -> value #);
           label:: (#do 'Term'->lab[] #);
           T: ^transaction
        enter T[]->append
@@ -865,6 +897,7 @@ StdBetaAst: StdBetaTopAST
      ObjEval: Transaction
        (# PP:: (#do 'ObjEval' -> lx.append #);
           PT:: (# do (pos,break) -> OS.PT #);
+          length:: (#do OS.length -> value #);
           label:: (#do 'ObjEval'->lab[] #);
           OS: ^BetaObjectSpecification;
        enter OS[]->append
@@ -888,11 +921,13 @@ StdBetaAst: StdBetaTopAST
      Denotation: Node(##);
      aChar: Transaction
        (# PT:: (#do theCh.T[] -> lx.append #);
+          length:: (# do 3 -> value #);
           theCh: ^BetaLexem
        enter theCh[] -> append
        #);
      aText: Transaction
        (# PT:: (#do theTxt.T[] -> lx.append #);
+          Length:: (#do theTxt.length -> value #);
           theTxt: ^BetaLexem
        enter theTxt[] -> append     
        #);
@@ -1009,7 +1044,8 @@ StdBetaAst: StdBetaTopAST
        enter(OS[] -> append, EV[] -> append)
        #);
      StaticItem: Node
-       (# PT:: 
+       (# PP:: (#do label -> lx.append #);
+          PT:: 
             (# 
             do ' '-> lx.put; '@' -> lx.put; ' ' -> lx.put;  
                (if OS[] <> none then
@@ -1018,6 +1054,8 @@ StdBetaAst: StdBetaTopAST
                    '-none-' -> lx.append
                if);
             #);
+          length:: (# do OS.length + 3 -> value #);
+          Label:: (# do 'StaticItem' -> lab[] #);
           OS: ^BetaObjectSpecification
        enter OS[]
        #);
@@ -1031,6 +1069,8 @@ StdBetaAst: StdBetaTopAST
                    '-none-' -> lx.append
                if);
             #);
+          length:: (# do OS.length + 3 -> value #);
+          Label:: (# do 'DynamicItem' -> lab[] #);
           OS: ^BetaObjectSpecification
        enter OS[]
        #);
