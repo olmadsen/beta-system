@@ -29,66 +29,6 @@ parseStdBetaModule: StdBetaAst
           inFile.close;
           (*oldLex[] -> lex[];*)
        #);
-     (*lex: ^StdBetaLexer;*)
-     openBetaModuleX:
-       (# mkFN:
-            (# FN,fullFN:  ^text;
-            enter FN[]
-            do '/' -> (StdPath.copy).append -> fullFN[];
-               FN[] -> fullFN.append -> fullFN[];
-            exit fullFN[]
-            #);
-          moduleName,StdPath,fragPath: ^text;
-          FD: ^FragmentDir;
-          NM: ^BetaName;
-          BM: ^SimpleBetaModule;
-       enter moduleName[]
-       do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
-          (if stdpath[] = none then '!!!! Did not find BETALIB!'->putline if);
-          (if doTrace then
-              '**** BETALIB: ' -> puttext; StdPath[] -> putline;
-          if);
-          'A fragment' -> BetaName -> NM[];
-          (if true then
-              moduleName[] -> mkFN -> fragPath[];
-           else
-              '/' -> (StdPath.copy).append -> fragPath[];
-              moduleName[] -> fragPath.append -> fragPath[];
-          if);
-          fragPath[] -> SimpleBetaModule -> BM[];
-          (if doTrace then BM.doPT -> dumpTN if);
-          BM.filePath[] -> superParser
-          (# BPS: ^BetaProperties;  frags: ^BetaFragments
-          do pProperties -> BPS[];
-             (if doTrace then
-                 'after:pProperties'->trace;             
-                 pFragments -> frags[];                 
-                 'after:pFragments:'->trace;
-                 BPS.dopt -> putline;
-                 frags.doPT->putline;
-                 frags.setUpOrigin;
-                 BPS.scanSons
-                 (# n: @integer; propN,propArg: ^text; 
-                    isOrigin,isInclude: @boolean
-                 do n + 1 -> n;
-                    (if n
-                     // 1 then
-                        current.dopt -> propN[];
-                        (if true
-                         // 'ORIGIN' -> propN.equalNCS then
-                            true -> isOrigin
-                         // 'INCLUDE' -> propN.equalNCS then
-                            true -> isInclude
-                        if)
-                     else
-                        current.dopt -> propArg[];
-                        'Prop:'->dumpT; current.dopt -> dumpTN;
-                    if);
-                    current.scanSons(#do current.dopt -> dumpTN #)
-                 #)
-             if)
-          #)
-       #);
      openBetaModule:
        (# mkFN:
             (# FN,fullFN:  ^text;
@@ -96,9 +36,12 @@ parseStdBetaModule: StdBetaAst
             do '/' -> (StdPath.copy).append -> fullFN[];
                (if '~beta/' ->((1,6) -> FN.sub).equal then
                    (7,FN.length) -> FN.sub -> fullFN.append -> fullFN[];
-                   '.bet' -> fullFN.append
                 else
                    FN[] -> fullFN.append -> fullFN[];
+               if);
+               (if not ('.bet' -> ((fullFN.length - 3,fullFN.length)->fullFN.sub).equal) then 
+                   '.bet' -> fullFN.append
+                   
                if)
             exit fullFN[]
             #);
@@ -140,8 +83,9 @@ parseStdBetaModule: StdBetaAst
                         (if true 
                          // isOrigin then
                             '**** handle origin:'->dumpTN;
+                            false -> isOrigin
                          // isInclude then
-                            '**** handle origin:'->dumpTN;
+                            '**** handle include:'->dumpTN;
                         if);
                         propArg[] -> mkFN -> doParse -> (BPS[],frags[]); 
                         BPS.doPT -> dumpTN;
@@ -152,14 +96,18 @@ parseStdBetaModule: StdBetaAst
        #);
      doParse: superParser
         (# BPS: ^BetaProperties;  frags: ^BetaFragments
-        do '**** doParse:' -> dumpT; fileName[] -> dumpTN;
+        do (if doTrace then
+               '**** doParse:' -> dumpT; fileName[] -> dumpTN;
+           if);
            pProperties -> BPS[];
            (if doTrace then
                'after:pProperties'->trace;             
-               pFragments -> frags[];                 
-               'after:pFragments:'->trace;
-               BPS.dopt -> putline;
-               frags.doPT->putline;
+               pFragments -> frags[];     
+               (if false then
+                   'after:pFragments:'->trace;
+                   BPS.dopt -> putline;
+                   frags.doPT->putline;
+               if);
                (if false then frags.setUpOrigin; if)
            if);
         exit(BPS[],frags[])
@@ -301,7 +249,7 @@ parseStdBetaModule: StdBetaAst
        enter(theName[],cat[],language[])
        do 'pObjDescFrag'->trace;
           (theName[],cat[],language[]) -> ObjDescFrag -> ODF[];
-          pObjectDesc -> ODF.OD[] -> ODF.append
+          '' -> BetaName ->  AttributeDenotation -> PatternDen -> pObjectDesc -> ODF.OD[] -> ODF.append
        exit ODF[]
        #);
      pAttFrag:
@@ -357,6 +305,7 @@ parseStdBetaModule: StdBetaAst
               pImperatives -> imps[]
            // lex.symbols.nonTbegin then
               lex;
+              'pActionPart:slot'->trace;
               pSlot -> slt[] (* we should mark that this is a slot *)
           if);
           pExitPart -> exitP[];
@@ -437,6 +386,23 @@ parseStdBetaModule: StdBetaAst
            // lex.symbols.innerSy then
               lex;
               pInnerImp -> imp[] 
+           (*// lex.symbols.thisObj then
+              (# AD: ^AttributeDenotation; 
+              do '!!!! this(ev) ingored'->dumpTN;
+                 lex;
+                 (if lex.symb = lex.symbols.leftBrack then
+                     lex;
+                     pAttributeDenotation -> AD[];
+                     (if lex.symb = lex.symbols.rightBrack then
+                         lex
+                      else
+                         syntaxError
+                     if);
+                  else
+                     ''->BetaName -> Attributedenotation -> AD[]
+                 if);
+                 thisObj -> imp[];
+              #)*)
            // lex.symbols.idf then
               'pImperative:idf'->trace;
               (if lex.peek = ':' then
@@ -468,9 +434,11 @@ parseStdBetaModule: StdBetaAst
           (if lex.symb = lex.symbols.idf then
               (* must be SLOT *)
               lex;
+              'pSlot:A'->trace;
               (if lex.symb = lex.symbols.idf then
                   lex.sym[] -> name[];
                   lex;
+                  'pSlot:B'->trace;
                   (if lex.symb = lex.symbols.colon then
                       lex;
                       (if lex.symb = lex.symbols.idf then
@@ -766,11 +734,11 @@ parseStdBetaModule: StdBetaAst
         *           | DynObjGen - R.P&
         * ObjDen:: AttDen       - R.P
         *)
-       (# tra: ^Transaction; evl: ^EvaluationList;
-          op: @integer; lE: ^expr;
+       (# tra: ^Transaction; evl: ^EvaluationList; EV: ^ObjEval;
+          op: @integer; lE: ^expr; AD: ^AttributeDenotation; 
        do 'pTransaction'->trace;
           (if lex.symb 
-           // lex.symbols.idf // lex.symbols.begin // lex.symbols.thisObj 
+           // lex.symbols.idf // lex.symbols.begin 
            // lex.symbols.textSy then
               pObjEval -> tra[];
               'pTransaction:A'->trace; tra.label -> dumpTN;
@@ -782,11 +750,37 @@ parseStdBetaModule: StdBetaAst
                   tra[] -> pStructureRef -> tra[];
                   lex
               if);
+           // lex.symbols.thisObj then
+             'pTransaction:thisObj'->trace; 
+              lex;
+              (if lex.symb = lex.symbols.leftBrack then
+                  lex;
+                  pAttributeDenotation -> AD[];
+                  (if lex.symb = lex.symbols.rightBrack then
+                      lex
+                   else
+                      syntaxError
+                  if);
+               else
+                  ''->BetaName -> Attributedenotation -> AD[]
+              if);
+              'pTransaction:thisObj'->trace; 
+              (if lex.symb 
+               // lex.symbols.objRef then
+                  Ev[] -> pReference -> tra[];
+                  lex
+               // lex.symbols.strucVar then
+                  EV[] -> pStructureRef -> tra[];
+                  lex
+              if);
+              AD[] -> thisObj -> tra[];
+              
            // lex.symbols.nott then 
+              'pTransaction:not'->trace; 
               lex.symb -> op;
               lex;
               pFactor -> lE[];
-              (*(op,lE[]) -> pUnaryExp -> tra[]*)
+              (op,lE[]) -> BetaUnaryExp -> tra[]
            // lex.symbols.const then
               'pTransaction:const'->trace;
               lex.sym[] -> BetaLexem -> BetaConst -> tra[];
@@ -795,7 +789,7 @@ parseStdBetaModule: StdBetaAst
               lex.sym[] -> BetaLexem -> aChar -> tra[];
               lex;
            // lex.symbols.textSy then
-              lex.sym[] -> BetaLexem -> aText -> tra[];
+              lex.sym[] -> aText -> tra[];
               lex;
            // lex.symbols.noneSy then
               noneValue -> tra[];
@@ -820,7 +814,7 @@ parseStdBetaModule: StdBetaAst
                       (*tra.markAsSuper;*)
                       (# PD: ^PatternDen; AD: ^AttributeDenotation; OE: ^ObjEval
                       do &PatternDen[] -> PD[];
-                         &AttributeDenotation[] -> AD[];
+                         ''->BetaName -> AttributeDenotation -> AD[];
                          &ObjEval[] -> OE[];                         
                          tra[] 
                            -> pComputedRemoteAsDenotation
@@ -1058,19 +1052,27 @@ parseStdBetaModule: StdBetaAst
      pStaticItem:
       (# IT: ^StaticItem; 
          PD: ^PatternDen;  OS: ^BetaObjectSpecification
-       do 'pStaticItem'->trace;
-          pPatternDen -> PD[];
-          (if lex.symb = lex.symbols.begin then
-              PD[] -> pObjectDesc -> OS[]
-           else
-              PD[] -> OS[]
-          if);
-          OS[] -> StaticItem -> IT[]
-       exit IT[]
-       #);     
+      do 'pStaticItem'->trace;
+         (if lex.symb = lex.symbols.component then
+             lex; 
+             '!!!! OBS!  Component ignored: @| T' -> dumpTN;
+         if);
+         pPatternDen -> PD[];
+         (if lex.symb = lex.symbols.begin then
+             PD[] -> pObjectDesc -> OS[]
+          else
+             PD[] -> OS[]
+         if);
+         OS[] -> StaticItem -> IT[]
+      exit IT[]
+      #);     
      pDynamicItem:
        (# IT: ^DynamicItem;  PD: ^PatternDen;
        do 'pDynamicItem' -> trace;
+         (if lex.symb = lex.symbols.component then
+             lex; 
+             '!!!! OBS!  Component ignored: ^| T' -> dumpTN;
+         if);
           pPatternDen -> PD[] -> DynamicItem -> IT[]
        exit IT[]
        #);
@@ -1165,13 +1167,19 @@ parseStdBetaModule: StdBetaAst
               'pObjectDesc:begin'->trace;
               pAttributes -> att[];
               pActionPart -> acp[];
+              'pObjectDesc:after:pActionPart'->trace;
+              sup[] = none -> putboolean; newline;
+              att[] = none -> putboolean; newline;
+              acp[] = none -> putboolean; newline;
               (sup[],att[],acp[]) -> ObjectDesc -> OD[];
+              'pObjectDesc:after:ObjectDesc'->trace;
               (if lex.symb = lex.symbols.end then
                   lex
                else
                   113 -> syntaxError
               if)
            // lex.symbols.nonTbegin then
+              lex;
               pSlot -> slt[];
               'pObjdesc:got:SLOT:MUST:FIX!'->dumptN;
               (sup[],Attributes,ActionPart) -> ObjectDesc -> OD[];
@@ -1205,9 +1213,13 @@ parseStdBetaModule: StdBetaAst
                       syntaxError
                   if);
                else
-                  Attributedenotation -> AD[]
+                  ''->BetaName -> Attributedenotation -> AD[]
               if);
               thisObj -> NA[];
+           // lex.symbols.textSy then 
+              (*'\n***AD:textSy:'-> putline;*)
+              lex.sym[] -> BetaName (*Atext*) -> AttributeDenotation -> NA[];
+              lex
            else
               '' -> BetaName -> AttributeDenotation -> NA[]
           if);
@@ -1324,6 +1336,6 @@ parseStdBetaModule: StdBetaAst
        #)
   do (if FN[] = none then 'FN is none'->putline if);
      FN[] -> openBetaModule;
-     checkFrag;
+     (*checkFrag;*)
      inner
   #);
