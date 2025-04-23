@@ -7,6 +7,7 @@ INCLUDE '~beta/grammars/beta/betacfl';
 INCLUDE '~beta/newmps/grammarinit';
 --Lib:attributes--
 doTrace: (# exit false #);
+doTraceParser: (#exit false #);
 parseStdBetaModule: StdBetaAst
   (# superParser:
        (# fileName,pathToFN: ^text; 
@@ -29,40 +30,72 @@ parseStdBetaModule: StdBetaAst
           inFile.close;
           (*oldLex[] -> lex[];*)
        #);
+      mkFN:
+       (# FN,currentDir,fullFN,BetaLib:  ^text;
+       enter(FN[],currentDir[])
+       do (if doTrace then
+              '**** mkFN:'->dumpTN; FN[] -> dumpTN; currentDir[] -> dumpTN;
+          if);
+          (if '~beta/' ->((1,6) -> FN.sub).equal then
+               '$(BETALIB)' -> expandEnvVar -> BetaLib[] ;
+              (if betaLib[] = none then 
+                  '!!!! Did not find BETALIB!'->putline 
+               else
+                  (if doTrace then
+                      '**   BetaLib:'->dumpT; BetaLib[] -> dumpTN;
+              if)if);          
+              '/' -> BetaLib.append -> betaLib[];
+              (7,FN.length) -> FN.sub -> BetaLib.append -> fullFN[];
+           else
+              FN[] -> (currentDir.copy).append -> fullFN[];
+          if);
+          (if not 
+              ('.bet' -> ((fullFN.length - 3,fullFN.length)->fullFN.sub).equal)
+              then 
+              '.bet' -> fullFN.append
+          if);
+          (if doTrace then
+              '**   fullFN:'->dumpT; fullFN[] -> dumpTN
+          if)
+       exit fullFN[]
+       #);
+     mkCurrentDir:
+       (# fullPath, currentDir: ^text; lastSlash: @integer
+       enter fullPath[]
+       do fullPath.scanAll
+          (# i: @integer
+          do i + 1 -> i; 
+             (if ch = '/' then
+                 i -> lastSlash
+          if)#);
+          (1,lastSlash) -> fullPath.sub -> currentDir[];
+          (if doTrace then
+              '**** mkCurrentDir:' -> dumpTN; fullPath[]->dumpTN;
+              currentDir[] -> dumpTN;
+          if)
+       exit currentDir[]
+       #);     
      openBetaModule:
-       (# mkFN:
-            (# FN,fullFN:  ^text;
-            enter FN[]
-            do '/' -> (StdPath.copy).append -> fullFN[];
-               (if '~beta/' ->((1,6) -> FN.sub).equal then
-                   (7,FN.length) -> FN.sub -> fullFN.append -> fullFN[];
-                else
-                   FN[] -> fullFN.append -> fullFN[];
-               if);
-               (if not ('.bet' -> ((fullFN.length - 3,fullFN.length)->fullFN.sub).equal) then 
-                   '.bet' -> fullFN.append
-                   
-               if)
-            exit fullFN[]
-            #);
-          moduleName,StdPath,fragPath: ^text;
+       (# moduleName,currentDir,StdPath,fragPath: ^text;
           FD: ^FragmentDir;
           NM: ^BetaName;
           BM: ^SimpleBetaModule;
           BPS: ^BetaProperties; frags: ^BetaFragments
-       enter moduleName[]
+       enter(moduleName[],currentDir[])
        do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
           (if stdpath[] = none then '!!!! Did not find BETALIB!'->putline if);
-          (if doTrace then
+          (if false then
               '**** BETALIB: ' -> puttext; StdPath[] -> putline;
+              '**   currentDir: ' -> dumpT; currentDir[] -> dumpTN
           if);
           'A fragment' -> BetaName -> NM[];
-          moduleName[] -> mkFN -> fragPath[];
+          (moduleName[],currentDir[]) -> mkFN -> fragPath[];
+          fragPath[] -> mkCurrentDir -> currentDir[];
           fragPath[] -> SimpleBetaModule -> BM[];
           (if doTrace then BM.doPT -> dumpTN if);
           BM.filePath[] -> doParse -> (BPS[],frags[]); 
           (if doTrace then
-              'after:doParse'->trace;
+              '**** handle Beta properties'->dumpTN;
               BPS.scanSons
               (# 
               do current.scanSons
@@ -87,13 +120,14 @@ parseStdBetaModule: StdBetaAst
                          // isInclude then
                             '**** handle include:'->dumpTN;
                         if);
-                        propArg[] -> mkFN -> doParse -> (BPS[],frags[]); 
-                        BPS.doPT -> dumpTN;
-                        frags.doPT -> dumpTN
-                    if);
-              #)#)
-          if)
-       #);
+                        (propArg[],currentDir[])
+                          -> mkFN 
+                          -> doParse (* probably openBetaModule here *)
+                          -> (BPS[],frags[]); 
+                        (if doTraceParser then
+                            BPS.doPT -> dumpTN;
+                            frags.doPT -> dumpTN
+       if)if)#)#)if)#);
      doParse: superParser
         (# BPS: ^BetaProperties;  frags: ^BetaFragments
         do (if doTrace then
@@ -276,7 +310,7 @@ parseStdBetaModule: StdBetaAst
                 // lex.symbols.nonTbegin then
                    lex;
                    pSlot;
-                   'pAttributes:got:SLOT:MUST:FIX'->dumpTN;
+                   'pAttributes:got:SLOT:MUST:FIX'->trace;
                    
                    restart Loop
                 // lex.symbols.doSy
@@ -385,24 +419,7 @@ parseStdBetaModule: StdBetaAst
                *)
            // lex.symbols.innerSy then
               lex;
-              pInnerImp -> imp[] 
-           (*// lex.symbols.thisObj then
-              (# AD: ^AttributeDenotation; 
-              do '!!!! this(ev) ingored'->dumpTN;
-                 lex;
-                 (if lex.symb = lex.symbols.leftBrack then
-                     lex;
-                     pAttributeDenotation -> AD[];
-                     (if lex.symb = lex.symbols.rightBrack then
-                         lex
-                      else
-                         syntaxError
-                     if);
-                  else
-                     ''->BetaName -> Attributedenotation -> AD[]
-                 if);
-                 thisObj -> imp[];
-              #)*)
+              pInnerImp -> imp[]
            // lex.symbols.idf then
               'pImperative:idf'->trace;
               (if lex.peek = ':' then
@@ -741,7 +758,7 @@ parseStdBetaModule: StdBetaAst
            // lex.symbols.idf // lex.symbols.begin 
            // lex.symbols.textSy then
               pObjEval -> tra[];
-              'pTransaction:A'->trace; tra.label -> dumpTN;
+              'pTransaction:A'->trace;
               (if lex.symb 
                // lex.symbols.objRef then
                   tra[] -> pReference -> tra[];
@@ -1168,9 +1185,6 @@ parseStdBetaModule: StdBetaAst
               pAttributes -> att[];
               pActionPart -> acp[];
               'pObjectDesc:after:pActionPart'->trace;
-              sup[] = none -> putboolean; newline;
-              att[] = none -> putboolean; newline;
-              acp[] = none -> putboolean; newline;
               (sup[],att[],acp[]) -> ObjectDesc -> OD[];
               'pObjectDesc:after:ObjectDesc'->trace;
               (if lex.symb = lex.symbols.end then
@@ -1181,7 +1195,7 @@ parseStdBetaModule: StdBetaAst
            // lex.symbols.nonTbegin then
               lex;
               pSlot -> slt[];
-              'pObjdesc:got:SLOT:MUST:FIX!'->dumptN;
+              'pObjdesc:got:SLOT:MUST:FIX!'->trace;
               (sup[],Attributes,ActionPart) -> ObjectDesc -> OD[];
           if);
           'pObjectDesc:end'->trace;
@@ -1278,7 +1292,7 @@ parseStdBetaModule: StdBetaAst
      trace:
        (# S: ^Text
        enter S[]
-       do (if doTrace then
+       do (if doTraceParser then
               S[] -> puttext; ':'->put; '\t'->put;
               lex.symb -> putint; ' ' -> put;
               lex.symb -> lex.symbols.asText -> puttext;
@@ -1333,9 +1347,11 @@ parseStdBetaModule: StdBetaAst
               (# 
               do current.name -> dumpTN
           #)if);
-       #)
+       #);
+     currentDir:  ^Text; (* FN is in the folder currentDir *)
+  enter currentDir[]
   do (if FN[] = none then 'FN is none'->putline if);
-     FN[] -> openBetaModule;
+     (FN[],currentDir[]) -> openBetaModule;
      (*checkFrag;*)
      inner
   #);
