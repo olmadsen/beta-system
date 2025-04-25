@@ -82,9 +82,9 @@ parseStdBetaModule: StdBetaAst
           fragPath[] -> SimpleBetaModule -> BM[];
           (if doTrace then BM.doPT -> dumpTN if);
           BM.filePath[] -> doParse -> (BPS[],frags[]); 
-          (if doTraceParser then
+          (if true or doTraceParser then
               BPS.doPT -> dumpTN;
-              frags.doPT -> dumpTN
+              frags.doPT -> dumpTN;
           if);
           (if doTrace then
               '**** handle Beta properties'->dumpTN;
@@ -134,15 +134,8 @@ parseStdBetaModule: StdBetaAst
                '**** doParse:' -> dumpT; fileName[] -> dumpTN;
            if);
            pProperties -> BPS[];
-           (if doTrace then
-               'after:pProperties'->trace;             
-               pFragments -> frags[];     
-               (if false then
-                   'after:pFragments:'->trace;
-                   BPS.dopt -> putline;
-                   frags.doPT->putline;
-               if);
-           if);
+           'after:pProperties'->trace;             
+           pFragments -> frags[];
         exit(BPS[],frags[])
         #);
      pProperties:
@@ -286,7 +279,7 @@ parseStdBetaModule: StdBetaAst
        exit ODF[]
        #);
      pAttFrag:
-       (# theName,cat,language: ^BetaName; frag: ^AttFrag;
+       (# theName,cat,language: ^BetaName; frag: ^AttFrag; 
        enter(theName[],cat[],language[])
        do 'pAttFrag'->trace;
           (theName[],cat[],language[]) -> AttFrag -> frag[];
@@ -295,7 +288,12 @@ parseStdBetaModule: StdBetaAst
        exit frag[]
        #);
      pAttributes:
-       (# theName,cat,language: ^BetaName; att: ^Attributes;
+       (# gotDoPartSlot:<
+            (# slt: ^Slot;
+            enter slt[]
+            do inner
+            #);
+          theName,cat,language: ^BetaName; att: ^Attributes; slt: ^Slot;
        enter(theName[],cat[],language[])
        do 'pAttributes'->trace;
           Attributes -> att[];
@@ -307,11 +305,21 @@ parseStdBetaModule: StdBetaAst
                    lex;
                    restart Loop
                 // lex.symbols.nonTbegin then
+                   (*lex.markPos;*)
                    lex;
-                   pSlot -> att.append;
-                   'pAttributes:got:SLOT:MUST:FIX'->trace;
-                   
-                   restart Loop
+                   pSlot -> slt[]; 
+                   'pAttributes:got:SLOT:'->dumpT;
+                   slt.doPT -> dumpT;
+                   (if slt.isDopart then 
+                       'isDoPart' ->dumpTN;
+                       (*lex.resetPos;
+                        lex.symbols.nonTbegin -> lex.symb;*)
+                       slt[] -> gotDoPartSlot
+                    else
+                       slt[] -> att.append;  
+                       newline;
+                       restart Loop
+                   if);
                 // lex.symbols.doSy
                 // lex.symbols.end
                 // lex.symbols.enterSy
@@ -327,20 +335,26 @@ parseStdBetaModule: StdBetaAst
        exit att[]
        #);
      pActionPart:
-       (# acp: ^ActionPart; 
+       (# doPartSlot: ^Slot; acp: ^ActionPart; 
           enterP: ^EnterPart; exitP: ^ExitPart; imps: ^Imperatives; slt: ^Slot;
+       enter doPartSlot[]
        do 'pActionPart'->trace;
           pEnterPart -> enterP[];
           Imperatives -> imps[];
-          (if lex.symb 
-           // lex.symbols.doSy then
-              lex;
-              pImperatives -> imps[]
-           // lex.symbols.nonTbegin then
-              lex;
-              'pActionPart:slot'->trace;
-              pSlot -> slt[] (* we should mark that this is a slot *)
-          if);
+          (if doPartSlot[] <> none then
+              'pActionPart:withDoPartSlot'->dumpTN;;
+              doPartSlot[] -> imps.append
+           else
+              (if lex.symb 
+               // lex.symbols.doSy then
+                  lex;
+                  pImperatives -> imps[]
+               // lex.symbols.nonTbegin then
+                  lex;
+                  'pActionPart:slot'->trace;
+                  pSlot -> slt[] -> imps.append; (* we should mark that this is a slot *)
+                  '**** Slot:'->dumpT; slt.doPT->dumpTN;
+          if)if);
           pExitPart -> exitP[];
           (enterP[],imps[],exitP[]) -> ActionPart -> acp[];
           'pActionPart:end'->trace;
@@ -360,7 +374,7 @@ parseStdBetaModule: StdBetaAst
        exit enterP[]
        #);
      pImperatives:
-       (# imps: ^Imperatives;
+       (# imps: ^Imperatives; slt: ^Node;
        do 'pImperatives'->trace;
           Imperatives -> imps[];
           Loop:
@@ -369,7 +383,8 @@ parseStdBetaModule: StdBetaAst
                 // lex.symbols.semiColon then (* empty imp *) lex; restart Loop 
                 // lex.symbols.nonTbegin then
                    lex;
-                   pSlot
+                   pSlot -> slt[];
+                   'pImperatives:got:slot:'->dumpT; slt.dopt->dumpTN;
                 // lex.symbols.end 
                 // lex.symbols.ifSy
                 // lex.symbols.alternative
@@ -464,8 +479,8 @@ parseStdBetaModule: StdBetaAst
                           (if true
                            // 'attributes'->cat.equalNCS then
                               (name[],cat[]) 
-                                -> Slot
-                                -> AttSlot 
+                              (*-> Slot*)
+                                -> AttSlot
                                 -> slt[]
                            // 'descriptor'->cat.equalNCS
                            // 'objectDescriptor'->cat.equalNCS then 
@@ -1194,7 +1209,8 @@ parseStdBetaModule: StdBetaAst
        exit dcl[]
        #);
      pObjectDesc:
-       (# sup: ^PatternDen; symb: ^Text; OD: ^ObjectDesc; slt: ^Slot;
+       (# sup: ^PatternDen; symb: ^Text; OD: ^ObjectDesc; 
+          doPartSlot,slt: ^Slot;
           att: ^Attributes; acp: ^ActionPart;
        enter sup[]
        do 'pObjectDesc'->trace;
@@ -1202,8 +1218,15 @@ parseStdBetaModule: StdBetaAst
            // lex.symbols.begin then
               lex;
               'pObjectDesc:begin'->trace;
-              pAttributes -> att[];
-              pActionPart -> acp[];
+              pAttributes
+              (# gotDoPartSlot::
+                   (#
+                   do 'pObjectDesc:pAttributes:gotDoPartsDesc:'->dumpT;
+                      slt.doPT -> dumpTN;
+                      slt[] -> doPartSlot[];
+                   #);
+              #) -> att[];
+              doPartSlot[] -> pActionPart -> acp[];
               'pObjectDesc:after:pActionPart'->trace;
               (sup[],att[],acp[]) -> ObjectDesc -> OD[];
               'pObjectDesc:after:ObjectDesc'->trace;
@@ -1215,8 +1238,9 @@ parseStdBetaModule: StdBetaAst
            // lex.symbols.nonTbegin then
               lex;
               pSlot -> slt[];
-              'pObjdesc:got:SLOT:MUST:FIX!'->trace;
+              'pObjdesc:got:SLOT:'->dumpT; slt.doPT->dumpTN;              
               (sup[],Attributes,ActionPart) -> ObjectDesc -> OD[];
+              slt[] -> OD.slt[]
           if);
           'pObjectDesc:end'->trace;
        exit OD[]
