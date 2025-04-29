@@ -123,8 +123,8 @@ parseStdBetaModule: StdBetaAst
                if);
                M[] -> theModules[top][]
             #);
-          has: BooleanValue
-            (# fragPath: ^text
+          has: 
+            (# fragPath: ^text; M: ^StdBetaModule
             enter fragPath[]
             do L:
                  scan
@@ -133,51 +133,67 @@ parseStdBetaModule: StdBetaAst
                     (#
                     do (if fragPath[] -> current.fragPath.equal then
                            (*'**   Alreay parsed:'->dumpT; fragPath[]->dumpTN;*)
-                           true -> value;
+                           current[] -> M[];
                            leave L
-                    if)#)
-                 #);               
+                 if)#)#)
+            exit M[]
             #);
           scan:
             (# current: ^StdBetaModule
             do (for i: top repeat
                     theModules[i][] -> current[];
                     inner scan
-            for)#)
+            for)#);
+          bindSlots:
+            (#
+            do scan
+               (#
+               do (if current.moduleOrigin[] <> none then
+                      '**** Bind fragments in: ' -> dumpT;
+                      current.moduleName.doPT -> dumpTN;
+                      '**   in slots in:' -> dumpT; 
+                      current.moduleOrigin.moduleName.dopt->dumpTN;
+                      (if false then
+                          current.frags.scanSons
+                          (# frag: ^BetaFragment
+                          do (current[]->frag[]).theName.doPT -> dumpT;
+                             frag.cat.dopt -> dumpT; ', ' -> dumpT
+                          #);
+                          newline
+                  if)if)
+               #)
+            #);
        #);
      openBetaModule:
        (# moduleName,currentDir,fragPath: ^text;
           NM: ^BetaName;
           BPS: ^BetaProperties; frags: ^BetaFragments;
           slots: ^SlotList;
-          SBM,topModule,B: ^StdBetaModule;
+          SBM,moduleOrigin: ^StdBetaModule;
        enter(moduleName[],currentDir[])
        do (if true or doTrace then
               '**** openBetaModule:'->dumpT; moduleName[] -> dumpTN
           if);
           slotCollector.push;
           (moduleName[],currentDir[]) -> mkFN -> fragPath[];
-          (if fragPath[] -> moduleCollector.has then
-              leave openBetaModule
-          if);
-          fragPath[] -> mkCurrentDir -> currentDir[];
-          fragPath[] -> doParse -> (BPS[],frags[]); 
-          (moduleName.copy,BPS[],frags[]) 
-            -> StdBetaModule -> SBM[] -> moduleCollector.add;
-          fragPath.copy -> SBM.fragPath[];
-          slotCollector.pop -> SBM.slots[];
-
-          (if doTrace then
-              SBM.doPT -> dumpTN;
-          if);
-          
-          (if topModule[] = none then SBM[] -> topModule[] if);
-          (SBM[],currentDir[]) -> handleProperties -> B[];
-          (if B[] <> none then B[] -> topModule[] if);
-       exit topModule[]
+          (if (fragPath[] -> moduleCollector.has -> SBM[]) = none then
+              fragPath[] -> mkCurrentDir -> currentDir[];
+              fragPath[] -> doParse -> (BPS[],frags[]); 
+              (moduleName.copy,BPS[],frags[]) 
+                -> StdBetaModule -> SBM[] -> moduleCollector.add;
+              fragPath.copy -> SBM.fragPath[];
+              slotCollector.pop -> SBM.slots[];
+              
+              (if false and doTrace then SBM.doPT -> dumpTN if);
+              
+              (SBM[],currentDir[]) -> handleProperties -> SBM.moduleOrigin[];
+              (if SBM.moduleOrigin[] = none then 
+                  SBM[] -> topModule[] 
+          if)if);
+       exit SBM[]
        #);
      handleProperties:
-       (# SBM,topModule: ^StdBetaModule; BPS: ^BetaProperties; 
+       (# SBM,propModule,moduleOrigin: ^StdBetaModule; BPS: ^BetaProperties; 
           frags: ^BetaFragments; currentDir: ^text;
        enter(SBM[],currentDir[])
        do (if doTrace then
@@ -190,8 +206,7 @@ parseStdBetaModule: StdBetaAst
              (# n: @integer; propN,propArg: ^text; 
                 isOrigin,isInclude: @boolean
              do n + 1 -> n; 
-                (if n
-                 // 1 then
+                (if n = 1 then
                     current.doPT -> propN[];
                     (if true
                      // 'ORIGIN' -> propN.equalNCS then
@@ -212,25 +227,24 @@ parseStdBetaModule: StdBetaAst
                     (if isOrigin or isInclude then
                         (propArg[],currentDir[])
                           -> OpenBetaModule
-                          -> SBM[];   
-                        (if frags[] <> none then
+                          -> propModule[];   
+                        (if propModule[] <> none then
                             (if doTrace then
-                                '**** after:OpenBetaModule:'->dumpT;
                                 (if true 
                                  // isOrigin then
-                                    'origin:'->dumpT;
+                                    '**** open:origin:'->dumpT;
                                  // isInclude then
-                                    'include:'->dumpT
+                                    '**** open:include:'->dumpT
                                 if);
                                 current.dopt -> dumpTN;
-                                frags.doPT -> putHeadN
+                                propModule.doPT -> putHeadN
                             if);
-                            (if isOrigin and (SBM[] <> none) then 
-                                SBM[] -> topModule[]
+                            (if isOrigin then 
+                                propModule[] -> moduleOrigin[]
                         if)if);
                         false -> isOrigin -> isInclude;
           if)if)#)#)
-       exit topModule[]
+       exit moduleOrigin[]
        #);
      doParse: superParser
         (# BPS: ^BetaProperties;  frags: ^BetaFragments
@@ -238,7 +252,6 @@ parseStdBetaModule: StdBetaAst
                '**** doParse:' -> dumpT; fileName[] -> dumpTN;
            if);
            pProperties -> BPS[];
-           'after:pProperties'->trace;             
            pFragments -> frags[];
         exit(BPS[],frags[])
         #);
@@ -1517,11 +1530,12 @@ parseStdBetaModule: StdBetaAst
               do current.name -> dumpTN
           #)if);
        #);
-     topModule: ^StdBetaModule;
+     mainModule,topModule: ^StdBetaModule;
      currentDir:  ^Text; (* FN is in the folder currentDir *)
   enter currentDir[]
   do (if FN[] = none then 'FN is none'->putline if);
-     (FN[],currentDir[]) -> openBetaModule -> topModule[];
-     (FN[],currentDir[]) -> checkFrag;
+     (FN[],currentDir[]) -> openBetaModule -> mainModule[];
+     (*(FN[],currentDir[]) -> checkFrag;*)
+     moduleCollector.bindSlots;
      inner
   #);
