@@ -4,11 +4,10 @@ INCLUDE 'qStdBetaTopAST';
 INCLUDE '~beta/containers/list';  
 --Lib:attributes--
 StdBetaAst: StdBetaTopAST
-  (# (*  we should perhaps also define lexems to be used by both ASTs
-      *);
+  (# (* We should perhaps also define lexems to be used by both ASTs *)
      StdBetaNode: Node
        (# vNode:: StdBetaNode;
-          SuperScope:: ObjectDesc;          
+          SuperScope:: StdBetaNode; (*ObjectDesc;          *)
           setUpOrigin::<
             (# done: @boolean
             do inner;
@@ -54,6 +53,12 @@ StdBetaAst: StdBetaTopAST
             enter NA[]
             do inner
             exit(dcl[],pn)
+            #);
+          search:<
+            (# NA: ^BetaName; dcl:  ^BetaDecl; pn,on: @integer
+            enter NA[]
+            do inner
+            exit(dcl[],pn,on)
             #);
           traceCheck:
             (# T: ^text;
@@ -211,6 +216,7 @@ StdBetaAst: StdBetaTopAST
      BetaString:< BetaLexem
        (# PP:: (#do 'String:'-> lx.append; T[] -> lx.append #);
           PT:: (#do T[] -> lx.append #);
+          Length:: (#do T.length -> value #);
           Label:: (#do 'String'->lab[] #);
        #);
     
@@ -743,6 +749,7 @@ StdBetaAst: StdBetaTopAST
             do '<<SLOT ' -> lx.puttext; name.PT; ':' -> lx.put;
                cat.PT; '>>' -> lx.puttext 
             #);
+          label :: (#do 'Slot' -> lab[] #);
           isAtt:< BooleanValue;
           isObjDesc:< BooleanValue;
           isDoPart:< BooleanValue;
@@ -769,12 +776,10 @@ StdBetaAst: StdBetaTopAST
        #);
      AttSlot:< Slot (*Attribute*)
        (# (*PT:: (#do (pos,break) -> theSlot.PT #);*)
-          Label:: (#do 'AttSlot'->lab[] #);
           isAtt:: TrueValue
        #);
      ObjDescSlot:< Slot
-       (# Label:: (#do 'ObjDescSlot'->lab[] #);
-          isObjDesc:: TrueValue;
+       (# isObjDesc:: TrueValue;
           addBinding::
             (#
             do (if bindings.top > 1 then
@@ -782,7 +787,7 @@ StdBetaAst: StdBetaTopAST
             if)#);
        #);
      DoPartSlot:< Slot
-       (# Label:: (#do 'DoPartSlot'->lab[] #);
+       (# 
           isDoPart:: TrueValue;
           addBinding::
             (#
@@ -790,7 +795,7 @@ StdBetaAst: StdBetaTopAST
                    '!!!! Too many bindings of DoPart slot:'->puttext; dopt -> dumpTN;
             if)#);
        #);
-     Evaluation: Imperative (*StdBetaNode*)
+     Evaluation:< Imperative (*StdBetaNode*)
        (# PP::(#do 'Eval'->lx.puttext #);
           length::
             (#
@@ -877,7 +882,8 @@ StdBetaAst: StdBetaTopAST
                   (#
                   do (pos,break) -> current.PT;
                      (if not isLast then (pos,break) -> mkBreak1 if);
-            #)#)#)
+            #)#)#);
+          Label:: (#do 'Alternatives' -> lab[] #);
        #);
      Alternative: StdBetaNode
        (# PP:: (# do 'Alternative' -> lx.puttext #);
@@ -900,6 +906,7 @@ StdBetaAst: StdBetaTopAST
                          (pos+3,break) -> mkBreak1;
                          (pos+3,break) -> imps.PT 
                if)#)#);
+          Label:: (#do 'Alternative' -> lab[] #);
           sel: ^Selections;
           imps: ^Imperatives
        enter(sel[]->append,imps[]->append)
@@ -919,7 +926,8 @@ StdBetaAst: StdBetaTopAST
                   do '// ' -> lx.append; (pos,break) -> current.PT;
                      (if not isLast then
                          (pos,break) -> mkBreak1
-            if)#)#)#)
+            if)#)#)#);
+          Label:: (#do 'Selections' -> lab[] #);
        #);
      Selection: StdBetaNode
        (# PP:: (# do 'Selection' -> lx.puttext #);
@@ -929,24 +937,26 @@ StdBetaAst: StdBetaTopAST
           EV: ^Evaluation
        enter EV[] -> append
        #);
-     ForImp: Imperative
+     ForImp:< Imperative
        (# PP:: (#do 'For' -> lx.puttext #);
           length::
             (#
             do (if true then
                    100000 -> value
                 else
-                   5 + inx.length + 2 + inxItem.length + 8 + imps.length + 5 -> value
+                   5 + 2 + inxDecl.length + 8 + imps.length + 5 -> value
             if)#);
           PT::
             (#
             do (pos,length) -> block
                (#
                do '(' -> lx.put; 'for ' -> lx.append; (* avoid cunfusing Beta PP *)
-                  (if inx[] <> none then
+                  (*(if inx[] <> none then
                       (pos,break) -> inx.PT ;
-                      ':' -> lx.put; ' ' -> lx.put;
-                  if);
+                      
+                   if);*)
+                  (pos,break) -> inxDecl.PT;
+                  ':' -> lx.put; ' ' -> lx.put;
                   (if rangee[] <> none then
                       (pos,break) -> rangee.PT ; 
                   if);
@@ -957,8 +967,9 @@ StdBetaAst: StdBetaTopAST
                   'for' -> lx.append; ')' -> lx.put
             #)#);
           Label:: (#do 'ForImp'->lab[] #);
-          inx: ^BetaNameDecl (*Lexem*);
-          inxItem: ^ForImpItem;
+          (* inx: ^BetaNameDecl (*Lexem*);
+          inxDecl: ^BetaDecl;
+          (*inxItem: ^ForImpItem;*)
           rangee: ^Evaluation;
           imps: ^Imperatives;
           (* ( for i: E repeat ... for )
@@ -966,14 +977,34 @@ StdBetaAst: StdBetaTopAST
            * ( for a + b repeat ... for )
            * ( for -a + b repeat ... for )
            *)
-       enter(inx[]->append,inxItem[]->append,rangee[]->append,imps[]->append)
+          emit:
+            (# N: ^StdBetaNode;
+            enter N[]
+            do N.noOfSons -> putint; ' ' -> put;
+               N.scanSons(#do current.label -> dumpT #);
+               newline;
+            #);
+          test:
+            (# T: ^Text;
+            enter T[]
+            do T[] -> dumpTN;
+               (*inx[] -> emit;*) inxDecl[] -> emit;
+               rangee[] -> emit; imps[] -> emit;
+            #);
+          init:
+            (#
+            enter(inxDecl[],rangee[],imps[])
+            do inxDecl[] -> append; rangee[] -> append; imps[] -> append;
+            #)
+       enter init
        #);
-     ForImpItem: StdBetaNode
+     ForImpItem: Item (*StdBetaNode*)
        (# PP:: (# do 'ForImpItem' -> lx.puttext #);
+          PT:: (# do ' @ ForImpItem' -> lx.puttext #);
           label:: (#do 'ForImpItem' -> lab[] #);
           kind:: (# do 'F' -> ch #);
        #);
-     LabelledImp: Imperative
+     LabelledImp:< Imperative
        (# PP:: (# do 'LabelledImp' -> lx.puttext #);
           length:: 
             (# 
@@ -994,13 +1025,13 @@ StdBetaAst: StdBetaTopAST
           label:: (#do 'LabelledImp'-> lab[] #);          
           lab: ^BetaNameDecl;
           imp: ^Imperative
-       enter(lab[],imp[])
+       enter(lab[]->append,imp[]->append)
        #);
      Break: Imperative
        (# PT::< (# do inner; (pos,break) -> lab.PT  #);
           length::< (# do inner; lab.length + value -> value #);
           lab: ^NameApl 
-       enter lab[]
+       enter lab[] -> append
        #);
      LeaveImp: Break
        (# PP::(#do 'leave '->lx.puttext #);
@@ -1029,12 +1060,12 @@ StdBetaAst: StdBetaTopAST
             #);
           label:: (#do 'Inner'-> lab[] #);
           N: ^NameApl
-       enter N[]
+       enter N[] -> append
        #);
      Transaction: StdBetaNode
        (# PP::< (#do 'Transaction:'-> lx.append; inner #);
        #);
-     Expr: Transaction (##);
+     Expr: Transaction (#  #);
      BetaBinaryExp: Expr
        (# PP::
             (#
@@ -1067,10 +1098,10 @@ StdBetaAst: StdBetaTopAST
        enter(op,E[]->append)
        #);
      BetaTerm: Expr
-       (# (*PP:: (#do 'Term'->lx.append #);
+       (# (*PP:: (#do 'Term'->lx.append #);*)
           PT:: (# do (pos,break) -> T.PT #);
           length:: (# do T.length -> value #);
-          label:: (#do 'Term'->lab[] #);*)
+          label:: (#do 'Term'->lab[] #);
           T: ^transaction
        enter T[]->append
        #);
@@ -1141,7 +1172,9 @@ StdBetaAst: StdBetaTopAST
                      if)
                   #);
                   ')' -> lx.put;
-       #)#)#);
+            #)#);
+          Label:: (#do 'EvalList' -> lab[] #);   
+       #);
      NoneValue: Expr (*Transaction*)
        (# PP:: (# do 'none' -> lx.puttext #);
           length:: (# do 6 -> value #);
@@ -1164,13 +1197,15 @@ StdBetaAst: StdBetaTopAST
        #);
      Remote:< AttributeDenotation
        (# PP:: (# do 'Remote' -> lx.append #);
-          length :: (#do scanSons(# do current.length + 1 + value -> value #)#);
+          length :: 
+            (#do scanSons(# do current.length + 1 + value -> value #)#);
           PT:: 
             (#
             do scanSons
                (#do (pos,break) -> current.PT;
                   (if not isLast then '.' -> lx.put if)
-            #)#)
+            #)#);
+          Label:: (#do 'Remote' -> lab[] #);
        #);
      ComputedRemote:< Transaction
        (# PP:: (# do 'ComputedRemote'-> lx.puttext #);
@@ -1188,7 +1223,7 @@ StdBetaAst: StdBetaTopAST
        #);
      ComputedRemoteX:< Transaction 
        (# tra: ^Transaction
-       enter tra[]
+       enter tra[] -> append
        #);
      ComputedRemoteAsDenotation:< AttributeDenotation
        (# CR: ^ComputedRemote
@@ -1224,8 +1259,7 @@ StdBetaAst: StdBetaTopAST
           length:: (# do 1 + OS.length -> value #);
           PT:: 
             (# 
-            do '&' -> lx.put; 
-               (pos,break) -> OS.PT;
+            do (pos,break) -> OS.PT;
                (if isRef and (EV[] <> none) then 
                    (pos,break) -> EV.PT
                if);
