@@ -46,12 +46,16 @@ qStdBetaChecker: parseStdBetaModule
      ObjDescFrag::<
        (# setUpOrigin::
             (#
-            do (*'ObjDescFrag:setUpOrigin:'->traceCheck; *)
+            do (*'ObjDescFrag:setUpOrigin:'->dumpT; dopt->putheadN;*)
                OD.scanSons(#do origin[] -> current.setUpOrigin #)
             #);
           check::
             (#
             do (if traceChecker then 'ObjDescFrag:check:'->traceCheckN; if)
+            #);
+          theDesc::
+            (#
+            do OD[] -> aDesc[]
             #);
        #);
      DoPartFrag::<
@@ -109,10 +113,13 @@ qStdBetaChecker: parseStdBetaModule
      ObjDescSlot::<
        (# setUpOrigin::
             (#
-            do (*'ObjDescSlot:setUpOrigin:'->traceCheck; 
-                * doPT -> traceCheckN;*)
+            do (*'ObjDescSlot:setUpOrigin:'->dumpT; doPT -> dumpTN; *)
                scanBindings(#do origin[] -> current.setUpOrigin#)
             #);
+          theDesc::
+            (# ODF:  ^ObjDescFrag;
+            do scanBindings(#do (current[]->ODF[]).OD[] -> aDesc[] #);
+            #)
        #);
      DoPartSlot::<
        (# setUpOrigin::
@@ -124,7 +131,7 @@ qStdBetaChecker: parseStdBetaModule
      BetaDecl::<
        (# setUpOrigin::
             (#
-            do (*'BetaDecl:setUpOrigin:'->dumpT; dopt -> dumpTN;*)
+            do (*'BetaDecl:setUpOrigin:'->dumpT; dopt -> putHeadN;;*)
                this(BetaDecl)[] -> NS.addDclRef;
                NS[] -> IT.NS[]
             #);
@@ -158,20 +165,26 @@ qStdBetaChecker: parseStdBetaModule
             if)#)#)
        #);
      BetaNameDecl::<
-       (# localSearch::
+       (# theDesc::
+            (#
+            do theDcl.theDesc -> aDesc[]
+            #);
+          localSearch::
             (#
             do (if NA.T[] -> N.T.equalNCS then
                    (* '**** NameDecl:found:'-> traceCheck; 
                     * NA.T[]->traceCheckN;*)
                    (if theDcl[] = none then
-                       '!!!! theDcl is none'->dumpTN;
+                       '!!!! theDcl is none: '->dumpT; label -> dumpT;
+                       dopt -> dumpTN;
+                       '!!   searching:'->dumpT; NA.T[] -> dumpTN;
                    if);
-                   theDcl[] -> dcl[];
+                   this(BetaNameDecl)[] -> dcl[];
             if)#);
           theDcl: ^BetaDecl
        #);
      StaticItem::<
-       (# setUpOrigin:: (#do NS[] -> OS.NS[] #);
+       (# setUpOrigin:: (#do  NS[] -> OS.NS[] #);
           check::
             (#
             do (*'StaticItem:check:'->traceCheck; doPT -> traceCheckN;*)
@@ -231,7 +244,7 @@ qStdBetaChecker: parseStdBetaModule
               VB.doPT -> putline;
           if);
           VB.NS.scanSons
-          (# ND: ^BetaNameDecl; ATd: ^BetaDecl; pn,on: @integer
+          (# ND: ^BetaNameDecl; ATd: ^BetaNameDecl; pn,on: @integer
           do current[] -> ND[];
              ND.N[] -> VB.origin.superSearch -> (ATd[],pn);
              (if false then
@@ -239,10 +252,10 @@ qStdBetaChecker: parseStdBetaModule
                  ND.theDcl.dopt -> putline;
              if);
              (if ATd[] <> none then
-                 (if ATd.IT.isVirtualPtn then
+                 (if ATd.theDcl.IT.isVirtualPtn then
                      ATd.theDesc -> VB.OS.setImplicitSuper; (* case 1 *)
                      (if false then '**   the virtual:'->putline; if);
-                     ATd.NS[] -> VB.superNS[];
+                     ATd.theDcl.NS[] -> VB.superNS[];
                   else
                      VB.father[] -> SemanticError
                      (#
@@ -295,9 +308,13 @@ qStdBetaChecker: parseStdBetaModule
        (# setUpOrigin::
             (#
             do (*'ObjectDesc:setUpOrigin'->traceCheck; label->traceCheckN*)
-               origin[] -> sup.setupOrigin; 
-               this(ObjectDesc)[] -> att.setUpOrigin;
-               this(ObjectDesc)[] -> acp.setUpOrigin;
+               (if slt[] <> none then
+                   origin[] -> slt.setUpOrigin
+                else
+                   origin[] -> sup.setupOrigin; 
+                   this(ObjectDesc)[] -> att.setUpOrigin;
+                   this(ObjectDesc)[] -> acp.setUpOrigin;
+               if);
                true -> done;
             #);
           check::
@@ -306,7 +323,14 @@ qStdBetaChecker: parseStdBetaModule
             #);
           theDesc::
             (#
-            do this(ObjectDesc)[] -> aDesc[]
+            do (if slt[] <> none then
+                   slt.scanBindings
+                   (# od: ^ObjectDesc; ODF:  ^ObjDescFrag
+                   do (current[]->ODF[]).OD[] -> aDesc[];
+                   #)
+                else
+                   this(ObjectDesc)[] -> aDesc[]
+               if)
             #);
           scanDecls:
             (#
@@ -340,9 +364,18 @@ qStdBetaChecker: parseStdBetaModule
                    (if false then
                        '**** Search:' -> traceCheck; NA.T[] -> traceCheckN;
                        '**   in:' -> traceCheckN;
-                       doPT -> traceCheckN;
+                       doPT -> putHeadN;
                    if);
-                   NA[] -> localSearch -> (dcl[],pn);
+                   (if slt[] <> none then
+                       '**** ObjectDesc:isSlot:'->dumpt;
+                       slt.scanBindings
+                       (# od: ^ObjectDesc; ODF:  ^ObjDescFrag
+                       do (current[]->ODF[]).OD[] -> od[];
+                          NA[] -> od.localSearch -> (dcl[],pn);
+                       #)
+                    else
+                       NA[] -> localSearch -> (dcl[],pn);
+                   if);
                    (if dcl[] = none then
                        (if origin[] <> none then
                            NA[] -> origin.search -> (dcl[],pn,on);
@@ -392,7 +425,7 @@ qStdBetaChecker: parseStdBetaModule
                        'in:' -> dumpTN; dopt -> dumpTN;
                        '**** found in forImp:'->dumpT; NA.dopt -> dumpTN; 
                    if);
-                   inxDecl[] -> dcl[]; 0 -> pn -> on;
+                   (*inxDecl[] -> dcl[];*) 0 -> pn -> on;
                 else
                    NA[] -> origin.search -> (dcl[],pn,on)
                if);
@@ -414,13 +447,15 @@ qStdBetaChecker: parseStdBetaModule
        #);
      NameApl::<
        (# check::
-            (# dcl: ^BetaDecl;
-            do (if false then
-                   'NameApl:check:'->traceCheck; doPT->traceCheckN;
+            (# dcl: ^BetaNAmeDecl; trace: @boolean
+            do (*'no_nyi'->N.T.equalNCS -> trace;*)
+               (if trace then
+                   'NameApl:check:'->dumpT; doPT->dumpT;
+                   origin.dopt -> putheadN;
                if);
                (if (N.T.length > 0) and not isSlot then 
-                   (if false then
-                       '**** AD:Search:'->traceCheck; N.T[]->traceCheckN;
+                   (if trace then
+                       '**** AD:Search:'->dumpT; N.T[]->dumpTN;
                    if);
                    (if origin[] <> none then
                        N[] -> origin.search -> (dcl[] -> ATd[],pn,on);
@@ -436,7 +471,10 @@ qStdBetaChecker: parseStdBetaModule
                            (#
                            do 'Did not find a declaration of: "'->msg;
                               N.dopt -> msg; '"'->msg
-                       #)if)
+                           #);
+                           '?'->Name->BetaNameDecl -> ATd[];
+                           errorDecl[] -> ATd.theDcl[]
+                       if)
                     else
                        'empty'->traceCheckN
                if)if);
@@ -449,10 +487,16 @@ qStdBetaChecker: parseStdBetaModule
                      (*ATd.dopt->putHeadN; *)
                      ATd.theDesc -> aDesc[] 
                 else
-                   (if N.T.length > 0 then
-                       '**** enforce:check:'->dumpT; dopt->putHeadN;
-                       check;
-                       restart L
+                     (if N.T.length > 0 then
+                         (if not N.beingChecked and not N.isChecked then
+                             '**** enforce:check:'->dumpT; dopt->putHeadN;
+                             check;
+                             restart L
+                          else
+                             '**** nameApl:theDecl:beingChecked:'->dumpT;
+                             dopt -> dumpTN;
+                             objDesc[] -> aDesc[]
+                         if);
                     else
                        (if implicitSuperOD[] <> none then
                            (if false then 'theDesc:implicitSuper:'->dumptN; if);
@@ -481,7 +525,7 @@ qStdBetaChecker: parseStdBetaModule
                                if)if);
                                (*'**   return:none:in:objDesc'->dumpTN*)
             if)if)if)if)#);
-          ATd: ^BetaDecl;
+          ATd: ^BetaNameDecl (*BetaDecl; *)
        #);
      Indexed::<
        (# theDesc:: 
@@ -494,15 +538,19 @@ qStdBetaChecker: parseStdBetaModule
             #);
           Check::
             (# predDesc: ^ObjectDesc
-            do (*'Remote:check:'->traceCheck; dopt -> dumpTN;*)
+            do (if false then
+                   'Remote:check:'->dumpT; dopt -> dumpTN;
+               if);
                scanSons
                (# AD: ^AttributeDenotation
-               do (*current.doPT -> dumpTN;*)
-                  (if not isFirst then
+               do (if not isFirst then
                       predDesc[] -> current.setUpOrigin
                   if);
                   (current[]->AD[]).check;
-                  AD.theDesc -> predDesc[]
+                  AD.theDesc -> predDesc[];
+                  (if false then
+                      '**   AD.theDesc:'->dumpT; predDesc.dopt -> putheadN;
+                  if)
             #)#);
           theDesc::
             (#
@@ -525,7 +573,7 @@ qStdBetaChecker: parseStdBetaModule
             if)#)#)
        #);
      findPredefinedDesc:
-       (# descName: ^Text;  ptn:  ^BetaPattern
+       (# descName: ^Text; dcl:  ^BetaNameDecl; ptn:  ^BetaPattern
        enter descName[]
        do (if false then
               'findPredefinedDesc:'->dumpT; descName[] -> dumpT;
@@ -534,17 +582,17 @@ qStdBetaChecker: parseStdBetaModule
           if);
           topModule.frags.scanSons
           (# i: @integer; objFrag: ^ObjDescFrag; 
-             att: ^Attributes; dcl:  ^BetaDecl; pn: @integer
+             att: ^Attributes;  pn: @integer
           do (*current.label -> dumpTN;*)
              (if (i + 1 -> i) = 1 then
                  (current[]->objFrag[]).OD.att[] -> att[];
                  descName[] -> Name -> att.localSearch -> (dcl[],pn);
                  (if dcl[] <> none then 
                      (if false then
-                         dcl.label->dumpT; dcl.IT.label -> dumpTN;
+                         dcl.label->dumpT; 
                          dcl.doPT -> dumpTN;
                      if);
-                     dcl.IT[] -> ptn[];
+                     dcl.theDcl.IT[] -> ptn[];
                      inner findPredefinedDesc;
                   else
                      '\n!!!! Compiler error: "'->puttext;
@@ -565,6 +613,7 @@ qStdBetaChecker: parseStdBetaModule
           (#
           do ptn.OD[] -> repetitionDesc[]
           #);
+          'errorName'->findPredefinedDesc(#do dcl.theDcl[] -> errorDecl[] #);
        #);
      markPrimitiveDescs:
        (#
