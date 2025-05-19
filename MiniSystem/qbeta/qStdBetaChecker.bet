@@ -21,7 +21,8 @@ qStdBetaChecker: parseStdBetaModule
      BetaFragments::<
        (# setUpOrigin::
             (#do (*'BetaFragments:setUpOrigin:'->traceCheckN;*)
-               scanSons(#do origin[] -> current.setUpOrigin #)
+               scanSons(#do origin[] -> current.setUpOrigin #);
+               true -> done
             #);
           check::
             (# 
@@ -33,8 +34,11 @@ qStdBetaChecker: parseStdBetaModule
      AttFrag::<
        (# setUpOrigin::
             (#
-            do (*'AttFrag:setUpOrigin:'->traceCheckN;*)
-               att.scanSons(#do origin[] -> current.setUpOrigin #)
+            do (if false then
+                   '**** AttFrag:setUpOrigin:'->dumpT; dopt -> putheadN;
+               if);
+               att.scanSons(#do origin[] -> current.setUpOrigin #);
+               true -> done
             #);
           check::
             (#
@@ -46,8 +50,13 @@ qStdBetaChecker: parseStdBetaModule
      ObjDescFrag::<
        (# setUpOrigin::
             (#
-            do (*'ObjDescFrag:setUpOrigin:'->dumpT; dopt->putheadN;*)
-               OD.scanSons(#do origin[] -> current.setUpOrigin #)
+            do (*'**** ObjDescFrag:setUpOrigin:'->dumpT; dopt->putheadN;*)
+               (if true then
+                   origin[] -> OD.setUpOrigin; 
+                   true -> done
+                else
+                   OD.scanSons(#do origin[] -> current.setUpOrigin #)
+               if)
             #);
           check::
             (#
@@ -95,9 +104,22 @@ qStdBetaChecker: parseStdBetaModule
        #);
      AttSlot::<
        (# setUpOrigin::
-            (#
-            do (*'AttSlot:setUpOrigin:'->traceCheck; doPT -> traceCheckN;*)
-               scanBindings(#do origin[] -> current.setUpOrigin #)
+            (# OD: ^ObjectDesc
+            do (if false then
+                    'AttSlot:setUpOrigin:'->dumpT; doPT -> dumpTN;
+                    (if origin[] = none then 
+                        'Origin is none:'->dumptn
+                     else
+                        origin.dopt -> putheadN
+               if)if);
+               scanBindings(#do origin[] -> current.setUpOrigin #);
+               (* origin may be a forImp - must be handled!!! *)
+               (if false and (origin[] = none) then
+                   '*** origin is none'->dumpT; dopt -> dumpTN;
+                   father.father.dopt -> putheadN
+                else
+                   this(AttSlot)[] -> (origin[]->OD[]).attSlots.add
+               if)
             #);
           check::
             (#
@@ -307,7 +329,13 @@ qStdBetaChecker: parseStdBetaModule
      ObjectDesc::<
        (# setUpOrigin::
             (#
-            do (*'ObjectDesc:setUpOrigin'->traceCheck; label->traceCheckN*)
+            do (if false then
+                   'ObjectDesc:setUpOrigin:'->dumpT; 
+                   (if (origin[] = none) then
+                       'origin=none:'->dumpTN
+                   if);
+                   dopt -> putheadN
+               if);
                (if slt[] <> none then
                    origin[] -> slt.setUpOrigin
                 else
@@ -354,7 +382,13 @@ qStdBetaChecker: parseStdBetaModule
             do NA[] -> att.localSearch -> (dcl[],pn);
                (if dcl[] = none then
                    NA[] -> superSearch -> (dcl[],pn);
-            if)#);
+               if);
+               (if dcl[] = none then
+                   NA[] -> attSlots.search -> (dcl[],pn);
+                   (if dcl[] <> none then
+                       '**** found:in:slots:'->dumpT; NA.dopt -> dumpTN;
+               if)if)
+            #);
           search::
             (# 
             do (if false then
@@ -381,6 +415,60 @@ qStdBetaChecker: parseStdBetaModule
                            NA[] -> origin.search -> (dcl[],pn,on);
                            on + 1 -> on
             if)if)if)#);
+          attSlots: @
+            (# aSlots: [3] ^AttSlot; top: @integer; trace: (#exit false #);
+               anAttSlot: ^AttSlot;
+               add:
+                 (#
+                 enter anAttSlot[]
+                 do (if (top + 1 -> top) > aSlots.range then
+                        aSlots.range -> aSlots.extend
+                    if);
+                    (if trace then
+                        '**** added slot: ' -> dumpt; anAttSlot.dopt -> dumptn;
+                        '**   in: ' -> dumptn; dopt -> putheadN;
+                    if);
+                    anAttSlot[] -> aSlots[top][]
+                 #);
+               scan:
+                 (# current: ^Attributes;
+                 do (for i: top repeat
+                         aSlots[i].scanBindings
+                         (# anAttFrag: ^AttFrag;
+                         do (if trace then
+                                '**   binding:'->dumpT; current.dopt -> dumpTN;
+                            if);
+                            (current[]->anAttFrag[]).att[] 
+                              -> this(scan).current[]; 
+                            inner scan
+                         #)
+                    for)
+                 #);
+               search:
+                 (# NA: ^Name; dcl: ^BetaNameDecl; pn: @integer
+                 enter NA[]
+                 do (if trace and (top > 0) then
+                        '**** attSlots:search:'->dumpT; NA.dopt -> dumpTN;
+                        print;
+                        '----'->dumptn;
+                    if);
+                    L:
+                      scan
+                      (#
+                      do NA[] -> current.localSearch -> (dcl[],pn);
+                         (if dcl[] <> none then
+                             (if trace then
+                                 '**   attSlots:found:'->dumpT; NA.dopt->dumpTN;
+                             if);
+                             leave L
+                      if)#)
+                 exit(dcl[],pn)
+                 #);
+               print:
+                 (#
+                 do (for i: top repeat aSlots[i].dopt -> dumpTN for)
+                 #)
+            #);
        #);
      ActionPart::<
        (# check::
