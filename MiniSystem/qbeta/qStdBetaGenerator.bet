@@ -9,6 +9,15 @@ qStdBetaGenerator: qStdBetaAllocator
             do '**** StdBetaModule:gen:'-> dumpT; moduleName.doPT->dumpTN;
             #)
        #);   
+     AttFrag::
+       (# gen:: (# do 'A'->cd.nop; cd.fcom(#do thename.dopt->TT #) #)
+       #);   
+     ObjDescFrag::
+       (# gen:: (# do 'B'->cd.nop; OD[] -> objTmpStack.add;  cd.fcom(#do thename.dopt->TT #); true -> done #)
+       #);   
+     DoPartFrag::
+       (# gen:: (# do 'C'->cd.nop;  cd.fcom(#do thename.dopt->TT #) #)
+       #);
      AttSlot::<
        (# gen::
             (#
@@ -18,12 +27,61 @@ qStdBetaGenerator: qStdBetaAllocator
      ObjDescSlot::<
        (# gen::
             (#
-            do scanBindings(#do current.gen #)
+            do  scanBindings
+               (# ODF: ^ObjDescFrag
+               do (current[] -> ODF[]).OD[] -> objTmpStack.add; 
+                  true -> done
+               #)
             #);
        #);
      ObjectDesc::
-       (# gen::
-            (#  T: ^Text
+       (# gen:: (#do this(ObjectDesc)[] -> objTmpStack.add #);
+          isExternal: BooleanValue
+            (# primNo: @integer
+            do (if sup.isExternal then
+                   cd.com(#do 'External:'->TT; dopt -> TT; #);
+                   L:
+                     acp.imps.scanSons
+                     (#
+                     do cd.com(#do current.doPP -> TT#);
+                        current.scanSons
+                        (# i: @integer
+                        do current.getPrimNo -> primNo;
+                           cd.com(#do primNo -> II #);
+                           true -> value;
+                           leave L
+                     #)#);
+                   (if primNo 
+                    // 2 then 
+                       ('put',2) -> cd.callPrim
+                    else
+                   if)
+               if)
+            #);
+          genClass:
+            (# isExternal: 
+                 (# primNo: @integer
+                 do (if sup.isExternal then
+                        '**** External:'->dumpT; dopt -> dumpTN;
+                        acp.doPP->dumpTN;
+                        L:
+                          acp.imps.scanSons
+                          (#
+                          do current.doPP -> dumpTN ;
+                             current.scanSons
+                             (# i: @integer
+                           do 
+                                current.getPrimNo -> primNo -> putint; newline;
+                                leave L
+                          #)#);
+                        (if primNo 
+                         // 2 then 
+                            ('put',2) -> cd.callPrim
+                         else
+                        if)
+                    if)
+                 #);
+               T: ^Text
             do (if false then
                    'ObjectDesc:gen:'-> dumpT; 
                if);
@@ -35,17 +93,17 @@ qStdBetaGenerator: qStdBetaAllocator
                    (if origin[] = none then
                        'betaenv'->T.append;
                     else
-                       'aFragment'->T.append
+                       'singular'->T.append
                if)if);
                (if false then T[] -> dumptn; if);
                
                (T[],descNo,false,1,originOff,'bobs',1,false,false)
                  -> cd.class;
                'B' -> cd.nop;
-               
+               att.gen; (* patterns must go on a lsit to be handled after *)
                acp.gen;
                
-               (objSize,false,0) -> cd.endclass
+               (objSize,false,0) -> cd.endclass;
                
        #)#);
      BetaNameDecl::
@@ -58,14 +116,43 @@ qStdBetaGenerator: qStdBetaAllocator
        (# storeItem::
             (#
             do (id[],off) -> cd.storeg
+            #);
+          gen::
+            (#
+            do (if OS.isSingular then OS[] -> objTmpStack.add if);
+               true -> done
             #)
        #);
      BetaPattern::
        (# storeItem::
             (#
-            do cd.fcom(#do 'invoke:'->TT; NS.dopt -> TQ #)
+            do cd.fcom(#do 'invoke:'->TT; NS.dopt -> TQ #);
+               (if OD.isExternal then
+                else
+                   (NS.doPT,OD.descNo,OD.objSize,0,false) -> cd.invoke
+               if)
+            #);
+          gen:: (#do OD[] -> objTmpStack.add; true -> done #);
+       #);
+     BetaVirtualPattern:: 
+       (# gen::
+            (#
+            do (if OS.isSingular then OS[] -> objTmpSTack.add if); true -> done
             #)
        #);
+     furtherBinding:: 
+       (# gen::
+            (#
+            do (if OS.isSingular then OS[] -> objTmpSTack.add if); true -> done
+            #)
+       #);
+     FinalBinding:: 
+       (# gen::
+            (#
+            do (if OS.isSingular then OS[] -> objTmpSTack.add if); true -> done
+            #)
+       #);
+          
      ActionPart::
        (# gen::
             (#
@@ -118,11 +205,40 @@ qStdBetaGenerator: qStdBetaAllocator
                true -> done
             #)
        #);
+     objTmpStack: @
+       (# ODs: [30] ^ObjectDesc; next,top: @integer;
+          add:
+            (# OD: ^ObjectDesc;
+            enter OD[]
+            do (if (top + 1 -> top) > ODs.range then
+                   ODs.range -> ODs.extend
+               if);
+               OD[] -> ODs[top][]
+            #);
+          gen:
+            (#
+            do (for i: top repeat
+                    ODs[i].gen
+            for)#);
+          genNext: BooleanValue
+            (#
+            do (if (next + 1 -> next) <= top then
+                   ODs[next].genClass;
+                   true -> value
+               if)
+            #)
+               
+       #);
      genStdBeta:
        (#
        do '**** Generator: StdBeta:'->dumptn;
           topModule.alloc;
           topModule.gen;
+          cd.fcom(#do 'objTmpStack.gen'->TT #);
+          L:
+            (if objTmpStack.genNext then
+                restart L
+            if)
        #);
      cd:  ^ObjectCode;
   enter cd[]
