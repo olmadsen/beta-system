@@ -102,8 +102,7 @@ qStdBetaGenerator: qStdBetaAllocator
                
                (T[],descNo,false,1,originOff,'bobs',1,false,false)
                  -> cd.class;
-               'B' -> cd.nop;
-               att.gen; (* patterns must go on a lsit to be handled after *)
+               att.gen; 
                acp.gen;
                
                (objSize,false,0) -> cd.endclass;
@@ -172,27 +171,120 @@ qStdBetaGenerator: qStdBetaAllocator
      ActionPart::
        (# gen::
             (#
-            do cd.fcom(#do 'ActionPart:'->TT; #);
-               (if imps[] <> none then imps.gen if)
+            do (if imps[] <> none then imps.gen if)
             #);
        #);
-     imperatives::
+     Imperatives::
        (# gen::
             (#
-            do cd.fcom(#do 'Imps:'->TT; #);
-               scanSons(#do current.gen #)
+            do scanSons(#do current.gen #)
             #)
+       #);
+     IfImp::
+       (# gen::
+            (# elseLab, Xlab,exitLab: @labelHandler.label
+            do cd.fcom(#do 'IfImp:gen:'->TT; dopt -> TT #);
+               cd.bcPos -> beginBCP;
+               exitlab.new;
+               (if elsePart[] <> none then
+                   elseLab.new; 
+                   elseLab -> Xlab
+                else
+                   exitLab -> xLab
+               if);               
+               cd.fcom(#do 'IfImp:eval:'->TT; eval.label->TT #);
+               (*'L' -> *) Eval.gen;
+                              
+               (if not thenPart.isNull then
+                   (* simpleif: (if e then I1 else I2 if *)
+                   (Xlab,Xlab) -> cd.jmpFalse; (* cd expects a Tlab and an Flab
+                                                * due to LLVM - must check *)
+                   thenPart.gen
+                else
+                   (Xlab[],exitLab[]) -> alt.select
+               if);
+               
+               (if not elsePart.isNull then
+                   (* Sometimes extra jmp here perhaps if thenPart.isNull *)
+                   exitLab -> cd.jmp;
+                   elseLab -> cd.defLab;                   
+                   elsePart.gen
+               if);
+               exitLab -> cd.defLab;
+               cd.bcPos -> endBCP               
+       #)#);
+     Alternatives::
+       (# select:
+            (# xLab,exitLAb: ^LabelHandler.label; 
+               A: ^Alternative;
+               nLab: @LabelHandler.label
+            enter(xLab[],exitLab[])
+            do cd.bcPos -> beginBCP;
+               scansons
+               (#
+               do current[] -> A[]; 
+                  (if isLast then
+                      (false,xLab[],exitLab[]) -> A.select
+                   else
+                      nLab.new;
+                      (true,nLab[],exitLab[]) -> A.select;
+                      nLab -> cd.defLab
+                  if)
+               #);
+               cd.bcPos -> endBCP;
+       #)#);
+     Alternative::
+       (# select:
+            (# double: @Boolean; xLab,elseLAb: ^LabelHandler.label;
+               tLab: @LabelHandler.label
+            enter(double,xLab[],elseLab[])
+            do cd.fcom(#do 'Alternative:'->TT; dopt -> TT #);
+               cd.bcPos -> beginBCP;
+               tLab.new;
+               (double,tLab[],xLab[]) -> sel.select;
+               tLab -> cd.defLab;
+               imps.gen;
+               elseLab -> cd.jmp;
+               cd.bcPos -> endBCP;
+       #)#);
+     Selections::
+       (# select:
+            (# double: @Boolean; tLab,xLab: ^LabelHandler.label;
+            enter(double,tLab[],xLab[])
+            do cd.bcPos -> beginBCP;
+               scansons
+               (# S: ^Selection
+               do current[] -> S[];
+                  (if isLast then
+                      (double,true,xLab[]) -> S.select 
+                   else
+                      (true,false,tLab[]) -> S.select
+                  if)
+               #);
+               cd.bcPos -> endBCP;
+       #)#);
+     Selection::
+       (# select:
+            (# double,isLast: @boolean; lab: ^LabelHandler.Label
+            enter(double,isLast,lab[])
+            do (if double then cd.double if);
+               (*'L' -> *) EV.gen;
+               lex.symbols.eq -> cd.op;
+               (if isLast then
+                   (lab,lab) -> cd.jmpFalse; (* check objectcode *)
+                   (if double then cd.vpop if);
+                else
+                   lab -> cd.jmpTrue
+            if)#);
        #);
      Evaluation::
        (# gen::
             (#
-            do (if true then
-                   cd.fcom(#do 'Eval:gen:'->TT; dopt -> TQ #)
-               if);
+            do cd.fcom(#do 'Eval:gen:'->TT; dopt -> TQ #);
                scanSons
                (#
                do (if isFirst then
-                      current.load;
+                      current.load
                    else
                       current.store
             if)#)#);
@@ -244,8 +336,7 @@ qStdBetaGenerator: qStdBetaAllocator
                    ATd.load
                 else
                    cd.fcom(#do 'NameApl:gen:ATd=none:'-> TT; dopt->TQ #)
-               if)
-            #);
+            if)#);
           store::
             (#
             do cd.pushThis;
@@ -254,12 +345,8 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
        #);     
      ConstExp::
-       (# gen::
-            (#
-            do cd.fcom(#do 'ConstExpr:gen:'->TT #);
-               cst.T.setpos; cst.T.getInt  -> cd.pushConst;
-            #);
-          load:: (#do cd.fcom(#do 'ConstExpr:load:'->TT #); gen #);
+       (# load:: (# do cst.T.setpos; cst.T.getInt  -> cd.pushConst #);
+          gen:: (#do load #);
        #);
      objTmpStack: @
        (# ODs: [30] ^ObjectDesc; next,top: @integer;
@@ -276,8 +363,17 @@ qStdBetaGenerator: qStdBetaAllocator
             do (if (next + 1 -> next) <= top then
                    ODs[next].genClass;
                    true -> value
-               if)
-            #)
+            if)#)
+       #);   
+     labelHandler: @
+       (# labCount: @integer;
+          label:
+            (# labNo: @integer;
+               new: (# do  labCount + 1 -> labCount -> labNo #);
+            enter labNo
+            exit labNo
+            #);
+          init: (# do 0 -> labCount #);
        #);
      genStdBeta:
        (#
