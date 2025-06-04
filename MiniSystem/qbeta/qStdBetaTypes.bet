@@ -1,0 +1,193 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'qStdBetaParser';
+---LIB:attributes---
+qStdBetaTypes: parseStdBetaModule
+  (# NX_error: (# exit 1 #);
+     QUA_error: (# exit 2 #);
+     QUA_runTimeCheck: (# exit 3 #);
+     single_type: type
+       (# OD: ^objectDesc;
+          theDesc:: (# do OD[] -> D[] #);
+          append::
+            (# L_TP: @list_type
+            do this(single_type)[] -> L_TP.add;
+               L_TP[] -> TP.appendToList
+               (*L_TP[] *)-> returnTP[]
+            #);
+          appendToList::
+            (# L_TP: ^list_type
+            do TPx[] -> L_TP[];
+               this(single_type)[] -> L_TP.add;
+               L_TP[] -> returnTP[]
+            #);
+       enter OD[] 
+       #);
+     value_type: single_type 
+       (# isValue::trueValue;
+          print:: (# do'value' -> out.puttext #);
+          match:: 
+            (# 
+            do (if (left[] <> none) and  not left.isValue and not left.isPrimitive then
+                   NX_error -> value
+               if)
+            #)
+       #);
+     ref_type: single_type
+       (# isRef:: trueValue;   
+          print:: (# do 'ref' -> out.puttext #);
+          match::
+            (# 
+            do (if (left[] <> none) and not left.isNone and not left.isRef and not left.isPrimitive then
+                   NX_error -> value
+                else
+                   (if not left.isNone and left.isRef then
+                      (* '\n*** qua check:'->putline;
+                       (left.theDesc).doPT -> putline; '<'->put; OD.doPT -> putline;*)
+                       (if ((left.theDesc,OD[]) -> quaCheck) then
+                           (if ((OD[],left.theDesc) -> quaCheck) then
+                               QUA_error -> value
+                            else
+                               QUA_runTimeCheck -> value
+                           if);
+                           (*(left.theDesc).doPT -> putline; OD.doPT -> putline *)
+                       if)
+               if)if)
+            #);
+          matchList:: (#do NX_error -> value #)
+       #);
+          strucRef_type: single_type
+       (# isStrucRef:: trueValue;           
+          print:: (# do 'struc' -> out.puttext #) ;
+          match::
+            (# left_R: ^strucRef_type
+            do (if (left[] <> none) and not left.isNone and not left.isStrucRef and not left.isPrimitive then
+                   NX_error -> value
+                else
+                   (if left.isStrucRef then
+                      (* '\n*** struc: qua check:'->putline;
+                       (left.theDesc).doPT -> putline; '<'->put; OD.doPT -> putline*)
+                       (if ((left.theDesc,OD[]) -> quaCheck) then
+                           (if ((OD[],left.theDesc) -> quaCheck) then
+                               QUA_error -> value
+                            else
+                               QUA_runTimeCheck -> value
+                           if);
+                           (*(left.theDesc).doPT -> putline; OD.doPT -> putline *)
+                       if)
+               if)if)
+            #);
+          matchList:: (#do NX_error -> value #)
+       #);
+     none_type: single_type
+       (# isNone:: trueValue;
+          print:: (# do 'none' -> out.puttext #);
+          match:: (# do NX_error -> value #);
+          matchList:: (#do NX_error -> value #)
+       #);
+     list_type: type
+       (# elms: [3] ^type; top: @integer;
+          isValue::
+            (#
+            do (if top = 1 then elms[1].isValue -> value  if)
+            #);
+          isRef::
+            (#
+            do (if top = 1 then elms[1].isRef -> value if)
+            #);
+          theDesc::(#do (if top = 1 then elms[1].theDesc -> D[] if)#);
+          match::
+            (#
+            do (if top = 1 then
+                   left[] -> elms[1].match -> value
+                else 
+                   this(list_Type)[] -> left.matchList -> value
+               if)
+            #);
+          matchList::
+            (# rTP: ^List_Type
+            do TPx[] -> rTP[];
+               L:
+                 (if top = rTP.top then
+                     (for i: top repeat 
+                          (if (elms[i][] -> rTP.elms[i].match) = NX_error then
+                              leave L
+                     if)for)
+                  else
+                     NX_error -> value
+                 if)
+            #);
+          add:
+            (# TP: ^type
+            enter TP[]
+            do (if (top+1-> top) > elms.range then
+                   elms.range -> elms.extend
+               if);
+               TP[] -> elms[top][]
+            #);
+          scan: 
+            (# current: ^type 
+            do (for i: top repeat elms[i][] -> current[]; inner for)
+            #);
+          append::
+            (#
+            do this(list_type)[] -> TP.appendTolist
+               (*this(list_type)[] *)-> returnTP[]
+            #);
+          appendToList::
+            (# L_TP: ^list_type
+            do TPx[] -> L_TP[];
+               (for i: L_TP.top repeat
+                    L_TP.elms[i][] -> add
+               for);
+               this(list_type)[] -> returnTP[]
+            #);
+          print:: 
+            (# 
+            do 'list(' -> out.puttext;
+               (for i: top repeat 
+                    (if elms[i][] = none then
+                        'none' -> out.puttext
+                     else
+                        elms[i].print -> out.puttext
+                    if);
+                    (if i < top then ',' -> out.put if)
+               for);
+               ')' -> out.put
+            #)
+       #);
+     primitive_type : type
+       (# isPrimitive:: trueValue;
+          print:: (# do 'primitive_type' -> out.puttext #);
+       #);
+     null_type: type
+       (# print:: (#do 'null' -> out.puttext #);
+          match:: (# do NX_error -> value #);
+       #);
+     quaCheck: booleanValue
+       (# left,right,OD: ^objectDesc
+       enter(left[],right[])
+       do left[] -> OD[];
+          loop:
+            (if OD[] = right[] then (* ok *)
+             else 
+                (if not (left.isChecked and right.isChecked) then
+                    (* OBS! QuaCheck is not complete
+                     * 'Not checked' -> putline;*)
+                    'OOPS'->putline;
+                    leave loop
+                if);
+                OD.superDesc[] -> OD[]; 
+                (if (OD[] = none) or (OD[] = superObject[]) then
+                    (if not ((OD[] = none) and (right[] = superObject[])) then
+                        true -> value
+                    if)
+                 else 
+                    restart loop
+            if)if)
+       #);
+     ObjectDesc::<
+       (# superDesc: ^ObjectDesc;
+       #);
+     superObject: ^ObjectDesc; (* perhaps not here *)
+  do inner
+  #)

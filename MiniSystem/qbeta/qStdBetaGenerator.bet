@@ -63,7 +63,7 @@ qStdBetaGenerator: qStdBetaAllocator
                     else
             if)if)#);
           genClass:
-            (# isExternal: 
+            (# isExternalXXX: 
                  (# primNo: @integer
                  do (if sup.isExternal then
                         '**** External:'->dumpT; dopt -> dumpTN;
@@ -102,10 +102,19 @@ qStdBetaGenerator: qStdBetaAllocator
                
                (T[],descNo,false,1,originOff,'bobs',1,false,false)
                  -> cd.class;
-               att.gen; 
-               acp.gen;
-               
-               'D' -> cd.rtn;
+               cd.bcPos -> beginBCP;
+               (* gen super, save origin, vdtTableCopy, etc  *)
+               (if false then ('super',501) -> cd.exeAlloc; if);
+               (if slt[] = none then
+                   att.gen;
+                   cd.markEnterE;
+                   (* enter.gen *)
+
+                   (false (*(superDesc[] <> none)*)) -> cd.actions;
+                   acp.gen;
+
+                   'D' -> cd.rtn;
+               if);
                (objSize,false,0) -> cd.endclass;
             #);
           goOrigin::
@@ -116,13 +125,26 @@ qStdBetaGenerator: qStdBetaAllocator
             if)#)
        #);
      BetaDecl::
-       (# gen:: (# do NS.gen; IT.gen #)
+       (# gen:: (# do NS.gen; IT.gen #);
+          doAlloc::
+            (#
+            do cd.fcom
+               (#do 'BetaDecl:doAlloc:'->TT; NS.doPT->TQ; IT.label->TT #);
+               IT.doAlloc
+            #);
+          
        #);
      BetaNameDecl::
        (# load:: (# do (N.T[],off) -> theDcl.IT.loadItem #);
           store::
             (#
             do (N.T[],off) -> theDcl.IT.storeItem
+            #);
+          doAlloc::
+            (#
+            do cd.fcom
+               (#do 'NameDecl:doAlloc:'->TT; N.T[]->TQ; theDcl.label->TT #);
+               theDcl.doAlloc
             #);
        #);
      StaticItem::
@@ -159,6 +181,11 @@ qStdBetaGenerator: qStdBetaAllocator
                if)
             #);
           gen:: (#do OD[] -> objTmpStack.add; #);
+          doAlloc::
+            (#
+            do cd.fcom(#do 'PTN:doAlloc:'->TT; NS.dopt -> TQ #);
+               (NS.doPT,OD.descNo,false) -> cd.alloc
+            #);
        #);
      BetaVirtualPattern:: 
        (# gen::
@@ -182,8 +209,24 @@ qStdBetaGenerator: qStdBetaAllocator
      ActionPart::
        (# gen::
             (#
-            do (if imps[] <> none then imps.gen if)
+            do cd.bcPos -> beginBCP;
+               enterP.gen;
+               (if imps[] <> none then imps.gen if);
+               exitP.gen;
+               cd.bcPos -> endBCP
             #);
+       #);
+     EnterPart::
+       (# gen::
+            (# 
+            do cd.bcPos -> beginBCP;
+               (if eval[] <> none then
+                   cd.enterP; (* generate no code *)
+                   (*'R' -> *) eval.gen;
+                   (* cd.rtn *)
+               if);
+               cd.bcPos -> endBCP;
+            #)
        #);
      Imperatives::
        (# gen::
@@ -191,6 +234,16 @@ qStdBetaGenerator: qStdBetaAllocator
             do scanSons(#do current.gen #)
             #)
        #);
+     ExitPart::
+       (# gen::
+            (#
+            do cd.bcPos -> beginBCP;
+               cd.markExitE;
+               (* do gen exit-part *)
+               cd.bcPos -> endBCP;
+            #)
+       #);
+
      IfImp::
        (# gen::
             (# elseLab, Xlab,exitLab: @labelHandler.label
@@ -302,8 +355,17 @@ qStdBetaGenerator: qStdBetaAllocator
           load:: (#do gen #)
        #);
      PatternDen::
-       (# load:: (#do AD.load #);
+       (# load:: 
+            (#
+            do cd.fcom(#do 'PatternDen:load:'-> TT; AD.label->TQ #);
+               AD.load 
+            #);
           store:: (#do AD.store #);
+          doAlloc::
+            (#
+            do cd.fcom(#do 'PatternDen:doAlloc:' -> TT #);
+               AD.doAlloc
+            #);
        #);
      ObjectEvaluation::
        (# load:: (# do OS.load #);
@@ -313,7 +375,30 @@ qStdBetaGenerator: qStdBetaAllocator
        (# gen::
             (#
             do cd.fcom(#do 'BinExp:gen:'->TT #);
-               lE.load; rE.load; op -> cd.op; 
+               lE.load; rE.load; 
+               (* check if lE/rE-type is value or ref: refEq, etc *)
+               (if op
+                // lex.symbols.eq then
+                   (if true
+                    // (lE.exitType).isRef then
+                       cd.req
+                    // (lE.exitType).isStrucRef then
+                       cd.seq
+                    else
+                       op ->  cd.op;
+                   if)
+                // lex.symbols.ne then
+                   (if true 
+                    // (lE.exitType).isRef  then
+                       cd.rne                       
+                    // (lE.exitType).isStrucRef then
+                       cd.sne
+                    else
+                       op -> cd.op;
+                   if)                   
+                else
+                   op -> (*lex.symbols.asText ->*) cd.op;
+               if);
             #);
           load:: (#do cd.fcom(#do 'BinExp:load:'->TT #); gen #);
        #);
@@ -331,7 +416,31 @@ qStdBetaGenerator: qStdBetaAllocator
             do OV.load
             #)
        #);
-          
+     DynamicObjectGeneration::
+       (# load::
+            (#
+            do cd.fcom
+               (#do 'DynamicObjectGeneration:gen:'->TT; OS.doPT->TT;
+                  (if isRef then '[]' -> TT if);
+                  OS.label -> TQ
+               #);
+               OS.doAlloc; (* is this load or an alloc method? *)
+               (* generator:
+                * OS.loadOrigin
+                * OS.doAlloc
+                * perhaps LMR since perhaps enter or exit must be executed
+                *)
+            #);
+       #);
+     ThisObject::<
+       (# load::
+            (#
+            do cd.fcom(#do 'ThisObject:load:'->TT; AD.doPT->TT #);
+               (* probably not AD.load
+                * push adr of enclosing AD
+                *)
+            #);
+       #);
      EvaluationList::<
        (# load::
             (#
@@ -363,6 +472,11 @@ qStdBetaGenerator: qStdBetaAllocator
             do cd.pushThis;
                on -> origin.goOrigin;
                ATd.store;
+            #);
+          doAlloc::
+            (#
+            do cd.fcom(#do 'NameApl:doAlloc:' -> TT; ATd.label -> TT  #);
+               ATd.doAlloc
             #);
        #);     
      ConstExp::
