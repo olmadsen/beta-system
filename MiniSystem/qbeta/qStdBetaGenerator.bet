@@ -85,7 +85,7 @@ qStdBetaGenerator: qStdBetaAllocator
                         if)
                     if)
                  #);
-               T: ^Text
+               T,orgId: ^Text; orgDescNo: @integer
             do cd.fcom(#do 'ObjectDesc:gen:'-> TT #);
 
                '_StdBeta_'-> T[];
@@ -100,29 +100,56 @@ qStdBetaGenerator: qStdBetaAllocator
                if)if);
                cd.fcom(#do 'ObjectDesc:gen:'-> TT; T[] -> TQ #);
                
-               (T[],descNo,false,1,originOff,'bobs',1,false,false)
-                 -> cd.class;
-               cd.bcPos -> beginBCP;
-               (* gen super, save origin, vdtTableCopy, etc  *)
-               (if false then ('super',501) -> cd.exeAlloc; if);
-               (if slt[] = none then
-                   att.gen;
-                   cd.markEnterE;
-                   (* enter.gen *)
-
-                   (false (*(superDesc[] <> none)*)) -> cd.actions;
-                   acp.gen;
-
-                   'D' -> cd.rtn;
+               (if (superDesc[] <> none) and not superDesc.done then
+                   (* pretty ad hoc - since we copy the VDtable from super, 
+                    * code must have been generated for super; 
+                    * done is introduced to handle this. 
+                    * But fix it
+                    *)
+                   (*sup.name -> *) superDesc.genClass;
+                   superDesc.descNo -> orgDescNo;
+                   'origin' -> orgId[];
+                else
+                   '' -> orgId[]
                if);
-               (objSize,false,0) -> cd.endclass;
+               (if not done then
+                   true -> done;
+                   (T[],descNo,false,1,originOff,orgId[],orgDescNo,false,false)
+                     -> cd.class;
+                   cd.bcPos -> beginBCP;
+                   (* gen super, save origin, vdtTableCopy, etc  *)
+                   (if superDesc[] <> none then
+                       (if false then
+                           '**** vdtTableCopy:'->dumpt; 
+                           descNo -> putint; ' ' -> put;
+                           superDesc.descNo -> putint; ' ' -> put;
+                           dopt -> putHeadN;
+                           '**    super:'->dumpTN;
+                           superDesc.dopt -> putheadN;
+                       if);
+                       superDesc.descNo  -> cd.vdtTableCopy;
+                   if);
+                   (if false then ('super',501) -> cd.exeAlloc; if);
+                   (if slt[] = none then
+                       att.gen;
+                       cd.markEnterE;
+                       (* enter.gen *)
+                       
+                       (false (*(superDesc[] <> none)*)) -> cd.actions;
+                       acp.gen;
+                       
+                       'D' -> cd.rtn;
+                   if);
+                   (objSize,false,0) -> cd.endclass;
+               if)
             #);
           goOrigin::
             (#
             do (if on > 0 then
                    ('origin',originOff) -> cd.rpushg;
                    on - 1 -> origin.goOrigin
-            if)#)
+            if)#);
+          done: @boolean
        #);
      BetaDecl::
        (# gen:: (# do NS.gen; IT.gen #);
@@ -140,7 +167,12 @@ qStdBetaGenerator: qStdBetaAllocator
           
        #);
      BetaNameDecl::
-       (# load:: 
+       (# gen::
+            (#
+            do cd.fcom(#do 'NameDecl:'->TT; N.T[]->TQ #);
+               theDcl.IT.gen
+            #);
+          load:: 
             (# 
             do cd.fcom
                (#do 'NameDecl:load:'->TT; N.T[]->TQ; theDcl.label->TT #);
@@ -212,20 +244,64 @@ qStdBetaGenerator: qStdBetaAllocator
      BetaVirtualPattern:: 
        (# gen::
             (#
-            do (if OS.isSingular then OS[] -> objTmpSTack.add if);
-            #)
+            do cd.fcom(#do 'VirtualPtn:doAlloc:'->TT; NS.dopt -> TQ; #);
+               (if OS.isSingular then OS[] -> objTmpSTack.add if);
+               NS.scanSons
+               (# ND: ^BetaNameDecl
+               do ((current[]->ND[]).off,OS.getDescNo,false,'LLVMsig') 
+                    -> cd.vdtTable;
+               #)
+            #);
+          doAlloc::
+            (# 
+            do cd.fcom(#do 'VirtualPtn:doAlloc:'->TT; NS.dopt -> TQ;
+                         'dispatch needed'->TQ #);
+               (if true then
+                   NS.scanSons
+                   (# ND: ^BetaNameDecl
+                   do current[]->ND[];
+                      (ND.doPT,ND.off,0,false) -> cd.invokeV;
+                      (* 0 is noOfRefArgs - must be defined *)
+                   #)
+                else
+                   (NS.doPT,OS.getDescNo,false) -> cd.alloc
+               if)
+            #);
        #);
      furtherBinding:: 
        (# gen::
             (#
-            do (if OS.isSingular then OS[] -> objTmpSTack.add if);
-            #)
+            do cd.fcom(#do 'FurtherPtn:doAlloc:'->TT; NS.dopt -> TQ; #);
+               (if OS.isSingular then OS[] -> objTmpSTack.add if);
+               NS.scanSons
+               (# ND: ^BetaNameDecl
+               do ((current[]->ND[]).off,OS.getDescNo,false,'LLVMsig') 
+                    -> cd.vdtTable;
+               #)
+            #);
+          doAlloc::
+            (#
+            do cd.fcom(#do 'FurtherPtn:doAlloc:'->TT; NS.dopt -> TQ;
+                      'dispatch needed'->TQ #);
+               (NS.doPT,OS.getDescNo,false) -> cd.alloc
+            #);
        #);
      FinalBinding:: 
        (# gen::
             (#
-            do (if OS.isSingular then OS[] -> objTmpSTack.add if);
-            #)
+            do cd.fcom(#do 'FinalPtn:doAlloc:'->TT; NS.dopt -> TQ; #);
+               (if OS.isSingular then OS[] -> objTmpSTack.add if);
+               NS.scanSons
+               (# ND: ^BetaNameDecl
+               do ((current[]->ND[]).off,OS.getDescNo,false,'LLVMsig') 
+                    -> cd.vdtTable;
+               #)
+            #);
+          doAlloc::
+            (#
+            do cd.fcom(#do 'FinalPTN:doAlloc:'->TT; NS.dopt -> TQ #);
+               (NS.doPT,OS.getDescNo,false) -> cd.alloc
+            #);
        #);
           
      ActionPart::
@@ -377,7 +453,12 @@ qStdBetaGenerator: qStdBetaAllocator
           load:: (#do gen #)
        #);
      PatternDen::
-       (# load:: 
+       (# gen::
+            (#
+            do cd.fcom(#do 'PatternDen:gen:'->TT; AD.dopt->TQ #);
+               AD.gen
+            #);
+          load:: 
             (#
             do cd.fcom(#do 'PatternDen:load:'-> TT; AD.label->TQ #);
                AD.load 
@@ -385,7 +466,7 @@ qStdBetaGenerator: qStdBetaAllocator
           store:: (#do AD.store #);
           doAlloc::
             (#
-            do cd.fcom(#do 'PatternDen:doAlloc:' -> TT #);
+            do cd.fcom(#do 'PatternDen:doAlloc:'->TT; AD.label->TT; dopt->TT #);
                AD.doAlloc
             #);
        #);
@@ -478,7 +559,12 @@ qStdBetaGenerator: qStdBetaAllocator
        (# load:: (#do cd.pushNone #)
        #);
      NameApl::
-       (# load::
+       (# gen::
+            (#
+            do cd.fcom(#do 'nameApl:gen:'->TT; N.dopt-> TQ #);
+               ATd.gen
+            #);
+          load::
             (#
             do cd.fcom(#do 'NameApl:load:'-> TT; ATd.label->TT; dopt->TQ #);
                cd.pushThis;
@@ -500,7 +586,21 @@ qStdBetaGenerator: qStdBetaAllocator
             do cd.fcom(#do 'NameApl:doAlloc:' -> TT; ATd.label -> TT  #);
                ATd.doAlloc
             #);
-       #);     
+       #);   
+     Remote::
+       (# doAlloc::
+            (#
+            do cd.fcom(#do 'Remote:doAlloc:'->TT; dopt -> TT #);
+               scanSons
+               (#
+               do (if not isLast then
+                      current.load
+                   else
+                      current.doAlloc
+               if)#)
+            #)
+       #);
+          
      ConstExp::
        (# load:: (# do cst.T.setpos; cst.T.getInt  -> cd.pushConst #);
           gen:: (#do load #);
