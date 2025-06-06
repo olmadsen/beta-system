@@ -4030,8 +4030,9 @@ bool traceThreads = true;
 #endif        
         break;
       case saveBETAworld:
+	arg1 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"saveBETAworld\n");
+	fprintf(trace,"saveBETAworld %i\n",arg1); 
 #endif
 	X = rPop(thisStack); // should be assigned to eventprocessor.fields[1][]
 	thisBlock->world = X;

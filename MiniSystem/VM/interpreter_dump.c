@@ -269,7 +269,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"doEventQ ");
 	break;
       case saveBETAworld:
-	fprintf(trace,"saveBETAworld ");
+	fprintf(trace,"saveBETAworld %i",op1(bc,&glsc));
 	break;
       case saveStringOrigin:
 	fprintf(trace,"saveStringOrigin ");
