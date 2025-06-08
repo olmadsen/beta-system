@@ -4030,7 +4030,7 @@ bool traceThreads = true;
 #endif        
         break;
       case saveBETAworld:
-	arg1 = op1(bc,&glsc);
+	arg1 = op2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"saveBETAworld %i\n",arg1); 
 #endif

@@ -867,10 +867,10 @@ betaVM:
             (# origin,callee,Y: ^objDesc.template; descNo: @integer; 
                isObj: @boolean
             enter(origin[],descNo,isObj)
-            do (*'Alloc: ' -> puttext; descNo -> putint; newline;*)
+            do 'Alloc: ' -> out.puttext; descNo -> out.putint;
                (descNo,isObj,0,0) -> allocTemplate -> callee[];
-               (* '\nAlloc: ' -> puttext; thisObj.myDescInx -> putint;
-                * ' lsc: ' -> puttext; glsc -> putint; newline; *)
+               '\nAlloc: ' -> out.puttext; thisObj.myDescInx -> out.putint;
+               ' lsc: ' -> out.puttext; glsc -> out.putint; ' '->out.put;
                callee.myId -> out.puttext; 
                (thisCode.descInx,glsc) -> thisObj.saveReturn;
                
@@ -880,11 +880,14 @@ betaVM:
                origin[] -> callee.rpush;  (* origin *)
                descs.OD[descInx].BC.allocE -> glsc;
                callee[] -> thisStack[] -> thisObj[];
+               ('alloc:end:thisObj',true,out[]) -> thisObj.dump;
+               ('alloc:end:thisStack',true,out[]) -> thisStack.dump;
                (if origin[] = root[] then
                    (* Perhaps just handled by saveBETAworld? *)
                    callee[] -> world[];
                if);
                (Y[],thisObj[],origin[],descNo,glsc,isObj,false) -> allocEvent;
+            exit callee[]
             #);
           invokeVal:
             (# descNo,staticOff,isValueObj: @integer; 
@@ -1049,7 +1052,7 @@ betaVM:
                descInx -> callee.myDescInx;
                callee[] -> descs.ObjPool;
                
-               (*'\nAlloc: ' -> puttext; thisObj.myDescInx -> putint;
+               (*'\nAllocIndexed: ' -> puttext; thisObj.myDescInx -> putint;
                 ' lsc: ' -> puttext; glsc -> putint; newline;*)
                (thisCode.descInx,glsc) -> thisObj.saveReturn;
                
@@ -1619,7 +1622,7 @@ betaVM:
                          
                          thisStack.rpop -> callee[];
                          (if callee[] = none then 
-                             6 -> fatalError ;
+                             6 -> fatalError;
                              leave doCall
                          if);
                          stacksToOut;
@@ -1648,7 +1651,8 @@ betaVM:
                               // 'D' then 
                                  thisCode.doE -> glsc;
                                 
-                                 (Y[],thisObj[],thisObj.myOrigin,0,glsc, withEnablingSuspend)
+                                 (Y[],thisObj[],thisObj.myOrigin,0,glsc
+                                 ,withEnablingSuspend)
                                    -> doEvent  
                               // 'X' then
                                  thisCode.exitE -> glsc
@@ -1658,7 +1662,7 @@ betaVM:
                           else '   resume:\n' -> out.puttext;
                              (if inx
                               // 'N' then
-                                 (*(':resume:N:',true,screen[]) -> callee.dump;*)
+                                 (*(':resume:N:',true,screen[])->callee.dump;*)
                                  thisObj[] -> Y[] -> callee.rpush; 
                                  thisStack[] -> callee.rpush;
                                  callee[] -> thisObj[]; 
@@ -1666,7 +1670,7 @@ betaVM:
                                  (*thisObj.mySuperCode -> thisCode[]; *)
                                  thisCode.enterE -> glsc; 
                               // 'X' then
-                                 (':coroutine:exit',false,out[]) -> thisObj.dump;
+                                 (':coroutine:exit',false,out[]) ->thisObj.dump;
                                  thisObj[] -> Y[] -> callee.rpush;
                                  thisStack[] -> callee.rpush;
                                  callee[] -> thisObj[];
@@ -1698,16 +1702,14 @@ betaVM:
                                  thisObj.lsc -> glsc; 
                                  (* 'descInx: ' -> puttext; descInx -> putint;
                                   * ' glsc: ' ->puttext; glsc->putint; newline*)
-                             if)
-                         if);
-                      #);
+                      if)if)#);
                     doSuspend:
                       (# callee: ^objDesc.template;
 		         preemptive: @boolean;
                       enter (callee[], preemptive)
                       do callee.myId -> out.puttext;
                          stacksToOut;
-                         glsc -> thisObj.lsc; (* why is saveReturn not enough? *)
+                         glsc -> thisObj.lsc; (* why is saveReturn not enough?*)
                          (if (thisObj[] <> thisStack[]) then
                              '\n\n**** external suspend: thisObj<>thisStack'
                                ->out.putline;
@@ -2825,7 +2827,10 @@ betaVM:
                         thisObj.restoreReturn -> (descInx,glsc); 
                         descs.OD[descInx].bc[] -> thisCode[]; 
                         descs.OD[descInx].isValueObj ->isValObj;
-                        (if not isXbeta then
+                        (if (inx = 'A') or not isXbeta then
+                            (* tricky: 'A' is used for StdBeta and not for qBeta
+                             * for StdBeta we must push X, thereturning object
+                             *)
                             X[] -> thisStack.rpush; 
                         if);
                         (if inx // 'A' // 'D' then
@@ -3605,14 +3610,31 @@ betaVM:
                         thisStack.fpop -> thisStack.vpush
                      // codes.saveBETAworld then
                         'saveBETAworld' -> exe; 
-                        op1 -> inx; (* inx=1: hasBetaModules *)
+                        op2 -> descInx;
                         (1,thisStack.rpop) -> eventProcessor.rput;
                         (if IsXbeta then
                             (* Why not for not isXbeta? See also Alloc *)
                             1 -> eventProcessor.rget -> world[]
                         if);
-                        (if inx = 1 then
-                            '**** alloc betaenv'->putline
+                        (if descInx > 0 then
+                            '**** alloc betaenv'->putline;
+                            (* perhaps save thisObj, since defined by alloc *)
+                            ('thisObj',true,out[]) -> thisObj.dump;
+                            ('thisStack',true,out[]) -> thisObj.dump;
+                            out.newline;
+                            (none(*origin*),descInx,true) 
+                              -> alloc;
+                            
+                            ('betaenv',true,out[]) -> thisObj.dump;
+                            (*thisObj[] -> thisStack.rPush;*)
+                            '\nbefore:doCall:'->out.putline;
+                            (*doCall;
+                            '\nafter:doCall:'->out.putline;
+                            thisObj.rpop; ( * pop origin = none * )
+                            thisObj.rpop -> thisStack[];
+                            thisObj.rpop -> thisObj[];*)
+                            ('BetaWorld',true,out[]) -> thisObj.dump;
+                            'end saveBetaWorld'->out.putline
                         if)
                      // codes.saveStringOrigin then
                         'saveStringOrigin' -> exe;
