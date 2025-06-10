@@ -46,10 +46,11 @@ qStdBetaGenerator: qStdBetaAllocator
      DoPartSlot::<
        (# gen::
             (#
-            do cd.fcom(#do 'DoPartSlot:gen:'->TT; theName.dopt -> TT #);
+            do cd.com(#do 'DoPartSlot:gen:'->TT; theName.dopt -> TT #);
                scanBindings
                (# DP: ^DoPartFrag
-               do cd.fcom(#do 'call:gen:'->TT; current.dopt->TT #);
+               do cd.com(#do 'call:gen:'->TT; theName.dopt->TT ;
+                            (*current.dopt->TT*) #);
                   (current[] -> DP[]).gen
                #)
             #);
@@ -94,7 +95,33 @@ qStdBetaGenerator: qStdBetaAllocator
                     else
             if)if)#);
           genClass:
-            (# T,orgId,N: ^Text; orgDescNo: @integer; org: ^ObjectDesc
+            (# handleSuper:
+                 (#
+                 do (if superDesc[] <> none then
+                        (if not sup.isThisBlockLevel then
+                            ('origin',originOff) -> cd.rstore; 
+                            (*sup.loadOrigin -> N[]; *)
+                            cd.pushThis; (* ??? *)
+                            'super' -> N[] (* fix *)
+                        if);
+                        (N[],superDesc.descNo) -> cd.exeAlloc;
+                        cd.rpop;
+                        (N[],superDesc.descNo)  -> cd.super; 
+                        (if false then
+                            '**** vdtTableCopy:'->dumpt; 
+                            descNo -> putint; ' ' -> put;
+                            superDesc.descNo -> putint; ' ' -> put;
+                            dopt -> putHeadN;
+                            '**    super:'->dumpTN;
+                            superDesc.dopt -> putheadN;
+                        if);
+                        superDesc.descNo  -> cd.vdtTableCopy;
+                        (* innerInx - fix *)
+                     else
+                        ('origin',originOff) -> cd.rstore; (* save origin *)
+                    if);
+                 #);
+               T,orgId,N: ^Text; orgDescNo: @integer; org: ^ObjectDesc
             do 'StdBeta$'-> T[];
                (if NS[] <> none then
                    NS.scanSons(#do current.dopt -> T.append #)
@@ -122,55 +149,39 @@ qStdBetaGenerator: qStdBetaAllocator
                if);
                (if not done then
                    true -> done;
-                   (T[],descNo,false,(topSuper).descNo
-                   ,originOff,orgId[],orgDescNo,false,false)
-                     -> cd.class;
-                   cd.bcPos -> beginBCP;
-                   (* gen super, save origin, vdtTableCopy, etc  *)
-                   (if superDesc[] <> none then
-                       (if not sup.isThisBlockLevel then
-                           ('origin',originOff) -> cd.rstore; (* save origin *)
-                           (*sup.loadOrigin -> N[]; *)
-                           cd.pushThis; (* ??? *)
-                           'super' -> N[] (* fix *)
-                       if);
-                       (N[],superDesc.descNo) -> cd.exeAlloc;
-                       cd.rpop;
-                       (N[],superDesc.descNo)  -> cd.super; 
-                       (if false then
-                           '**** vdtTableCopy:'->dumpt; 
-                           descNo -> putint; ' ' -> put;
-                           superDesc.descNo -> putint; ' ' -> put;
-                           dopt -> putHeadN;
-                           '**    super:'->dumpTN;
-                           superDesc.dopt -> putheadN;
-                       if);
-                       superDesc.descNo  -> cd.vdtTableCopy;
-                       (* innerInx - fix *)
-                    else
-                       ('origin',originOff) -> cd.rstore; (* save origin *)
-                   if);
-                   (if false then ('super',501) -> cd.exeAlloc; if);
                    (if slt[] = none then
+                       (T[],descNo,false,(topSuper).descNo
+                       ,originOff,orgId[],orgDescNo,false,false)
+                         -> cd.class;
+                       cd.bcPos -> beginBCP;
+                       (* gen super, save origin, vdtTableCopy, etc  *)
+                       handleSuper;
+                       (if false then ('super',501) -> cd.exeAlloc; if);
                        att.gen;
                        (* check generator: more may be need here including 
                         * for-fields
                         *)
                        'A' -> cd.rtn; 
-
+                       
                        cd.markEnterE;
                        (* enter.gen *)
                        
                        (false (*(superDesc[] <> none)*)) -> cd.actions;
                        acp.gen;
                        'd' -> cd.rtn;
+                    else
+                       slt.scanBindings
+                       (# ODF: ^ObjDescFrag
+                       do cd.fcom
+                          (#do 'ObjDesc:gen:slot:'->TT; current.dopt -> TT #);
+                          (current[]->ODF[]).OD.genClass
+                       #)
                    if);
                    (objSize,false,0) -> cd.endclass;
                if)
             #);   
-          doCall:
-             (# N: ^text; LMR: @char; TP: ^type; xType: @integer
-             enter(N[],LMR)
+          doCall::
+             (# TP: ^type; xType: @integer
              do cd.fcom(#do 'ObjDesc:doCall'->TT #);
                 (if (exitType->TP[]) <> none then
                     (if TP.isRef then
@@ -212,7 +223,7 @@ qStdBetaGenerator: qStdBetaAllocator
      DoPart::<
        (# gen::
             (#
-            do cd.fcom(#do 'DoPart:gen:'->TT; #);
+            do cd.com(#do 'DoPart:gen:'->TT; #);
                (if imps[] <> none then imps.gen if)
             #);
        #);
@@ -294,7 +305,11 @@ qStdBetaGenerator: qStdBetaAllocator
        (# loadItem::
             (#
             do cd.fcom(#do 'PTN:loadItem:'->TT; NS.dopt -> TQ #);
-               (NS.doPT,OD.descNo,false) -> cd.alloc;
+               (if true then
+                   doAlloc
+                else
+                   (NS.doPT,OD.descNo,false) -> cd.alloc;
+               if);
                (NS.dopt,'S') -> OD.doCall
             #);
           storeItem::
@@ -302,18 +317,44 @@ qStdBetaGenerator: qStdBetaAllocator
             do cd.fcom(#do 'PTN:storeItem:'->TT; NS.dopt -> TQ #);
                (if OD.isExternal then
                 else
-                   (NS.doPT,OD.descNo,OD.objSize,0,false) -> cd.invoke
-               if)
+                   (if true then
+                       loadItem
+                    else
+                       (NS.doPT,OD.descNo,OD.objSize,0,false) -> cd.invoke
+               if)if)
             #);
-          gen:: (#do OD[] -> objTmpStack.add; #);
+          gen:: 
+            (#
+            do (if OD.slt[] = none then
+                   OD[] -> objTmpStack.add;
+                else
+                   OD.slt.scanBindings
+                   (# ODF: ^ObjDescFrag
+                   do (current[] -> ODF[]).OD[] -> objTmpStack.add
+                   #)
+            if)#);
           doAlloc::
             (#
-            do cd.fcom(#do 'PTN:doAlloc:'->TT; NS.dopt -> TQ #);
-               (NS.doPT,OD.descNo,false) -> cd.alloc
-            #);
+            do cd.fcom
+               (#do 'PTN:doAlloc:'->TT; NS.dopt->TQ; 'isSlot:'->TT;
+                  OD.slt[] <> none -> BB 
+               #);
+               (if OD.slt[] = none then
+                   (NS.doPT,OD.descNo,false) -> cd.alloc
+                else
+                   cd.fcom(#do 'findBinding'->TT #);
+                   OD.slt.scanBindings
+                   (# ODF: ^ObjDescFrag
+                   do cd.fcom(#do 'got:'->TT; current.dopt->TT #);
+                      (NS.doPT,(current[] -> ODF[]).OD.descNo,false) -> cd.alloc
+            #)if)#);
        #);
      BetaVirtualPattern:: 
-       (# gen::
+       (# loadItem::
+            (#
+            do 
+            #);
+          gen::
             (#
             do cd.fcom(#do 'VirtualPtn:doAlloc:'->TT; NS.dopt -> TQ; #);
                (if OS.isSingular then OS[] -> objTmpSTack.add if);
@@ -536,15 +577,24 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           load:: 
             (#
-            do cd.fcom(#do 'PatternDen:load:'-> TT; AD.label->TQ #);
+            do cd.fcom(#do 'PatternDen:load:'->TT; AD.label->TQ; AD.doPT->TT #);
                AD.load 
             #);
-          store:: (#do AD.store #);
+          store:: 
+            (#
+            do cd.fcom(#do 'PatternDen:store:'->TT; AD.label->TQ; AD.doPT->TT #);
+               AD.store 
+            #);
           doAlloc::
             (#
             do cd.fcom(#do 'PatternDen:doAlloc:'->TT; AD.label->TT; dopt->TT #);
                AD.doAlloc
             #);
+          doCall::
+            (#
+            do cd.fcom(#do 'PatternDen:doCall:'->TT; AD.label->TT; dopt->TT #);
+               (N[],LMR) -> AD.docall
+            #)
        #);
      ObjectEvaluation::
        (# load:: 
@@ -601,14 +651,25 @@ qStdBetaGenerator: qStdBetaAllocator
      ObjectReference::
        (# load::
             (#
-            do OV.load
+            do cd.fcom(#do 'ObjRef:load:'->TT; OV.label-> TT; OV.dopt -> TT #);
+               OV.load
+            #);
+          store::
+            (#
+            do cd.fcom(#do 'ObjRef:store:'->TT; OV.label-> TT; OV.dopt -> TT #);
+               OV.store
+            #);
+          doAlloc::
+            (#
+            do cd.fcom(#do 'ObjRef:doAlloc'->TT; OV.dopt->TT #); OV.doAlloc
             #)
        #);
      DynamicObjectGeneration::
        (# load::
             (#
             do cd.fcom
-               (#do 'DynamicObjectGeneration:gen:'->TT; OS.doPT->TT;
+               (#
+               do 'DynamicObjectGeneration:gen:'->TT; OS.doPT->TT;
                   (if isRef then '[]' -> TT if);
                   OS.label -> TQ
                #);
@@ -619,6 +680,11 @@ qStdBetaGenerator: qStdBetaAllocator
                 * perhaps LMR since perhaps enter or exit must be executed
                 *)
             #);
+          doAlloc:: 
+            (# 
+            do cd.fcom(#do 'DynamicObjectGeneration:doAlloc'->TT; OS.dopt->TT #);
+               OS.doAlloc
+            #)
        #);
      ThisObject::<
        (# load::
@@ -677,7 +743,8 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           doAlloc::
             (#
-            do cd.fcom(#do 'NameApl:doAlloc:' -> TT; ATd.label -> TT  #);
+            do cd.fcom(#do 'NameApl:doAlloc:' -> TT; dopt->TT; 
+                         ATd[] = none -> BB; (*ATd.label -> TT*)  #);
                ATd.doAlloc
             #);
        #);   
