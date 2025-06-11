@@ -258,7 +258,22 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           store::
             (#
-            do (N.T[],off) -> theDcl.IT.storeItem
+            do cd.fcom
+               (#do 'NameDecl:store:'->TT; N.T[]->TQ; theDcl.label->TT #);
+               (if isRef then
+                   (N.T[],off) -> theDcl.IT.storeItem
+                else
+                   cd.fcom(#do 'nameDecl:store:exe:'->TT; #);
+                   (N.T[],off) -> theDcl.IT.loadItem;
+                   (N.T[],'R') -> (theDcl.IT.theDesc).doCall
+               if)
+            #);
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'NameDecl:activate:'->TT; N.T[]->TQ; 
+                  theDcl.label->TT; LMR->CC; isRef->BB #);
+               (this(BetaNameDecl)[],LMR,isRef) -> theDcl.IT.activate
             #);
           doAlloc::
             (#
@@ -286,12 +301,50 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           storeItem::
             (#
-            do (id[],off) -> cd.rstoreg
+            do cd.fcom
+               (#
+               do 'StaticItem:storeItem:'->TT; id[]->TQ; 
+                  (if NS.theDesc <> none then
+                      (NS.theDesc).doPT -> TT;
+                      (NS.theDesc).isPrimitive->BB;
+                  if); 
+               #);
+               (id[],off) -> cd.rstoreg
+            #);
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'StaticItem:activate:'->TT; ND.dopt->TQ; LMR->CC;isRef->BB#);
+               (if isRef then
+                   (if LMR
+                    // 'L' then 
+                       (ND.dopt,ND.off) -> cd.rpushg
+                    // 'M' then
+                       (ND.dopt,ND.off) -> cd.rpushg;
+                       cd.rdouble
+                    // 'R' then
+                       (ND.dopt,ND.off) -> cd.rstoreg
+                   if)
+                else
+                   (if (NS.theDesc <> none) and (NS.theDesc).isPrimitive then
+                       (if LMR
+                        // 'L' then
+                           (ND.dopt,ND.off) -> cd.pushg
+                        // 'M' then
+                           (ND.doPT,ND.off) -> cd.pushg;
+                           cd.double
+                        // 'R' then
+                           (ND.doPT,ND.off) -> cd.storeg
+                       if)
+                    else
+                       (ND.doPT,LMR) -> doCall
+                   if)
+               if)
             #);
           gen::
             (#
             do (if OS.isSingular then 
-                   cd.fcom(#do 'StaticItem:gen:'->TT; NS.doPT-> TT; OS.dopt->TT#);
+                   cd.fcom(#do 'StaticItem:gen:'->TT; NS.doPT-> TT; #);
                    OS[] -> objTmpStack.add 
                if);
             #)
@@ -303,7 +356,13 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           storeItem::
             (#
-            do (id[],off) -> cd.rstoreg
+            do cd.fcom
+               (#do 'DynamicItem:storeItem:'->TT; OS.dopt->TQ; (*isRef->BB*)#);
+               (if true (*isRef*) then
+                   (id[],off) -> cd.rstoreg
+                else
+                   (*'R' -> (OS.theDesc).doCall*)
+               if)
             #);
        #);
      BetaPattern::
@@ -327,6 +386,13 @@ qStdBetaGenerator: qStdBetaAllocator
                     else
                        (NS.doPT,OD.descNo,OD.objSize,0,false) -> cd.invoke
                if)if)
+            #);
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'PTN:activate:'->TT; ND.dopt->TQ; LMR->CC;isRef->BB#);
+               doAlloc;
+               (NS.doPT,LMR) -> OD.doCall
             #);
           gen:: 
             (#
@@ -564,15 +630,57 @@ qStdBetaGenerator: qStdBetaAllocator
      Evaluation::
        (# gen::
             (#
-            do cd.fcom(#do 'Eval:gen:'->TT; dopt -> TQ #);
+            do cd.pfcom(#do 'Eval:gen:'->TT; dopt -> TQ #);
+               (if useActivate then
+                   (none,'S',false) -> activate
+               else
+                   scanSons
+                   (#
+                   do (if isFirst then
+                          current.load
+                       else
+                          (*isRef ->*) current.store
+            if)#)if)#);
+          load:: (#do gen #);
+          activate::
+            (# LMRx: @char
+            do cd.pfcom(#do 'Eval:activate:'->TT; dopt->TQ; LMR->CC;isRef->BB#);
                scanSons
                (#
-               do (if isFirst then
-                      current.load
+               do (if true
+                   // isFirst and isLast then
+                      (if LMR 
+                       // 'S' then
+                          'S' -> LMRx
+                       // 'L' then
+                          'L' -> LMRx
+                       // 'R' then
+                          'R' -> LMRx
+                      if)
+                   // isFirst then
+                      (if LMR
+                       // 'S' then
+                          'L' -> LMRx
+                       // 'L' then
+                          'L' -> LMRx
+                       // 'R' then
+                          'M' -> LMRx
+                      if)
+                   // isLast then
+                      (if LMR
+                       // 'S' then
+                          'R' -> LMRx
+                       // 'L' then
+                          'L' -> LMRx
+                       // 'R' then
+                          'M' -> LMRx
+                      if)
                    else
-                      current.store
-            if)#)#);
-          load:: (#do gen #)
+                      'M' -> LMRx
+                  if);
+                  (ND[],LMRx,isRef) -> current.activate
+               #)
+            #);
        #);
      PatternDen::
        (# gen::
@@ -587,8 +695,14 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           store:: 
             (#
-            do cd.fcom(#do 'PatternDen:store:'->TT; AD.label->TQ; AD.doPT->TT #);
-               AD.store 
+            do cd.fcom(#do 'PatternDen:store:'->TT; AD.label->TQ; AD.doPT->TT#);
+               isRef -> AD.store 
+            #);
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'patternDen:activte:'->TT; dopt->TT; LMR->CC; isRef->BB#);
+               (ND[],LMR,isRef) -> AD.activate
             #);
           doAlloc::
             (#
@@ -612,7 +726,13 @@ qStdBetaGenerator: qStdBetaAllocator
             (# 
             do cd.fcom
                (#do 'ObjectEvaluation:store'->TT; OS.label-> TT; OS.dopt->TT #);
-               OS.store 
+               isRef->OS.store 
+            #);
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'ObjectEval:activte:'->TT; dopt->TT; LMR->CC; isRef->BB#);
+               (ND[],LMR,isRef) -> OS.activate
             #);
        #);
      BetaBinaryExp::
@@ -651,7 +771,13 @@ qStdBetaGenerator: qStdBetaAllocator
             do cd.fcom(#do 'Term:load'->TT; T.label-> TT; T.dopt -> TT #);
                T.load
             #); 
-          store:: (# do T.store #); 
+          store:: (# do isRef->T.store #); 
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'Term:activte:'->TT; dopt->TT; LMR->CC; isRef->BB#);
+               (ND[],LMR,isRef) -> T.activate
+            #);
        #);
      ObjectReference::
        (# load::
@@ -662,7 +788,13 @@ qStdBetaGenerator: qStdBetaAllocator
           store::
             (#
             do cd.fcom(#do 'ObjRef:store:'->TT; OV.label-> TT; OV.dopt -> TT #);
-               OV.store
+               true -> OV.store
+            #);
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'ObjRef:activte:'->TT; dopt->TT; LMR->CC; isRef->BB#);
+               (ND[],LMR,true) -> OV.activate
             #);
           doAlloc::
             (#
@@ -744,14 +876,22 @@ qStdBetaGenerator: qStdBetaAllocator
                (if ATd[] = none then
                    'NameApl:ATd is none'->dumpT; dopt -> dumptn
                if);
-               ATd.store;
+               isRef->ATd.store;
+            #);
+          activate::
+            (#
+            do cd.pfcom
+               (#do 'NameApl:activte:'->TT; dopt->TT; LMR->CC; isRef->BB#);
+               (ND[],LMR ,isRef) -> ATd.activate
             #);
           doAlloc::
             (#
             do cd.fcom(#do 'NameApl:doAlloc:' -> TT; dopt->TT; 
                          ATd[] = none -> BB; (*ATd.label -> TT*)  #);
-               cd.pushThis;
-               on -> origin.goOrigin;
+               (if not isRemote then
+                   cd.pushThis;
+                   on -> origin.goOrigin;
+               if);
                ATd.doAlloc
             #);
        #);   
@@ -762,9 +902,9 @@ qStdBetaGenerator: qStdBetaAllocator
                scanSons
                (#
                do (if not isLast then
-                      current.load
+                      not isFirst -> current.load
                    else
-                      current.doAlloc
+                      not isFirst -> current.doAlloc
                if)#)
             #)
        #);
@@ -772,6 +912,11 @@ qStdBetaGenerator: qStdBetaAllocator
      ConstExp::
        (# load:: (# do cst.T.setpos; cst.T.getInt  -> cd.pushConst #);
           gen:: (#do load #);
+          activate:: (# do cst.T.setpos; cst.T.getInt  -> cd.pushConst #);
+       #);
+     CharExp:: 
+       (# activate::
+            (#do theCh.T.setpos; 1 -> theCh.T.inxGet -> cd.pushConst #);
        #);
      objTmpStack: @
        (# ODs: [30] ^ObjectDesc; next,top: @integer;
