@@ -99,6 +99,26 @@ qStdBetaGenerator: qStdBetaAllocator
                        ('put',2) -> cd.callPrim
                     else
             if)if)#);
+          addEncNS:
+            (# T:  ^Text; encOD: ^ObjectDesc
+            enter T[]
+            do (if ((theEncOD -> encOD[]) <> none) then
+                   cd.fcom (#do 'encOD:'->TT; encOD.dopt->TL #);
+                   (if (encOD.NS[] <> none) 
+                       then 
+                       cd.fcom(#do 'NS:'->TT; encOD.ns.dopt->TT#);;
+                       encOD.NS.scanSons
+                       (#do current.dopt -> T.append #);
+                       '$' -> T.put
+                    else
+                       T[] -> encOD.addEncNS -> T[];
+                       '$S$' -> T.append;
+                   if)
+                else
+                   'betaenv'-> T.append; '$' -> T.put
+               if);
+            exit T[]
+            #);
           genClass:
             (# handleSuper:
                  (#
@@ -121,12 +141,16 @@ qStdBetaGenerator: qStdBetaAllocator
                             superDesc.dopt -> putheadN;
                         if);
                         superDesc.descNo  -> cd.vdtTableCopy;
-                        (* innerInx - fix *)
+                        (if superDesc.innerInx > 0 then
+                            cd.fcom(#do 'super has inner:'->TT; doPT->TT #);
+                            (superDesc.innerInx,descno,true,'LLVMsig')
+                              -> cd.vdtTable
+                        if)
                      else
                         ('origin',originOff) -> cd.rstore; (* save origin *)
                     if);
                  #);
-               T,orgId,N: ^Text; orgDescNo: @integer; org: ^ObjectDesc
+               T,orgId,N: ^Text; orgDescNo: @integer; org,encOD: ^ObjectDesc
             do 'StdBeta$'-> T[];
                (if NS[] <> none then
                    NS.scanSons(#do current.dopt -> T.append #)
@@ -134,6 +158,19 @@ qStdBetaGenerator: qStdBetaAllocator
                    (if origin[] = none then
                        'betaenv' -> T.append;
                     else
+                       (if true then
+                           T[] -> addEncNS -> T[]
+                        else
+                           (if ((theEncOD -> encOD[]) <> none) then
+                               cd.fcom
+                               (#do 'encOD:'->TT; encOD.dopt->TT #);
+                               (if (encOD.NS[] <> none) 
+                                   then 
+                                   cd.fcom(#do 'NS:'->TT; encOD.ns.dopt->TT#);;
+                                   encOD.NS.scanSons
+                                   (#do current.dopt -> T.append #);
+                                   '$' -> T.put
+                       if)if)if);
                        'S$' -> T.append; descNo -> T.putint
                if)if);
                cd.fcom
@@ -230,7 +267,11 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
        #);
      BetaDecl::
-       (# gen:: (# do NS.gen; IT.gen #);
+       (# gen:: 
+            (# 
+            do (*cd.fcom(#do 'BetaDecl:gen:'->TT; NS.dopt->TQ #);*)
+               NS.gen; IT.gen 
+            #);
           load::
             (#
             do cd.fcom
@@ -247,7 +288,7 @@ qStdBetaGenerator: qStdBetaAllocator
      BetaNameDecl::
        (# gen::
             (#
-            do cd.fcom(#do 'NameDecl:'->TT; N.T[]->TQ #);
+            do cd.fcom(#do 'NameDecl:gen:'->TT; N.T[]->TQ #);
                theDcl.IT.gen
             #);
           load:: 
@@ -324,6 +365,8 @@ qStdBetaGenerator: qStdBetaAllocator
                        cd.rdouble
                     // 'R' then
                        (ND.dopt,ND.off) -> cd.rstoreg
+                    else
+                       cd.fcom(#do 'StaticItem:activate:'->TT; ND.dopt->TQ#);
                    if)
                 else
                    (if (NS.theDesc <> none) and (NS.theDesc).isPrimitive then
@@ -337,6 +380,7 @@ qStdBetaGenerator: qStdBetaAllocator
                            (ND.doPT,ND.off) -> cd.storeg
                        if)
                     else
+                       cd.fcom(#do  'StaticItem:activate:doCall'->TT #);
                        (ND.doPT,LMR) -> doCall
                    if)
                if)
@@ -345,7 +389,17 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do (if OS.isSingular then 
                    cd.fcom(#do 'StaticItem:gen:'->TT; NS.doPT-> TT; #);
-                   OS[] -> objTmpStack.add 
+                   OS[] -> objTmpStack.add ;
+                   
+                   NS.scanSons
+                   (# ND:  ^BetaNameDecl
+                   do cd.pushThis; (* origin *)
+                      (NS.dopt,(OS.theDesc).descNo,false) -> cd.alloc;
+                      cd.pushThis;
+                      ((current[]->ND[]).doPT,ND.off) -> cd.rstoreg
+                   #)
+                else
+                   (* also store X: @T if T not primitive *)
                if);
             #)
        #);
@@ -382,6 +436,17 @@ qStdBetaGenerator: qStdBetaAllocator
                    (ND.doPT,LMR) -> doCall
             if)#)
        #);
+     Repetition::
+       (# activate::
+            (#
+            do cd.fcom(#do 'Repetition:activate:'->TT; NS.dopt -> TQ #);
+               NS.scanSons
+               (#
+               do 
+                  (ND.dopt,ND.off,0,1) -> cd.xpushg
+               #)
+            #)
+       #);
      BetaPattern::
        (# loadItem::
             (#
@@ -408,10 +473,17 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do cd.fcom
                (#do 'PTN:activate:'->TT; ND.dopt->TQ; LMR->CC;isRef->BB#);
-               (if OD.isExternal then
+               (if true
+                // OD[] = trueDesc[] then
+                   1 -> cd.pushConst
+                // OD[] = falseDesc[] then
+                   0 -> cd.pushConst
+                // OD.isExternal then
                 else
                    doAlloc;
-                   (NS.doPT,LMR) -> OD.doCall
+                   (if not isRef then
+                       (NS.doPT,LMR) -> OD.doCall
+                   if)
                if)
             #);
           gen:: 
@@ -454,6 +526,19 @@ qStdBetaGenerator: qStdBetaAllocator
                do ((current[]->ND[]).off,OS.getDescNo,false,'LLVMsig') 
                     -> cd.vdtTable;
                #)
+            #);
+          activate::
+            (#
+            do cd.fcom
+               (#do 'VirtualPTN:activate:'->TT;ND.dopt->TQ; LMR->CC;isRef->BB#);
+               NS.scanSons
+               (# ND: ^BetaNameDecl
+               do current[]->ND[];
+                  (ND.doPT,ND.off,0,false) -> cd.invokeV;
+                  (* 0 is noOfRefArgs - must be defined *)
+               #);
+               (* isRef : no doCall, only alloc *)
+               (NS.doPT,LMR) -> OS.doCall
             #);
           doAlloc::
             (# 
@@ -528,7 +613,6 @@ qStdBetaGenerator: qStdBetaAllocator
             do cd.bcPos -> beginBCP;
                (if eval[] <> none then
                    cd.enterP; (* generate no code *)
-                   (*'R' -> *) eval.gen;
                    (none,'R',false) -> eval.activate;
                    'n' -> cd.rtn 
                if);
@@ -546,7 +630,6 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do cd.bcPos -> beginBCP;
                cd.markExitE;
-               (* do gen exit-part *)
                (none,'L',false) -> eval.activate;
                'X' -> cd.rtn;
                cd.bcPos -> endBCP;
@@ -664,13 +747,19 @@ qStdBetaGenerator: qStdBetaAllocator
        (# gen:: (# do cd.fcom(#do 'RestartImp:gen:missing'->TT #); #)
        #);
      InnerImp::
-       (# gen:: (#do  cd.fcom(#do 'InnerImp:gen:missing'->TT #); #)
+       (# gen:: 
+            (#
+            do cd.fcom(#do 'InnerImp:gen:missing'->TT #); 
+               cd.pushThis;
+               (* on -> goorigin *)
+               orgOD.innerInx -> cd.innerP
+            #);
        #);
      
      Evaluation::
        (# gen::
             (#
-            do cd.fcom(#do 'Eval:gen:'->TT; dopt -> TQ #);
+            do cd.fcom(#do 'Eval:gen:'->TT; dopt -> TL #);
                (if useActivate then
                    (none,'S',false) -> activate
                else
@@ -747,6 +836,7 @@ qStdBetaGenerator: qStdBetaAllocator
           doAlloc::
             (#
             do cd.fcom(#do 'PatternDen:doAlloc:'->TT; AD.label->TT; dopt->TT #);
+               AD.loadOrigin;
                AD.doAlloc
             #);
           doCall::
@@ -888,7 +978,11 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do cd.fcom
                (#do 'DynamicObjectGeneration:activate'->TT; OS.dopt->TT #);
-               OS.doAlloc
+               (if false then
+                   OS.doAlloc 
+                else
+                   (ND[],LMR,true) -> OS.activate 
+               if)
             #);
           doAlloc:: 
             (# 
@@ -961,11 +1055,18 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do cd.fcom
                (#do 'NameApl:activate:'->TT; dopt->TT; LMR->CC; isRef->BB#);
-               (if true (*or not isRemote*) then
+               (if false (*or not isRemote*) then
                    cd.pushThis;
                    on -> origin.goOrigin;
                if);
                (ND[],LMR ,isRef) -> ATd.activate
+            #);
+          loadOrigin::
+            (#
+            do cd.fcom
+               (#do 'NameApl:loadOrigin:'->TT; dopt->TT #);
+               cd.pushThis;
+               on -> origin.goOrigin;
             #);
           doAlloc::
             (#
@@ -978,10 +1079,19 @@ qStdBetaGenerator: qStdBetaAllocator
                ATd.doAlloc
             #);
        #);   
+     Indexed::
+       (# activate::
+            (#
+            do cd.fcom(#do 'Indexed:activate:'->TT; doPP -> TT #);
+               (none,'L',false) -> EV.activate;
+               NA.loadOrigin; (* not ok; R.V[i] - no V.loadOrigin *)
+               (ND[],LMR,true) -> NA.activate;
+            #)
+       #);
      Remote::
        (# doAlloc::
             (#
-            do cd.fcom(#do 'Remote:doAlloc:'->TT; dopt -> TT #);
+            do cd.fcom(#do 'Remote:doAlloc:'->TT; doPT -> TT #);
                scanSons
                (#
                do (if not isLast then
@@ -989,6 +1099,19 @@ qStdBetaGenerator: qStdBetaAllocator
                    else
                       not isFirst -> current.doAlloc
                if)#)
+            #);
+          activate::
+            (#
+            do cd.fcom(#do 'Remote:activate:'->TT; doPP -> TT #);
+               scanSons
+               (#
+               do (if isFirst then current.loadOrigin if);
+                  (if not isLast then
+                      (ND[],'L',true) -> current.activate
+                   else
+                      (ND[],LMR,isRef) -> current.activate
+                  if)
+               #)
             #)
        #);
           
