@@ -234,7 +234,10 @@ qStdBetaGenerator: qStdBetaAllocator
                 if);
                 (if LMR
                  // 'S' then 
-                    (if hasDoPart then (N[],'D') -> cd.call if);
+                    (if hasDoPart then 
+                        (N[],'D') -> cd.call;
+                        cd.rpop 
+                    if);
                     cd.rtnEvent;                        
                  // 'L' then
                     (if hasDoPart then (N[],'D') -> cd.call if);
@@ -247,7 +250,10 @@ qStdBetaGenerator: qStdBetaAllocator
                     xType -> cd.rtnEvent
                  // 'R' then
                     (N[],'N') -> cd.call;
-                    (if hasDoPart then (N[],'D') -> cd.call if);
+                    (if hasDoPart then
+                        (N[],'D') -> cd.call;
+                        cd.rpop
+                    if);
                     cd.rtnEvent;                     
                 if);
              #);
@@ -361,8 +367,8 @@ qStdBetaGenerator: qStdBetaAllocator
                     // 'L' then 
                        (ND.dopt,ND.off) -> cd.rpushg
                     // 'M' then
-                       (ND.dopt,ND.off) -> cd.rpushg;
-                       cd.rdouble
+                       cd.rdouble;
+                       (ND.dopt,ND.off) -> cd.rstoreg
                     // 'R' then
                        (ND.dopt,ND.off) -> cd.rstoreg
                     else
@@ -374,10 +380,15 @@ qStdBetaGenerator: qStdBetaAllocator
                         // 'L' then
                            (ND.dopt,ND.off) -> cd.pushg
                         // 'M' then
-                           (ND.doPT,ND.off) -> cd.pushg;
-                           cd.double
+                           cd.double;
+                           (ND.doPT,ND.off) -> cd.storeg;
                         // 'R' then
-                           (ND.doPT,ND.off) -> cd.storeg
+                           (ND.doPT,ND.off) -> cd.storeg;
+                        // 'S' then
+                           (* standalone primitive like V where V: @integer
+                            * pop thisObj
+                            *)
+                           cd.rpop
                        if)
                     else
                        cd.fcom(#do  'StaticItem:activate:doCall'->TT #);
@@ -437,15 +448,44 @@ qStdBetaGenerator: qStdBetaAllocator
             if)#)
        #);
      Repetition::
-       (# activate::
+       (# gen::
+            (#
+            do NS.scanSons
+               (# ND:  ^BetaNameDecl
+               do cd.pushThis; (* origin *)
+                  (none,'L',false) -> inx.EV.activate;
+                  1 -> cd.pushConst; (* dinx *)
+                  (NS.dopt,repetitionDesc.descNo,(IT.theDesc).objsize,0,0)
+                    -> cd.allocIndexed;
+                  cd.pushThis;
+                  ((current[]->ND[]).doPT,ND.off) -> cd.rstoreg
+               #);
+               (* also X: @ [3] T where T is not primitive *)
+            #);
+          activate::
             (#
             do cd.fcom(#do 'Repetition:activate:'->TT; NS.dopt -> TQ #);
-               NS.scanSons
-               (#
-               do 
-                  (ND.dopt,ND.off,0,1) -> cd.xpushg
-               #)
-            #)
+               L:
+                 NS.scanSons
+                 (#
+                 do 
+                    (if LMR
+                     // 'L' then 
+                        (ND.dopt,1,0,1) -> cd.xpushg;
+                     // 'M' then
+                        cd.swap;
+                        cd.double;
+                        1 -> cd.swap;
+                        (ND.dopt,1,0,1) -> cd.xstoreg;
+                        (*(ND.dopt,1,0,1) -> cd.xpushg;*)
+                     // 'R' then 
+                        (ND.dopt,1,0,1) -> cd.xstoreg
+                     else
+                        cd.fcom(#do 'no match'-> TT #)
+                    if);
+                    leave L
+                 #)
+            #);
        #);
      BetaPattern::
        (# loadItem::
@@ -831,6 +871,7 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do cd.fcom
                (#do 'patternDen:activate:'->TT; dopt->TT; LMR->CC; isRef->BB#);
+               cd.pushThis;
                (ND[],LMR,isRef) -> AD.activate
             #);
           doAlloc::
@@ -1055,7 +1096,7 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do cd.fcom
                (#do 'NameApl:activate:'->TT; dopt->TT; LMR->CC; isRef->BB#);
-               (if false (*or not isRemote*) then
+               (if on > 0 then
                    cd.pushThis;
                    on -> origin.goOrigin;
                if);
@@ -1065,7 +1106,7 @@ qStdBetaGenerator: qStdBetaAllocator
             (#
             do cd.fcom
                (#do 'NameApl:loadOrigin:'->TT; dopt->TT #);
-               cd.pushThis;
+               (*cd.pushThis;*)
                on -> origin.goOrigin;
             #);
           doAlloc::
@@ -1073,7 +1114,7 @@ qStdBetaGenerator: qStdBetaAllocator
             do cd.fcom(#do 'NameApl:doAlloc:' -> TT; dopt->TT; 
                          ATd[] = none -> BB; (*ATd.label -> TT*)  #);
                (if not isRemote then
-                   cd.pushThis;
+                   (*cd.pushThis;*)
                    on -> origin.goOrigin;
                if);
                ATd.doAlloc
@@ -1082,9 +1123,15 @@ qStdBetaGenerator: qStdBetaAllocator
      Indexed::
        (# activate::
             (#
-            do cd.fcom(#do 'Indexed:activate:'->TT; doPP -> TT #);
+            do cd.fcom(#do 'Indexed:activate:'->TT; doPP -> TT;
+                         NA.doPP -> TT;
+                      #);
                (none,'L',false) -> EV.activate;
                NA.loadOrigin; (* not ok; R.V[i] - no V.loadOrigin *)
+               cd.fcom(#do 'on:'->TT; NA.on->II; 'off:'->TT;NA.ATd.off->II#);
+
+               (if NA.on > 0 then NA.on -> origin.goorigin if);
+               (NA.dopt,NA.Atd.off) -> cd.rpushg;
                (ND[],LMR,true) -> NA.activate;
             #)
        #);
@@ -1102,10 +1149,10 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           activate::
             (#
-            do cd.fcom(#do 'Remote:activate:'->TT; doPP -> TT #);
+            do cd.fcom(#do 'Remote:activate:'->TT; doPT -> TT #);
                scanSons
                (#
-               do (if isFirst then current.loadOrigin if);
+               do (*(if isFirst then current.loadOrigin if);*)
                   (if not isLast then
                       (ND[],'L',true) -> current.activate
                    else
