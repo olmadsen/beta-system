@@ -196,8 +196,9 @@ qStdBetaGenerator: qStdBetaAllocator
                orgDescNo: @integer; org,encOD: ^ObjectDesc
             do mkClassName -> className[]; 
                cd.fcom
-               (#do 'ObjectDesc:genClass:'-> TT; className[]->TQ; 
-                  slt[]<>none->BB #);
+               (#
+               do 'ObjectDesc:genClass:'-> TT; className[]->TQ; 
+                  'isSlot:'->TT; slt[]<>none->BB #);
                (if (superDesc[] <> none) and not superDesc.done then
                    (* pretty ad hoc - since we copy the VDtable from super, 
                     * code must have been generated for super; 
@@ -206,8 +207,8 @@ qStdBetaGenerator: qStdBetaAllocator
                     *)
                    (*sup.name -> *) superDesc.genClass;
                if);
-               (if origin[] <> none then
-                   (origin[]->org[]).descNo -> orgDescNo;
+               (if (theEncOD->org[]) <> none then
+                   org.descNo -> orgDescNo;
                    'origin' -> orgId[]
                 else
                    'origin' -> orgId[]
@@ -702,7 +703,10 @@ qStdBetaGenerator: qStdBetaAllocator
                (if imps[] <> none then 
                    (false (*(superDesc[] <> none)*)) -> cd.actions;
                    cd.mvStack;
+                   startLab.new; endLab.new;
+                   startLab -> cd.defLab;
                    imps.gen;
+                   endLab -> cd.defLab;
                    (if superDesc[] <> none then
                        cd.rtnInner
                     else
@@ -741,7 +745,7 @@ qStdBetaGenerator: qStdBetaAllocator
      IfImp::
        (# gen::
             (# elseLab, Xlab,exitLab: @labelHandler.label
-            do cd.fcom(#do 'IfImp:gen:'->TT; dopt -> TT #);
+            do cd.fcom(#do 'IfImp:gen:'->TT; dopt -> TL #);
                cd.bcPos -> beginBCP;
                exitlab.new;
                (if not elsePart.isNull then
@@ -750,8 +754,6 @@ qStdBetaGenerator: qStdBetaAllocator
                 else
                    exitLab -> xLab
                if);               
-               cd.fcom(#do 'IfImp:eval:'->TT; eval.label->TT #);
-               (*'L' -> * ) Eval.gen; *)
                (none,'L',false,false) -> eval.activate;
                               
                (if not thenPart.isNull then
@@ -880,19 +882,73 @@ qStdBetaGenerator: qStdBetaAllocator
             #)
        #);
      LabelledImp::
-       (# gen:: (# do cd.fcom(#do 'LabelledImp:gen:missing'->TT #); #);
+       (# gen:: 
+            (# 
+            do cd.fcom(#do 'LabelledImp:gen:incomplete'->TT #); 
+               startLab.new; endLab.new;
+               startLab -> cd.defLab;
+               imp.gen;
+               endLab -> cd.defLab;
+            #);
           goOrigin::
             (#
             do cd.fcom(#do 'LabelledImp:goOrigin:'->TT; on -> II; dopt->TL #);
-               'LabelledImp:goOrigin:'->dumpT; on -> putint; dopt->putheadN;
                on -> origin.goOrigin
             #);
        #);
      LeaveImp::
-       (# gen:: (# do cd.fcom(#do 'LeaveImp:gen:missing'->TT #); #)
+       (# gen:: 
+            (# N: ^StdBetaNode; labImp: ^LabelledImp
+            do cd.fcom(#do 'LeaveImp:gen:missing'->TT; lab.on->II  #); 
+               origin[] -> N[];  
+               (if lab.on = 0 then
+                   L:
+                     (if N## = LabelledImp## then
+                         N[] -> labImp[];
+                      else
+                         N.origin[] -> N[];
+                         restart L
+                     if);
+                   labImp.endLab -> cd.jmp
+                else
+                   (if false then
+                       '**** leave:'->dumpT; lab.on -> putint; ' ' ->put;
+                       dopt->dumpTN;
+                   if);
+                   lab.on -> origin.goEncLabImp -> labImp[];
+                   '**** leave:encloser:'->dumpTN;
+                   labImp.dopt -> dumpTN;
+                   (lab.on,labImp.endLab,0,0) -> cd.break; 
+               if)
+            #)
        #);
      RestartImp::
-       (# gen:: (# do cd.fcom(#do 'RestartImp:gen:missing'->TT #); #)
+       (# gen:: 
+            (# N: ^StdBetaNode; labImp: ^LabelledImp
+            do cd.fcom(#do 'RestartImp:gen:missing'->TT; lab.on -> II #);
+               origin[] -> N[];  
+               (if lab.on = 0 then
+                   L:
+                     (if N## = LabelledImp## then
+                         N[] -> labImp[];
+                      else
+                         N.origin[] -> N[];
+                         restart L
+                     if);
+                   labImp.startLab -> cd.jmp
+                else
+                   (if true then
+                       '**** restart:'->dumpT; lab.on -> putint; ' ' ->put;
+                       dopt->dumpTN;
+                   if);
+                   (if false then
+                       lab.on -> origin.goEncLabImp -> labImp[];
+                       '**** restart:encloser:'->dumpTN;
+                       labImp.dopt -> dumpTN;
+                       (lab.on,labImp.endLab,0,0) -> cd.break;
+                   if)
+               if)
+            #)
        #);
      InnerImp::
        (# gen:: 
@@ -986,21 +1042,21 @@ qStdBetaGenerator: qStdBetaAllocator
           activate::
             (#
             do cd.fcom
-               (#do 'patternDen:activate:'->TT; dopt->TT; LMR->CC; isRef->BB#);
+               (#do 'PatternDen:activate:'->TT; dopt->TT; LMR->CC; isRef->BB#);
                AD.pushThis;
                AD.loadOrigin;
                (ND[],LMR,isRef,isIndexed) -> AD.activate
             #);
           doAlloc::
             (#
-            do cd.fcom(#do 'PatternDen:doAlloc:'->TT; AD.label->TT; dopt->TT #);
+            do cd.fcom(#do 'PatternDen:doAlloc:'->TT; AD.label->TT;dopt->TT #);
                AD.loadOrigin;
                AD.doAlloc
             #);
           doCall::
             (#
             do cd.fcom
-               (#do 'PatternDen:doCall:'->TT; AD.label->TT; dopt->TT; LMR->CC#);
+               (#do 'PatternDen:doCall:'->TT; AD.label->TT; dopt->TT;LMR->CC#);
                (N[],LMR) -> AD.docall
             #)
        #);
@@ -1014,7 +1070,7 @@ qStdBetaGenerator: qStdBetaAllocator
           store:: 
             (# 
             do cd.fcom
-               (#do 'ObjectEvaluation:store'->TT; OS.label-> TT; OS.dopt->TT #);
+               (#do 'ObjectEvaluation:store'->TT; OS.label-> TT;OS.dopt->TT #);
                isRef->OS.store 
             #);
           activate::
@@ -1028,7 +1084,7 @@ qStdBetaGenerator: qStdBetaAllocator
        (# gen::
             (#
             do cd.fcom(#do 'BinExp:gen:'->TT #);
-               lE.load; rE.load; 
+               lE.load; rE.load;
                (if op
                 // lex.symbols.eq then
                    (if true
@@ -1078,7 +1134,7 @@ qStdBetaGenerator: qStdBetaAllocator
                        op -> cd.op;
                    if)                   
                 else
-                   op -> (*lex.symbols.asText ->*) cd.op;
+                   op -> cd.op;
             if)#)
        #);
      BetaTerm::
@@ -1103,7 +1159,7 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
           store::
             (#
-            do cd.fcom(#do 'ObjRef:store:'->TT; OV.label-> TT; OV.dopt -> TT #);
+            do cd.fcom(#do 'ObjRef:store:'->TT; OV.label-> TT; OV.dopt->TT #);
                true -> OV.store
             #);
           activate::
@@ -1152,7 +1208,7 @@ qStdBetaGenerator: qStdBetaAllocator
             if)#);
           doAlloc:: 
             (# 
-            do cd.fcom(#do 'DynamicObjectGeneration:doAlloc'->TT; OS.dopt->TT#);
+            do cd.fcom(#do 'DynamicObjectGeneration:doAlloc'->TT;OS.dopt->TT#);
                OS.doAlloc
             #)
        #);
@@ -1183,7 +1239,7 @@ qStdBetaGenerator: qStdBetaAllocator
             #);
        #);
      NoneValue::
-       (# load:: (#do cd.pushNone #);
+       (# gen:: (#do cd.pushNone #);
           activate::(# do cd.pushNone #);
        #);
      NameApl::
@@ -1237,15 +1293,13 @@ qStdBetaGenerator: qStdBetaAllocator
                   if);
                   ATd.theDcl.IT.isSimple->BB;
                #);
-               (*cd.pushThis;*)
                (if not ATd.theDcl.IT.getSimple then
                    on -> origin.goOrigin;
                if);
             #);
           doAlloc::
             (#
-            do cd.fcom(#do 'NameApl:doAlloc:' -> TT; dopt->TT; 
-                         ATd[] = none -> BB; (*ATd.label -> TT*)  #);
+            do cd.fcom(#do 'NameApl:doAlloc:' -> TT; dopt->TT #);
                (if not isRemote then
                    (*cd.pushThis;*)
                    on -> origin.goOrigin;
@@ -1299,8 +1353,7 @@ qStdBetaGenerator: qStdBetaAllocator
             do cd.fcom(#do 'Remote:activate:'->TT; doPT -> TT #);
                scanSons
                (#
-               do (*(if isFirst then current.loadOrigin if);*)
-                  (if not isLast then
+               do (if not isLast then
                       (ND[],'L',true,isIndexed) -> current.activate
                    else
                       (ND[],LMR,isRef,isIndexed) -> current.activate
@@ -1333,7 +1386,7 @@ qStdBetaGenerator: qStdBetaAllocator
                    OD[] -> ODs[top][]
                 else
                    (# found: @boolean
-                   do cd.fcom(#do 'objTmpStack.add:SLOT'->TT; OD.slt.dopt->TT#);
+                   do cd.fcom(#do 'objTmpStack.add:SLOT'->TT;OD.slt.dopt->TT#);
                       OD.slt.scanBindings
                       (# ODF: ^ObjDescFrag
                       do (*cd.fcom(#do 'adding:'->TT; current.dopt-> TT #);*)
@@ -1349,16 +1402,6 @@ qStdBetaGenerator: qStdBetaAllocator
                    true -> value
             if)#)
        #);   
-     labelHandler: @
-       (# labCount: @integer;
-          label:
-            (# labNo: @integer;
-               new: (# do  labCount + 1 -> labCount -> labNo #);
-            enter labNo
-            exit labNo
-            #);
-          init: (# do 0 -> labCount #);
-       #);
      genStdBeta:
        (#
        do '**** Generator: StdBeta:'->dumptn;
