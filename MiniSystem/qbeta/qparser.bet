@@ -53,6 +53,7 @@ parser: ModuleHandler
           inFile.openRead;
           (fileName[],inFile[]) -> lex.init;
           true -> lex.isXbeta;
+          true -> lex.invAsDerivedP;
           lex;
           true -> pNewFatCommaFile;
           INNER;
@@ -114,7 +115,9 @@ parser: ModuleHandler
                       #) -> M[];
                       pathToFN[] -> M.pathToFN[];
                       inFile[] -> M.inFile[];
-                      checkModuleName
+                      (if not parseMain then
+                          checkModuleName
+                      if)
                    else
                       3 -> SyntaxError
                   if)
@@ -349,46 +352,101 @@ parser: ModuleHandler
           OI: ^ObjectInvocation;
           inPtn: @boolean
        enter inPtn
-       do pInvocation -> IV[];
-          pMainPart -> IS[]; (* if we split OG into singular and pattern
-                              * then there must be a main part *)
-          (if IV.isEmpty and IS.isEmpty then
-              222 -> syntaxError
-          if);
-          (if false and pNewFatCommaFile then
-              '**** pOG:IV:' -> puttext; IV.dopt -> putline;
-              '**   IS: ' -> puttext; IS.dopt -> puthead;
-          if);
-              
-          (if inPtn and pNewFatCommaFile and IS.isEmpty then 
-              IV.last -> E[]; 
-              (if false then
-                  '**   E: ' -> putline;
-                  E.args.scansons
-                  (#do current.dopt -> puthead;
-                  #);
-                  E.args.noOfSons -> putint;  ' ' -> put; 
-                  E.args.inBraces -> putboolean; 
-                  newline;
+       do 'pOD'->trace; 
+          (if invAsDerivedP then
+              'pOD:invAsDerivedP'->trace;
+              lex.parenthLevel + 1 -> lex.parenthLevel;
+              pInvocation -> IV[];
+              pBindings -> IS[];
+              'pOd:afterBindings'->trace;
+              IS[] -> pMainPartII -> IS[];
+              (IV[],IS[]) -> ObjectDescriptor -> OG[];
+              OG.IS.handleNewProps;
+           else
+              pInvocation -> IV[];
+              pMainPart -> IS[]; (* if we split OG into singular and pattern
+                                  * then there must be a main part *)
+              (if IV.isEmpty and IS.isEmpty then
+                  222 -> syntaxError
               if);
-              (if (E.args[] <> none) 
-                  and (E.args.noOfSons = 4)
-                  and (E.args.inBraces) 
-                  and E.isObjectInvocation then
+              (if false and pNewFatCommaFile then
+                  '**** pOG:IV:' -> puttext; IV.dopt -> putline;
+                  '**   IS: ' -> puttext; IS.dopt -> puthead;
+              if);
+              
+              (if inPtn and pNewFatCommaFile and IS.isEmpty then 
+                  IV.last -> E[]; 
                   (if false then
-                      '**** pOG:got:arg:as:mainPart: ' -> puttext;
-                      E.args.noOfSons -> putint; newline;
-                      IV.dopt -> puthead;
+                      '**   E: ' -> putline;
+                      E.args.scansons
+                      (#do current.dopt -> puthead;
+                      #);
+                      E.args.noOfSons -> putint;  ' ' -> put; 
+                      E.args.inBraces -> putboolean; 
+                      newline;
                   if);
-                  IV.mkOG -> (IV[],IS[]);
-                  (if false then
-                      '**   IV:' -> puttext; IV.dopt -> putline;
-                      '**   IS:' -> putline; IS.dopt -> putHead
-          if)if)if);
-          (IV[],IS[]) -> ObjectDescriptor -> OG[];
-          OG.IS.handleNewProps;
+                  (if (E.args[] <> none) 
+                      and (E.args.noOfSons = 4)
+                      and (E.args.inBraces) 
+                      and E.isObjectInvocation then
+                      (if false then
+                          '**** pOG:got:arg:as:mainPart: ' -> puttext;
+                          E.args.noOfSons -> putint; newline;
+                          IV.dopt -> puthead;
+                      if);
+                      IV.mkOG -> (IV[],IS[]);
+                      (if false then
+                          '**   IV:' -> puttext; IV.dopt -> putline;
+                          '**   IS:' -> putline; IS.dopt -> putHead
+              if)if)if);
+              (IV[],IS[]) -> ObjectDescriptor -> OG[];
+              OG.IS.handleNewProps;
+          if)
        exit OG[]
        #);
+     pBindings:
+       (# B: ^Items (*Bindings*)
+       do 'pBindings'->traceT;
+          Items -> B[];
+          (*(if lex.symb = lex.symbols.semicolon then lex if);*)
+          (if lex.symb
+           // lex.symbols.leftBrack then
+              lex;
+              'pBindings('->traceT;
+           else
+              (if (1->lex.peekNext) = lex.symbols.idf then
+                  'pBindings:idf'->trace; 
+                  (if 1 -> lex.peekNext
+                   // lex.symbols.further then
+                      'pBindings:further'->traceT;
+                   // lex.symbols.final then
+                      'pBindings:final'->traceT;                  
+          if)if)if);
+          lex.parenthLevel - 1 -> lex.parenthLevel;
+       exit B[]
+       #);
+     pMainPartII:
+       (# IS: ^Items;
+       enter IS[]
+       do 'pMainPartII'->trace;
+          (if lex.symb = lex.symbols.begin then 
+              'pMainPartII:after leftCurly'->trace;
+              lex;
+              pItems -> IS[];
+              'pMainPartII:after:items'->trace;
+              (if lex.symb // lex.symbols.end // lex.symbols.eos then
+                  lex;
+               else
+                  lex.symb -> lex.symbols.asText ->putline;;
+                  2 -> SyntaxError
+              if);
+           else
+              Items -> IS[];
+              true -> IS.isEmpty
+          if);
+       exit IS[]
+       #);
+       
      pMainPart:
        (# IS: ^Items;
        do 'pMainPart:'->trace;
@@ -636,7 +694,7 @@ parser: ModuleHandler
        #);
      pDecl:
        (# D: ^Decl; sig: ^Signature; OD: ^ObjectDescriptor; 
-          ptnKind: @integer;
+          ptnKind: @integer; DI: ^DataItem;
           P: ^Pattern; isInArg,isOutArg,mustBePattern,isDesignator: @boolean
        do (if lex.symb 
            // lex.symbols.inArg then
@@ -700,7 +758,8 @@ parser: ModuleHandler
                    (if lex.symb
                     // lex.symbols.constRef then 
                        lex;
-                       (true,false,sig[],false) -> pDataItem -> D[];
+                       (true,false,sig[],false) -> pDataItem -> D[] -> DI[];
+                       true -> DI.virtualDI;
                        leave L
                     // lex.symbols.varRef then
                        lex; 
@@ -711,18 +770,22 @@ parser: ModuleHandler
                                lex.symb -> lex.symbols.asText -> puttext; 
                                ' '->put; lex.sym[] -> puttext;
                            if);
-                           (false,false,sig[]) -> pVarRefDI -> D[];
+                           (false,false,sig[]) -> pVarRefDI -> D[] -> DI[];
+                           true -> DI.virtualDI;
                         else
-                           (false,false,sig[],false) ->pDataItem -> D[];
+                           (false,false,sig[],false) ->pDataItem -> D[] -> DI[];
+                           true -> DI.virtualDI;
                        if);
                        leave L
                     // lex.symbols.constVal then 
                        lex;
-                       (true,true,sig[],false) -> pDataItem -> D[];
+                       (true,true,sig[],false) -> pDataItem -> D[] -> DI[];
+                       true -> DI.virtualDI;
                        leave L
                     // lex.symbols.varVal then
                        lex;
-                       (false,true,sig[],false) -> pDataItem -> D[];
+                       (false,true,sig[],false) -> pDataItem -> D[] -> DI[];
+                       true -> DI.virtualDI;
                        leave L
                     else
                        virtualPtn -> ptnKind
@@ -1064,7 +1127,7 @@ parser: ModuleHandler
        (# IV: ^Invocation; OI: ^ObjectInvocation;
           E: ^Exp;
           i: @integer
-       do 'pInvocation:'->trace;
+       do 'pInvocation'->trace;
           (if true then
               pExp -> E[];
               (if E## = Invocation## then
@@ -1205,7 +1268,7 @@ parser: ModuleHandler
           pTerm -> E[]; 
           L:
             (if (lex.sym[] -> lex.symbols.isAddOp) then 
-                'pSimpleExp:addOp:' -> trace;
+                'pSimpleExp:addOp' -> trace;
                 lex.sym[] -> sym[];
                 lex;
                 pTerm -> rE[];
@@ -1218,7 +1281,7 @@ parser: ModuleHandler
        (# E,rE: ^Exp; sym: ^text; isUnaryAddOp: @boolean;
        do 'pTerm'->trace;                  
           (if (lex.sym[],lex.symb) -> lex.symbols.isUnaryAddOp then
-              'unaryAddOp:'->trace;
+              'unaryAddOp'->trace;
               lex.sym[] -> sym[];
               lex;
               true -> isUnaryAddOp
@@ -1338,7 +1401,11 @@ parser: ModuleHandler
               (*newline; lex.symb -> lex.symbols.asText -> putline;*)
               leave pOI
           if);
-          lex;
+          (if invAsDerivedP then 
+              lex.symbols.semicolon -> lex.symb
+           else
+              lex;
+          if);
           (if lex.symb
            // lex.symbols.leftBrack 
            // lex.symbols.leftSquare
@@ -1938,15 +2005,16 @@ parser: ModuleHandler
      trace:
        (# S: ^Text
        enter S[]
-       do (if false then
+       do (if invAsDerivedP or false or parseMain then
               S[] -> puttext; ':'->put;
               lex.symb -> putint; ' ' -> put;
               lex.symb -> lex.symbols.asText -> puttext;
-              ' "'->puttext; lex.sym[] -> puttext; '"\n'->puttext;
+              ' "'->puttext; lex.sym[] -> puttext; '"'->put;
+              ' pLevel:'->puttext; lex.parenthLevel -> putint; newline;
               inner trace
           if)
        #);
-     traceX:
+     traceT: (* always trace parsing *)
        (# S: ^Text
        enter S[]
        do (if true then
@@ -1954,7 +2022,7 @@ parser: ModuleHandler
               lex.symb -> putint; ' ' -> put;
               lex.symb -> lex.symbols.asText -> puttext;
               ' "'->puttext; lex.sym[] -> puttext; '"\n'->puttext;
-              inner traceX
+              inner traceT
           if)
        #);
      genTokenStream: superParser
@@ -2144,7 +2212,11 @@ parser: ModuleHandler
              true -> lex.isXbeta;
              path.init;
              (fullPath,FN[]) -> locateWorld -> topPath[];
-             parseBetaWorld;
+             (if parseMain then
+                 (FN[],true) -> pModule -> main[]
+              else
+                 parseBetaWorld;
+             if)
           else
              (*'*** Parser called from qenv - thus no parsing'- putline;*)
              theM[] -> main[];
@@ -2181,7 +2253,7 @@ parser: ModuleHandler
          (*rootModule.doPP -> putline;*)
          lex.hasLexError or hasSyntaxError -> hasSyntaxError;
          (* hasSyntaxError:false => dont calle execute *)
-         (if not hasSyntaxError then
+         (if not hasSyntaxError and not parseMain then
              inner
          if)
      if)
