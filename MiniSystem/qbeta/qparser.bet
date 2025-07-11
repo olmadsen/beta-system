@@ -426,27 +426,33 @@ parser: ModuleHandler
        exit OG[]
        #);
      pBindings:
-       (# B: ^Items (*Bindings*)
-       do 'pBindings'->traceT;
+       (# B: ^Items; (*Bindings*) D: ^Decl
+       do 'pBindings'->trace;
           Items -> B[];
           (*(if lex.symb = lex.symbols.semicolon then lex if);*)
           (if lex.symb
            // lex.symbols.leftBrack then
               lex;
-              'pBindings('->traceT;
+              'pBindings('->trace;
            else
-              (if (1->lex.peekNext) = lex.symbols.idf then
-                  'pBindings:idf'->trace; 
-                  (if 2 -> lex.peekNext
-                   // lex.symbols.further then
-                      'pBindings:further'->traceT;
-                   // lex.symbols.final then
-                      'pBindings:final'->traceT;
-                      lex;
-                      lex;
-                      lex;
-                      'pBindings:final:lex'->traceT;
-              if)if)
+              L: 
+                (if (1->lex.peekNext) = lex.symbols.idf then
+                    'pBindings:idf'->trace; 
+                    (if 2 -> lex.peekNext
+                     // lex.symbols.further then
+                        'pBindings:further'->trace;
+                     // lex.symbols.final then
+                        'pBindings:final:A'->trace;
+                        lex; 
+                        (* two tokens: 'idf' and '::' or '::<' *)
+                        'pBindings:final:before:pDecl'->trace;
+                        pDecl -> D[] -> B.append;
+                        'pBindings:final:after:pDecl'
+                          ->trace(#do D.doPT->putline#);
+                        (if lex.symb = lex.symbols.semicolon then
+                            'pBindings:semicolon'->trace;
+                            restart L
+                if)if)if)
           if);
           (if false and invAsDerivedP then
               lex.parenthLevel - 1 -> lex.parenthLevel;
@@ -456,11 +462,11 @@ parser: ModuleHandler
      pMainPartII:
        (# IS: ^Items;
        enter IS[]
-       do 'pMainPartII'->trace;
+       do 'pMainPartII'->trace(#do (if IS[] <> none then IS.dopt->dumptN if)#);
           (if lex.symb = lex.symbols.begin then 
               'pMainPartII:after leftCurly'->trace;
               lex;
-              pItems -> IS[];
+              (if IS[] = none then pItems -> IS[] if);
               'pMainPartII:after:items'->trace;
               (if lex.symb // lex.symbols.end // lex.symbols.eos then
                   lex;
@@ -469,9 +475,10 @@ parser: ModuleHandler
                   2 -> SyntaxError
               if);
            else
-              Items -> IS[];
-              true -> IS.isEmpty
-          if);
+              (if IS[] = none 
+                  then Items -> IS[];
+                  true -> IS.isEmpty
+          if)if)
        exit IS[]
        #);
        
@@ -592,8 +599,10 @@ parser: ModuleHandler
        #);
      pItems:
        (# I: ^Items
-       do 'pItems'->trace;
-          Items -> I[]; true -> I.commentBefore;
+       enter I[]
+       do 'pItems'->trace(#do (if I[] <> none then I.dopt->dumptn if)#);
+          (if I[] = none then Items -> I[] if);
+          true -> I.commentBefore;
           Loop:
             (# D: ^Decl
             do (if lex.symb 
@@ -1678,25 +1687,25 @@ parser: ModuleHandler
        #);
      pIfExp:
        (# ifE: ^Exp; cond,thenPart,elsePart: ^Statement(*ObjectSpecification*)
-       do pObjectSpec -> cond[];
+       do 'pIfExp'->trace;
+          pObjectSpec -> cond[];
           (if (lex.symb <> lex.symbols.fatComma)
               and not (':then' -> lex.sym.equalNCS) then
               130 -> syntaxError
           if);
           lex;
+          'pIfExp:after:then'->trace;
           pObjectSpec -> thenPart[];
-          (*thenPart.dopt -> putline;*)
-          (*lex.symb -> lex.symbols.asText -> puttext;
-          ' ' -> put; lex.sym[] -> putline;*)
           (if (lex.symb = lex.symbols.fatComma)
               and (':else' -> lex.sym.equalNCS) then
-              (*'   elsePart:\n' -> puttext;*)
               lex;
+              'pIfExp:after:else'->trace;
               pObjectSpec -> elsePart[];
               (cond[],thenPart[],elsePart[]) -> IfThenElse -> IfE[]
            else
               (cond[],thenPart[]) -> IfThen -> IfE[]
-          if)
+          if);
+          'pIfExp:after:end'->trace(#do ifE.dopt->putline #);
        exit ifE[]
        #);
      pBracketedExp:
@@ -2040,7 +2049,8 @@ parser: ModuleHandler
               lex.symb -> putint; ' ' -> put;
               lex.symb -> lex.symbols.asText -> puttext;
               ' "'->puttext; lex.sym[] -> puttext; '"'->put;
-              ' pLevel:'->puttext; lex.parenthLevel -> putint; newline;
+              ' pLevel:'->puttext; lex.parenthLevel -> putint; 
+              ' charPos:'->puttext; lex.nextch.pos->putint; newline;
               inner trace
           if)
        #);
