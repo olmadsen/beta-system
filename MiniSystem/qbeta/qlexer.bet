@@ -57,37 +57,42 @@ Lexer:
               if)if)
           if);
           (* pos -> putint; ' ' -> put;   ch -> put; *)
-          (if (bTop + 1 -> bTop) > buffer.range then buffer.range -> buffer.extend if);
+          (if (bTop + 1 -> bTop) > buffer.range then 
+              buffer.range -> buffer.extend 
+          if);
           ch -> buffer[bTop];
        #);
      printLines:
-       (# n,lc,c: @integer; ch: @char
+       (# n,lc,c,top: @integer; ch: @char
        enter n
-       do bTop - 1 -> bTop; (* last char is white space and may be newline, 
-                             * which should not be counted below
-                             *)
+       do (if tokenBuf.L > 0 then
+              tokenBuf.chPos[tokenBuf.L] - 1 -> top;
+              (*'***** lines: '->puttext; top -> putint; newline;
+           else
+               bTop - 1 -> top; 
+               * (* last char is white space and may be newline, 
+                  * which should not be counted below
+                  *)
+          if);
           1 -> lc;
-          (for i: btop repeat 
+          (for i: top repeat 
                (if buffer[i] = ascii.newline then lc + 1 -> lc if)
           for);
           L:
-            (for i: bTop repeat
-                 (if (i = bTop) or (buffer[bTop - i + 1] = ascii.newline) then
+            (for i: top repeat
+                 (if (i = top) or (buffer[top - i + 1] = ascii.newline) then
                      n - 1 -> n; lc - 1 -> lc;
-                     (if (n = 0) or (i = bTop) then   
+                     (if (n = 0) or (i = top) then   
                          (*lc + 1 ->*) lc -> putint; ':' -> put; ' ' -> put; 
                          (for j: i repeat 
-                              buffer[bTop - i + j] -> ch -> put;
+                              buffer[top - i + j] -> ch -> put;
                               c + 1 -> c;
                               (if ch = ascii.newline then 
                                   lc + 1 -> lc -> putint; ':' -> put;
                                   0 -> c;
-                              if)
-                         for);
+                         if)for);
                          leave L
-                     if)
-                 if);
-            for);
+            if)if)for);
           newline;
           (for i: c + 2 repeat '*'-> put for);
           '^' -> put
@@ -636,33 +641,105 @@ Lexer:
           denoter: (# exit 88 #);
           object: (# exit 89 #)
        #);
-     tokenBuf: @
-       (# B: [5] @ integer; 
-          Sy: [5] ^text;
-          L,R: @ integer;
+   tokenBuf: @
+        (# bufSize: (#exit 15 #);
+          B: [bufSize] @ integer; 
+          Sy: [bufSize] ^text;
+          chPos: [bufSize] @integer;
+          L,R,cnt: @ integer;
           add:
-            (# T: @integer; S: ^text
+            (# T,oldRange: @integer; S: ^text
             enter(T,S[])
-            do (if (R + 1 -> R) > B.range then 
-                   B.range -> B.extend;
-                   Sy.range -> Sy.extend
-               if);
+            do (if true then 
+                   cnt + 1 -> cnt;
+                   (if false then
+                       'tokenBuf.add:'->puttext; cnt ->putint; ' '-> put;
+                       T->putint; ' ' ->put; T->symbols.asText->puttext; 
+                       ' '->put; S[] -> puttext;
+                       newline;
+                   if);
+                   (if cnt > B.range then
+                       (if true then
+                           'tokenBuf:put:overflow\n'->puttext; 
+                           print;
+                       if);
+                       B.range -> oldRange -> B.extend;
+                       Sy.range -> Sy.extend;
+                       chPos.range -> chPos.extend;
+                       (if R <> L then
+                           'OBS! R<>L'->putline;
+                        else
+                           (for i: oldRange - L repeat
+                                B[L + i] -> B[oldRange + L + i];
+                                Sy[L + i][] -> Sy[oldRange  + L + i][];
+                                chpos[L + i] -> chPos[oldRange + L + i];
+                           for);
+                           L + oldRange -> L
+                   if)if);
+                   (R mod B.range) + 1 -> R;
+                else
+                   (if (R + 1 -> R) > B.range then 
+                       B.range -> B.extend;
+                       Sy.range -> Sy.extend;
+                       chPos.range -> chPos.extend
+               if)if);
+               (*'tokenbuf.add:'->puttext; T -> putint; S[]->putline;*)
                T -> B[R];
-               S[] -> Sy[R][]
+               S[] -> Sy[R][];
+               nextCh.pos -> chPos[R];
             #);
           get:
             (# T: @integer; S: ^Text
-            do B[L + 1 -> L] -> T;
-               Sy[L][] -> S[]
+            do (if true then
+                   (if false and (L = R) then
+                       'lex:tokenBuf:get:empty:'->putline;
+                   if);
+                   (L mod B.range) + 1 -> L;
+                   cnt - 1 -> cnt;
+                   (if false then
+                       'tokenBuf.get:'->puttext; cnt ->putint; newline
+                   if)
+                else
+                   L + 1 -> L
+               if);
+               B[L] -> T;
+               Sy[L][] -> S[]; ' ' -> Sy[L][]
             exit(T,S[])
             #);
           getTokenNo:
-            (# n: @integer
+            (# n,pos: @integer
             enter n
-            exit B[L + n]
+            do (if true then 
+                   (L + n - 1) mod B.range + 1 -> pos 
+                else 
+                   L + n -> pos 
+               if)
+            exit B[pos]
             #);
           isEmpty: 
-            booleanValue(#do (if L = R then 0 -> L -> R; true -> value if) #)
+            booleanValue
+            (#
+            do (if true then
+                   cnt = 0 -> value;
+                   (if false then
+                       'tokenBuf:empty:\n'->puttext; print
+                   if)
+                else
+                   (if L = R then 0 -> L -> R; true -> value 
+            if)if)#);
+          print:
+            (#
+            do '**** tokenBuf: cnt:'->puttext; cnt->putint;
+               ' L:' -> puttext; L -> putint; 
+               ' R:'->puttext; R -> putint; 
+               ' range:'->puttext; B.range -> putint; newline;
+               (for i: B.range repeat
+                    i->putint; ':' -> put; B[i]->putint; ','-> put;
+                    '"'->put;SY[i][]->puttext;'"'->put; 
+                    ',pos:'->puttext; chPos[i]->putint; 
+                    newline
+               for);
+            #);
        #);
      inDecl,second: @boolean;
      parenthLevel: @integer;
@@ -893,7 +970,7 @@ Lexer:
               (symb,sym[]) -> tokenBuf.add;
            // 1 then (* indent *)
               symbols.begin -> symb;
-              (symb,sym[]) -> tokenBuf.add;
+              (symb,''(*sym[]*)) -> tokenBuf.add;
            // maxInt then (* new line, but same block level *)
               (if readNextToken then
                   (* comment *)
@@ -930,7 +1007,7 @@ Lexer:
        enter n
        do symb -> currentSymb;
           sym[] -> currentSymT[];
-          (for i: n repeat 
+          (for i: n - tokenBuf.cnt + 1 repeat 
                nextTokens
           for);
           n -> tokenBuf.getTokenNo -> T;
