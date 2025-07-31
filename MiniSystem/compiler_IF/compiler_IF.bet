@@ -181,84 +181,135 @@ Tree: DirectoryModules
                  enter(pos,break)
                  do inner
                  #);
-               standAlone: BooleanValue
+               isLastLineWhiteSpace: BooleanValue
+                 (* value: true, 
+                  *   if last line of lx has only white space
+                  *   or lx.length = 0
+                  *)
                  (# ch: @char; ix: @integer
-                 do lx.length -> ix;  (*'"' -> put;*)
+                 do lx.length -> ix;
+                    (* check chars backwards,:
+                     *    lx[lex.length], lx[lx.length-1], ...
+                     *)
                     L:
                       (if ix > 0 then                        
-                          ix -> lx.inxGet -> ch; 
-                          (*ch -> put;
-                           (if commentBefore then 'B'->put else 'A' -> put if);
-                           *)
-                        (if true
-                         // ch = ascii.newline then
-                            true -> value;
-                            leave standAlone
-                         // ch <= ' ' then;
-                            ix - 1 -> ix;
-                            restart L
-                        if)
-                     else
-                        true -> value
-                      if);
-                    (*'"'->put*)
-                 #);               
+                          ix -> lx.inxGet -> ch;
+                          (if true
+                           // ch = ascii.newline then
+                              true -> value;
+                              leave isLastLineWhiteSpace
+                           // ch <= ' ' then;
+                              ix - 1 -> ix;
+                              restart L
+                          if)
+                       else
+                          true -> value
+                 if)#);           
                printComment:
-                 (* A comment has thje form
-                  * '<n> hello world' 
-                  *      if only white space before the comment
-                  * 'n> how are you' 
-                  *      if the comment appears after 
-                  *      some code on the same line
+                 (* A single-line comment has the form
+                  *    '<n> hello world' 
+                  *         if only white space before the comment
+                  *    'n> how are you' 
+                  *         if the comment appears after 
+                  *         some code on the same line
+                  * No \n in a single-line comment
+                  * A multi-line comment has the form
+                  *    '<n> abc...\n<n> qwe...\n<n> xyz...'
+                  *        if only white space before the comment
+                  *    'n> abc...\n<n> qwe...\n<n> xyz...'
+                  *        if the first comment appears after some code;
+                  *        2nd, 3rd, ... have white space before the comments
+                  * A \n appears between the lines.
+                  * comBeforeFirstItem = true 
+                  *    comment is before the first Item in an ObjectDescriptor
+                  * doBreak: ...
+                  * lastLineIsWhiteSpace: last line is white space
+                  * notFirst = true 
+                  *    for lines after the first line in a multi-line comment
+                  * comPos: position of comment
+                  *    For code like:
+                  *       ClassA:
+                  *          X: var integer
+                  *          -- comment A
+                  *    comPos = pos
+                  *       ClassB:
+                  *          Y: var integer
+                  *       -- comment B
+                  *    comPos = pos - 3
+                  *    We thus have to use comPos to indent comment
                   *)
-                 (# ix,xpos: @integer; notFirst: @boolean;
+                 (# trace:
+                      (#
+                      do (if false then
+                             (if false then
+                                 '('->lx.put;
+                                 comment.scanAll
+                                 (#do ch->lx.putint; ' '->lx.put #);
+                                 ')'->lx.put;
+                             if);
+                             (if doBreak <> lastLineIsWhiteSpace then 
+                                 '?'->lx.put;
+                             if);
+                             (if doBreak then
+                                 'DB:T,'->lx.puttext 
+                              else 'DB:F,'->lx.puttext;
+                             if);
+                             (if lastLineIsWhiteSpace then
+                                 'lW:T'->lx.puttext 
+                              else 'lW:F'->lx.puttext;
+                             if);
+                             (if comBeforeFirstItem then
+                                 '[cB:T]'->lx.puttext
+                              else
+                                 '[cB:F]'->lx.puttext
+                      if)if)#);
+                    doBreak,lastLineIsWhiteSpace: @boolean;
+                    comPos: @integer; (* position of comment *)
+                    notFirst: @boolean;
+                    ix: @integer
                  do (if comment[] <> none then
                         comment.setPos;
                         1 -> ix;
                         emit:
-                          (# doBreak,isAlone: @boolean;
-                          do standAlone -> isAlone;
+                          (# 
+                          do isLastLineWhiteSpace -> lastLineIsWhiteSpace;
                              (ix ->comment.inxGet) = '<' -> doBreak;
+                             trace;
                              (if doBreak then
                                  comment.get;
-                                 comment.getint - 3 -> xpos;
-                                 (if not commentBefore or notFirst then
-                                     (* commentBefore = true if this comment
-                                      * is before the first Item in an 
-                                      * ObjectGenerator; see qparser
-                                      * notFirst = true for lines after the
-                                      * first line in a multiline comment
-                                      *)
-                                     (pos,true) -> mkBreak;
+                                 comment.getint - 3 -> comPos;
+                                 (if false then
+                                     comPos -> lx.putint; ':'->lx.put;
+                                     (if pos <> comPos then
+                                         '!'->lx.put;
+                                 if)if);
+                                 (if not comBeforeFirstItem or notFirst then
+                                     (comPos,true) -> mkBreak;
                                  if)
                               else 
                                  comment.getint;
-                                 (if not isAlone then ' ' -> lx.put if)
-                             if);
+                                 (if not lastLineIsWhiteSpace then
+                                     ' ' -> lx.put 
+                             if)if);
                              comment.get; (* read '>' *)
                              '--' -> lx.puttext;
                              comment.scan
                              (# 
                              do (if ch <> ascii.newline then
                                     ch -> lx.put;
-                                 else
+                                 else (* multi line comment *)
                                     true -> notFirst;
                                     comment.pos + 1 -> ix;
-                                    (*(pos,true) -> mkBreak;*)
                                     restart emit 
                              if)#);
-                             (* 2024.03.08: to fix UsingAccount
-                              * assume that next Item makes a newline!?
-                              *
-                             (if doBreak or isAlone  then
-                                 (pos ,true) -> mkBreak;
-                             if)*)
-                 #)if)#);
+                             (if comBeforeFirstItem then 
+                                 (comPos,true) -> mkBreak 
+                 if)#)if)#);
                pos: @integer; break: @boolean;
             enter(pos,break)                
             do inner
             #);
-          comment: ^text; commentBefore: @boolean;
+          comment: ^text; comBeforeFirstItem: @boolean;
           PT:< SuperPP
             (# block:
                  (# pos,width: @integer; break: @boolean
