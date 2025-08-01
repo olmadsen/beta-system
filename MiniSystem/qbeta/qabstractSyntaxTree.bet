@@ -65,6 +65,10 @@ AbstractSyntaxTree: Tree
      newFeature, (* true if we are implementing a new feature but need to
                   * be able to test without it; set by switch -F  *)
      invAsDerived,   (* parse one-line syntax for bindings *)
+     ppInvAsDerived, (* pretty-print signatures and in-args as virtuals *)
+     doPPasDerived, (* -i sets this boolean; checker uses it set ppAsDerivedd;
+                     * see end of checker
+                     *)
      handleStdBetaModules,
      withValueProxy,
      parseMain, (* only parse main and then exit *)
@@ -1064,6 +1068,23 @@ AbstractSyntaxTree: Tree
             do (if false then
                    '['->lx.put; pos -> lx.putint;']'->lx.put;
                if);
+               (if ppInvAsDerived then
+                   (if sig[] <> none then
+                       sig.paramItems.scanSons
+                       (# 
+                       do (if true
+                           // current.isDecl then
+                              current[]->D[];
+                              (pos,break,true) -> D.sig.PT;
+                              (if D.isOutArg then
+                                  ': -> ' -> lx.append
+                               else
+                                  ':< ' -> lx.append;
+                              if);
+                              (pos,break) -> D.OG.PT;
+                              (pos,true) -> mkBreak
+                          if)
+               #)if)if);
                (pos,length) -> block
                (# 
                do (* '{' -> lx.put; beginPos -> lx.putint; ' ' -> lx.put;*)
@@ -1308,7 +1329,8 @@ AbstractSyntaxTree: Tree
                    scanDecls
                    (#
                    do currentDcl[] -> currentArg[];
-                      (if currentArg.isInArg or currentArg.isVirtualDataItem then
+                      (if currentArg.isInArg or currentArg.isVirtualDataItem 
+                          then
                           inner scanNonBoundItemArgs
                        else
                           (if currentArg.isOutArg then
@@ -1343,8 +1365,9 @@ AbstractSyntaxTree: Tree
                scanAllItemDecls
                (# DI: ^DataItem
                do currentDcl[] -> this(scanItemArgs).currentArg[];
-                  (if currentArg.isInArg then
-                      (if currentArg.isDataItem then
+                  (if currentArg.isInArg
+                      or ppInvAsDerived and currentArg.isVirtualDataItem then
+                      (if currentArg.isDataItem  then
                           currentArg[] -> DI[];
                           (if DI.isValue then
                               vn + 1 -> vn
@@ -2028,8 +2051,10 @@ AbstractSyntaxTree: Tree
             do (if printOffOn and false then
                    '('->lx.put; off -> lx.putint; ')'-> lx.put;
                if);
-               (if isInArg and not inSig then 'in ' -> lx.puttext if);
-               (if isOutArg and not inSig then 'out ' -> lx.puttext if);
+               (if not ppInvAsDerived then
+                   (if isInArg and not inSig then 'in ' -> lx.puttext if);
+                   (if isOutArg and not inSig then 'out ' -> lx.puttext if);
+               if);
                inner 
             #);
           isArg: @boolean;
@@ -2314,18 +2339,20 @@ AbstractSyntaxTree: Tree
                  id.scanAll
                  (#do (if ch =':' then leave print else ch -> lx.put if)
                  #);
-               paramItems.scanSons
-               (# NP: ^NewProperty; D: ^Decl
-               do (if true
-                   // current.isNewProp then
-                      (current[]->NP[]).getSarg1 -> lx.append
-                   // current.isDecl then
-                      (if (current[]->D[]).isOutArg then
-                          ' -> ' -> lx.append                              
-                      if);
-                      (pos,break) -> current.PT
-                  if)
-               #);
+               (if not ppInvAsDerived then
+                   paramItems.scanSons
+                   (# NP: ^NewProperty; D: ^Decl
+                   do (if true
+                       // current.isNewProp then
+                          (current[]->NP[]).getSarg1 -> lx.append
+                       // current.isDecl then
+                          (if (current[]->D[]).isOutArg then
+                              ' -> ' -> lx.append                              
+                          if);
+                          (pos,break) -> current.PT
+                      if)
+                   #);
+               if);
                (if isBinary then ' ' -> lx.put; ' ' -> lx.put if)
             #);
           length:: 
@@ -2410,44 +2437,113 @@ AbstractSyntaxTree: Tree
                        scanSons(# do (pos,break) -> current.PT #);
                    if)
                 // isKeyWord then
-                   scanSons
-                   (# doBreak,blankAfter: @boolean;
-                      skipBrace:
-                        (# go: @Boolean; N: ^Name;
-                        do true -> go;
-                           (if current.isNameLiteral then
-                               current[] -> N[];
-                               (if true
-                                // '(' -> N.T.equal then
-                                   (*' ' -> lx.put*)
-                                // ')' -> N.T.equal then
-                                   (*true -> blankAfter*)
-                                // '{' -> N.T.equal then
-                                   false -> go
-                                // '}' -> N.T.equal then
-                                   (pos,true) -> mkBreak0;
-                                   false -> go
-                                // (1->N.T.inxGet) = '@' then
-                                   true -> blankAfter
-                           if)if);
-                           (if go then inner if)
-                        #);
-                      ix: @integer
-                   do (* if (E) :then { S1 } :else { S2} *)
-                      (if not doBreak then
-                          pos > lineWidth -> doBreak
-                      if);
-                      (pos,doBreak) -> mkBreak0;
-                      (if false and nameListInDcl then
-                          (if (ix + 1 -> ix) > 1 then
-                              skipBrace(#do (pos,true) -> current.PT #);
+                   (if ppInvAsDerived then 
+                       (if false then
+                           scanSons
+                           (# n: @integer
+                           do n + 1 -> n;
+                              n -> lx.putint; ':'->lx.put; 
+                              current.PT; ','->lx.put
+                       #)if);
+                       (pos,true)->mkBreak;
+                       scanSons
+                       (# n: @integer;  Nm: ^Name; OI: ^ObjectInvocation;
+                          firstPar: ^Decl; Foi: ^Node
+                       do n + 1 -> n;
+                          (if true
+                           // n = 1 then
+                              current.father[] -> Foi[];
+                              L: 
+                                (if Foi## = ObjectInvocation## then
+                                    Foi[] -> OI[];
+                                 else
+                                    Foi.father[] -> Foi[];
+                                    restart L
+                                if);
+                              (if OI.ATd[] <> none then
+                                  '#'->lx.put; OI.ATd.sig.id[]->lx.append;
+                                  '$'->lx.put;
+                                  L:
+                                    OI.ATd.OG.IS.scanItemArgs (*sig.scanArgs*)
+                                    (# i: @integer;
+                                    do '%'->lx.put; currentArg.label->lx.append;
+                                       (if currentArg## <= Decl## then
+                                           currentArg[] -> firstPar[];
+                                           leave L
+                                       if)
+                                    #)
+                              if);
+                              (pos,break) -> current.PT; 
+                              pos + 3 -> pos;
+                              (pos,true) -> mkBreak
+                           // n = 3 then
+                              (if firstPar[] <> none then
+                                  (pos,break,false) -> firstPar.sig.PT;
+                               else
+                                  '???F'->lx.append
+                              if);
+                              ':: '->lx.append;
+                              (pos,break) -> current.PT;
+                              (pos,true) -> mkBreak
+                           else
+                              (if current.isNameLiteral then
+                                  current[] -> Nm[];
+                                  (if true
+                                   // '(' -> Nm.T.equal then
+                                   // ')' -> Nm.T.equal then
+                                   // '[' -> Nm.T.equal then
+                                   // ']' -> Nm.T.equal then
+                                   // '{' -> Nm.T.equal then
+                                   // '}' -> Nm.T.equal then
+                                   else
+                                      (2,Nm.T.length) -> Nm.T.sub -> lx.append;
+                                      ':: '-> lx.append
+                                  if)
+                               else
+                                  (pos,break) -> current.PT;
+                                  (pos,true) -> mkBreak
+                              if);
                           if)
-                       else
-                          skipBrace(#do (pos,true) -> current.PT #);
-                      if);
-                      (if blankAfter then 
-                          ' ' -> lx.put; false -> blankAfter 
-                   if) #)
+                       #)
+                   else
+                       scanSons
+                       (# doBreak,blankAfter: @boolean;
+                          skipBrace:
+                            (# go: @Boolean; N: ^Name;
+                            do true -> go;
+                               (if current.isNameLiteral then
+                                   current[] -> N[];
+                                   (if true
+                                    // '(' -> N.T.equal then
+                                       (*' ' -> lx.put*)
+                                    // ')' -> N.T.equal then
+                                       (*true -> blankAfter*)
+                                    // '{' -> N.T.equal then
+                                       false -> go
+                                    // '}' -> N.T.equal then
+                                       (pos,true) -> mkBreak0;
+                                       false -> go
+                                    // (1->N.T.inxGet) = '@' then
+                                       true -> blankAfter
+                               if)if);
+                               (if go then inner if)
+                            #);
+                          ix: @integer
+                            do (* if (E) :then { S1 } :else { S2} *)
+                          (if not doBreak then
+                              pos > lineWidth -> doBreak
+                          if);
+                          (pos,doBreak) -> mkBreak0;
+                          (if false and nameListInDcl then
+                              (if (ix + 1 -> ix) > 1 then
+                                  skipBrace(#do (pos,true) -> current.PT #);
+                              if)
+                           else
+                              skipBrace(#do (pos,true) -> current.PT #);
+                          if);
+                          (if blankAfter then 
+                              ' ' -> lx.put; false -> blankAfter 
+                   if)#)if)
                 // isFunction then
                    (if inDecl then
                        scanSons
@@ -2575,6 +2671,13 @@ AbstractSyntaxTree: Tree
                if);
                (pos,break,true) -> sig.PT;
                ':' -> lx.put;
+               (if ppInvAsDerived then
+                   (if true
+                    // isInArg then
+                       '<' -> lx.put 
+                    // isOutArg then
+                       ' -> ' -> lx.append
+               if)if);
                (if isVirtualDataItem then '<' -> lx.put if);
                ' ' -> lx.put;     
                label -> lx.puttext;
