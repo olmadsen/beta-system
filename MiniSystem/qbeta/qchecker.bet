@@ -702,7 +702,7 @@ checker: Parser
                         current.label -> putline;*)
                         (if traceSearch then
                             'searchEmbodied:Search: ' -> puttext; 
-                            CS[] -> puttext; ' in:'->dumpt;
+                            CS[] -> puttext; ' in:scope:'->dumpt;
                             current.dopt ->putline;
                         if);
                         NA[] -> current.OG.IS.localSearch -> (ATdx[],pn);
@@ -720,7 +720,7 @@ checker: Parser
                              else
                                 '**** name clash for: '-> puttext;
                                 NA.dopt -> putline;
-                                '**   in: '-> putline; 
+                                '**   in:scope: '-> putline; 
                                 OI.theEmbodied.dopt -> putline;
                                 '**   and:'->putline;
                                 current.dopt -> putline;
@@ -734,12 +734,13 @@ checker: Parser
           localSearch:            
             (# NA: ^Name; CS: ^ Text; ATd: ^Decl; pn: @integer
             enter NA[]
-            do (if traceSearch then
+            do NA.rmHash -> CS[];
+               (if traceSearch then
                    '**** Items:localSearch: ' -> puttext; CS[] -> putline;
-                   '**   in:' -> puttext; doPT -> putheadN;
-                   '**   isChecked:'->dumpt; isChecked -> putboolean; newline
+                   '**   in:scope:' -> puttext; doPT -> putheadN;
+                   '**   scope:isChecked:'->dumpt; isChecked -> putboolean; 
+                   newline
                if);
-               NA.rmHash -> CS[];
                searchDcls:
                  (#
                  do (if traceSearch then
@@ -757,7 +758,7 @@ checker: Parser
                     do current[] -> I[]; 
                        (if I.isDecl then
                            I[] -> AT[]; 
-                           (if traceSearch then
+                           (if false and traceSearch then
                                'Try: "' -> puttext; AT.sig.id[] -> puttext;
                                '"'->put; newline
                            if);
@@ -858,6 +859,23 @@ checker: Parser
                     (if sig[] <> none then 
                         NA[] -> sig.localSearch -> (ATd[],pn);(* pn = 0*)
                     if);
+                    (if traceSearch then
+                        '**   Items:localSearch:trySuper:before:'
+                          ->dumpT; super.doPT->dumpT;
+                        (if superDesc[] <> none then
+                            'superDesc:'->dumpTN;
+                            superDesc.dopt -> putheadN
+                         else
+                            'superdesc is none'->putline;
+                            dopt -> putheadN
+                    if)if);
+                    (if newSuperSetUp then
+                        (if (superDesc[] <> none) then
+                            NA[] -> superDesc.localSearch -> (ATd[],pn);
+                            (if ATd[] <> none then pn + 1 -> pn if);
+                        if);
+                        leave searchDcls
+                    if); 
                     trySuper:
                       (if (ATd[] = none) and (superDesc[] <> none) then
                           (if traceSearch then
@@ -869,7 +887,7 @@ checker: Parser
                        else
                           (if super[] = none then ' super is none'->putline if);
                           (if not super.isChecked then
-                              (if traceCheck then
+                              (if newSuperSetUp or traceCheck then
                                   '**   OG:check:super:isChecked:'->puttext;
                                   super.isChecked -> putboolean; newline;
                                   super.dopt -> puthead; '\n---'-> putline;
@@ -885,6 +903,7 @@ checker: Parser
                                   #);
                                   '**   superDesc = none:'->dumpT;
                                   superDesc[] = none -> putBoolean; newline;
+                                  stop
                               if);
                               (* This is a hack - let super = R.foo
                                * if super.isBeingChecked then we may have:
@@ -1361,7 +1380,7 @@ checker: Parser
                     if)
                  #)
             do (if traceCheck then
-                   '**** NewProperty:Check: '->puttext; dopt->putline;dopp->putline;
+                   '**** NewProperty:Check: '->puttext; dopt->putline
                if);
                L:
                  (#
@@ -2036,7 +2055,7 @@ checker: Parser
                      if);
                     (if isOutArg and not outOK then
                          inOutError                         
-                     if);
+                    if);
                  #);            
                handleVirtualBinding:
                   (* For any pattern: final or further, we search for a virtual
@@ -2049,8 +2068,10 @@ checker: Parser
                   *)
                  (# VP: ^Pattern; (* not always the case ??*)
                     pn: @integer; vDclx: ^NameDecl; vDclD: ^Decl
-                 do (*'Ptn:check:handleVirtualBinding:'->puttext; 
-                     * doPT -> putline;*)
+                 do (if traceCheck then
+                        'Ptn:check:handleVirtualBinding:\n'->puttext; 
+                        doPT -> putline;
+                    if);
                     (if ptnKind 
                      // VirtualPtn then
                         OG[] -> mkSig -> theSig[];
@@ -2066,6 +2087,18 @@ checker: Parser
                               -> (vDclx[],pn);
                             vDclx.asDecl -> vDcl[]
                          else
+                            (if (basicScope.superDesc[] = none) then
+                                (if basicScope.EncOG[] <> none then
+                                    '!!!! handleVirtualBinding:not checked:'
+                                      ->dumpTN;
+                                    basicScope.encOG.dopt -> putheadN;
+                                    (none,basicScope.origin[],none,true) 
+                                      -> basicScope.encOG.check
+                            if)if);
+                            (if traceCheck then
+                                '**   basicScope.superDesc:'->dumpTN;
+                                basicScope.superDesc.doPT -> dumpTN
+                            if);
                             sig.id[] -> Name
                               -> basicScope.superDesc.localSearch 
                               -> (vDclD[],pn);
@@ -2123,7 +2156,8 @@ checker: Parser
                     if)
                  #);
             do (if traceCheck then  
-                   '**** Pattern:check: ' -> puttext; sig.id[] -> putline if);
+                   '**** Pattern:check: ' -> puttext; doPT->putHeadN
+               if);
                handleVirtualBinding;
                (* Must check sig before OG;
                 * Items in OG may refer Decl's in sig
@@ -2583,8 +2617,7 @@ checker: Parser
                            else
                               ptn.OG.super.ATd[] -> D[];
                               restart followSuper
-                      if)if);
-                 #);
+                 if)if)#);
                checkIfSuperIsPattern:
                  (* A unary exp like XXX where XXX is a data-item
                   * is syntactically an ObjectDescriptor (Unary)
@@ -2610,9 +2643,7 @@ checker: Parser
                         do 'Super is not a pattern: "' -> msg;
                            super.doPT -> msg;
                            '"' -> msg;
-                        #)                       
-                    if)
-                 #);
+                 #)if)#);
                checkIfSuperIsVirtual:
                  (# ptn: ^Pattern; ATdx: ^Decl
                  do super.ATd[] -> ND2D -> ATdx[];
@@ -2626,8 +2657,83 @@ checker: Parser
                             do 'Super cannot be a virtual pattern: "' -> msg;
                                super.doPT -> msg;
                                '"' -> msg;
-                            #)                       
-                    if)if)
+                 #)if)if)#);
+               setSuperDesc:
+                 (# trace: (#exit true #);
+                    traverseSuper:
+                      (# scp: ^Scope; OGx: ^ObjectDescriptor
+                      enter(scp[],OGx[])
+                      do (if trace and  not OGx.IS.isEmpty 
+                             and not OGx.super.isEmpty then
+                             '**   traverseSuper:'->dumpT; 
+                             '"'->put; OGx.super.dopt->puttext; '"'->put; 
+                             ' '->put; OGx.doPT->putHeadN
+                         if);
+                         L:
+                           (if (OGx.IS.superDesc[] = none)  and
+                               not OGx.IS.isEmpty and not super.isEmpty then
+                               OGx.super.scanSons
+                               (# E: ^Exp; OI: ^ObjectInvocation; ATdx: ^Decl; 
+                                  onx,pnx,n: @integer
+                               do (if trace then
+                                      '**   super:'->dumpT; 
+                                      current.dopt->dumpTN;
+                                  if);
+                                  current[] -> E[];
+                                   n + 1 -> n;
+                                  (if E.isObjectInvocation then
+                                      E[] -> OI[];
+                                      (OI.ptnId[],true) 
+                                        -> scp.search 
+                                        -> (ATdx[],onx,pnx);
+                                      (if ATdx[] <> none then
+                                          (if trace then
+                                              ATdx.dopt -> putHeadN
+                                          if);
+                                          ATdx[] -> OI.ATd[]
+                                       else
+                                          '**** did not find a declaration of super'
+                                            ->dumptn;
+                                          OI.dopt -> dumptn;
+                                          leave L
+                                      if);
+                                      ATdx.OG.IS[] -> scp[];
+                                      (if isLast then
+                                          scp[] -> OGx.IS.superDesc[];
+                                          ATDx[] -> OGx.super.ATd[];
+                                          (OGx.origin[],ATdx.OG[]) 
+                                            -> traverseSuper
+                                       else
+                                          ATdx.OG.IS[] -> scp[];
+                                          ATdx.OG[] -> OGx[]
+                               if)if)#);
+                            else
+                               (if true or (OGx.IS.superDesc[] = none)
+                                   or  super.isEmpty then
+                                   (if trace then
+                                       '**   super:isEmpty'->dumpT;
+                                       OGx.super.isEmpty ->putboolean; ' '->put;
+                                       OGx.IS.superDesc[] = none -> putboolean;
+                                       ' ' -> put;
+                                       OGx.dopt -> dumptn;
+                                   if);
+                                   (if super.isEmpty 
+                                       and (OGx[] <> objectDecl.OG[]) then
+                                       objectDecl.OG.IS[] -> OGx.IS.superDesc[]
+                                   if)
+                               if)
+                           if);
+                         #)
+                 do (if trace and not IS.isEmpty and not super.isEmpty then
+                        '**** setSuperDesc:'->dumpT; 
+                        '"'->put; super.dopt->puttext; '"'->put;
+                        doPT->putHeadN
+                    if);
+                    (if (IS.superDesc[] = none) 
+                        and not IS.isEmpty and not super.isEmpty then
+                        (basicScope[],this(ObjectDescriptor)[]) 
+                          -> traverseSuper
+                    if)
                  #);
                setUpIS:
                  (* A preliminary attempt to setup IS.superDesc before 
@@ -2667,23 +2773,29 @@ checker: Parser
                                (if E## = ifThen## then
                                    '**** setUpIS:ifThen:'->puttext;
                                    dopt -> puthead
-                    if)if)#)if)
-                 #);
+                 if)if)#)if)#);
                basicScope: ^Scope
             enter basicScope[]
             do (if traceCheck then
-                   '**** OG:check:super:' -> puttext; super.dopt -> putline;
+                   '**** OG:checkSuper:' -> puttext; super.dopt -> putline;
+                   '**   OG:checkSuper:super.isChecked:'->dumpT; 
+                   super.isChecked->putboolean; 
+                   ' beingChecked:'->dumpT; super.beingChecked->putboolean;
+                   newline;
                    '**   basicScope:'->dumpT;
                    (if basicScope[] = none then
                        'none'->dumpTN;
                     else
                        basicScope.dopt -> putHeadN
-                   if)
-               if);
+               if)if);
                (if super.ATd[] = none then 
                    (* else implict super that has been setUp
                     * Or has been called from Pattern:check
                     *)
+                   (if newSuperSetUp then
+                       setSuperDesc;
+                       leave checkSuper
+                   if);
                    (*setUpIS; -- ChemicalPlantSystem fails" *)
                    (if sig[] = none (*isSingular*) then
                        (* A singular statement:
@@ -2706,6 +2818,16 @@ checker: Parser
                        (none,basicScope[],(*basicScope[]*)sig[],true) 
                          -> super.check
                    if); 
+                   (if  traceCheck then
+                       '**   OG:checkSuper:A:'->dumpT; 
+                       super.isChecked->putboolean; 
+                       (if super.ATd[] <> none then
+                           ' super.ATd:'->dumpT; 
+                           super.ATd.isChecked -> putboolean; newline;
+                           super.ATd.dopt -> putheadN;
+                           (if not super.ATd.isChecked then
+                               super.ATd.OG.IS[] -> IS.superDesc[]
+                   if)if)if);
                    checkIfSuperIsPattern;
                    checkIfSuperIsVirtual;
                    (if (super.ATd[] -> checkIfSuperIsCircular) then
@@ -2727,24 +2849,28 @@ checker: Parser
                    (if IS.superDesc[] = IS[] then
                        (* No super for pattern Object *)
                        none -> IS.superDesc[];
-                   if)
-               if);                
-               (if traceCheck then
-                   '**** check:super:end: ' -> puttext; dopt -> putheadn;
-                   ('superDesc',IS.superDesc[]) -> putPT;
-                   '**   OG:check:super:end:  ' -> puttext; doPT  -> putheadn;
+               if)if);
+               (if false and (super.ATd[] <> none) and not super.ATd.isChecked then
+                   '**** BUM'->dumpt; super.ATd.dopt->putheadN;
+                   super.ATd.OG.IS[] -> IS.superDesc[]
                if);
-            #);
+               (if traceCheck then
+                   '**** OG:checkSuper:end: ' -> puttext; dopt -> putheadn;
+                   ('superDesc',IS.superDesc[]) -> putPT;
+                   '**   OG:checkSuper:IS.superDesc.isChecked: ' -> puttext; 
+                   (if IS.superDesc[] <> none then
+                       IS.superDesc.isChecked -> putBoolean
+                    else
+                       'none'->dumpT
+                   if);
+                   newline
+            if)#);
           check::
             (# 
             do (if traceCheck then
                    '**** ObjectDescriptor:check:' -> puttext; 
-                   doPT -> putHeadn;
+                   doPT -> putHeadN;
                    (' basicScope',basicScope[]) -> putPT;
-                   (*('origin',origin[]) -> putPT;
-                   (if origin[] <> none then
-                       ('origin.father',origin.father[]) -> putPT;
-                   if)*)
                if);
                (*origin[] -> basicScope[];*)
                (* !!!!!! to fix @if S.exists{... } : then ...*)
@@ -2754,6 +2880,17 @@ checker: Parser
                (if hasItems or super.hasVirtualArgs then
                    (none,origin[],none(*origin[]*),true) -> IS.check;
                if);
+               (if traceCheck then
+                   '**** ObjectDescriptor:check:end:\n' -> puttext; 
+                   doPT->putHeadN;
+                   (if IS.superDesc[] <> none then
+                       '**   IS.superDesc:isChecked:'->dumpT; 
+                       IS.superDesc.isChecked -> putboolean; 
+                       newline                       
+                    else
+                       ' IS.superDesc:isNone:'->dumpTN;
+                   if)
+               if)
             #);
           isObjectDesc::
             (* this can be a singular or pattern defined ObjectDesc:
@@ -2967,14 +3104,13 @@ checker: Parser
             (# checkOIStdBeta:
                  (* Perhaps not needed; 
                   * the OI has been checked before this call
-                  * CheckOI retursn basicScope and OGS;
+                  * CheckOI returns basicScope and OGS;
                   * we must do that
                   *)
                  (#
                  do '**** OI:checkOIStdBeta:'->dumpT; dopt->dumptn;
                     integerDecl.OG.IS[] -> basicScope[]
                  #);
-               
                BS: ^Scope
             do (if traceCheck or traceGetVqual then
                    '**** ObjectInvocation:checkOI: '->puttext;
@@ -3248,8 +3384,21 @@ checker: Parser
                        if);
                        (ptnId[],on,pn,ATd[]) -> found;
                        ATd.asDecl -> ATdx[] -> ptnId.ATd[];
+                       (if traceCheck then
+                           '**   OI:check:ATd.check:isChecked'->dumpT;
+                           ATd.isChecked->putboolean; ' ' -> put;
+                           ATd.beingChecked->putboolean; ' ' -> put;
+                           ATd.label -> dumpTN;
+                           ATd.dopt -> putHeadN
+                       if);
                        (none,ATdx.origin[],ATdx.origin[],true) 
                          -> ATd.check;
+                       (if traceCheck then
+                           '**   OI:check:ATd.check:isChecked:after:'->dumpT;
+                           ATd.isChecked->putboolean; ' ' -> put;
+                           ATd.beingChecked->putboolean; newline;
+                           ATd.dopt -> putHeadN
+                       if);
                        ATdx[] -> checkifAbstract;
                     else
                        (if basicScope## = Items## then
@@ -4070,7 +4219,7 @@ checker: Parser
          '     in the path name to the CWD like:'->putline;
          '        ".../BETAworld/LIB/.../foo"'->putline;
          '        ".../BETAworld/lib/.../foo"'->putline;
-         '     May happen with Cugwin'->putline
+         '     May happen with Cygwin'->putline
      if);
      (none,main.origin[],none(*main.origin[]*),true) -> main.check;
      main.MarkInModuleProp;
