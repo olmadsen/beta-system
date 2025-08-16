@@ -410,7 +410,7 @@ generator: codeGenMarker
                     * Singular T: = P{...} 
                     * C3,C4,V4 *)
                    cd.bcPos -> beginBCP;
-                   (if isInArg then (* also outArg? *)
+                   (if isInArg or virtualDI then (* also outArg? *)
                        ctracer(#do 'inArg:' -> TT; doPT -> TT #);
                     else
                        (if (OG.primNo = String_prim) then
@@ -2956,7 +2956,7 @@ generator: codeGenMarker
                          * ActualArg is a valueObj being an actual arg to 
                          * a ptn that is not assign, float-*, etc.
                          *)
-                        ctracer(#do 'loadArgs:not:*: ' -> TT;
+                        cd.com(#do 'loadArgs:not:*: ' -> TT;
                                  'formalArgOf:' -> TT; E.doPT -> TQ;
                                  ' isCompositeValueObj:' -> TT;
                                  actualArg.isCompositeValueObj -> BB
@@ -2965,6 +2965,12 @@ generator: codeGenMarker
                     (true,superAdj,staticOff) 
                       -> actualArg.gen 
                       -> (mp[],valueOff);
+                    cd.com
+                    (#do 'loadArgs:after:actualArg:gen:'->TT;
+                       actualArg.isNonBasicValueObj->BB;
+                       (actualArg.super.ATd.asDecl).isDataItem->BB;
+                       (actualArg.super.ATd.asDecl).dopt->TT
+                    #);
                     (if actualArg.isNonBasicValueObj 
                         and (actualArg.super.ATd.asDecl).isDataItem then
                         (* actualArg is a data-item being 
@@ -3039,6 +3045,7 @@ generator: codeGenMarker
                                    actualArg.isBasicValue ->BB;
                                 #);
                                 (if actualArg.isInteger then cd.I2F if);
+                                cd.com(#do 'BOBS:A'->TT #);
                                 1 -> cd.pushConst
                              else
                                 ctracer(#do 'case:B:'->TT; actualArg.dopt->TT;
@@ -3078,6 +3085,7 @@ generator: codeGenMarker
                                             )
                                               -> cd.pushValue;
                                         if);
+                                        cd.com(#do 'BOBS:B'->TT #);
                                         1 -> cd.pushConst
                                     if);
                                  else
@@ -3163,16 +3171,24 @@ generator: codeGenMarker
                       if);
                       current[] -> actArgs[argTop][];
                       cd.fcom
-                      (#do 'E:'->TT;  current.label->TQ; current.dopt->TT#);
+                      (#do 'E.arg:'->TT;  current.label->TQ; current.dopt->TT#);
                    #);
                    scanArgs (* scan formal parameters in sig or as IN *)
                    (#
                    do argInx + 1 -> argInx; 
+                      ctracer
+                      (#
+                      do 'arg:'->TT; currentArg.dopt->TT; argInx->II;
+                         argTop->II; currentArg.isVirtual->BB;
+                         currentArg.isVirtualDataitem
+                      #);
                       (if argInx <= argTop then
                           (* can we do currentArg.LoadArg?
                            * And then perhaps special for virtual primitive
                            * and ptName? Virt is of course ptn *)
-                          (if currentArg.isVirtual then
+                          (if currentArg.isVirtual 
+                              and not currentArg.isVirtualDataItem 
+                              then
                               (* (currentArg[],actArgs[argInx][]) 
                                * -> handleVirtualArg
                                * See handleVargs instead
@@ -3205,7 +3221,7 @@ generator: codeGenMarker
                             'argTop:'->TT; argTop->II; nl;
                             dopt->TL;
                          #);
-                         (* The code below is a qucik hack to handle
+                         (* The code below is a quick hack to handle
                           * for 
                           *    doScan(myInx) 
                           *       from:: 3
@@ -3219,25 +3235,29 @@ generator: codeGenMarker
                           *)
                          OG.IS.scanVirtualDataItems
                          (# ix: @integer
-                         do (if traceInvAsDerived then
-                                'argInx:'->dumpT; argInx->putint; 
-                                ' ix:'->dumpT; ix->putint; 
-                                ' argTop:'->dumpT; argTop->putint; newline;
-                            if);
+                         do cd.com
+                            (#do 'argInx:'->TT; argInx->II; ' ix:'->TT; ix->II; 
+                               'argTop:'->TT; argTop->II
+                            #);
                             ix + 1 -> ix;
                             (if (ix >= argInx) and (ix <= argTop) then
                                 argInx + 1 -> argInx;
-                                (if traceInvAsDerived then
-                                    '**** current:'->dumpT; current.dopt->dumpt;
-                                    'actual:'->dumpT; 
-                                    actArgs[argInx].dopt->dumptn;
-                                if);
+                                cd.com
+                                (#do 'current:'->TT; current.dopt->TT;
+                                   'actual:'->TT; 
+                                   actArgs[argInx].dopt->TT;
+                                #);
                                 (if current.isDesignator then
                                     (* OBS! Works only for primitive types *)
                                     0 -> cd.pushConst;
                                  else
-                                    (true,superAdj,staticOff)
-                                      -> actArgs[argInx].gen;
+                                    (if true then
+                                        (current[],actArgs[argInx][])
+                                        -> handleNonVirtualArg
+                                     else
+                                        (true,superAdj,staticOff)
+                                          -> actArgs[argInx].gen;
+                                    if)
                          if)if)#);
                          restart handleSuperargs
                if)if);
