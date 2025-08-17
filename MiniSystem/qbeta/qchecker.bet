@@ -2715,7 +2715,9 @@ checker: Parser
                                               (# i: @integer
                                               do i + 1 -> i;
                                                  (if i = 2 then
-                                                     current.dopt -> dumptn;
+                                                     (if trx then
+                                                         current.dopt -> dumptn;
+                                                     if);
                                                      current[] -> A[]
                                                  if)
                                               #);
@@ -2844,7 +2846,15 @@ checker: Parser
                                           newline;
                                       if);
                                    else
-                                      E.setUpDecl -> (ATdy[],scp[]);
+                                      (if isFirst then E.origin[] -> scp[] if);
+                                      (if trx then
+                                          '**   OG:setSuperDescs:else:'->dumpT;
+                                          isFirst -> putBoolean;
+                                          scp[] = none->putBoolean;
+                                          E[] = none -> putBoolean; newline;
+                                      if);
+                                      (scp[],true)
+                                        -> E.setUpDecl -> (ATdy[],scp[]);
                                if)#);
                                scp[] -> OGx.IS.superDesc[];
                                ATDy[] -> OGx.super.ATd[];
@@ -2872,9 +2882,6 @@ checker: Parser
                         newline;
                         '**   encOD:'->dumpTN;
                         (enclosingOGwithIS).dopt -> putHeadN
-                    if);
-                    (if basicScope[] = none then
-                        '!!!! basicScope is none'->dumptn;
                     if);
                     (if (IS.superDesc[] = none) 
                         and not super.isEmpty then
@@ -3186,13 +3193,18 @@ checker: Parser
                #)
             #);
           setUpDecl::
-            (# E: ^Exp
+            (# 
             do (if trx then
-                   '**** Invocation:setDecl:'->dumpT; dopt -> dumpTN
+                   '**** Invocation:setDecl:'->dumpT; dopt -> dumpTN;
+                   theScope[] = none -> putboolean; newline
                if);
                scanSons
-               (#do (current[]->E[]).setUpDecl -> (theDcl[]->ATd[],theScope[])#)
-            #);
+               (# E: ^Exp
+               do (theScope[] ,isFirst)
+                    -> (current[]->E[]).setUpDecl 
+                    -> (theDcl[]->ATd[],theScope[]);
+                  false -> isFirst
+            #)#);
           alloc:: 
             (# 
             do (if traceAlloc then
@@ -3596,10 +3608,8 @@ checker: Parser
                  do true -> value;
                     this(ObjectInvocation)[] -> Semanticerror
                     (#
-                    do 'must be a data-item: ' -> msg;
-                       dopt -> msg
-                    #)
-                 #);               
+                    do 'must be a data-item: ' -> msg; dopt -> msg
+                 #)#);               
                ptn: ^Pattern; D: ^Decl
             do (*'**** mustBeObject: ' -> puttext; dopt -> putline;*)
                (if (ATd.asDecl -> D[]) <> none then
@@ -3630,17 +3640,15 @@ checker: Parser
                if)
             #);
           setUpDecl::
-            (# 
+            (# D: ^DataItem
             do (if trx then
                    '**** OI:setUpDecl:'->dumpT; dopt -> dumptn
                if);
                (* currently only partial *)
-               (if true (* isFirst*) then
-                   origin[] -> theScope[];
-               if);
-               (ptnId[],true(*isFirst*)) 
+               (ptnId[],isFirst) 
                  -> theScope.search 
                  -> (theDcl[],on,pn);
+                   
                (if theDcl[] <> none then
                    (if trx then
                        ('foundX',theDcl[]) -> putPT;
@@ -3650,12 +3658,20 @@ checker: Parser
                        newline
                    if);
                    theDcl[] -> ATd[];
+                   (if (theDcl.OG.getReturnDecl -> D[]) <> none then
+                       D.theDesc -> theScope[]
+                    else
+                       (if true then
+                           ATd.theDesc -> theScope[]
+                        else
+                           ATd.OG.IS[] -> theScope[]
+                       if)
+                   if)
                 else
                    '**** did not find a declaration of super:'-> dumpT;
                    pt -> dumptn;
                    stop;
-               if);
-            #);
+            if)#);
           alloc:: 
             (# org: ^Items
             do (if traceAlloc then
@@ -3859,8 +3875,9 @@ checker: Parser
           setUpDecl::
             (#
             do (if trx then
-                   '**** BinatyExp:setUpDecl:'->dumpt; dumptn
+                   '**** BinaryExp:setUpDecl:'->dumpt; dumptn
                if);
+               (* not always integer *)
                integerDecl[] -> theDcl[]; theDcl.OG.IS[] -> theScope[]
             #);
        #);
@@ -3910,7 +3927,8 @@ checker: Parser
             do (if trx then
                    '**** UnaryExp:setUpDecl:'->dumpT; dopt ->dumpTN
                if);
-               trm.setUpDecl -> (ATd[]->theDcl[],theScope[])
+               (theScope[],isFirst) 
+                 -> trm.setUpDecl -> (ATd[]->theDcl[],theScope[])
             #)
        #);
      BracketedExp::<
@@ -3946,7 +3964,7 @@ checker: Parser
                IV.ATd[] -> ATd[];
                IV.on -> on;             
                (if trx then
-                   '**** BracketedExp:checkOI:end:' -> puttext; doPT -> putheadN;
+                   '**** BracketedExp:checkOI:end:' -> puttext; doPT ->putheadN;
                    '**   basicScope:' -> dumpT; basicScope.dopt -> putheadN;
                    ('ATd',ATd[]) -> putPT;
                    (*('superDesc',IS.superDesc[]) -> putPT*)
@@ -3980,7 +3998,8 @@ checker: Parser
             do (if trx then
                    '**** BEXP:setUpDecl:'->dumpT; dopt->dumpTN
                if);
-               IV.setUpDecl -> (ATd[]->theDcl[],theScope[])
+               (theScope[],isFirst) 
+                 -> IV.setUpDecl -> (ATd[]->theDcl[],theScope[])
             #);
           alloc:: (# do enclIT[] -> IV.alloc #)
        #);
@@ -4003,11 +4022,33 @@ checker: Parser
        #);
      floatConst::<
        (# checkOI:: (# do floatDecl[] -> ATd[]; ATd.theDesc -> basicScope[] #);
-          check:: (# do floatDecl[] -> ATd[]; ATd.theDesc -> basicScope[] #)
+          check:: (# do floatDecl[] -> ATd[]; ATd.theDesc -> basicScope[] #);
+          setUpDecl::
+            (#
+            do (if trx then
+                   '**** FloatConst:setUpDcl:'->dumpT;
+                   floatDecl[] = none -> putboolean;
+                   floatDecl.OG[] = none -> putboolean;
+                   newline
+               if);
+               floatDecl[] -> theDcl[];
+               floatDecl.OG.IS[] -> theScope[]
+            #)
        #);          
      charObj::<
        (# checkOI:: (# do charDecl[] -> ATd[]; ATd.theDesc -> basicScope[] #);
-          check:: (# do charDecl[] -> ATd[]; ATd.theDesc -> basicScope[] #)
+          check:: (# do charDecl[] -> ATd[]; ATd.theDesc -> basicScope[] #);
+          setUpDecl::
+            (#
+            do (if trx then
+                   '**** CharObj:setUpDcl:'->dumpT;
+                   CharDecl[] = none -> putboolean;
+                   CharDecl.OG[] = none -> putboolean;
+                   newline
+               if);
+               charDecl[] -> theDcl[];
+               charDecl.OG.IS[] -> theScope[]
+            #)
        #);
      stringObj::<
        (# setUpOrigin::(# do scanSons(# do origin[] -> current.setUpOrigin #)#);
@@ -4032,7 +4073,7 @@ checker: Parser
           setUpDecl::
             (#
             do (if trx then
-                   '**** StringObjsetUpDcl:'->dumpT;
+                   '**** StringObj:setUpDcl:'->dumpT;
                    stringDecl[] = none -> putboolean;
                    stringDecl.OG[] = none -> putboolean;
                    newline
