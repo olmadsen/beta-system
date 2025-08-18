@@ -2653,36 +2653,26 @@ checker: Parser
                                '"' -> msg;
                  #)if)if)#);
                setSuperDescs:
-                 (* setUp superDescs for this(ObjectDescriptor) and
-                  * all its complete chain of super patterns
-                  *)
                  (# traverseSuper:
-                      (* traverse the super chain of this(OD) *)
-                      (# encOD: ^ObjectDescriptor; 
-                         (* enclosing OD of this(OD);
-                          * if this(OD).IS.isEmpty, 
-                          * then nearest enclosing OD with items
-                          * else encOD = this(OD)
-                          *)
-                         OGx: ^ObjectDescriptor; 
-                         (* an OD in the superchain starting with this(OD) *)
-                         theDcl: ^Decl; 
-                         (* the declaration of OGx.super.last *)
-                         theScope: ^Scope; 
-                         (* the scope(Items) of OGx.super.last*)
+                      (# scp: ^Scope; OGx,encOD: ^ObjectDescriptor;
+                         OGs: ^OGsequence; ATdy: ^Decl;
                       enter(encOD[],OGx[])
                       do (if trx and not OGx.super.isEmpty then
                              ('traverseSuper',OGx[])->putPT
                          if);
                          (if (OGx.IS.superDesc[] = none)
                              and not OGx.super.isEmpty then
-                             OGx.super.origin[] -> theScope[];
-                             (none,theScope[],true,encOD[])
-                               -> OGx.super.setUpDecl
-                               -> (theDcl[],theScope[]);
-                             theScope[] -> OGx.IS.superDesc[];
-                             theDcl[] -> OGx.super.ATd[]; (* already done? *)
-                             (encOD[],theDcl.OG[]) -> traverseSuper
+                             OGx.super.scanSons
+                             (# E,rec: ^Exp; 
+                             do (if trx then ('super',current[])->putPT if);
+                                E[] -> rec[]; current[] -> E[];
+                                (if isFirst then E.origin[] -> scp[] if);
+                                (rec[],scp[],true,encOD[])
+                                  -> E.setUpDecl -> (ATdy[],scp[]);
+                             #);
+                             scp[] -> OGx.IS.superDesc[];
+                             ATDy[] -> OGx.super.ATd[];
+                             (encOD[],ATdy.OG[]) -> traverseSuper
                           else
                              (if true or (OGx.IS.superDesc[] = none)
                                  or  super.isEmpty then
@@ -2706,13 +2696,18 @@ checker: Parser
                           -> traverseSuper;
                     if);
                     (if true then
-                        (* do we need this code? *)
+                        (if false then 
+                            '**   super.ATd:A:'->dumpT; 
+                            super.ATd[] <> none -> dumpB;;
+                            IS.superDesc[] <> none -> dumpB; dumpNL;
+                        if);
                         (if sig[] = none then
                             (none,basicScope[],basicScope[],true) 
                               -> super.check
                          else
                             (none,basicScope[],sig[],true) -> super.check
-                 if)if)#);
+                        if);
+                 if)#);
                basicScope: ^Scope
             enter basicScope[]
             do (if traceCheck then
@@ -3449,44 +3444,55 @@ checker: Parser
                    '**** this_prim:'->dumpT; dopt -> dumptn
             if)#);
           setUpDecl::
-            (* virtual defined in qabstractSyntaxTree.bet;
-             * currently a mess with Indexed, etc.
-             * perhaps getVqual may hanled Indexed?
-             * Must be understood and cleaned up.
-             *)
-            (# foundOrNot: BooleanValue
-                 (#
-                 do (if theDcl[] = none then
-                        this(ObjectInvocation)[] -> semanticError
-                        (#
-                        do 'did not find a declaration of super: "'-> msg;
-                           doPT -> msg; '"'->msg;
-                           '\n     enclosing ObjectDescriptor:\n'->msg; 
-                           encOD.dopt -> msg;
-                        #);
-                        true -> value
-                     else
-                        (if trx then
-                            ('found',ptnId[])->putPT;('theDcl',theDcl[])->putPT;
-                            (' on',on) -> putI; ('pn',pn) -> putI; newline
-                        if);
-                 if)#);
-               D: ^DataItem; qual,A: ^ObjectDescriptor;  OGs: ^OGsequence;
+            (# D: ^DataItem; qual,A: ^ObjectDescriptor;  OGs: ^OGsequence;
             do (if trx then
                    '**** OI:setUpDecl:'->dumpT; dopt -> dumptn
                if);
+               (* currently only partial *)
                (ptnId[],isFirst) -> theScope.search -> (theDcl[],on,pn);
-               (if foundOrNot then leave setUpDecl if);
+                   
+               (if theDcl[] = none then
+                   '**** did not find a declaration of super:'-> dumpT;
+                   doPT -> dumptn;
+                   '**** enclosing ObjectDescriptor:'->dumpT; 
+                   encOD.dopt -> putheadN;
+                   stop;
+               if);
+               (if trx then
+                   ('found',ptnId[])->putPT; ('theDcl',theDcl[])->putPT;
+                   (' on',on) -> putI; ('pn',pn) -> putI; newline
+               if);
                theDcl[] -> ATd[];
+               (if false then
+                   (if (theDcl.OG.getReturnDecl -> D[]) <> none then
+                       D.theDesc -> theScope[]
+                    else
+                       (if true then
+                           ATd.theDesc -> theScope[]
+                        else
+                           ATd.OG.IS[] -> theScope[]
+               if)if)if);
                (if theDcl.primNo
                 // indexedGet_prim then
                    (if trx then
                        '**** OI:setUpDecl:indexedGet'->dumptn; dopt->putheadN; 
-                       ('rec',rec[])->putPT(#do ('rec.ATd',rec.ATd[])->putPT #)
-                   if);
+                       ('rec',rec[])->putPT;
+                       (if rec[] <> none then
+                           ('rec.ATd',rec.ATd[])->putPT;
+                           (if rec.ATd[] <> none then
+                               rec.ATd.OG.super.doPT->dumptn;
+                   if)if)if);
                    (if (rec[] <> none) and (rec.ATd[] <> none) then
                        (* should be ! *)
-                       (rec.ATd.OG.super.last).args.getSecondArg -> A[];
+                       (rec.ATd.OG.super.last).args.scanArgs
+                       (# i: @integer
+                       do i + 1 -> i;
+                          (if i = 2 then
+                              (if trx then
+                                  current.dopt -> dumptn;
+                              if);
+                              current[] -> A[]
+                       if)#);
                        (encOD[],not isFirst,none)
                          -> A.getVqual
                          -> (OGs[],qual[]);
@@ -3536,7 +3542,8 @@ checker: Parser
                   // indexedGet_prim then
                      (if true then
                          '!!!! traverse:got:indexedGet:X:'->dumpTN; dopt->dumpTN
-                 if)if);
+                     if);
+                 if);
                qual.IS[] -> theScope[];
                (if trx then
                    '**   after:getVqual:'->dumpTN;
