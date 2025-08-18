@@ -2668,10 +2668,9 @@ checker: Parser
                                (# E,rec: ^Exp; OI: ^ObjectInvocation; 
                                   onx,pnx: @integer
                                do (if trx then ('super',current[])->putPT if);
-                                  E[] -> rec[];
-                                  current[] -> E[];
+                                  E[] -> rec[]; current[] -> E[];
                                   LLL:
-                                  (if E.isObjectInvocation then
+                                  (if false and E.isObjectInvocation then
                                       E[] -> OI[];
                                       (if isFirst then OI.origin[] -> scp[] if);
                                       (if trx then
@@ -2756,7 +2755,6 @@ checker: Parser
                                                 'A.theDesc:'->dumpt;
                                                 (A.theDesc).doPT -> putheadN;
                                             if);
-                                            
                                             (encOD[],not isFirst,none)
                                               -> A.getVqual
                                               -> (OGs[],qual[]);
@@ -2782,7 +2780,8 @@ checker: Parser
                                                 OI.label -> dumptn;
                                                 ('ATdy',ATdy[])->putPT;
                                                 ('ATdy.OG',ATdy.OG[])->putPT;
-                                                ('ATdy.OG.super',ATdy.OG.super[])
+                                                ('ATdy.OG.super'
+                                                ,ATdy.OG.super[])
                                                   ->putPT;
                                                 ('ATdy.primNo',ATdy.OG.primNo)
                                                   ->putI; 
@@ -2853,7 +2852,7 @@ checker: Parser
                                           scp[] = none->putBoolean;
                                           E[] = none -> putBoolean; newline;
                                       if);
-                                      (scp[],true)
+                                      (rec[],scp[],true,encOD[])
                                         -> E.setUpDecl -> (ATdy[],scp[]);
                                if)#);
                                scp[] -> OGx.IS.superDesc[];
@@ -3200,9 +3199,10 @@ checker: Parser
                if);
                scanSons
                (# E: ^Exp
-               do (theScope[] ,isFirst)
+               do (rec[],theScope[],isFirst,encOD[])
                     -> (current[]->E[]).setUpDecl 
                     -> (theDcl[]->ATd[],theScope[]);
+                  current[] -> rec[];
                   false -> isFirst
             #)#);
           alloc:: 
@@ -3597,8 +3597,7 @@ checker: Parser
                               ptnId.T[] -> msg;
                               '" cannot be accessed;\n     must be'
                               ' listed in a %requires property' -> msg
-                           #)
-               if)if);
+               #)if)if);
                true -> done
             #);
           isModuleItem: @boolean;
@@ -3631,33 +3630,33 @@ checker: Parser
                          if)
                       else
                          error
-               if)if)
-            #);
+            if)if)#);
           theDesc::
             (#
             do (if ATd.primNo = this_prim then
                    '**** this_prim:'->dumpT; dopt -> dumptn
-               if)
-            #);
+            if)#);
           setUpDecl::
-            (# D: ^DataItem
+            (# D: ^DataItem; qual,A: ^ObjectDescriptor;  OGs: ^OGsequence;
             do (if trx then
                    '**** OI:setUpDecl:'->dumpT; dopt -> dumptn
                if);
                (* currently only partial *)
-               (ptnId[],isFirst) 
-                 -> theScope.search 
-                 -> (theDcl[],on,pn);
+               (ptnId[],isFirst) -> theScope.search -> (theDcl[],on,pn);
                    
-               (if theDcl[] <> none then
-                   (if trx then
-                       ('foundX',theDcl[]) -> putPT;
-                       ('foundY:',ptnId[])->putPT;
-                       (' on',on) -> putI;
-                       ('pn',pn) -> putI;
-                       newline
-                   if);
-                   theDcl[] -> ATd[];
+               (if theDcl[] = none then
+                   '**** did not find a declaration of super:'-> dumpT;
+                   doPT -> dumptn;
+                   '**** enclosing ObjectDescriptor:'->dumpT; 
+                   encOD.dopt -> putheadN;
+                   stop;
+               if);
+               (if trx then
+                   ('found',ptnId[])->putPT; ('theDcl',theDcl[])->putPT;
+                   (' on',on) -> putI; ('pn',pn) -> putI; newline
+               if);
+               theDcl[] -> ATd[];
+               (if false then
                    (if (theDcl.OG.getReturnDecl -> D[]) <> none then
                        D.theDesc -> theScope[]
                     else
@@ -3665,13 +3664,92 @@ checker: Parser
                            ATd.theDesc -> theScope[]
                         else
                            ATd.OG.IS[] -> theScope[]
-                       if)
+               if)if)if);
+               (if theDcl.primNo
+                // indexedGet_prim then
+                   (if trx then
+                       '**** OI:setUpDecl:indexedGet'->dumptn; dopt->putheadN; 
+                       ('rec',rec[])->putPT;
+                       (if rec[] <> none then
+                           ('rec.ATd',rec.ATd[])->putPT;
+                           (if rec.ATd[] <> none then
+                               rec.ATd.OG.super.doPT->dumptn;
+                   if)if)if);
+                   (if (rec[] <> none) and (rec.ATd[] <> none) then
+                       (* should be ! *)
+                       (rec.ATd.OG.super.last).args.scanArgs
+                       (# i: @integer
+                       do i + 1 -> i;
+                          (if i = 2 then
+                              (if trx then
+                                  current.dopt -> dumptn;
+                              if);
+                              current[] -> A[]
+                       if)#);
+                       (encOD[],not isFirst,none)
+                         -> A.getVqual
+                         -> (OGs[],qual[]);
+                       rec.ATd[] -> theDcl[]; (* ??? *)
+                       qual.IS[] -> theScope[];
+                       leave setUpDecl
+                    else
+                       (* (rec[] = none) and (rec.ATd[] = none)
+                        * for  V := get[0], for computing range
+                        * We should eliminate get[0]
+                        * And perhaps we should avoid rec[]=none
+                        * receiver should perhaps be an OD?
+                        *)
                    if)
-                else
-                   '**** did not find a declaration of super:'-> dumpT;
-                   pt -> dumptn;
-                   stop;
-            if)#);
+                // indexedPut_prim then
+                   (if trx then
+                       '!!!! OI:setUpDecl:indexedPut:skipped:'->dumpTN;
+               if)if);
+               (encOD[],not isFirst,OGs[]) -> getVqual -> (OGs[],qual[]);
+               special:
+                 (if qual.primNo 
+                  // this_prim then
+                     (if trx then
+                         ('traverse:theScope:this',theScope[])
+                           -> putPT;
+                         ('OI',this(ObjectInvocation)[]) -> putPT;
+                     if);
+                     args.getFirstArg -> A[];
+                     (if trx then
+                         'A.theDesc:'->dumpt;
+                         (A.theDesc).doPT -> putheadN;
+                     if);
+                     (encOD[],not isFirst,none) -> A.getVqual -> (OGs[],qual[]);
+                     (if trx then
+                         ('thisArg',A[]) -> putPT;
+                         ('thisScope',theScope[])->putPT
+                     if)
+                  // indexed_prim // rIndexed_prim then
+                     (if not theDcl.isDataItem then
+                         leave special
+                     if);
+                     (if trx then
+                         '!!!! traverse:got:indexed:X:'->dumpT; dopt->dumpTN
+                     if);
+                     IndexedDecl[] -> theDcl[];
+                     IndexedDecl.OG.IS[] -> theScope[]
+                  // indexedGet_prim then
+                     (if true then
+                         '!!!! traverse:got:indexedGet:X:'->dumpTN; dopt->dumpTN
+                     if);
+                 if);
+               qual.IS[] -> theScope[];
+               (if trx then
+                   '**   after:getVqual:'->dumpTN;
+                   ('theScope',theScope[])->putPT;
+                   '**   OGs:'->dumpTN;
+                   (if OGs[] <> none then
+                       OGs.print
+                    else
+                       'none'->dumpt
+                   if);
+                   newline;
+               if);
+            #);
           alloc:: 
             (# org: ^Items
             do (if traceAlloc then
@@ -3927,8 +4005,9 @@ checker: Parser
             do (if trx then
                    '**** UnaryExp:setUpDecl:'->dumpT; dopt ->dumpTN
                if);
-               (theScope[],isFirst) 
-                 -> trm.setUpDecl -> (ATd[]->theDcl[],theScope[])
+               (rec[],theScope[],isFirst,encOD[]) 
+                 -> trm.setUpDecl 
+                 -> (ATd[]->theDcl[],theScope[])
             #)
        #);
      BracketedExp::<
@@ -3998,7 +4077,7 @@ checker: Parser
             do (if trx then
                    '**** BEXP:setUpDecl:'->dumpT; dopt->dumpTN
                if);
-               (theScope[],isFirst) 
+               (rec[],theScope[],isFirst,encOD[]) 
                  -> IV.setUpDecl -> (ATd[]->theDcl[],theScope[])
             #);
           alloc:: (# do enclIT[] -> IV.alloc #)
