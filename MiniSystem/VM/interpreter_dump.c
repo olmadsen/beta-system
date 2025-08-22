@@ -20,7 +20,7 @@ void dumpLiterals(FILE *trace,ObjDesc desc){
   int end = desc_getInt4(desc,GCinfo_index);
   int i,v;
 
-  fprintf(trace,"Literals: ");
+  fprintf(trace,"Literals: \n");
   /* This function is incomplete
    * The size of a literal (e.g. String) is written before the elements 
    * Of the literal. This is not handled below.
@@ -105,9 +105,6 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	break; 
       case rpushg:
 	fprintf(trace,"rpushg %i ", op1(bc,&glsc));
-	break;
-      case xpush:
-	fprintf(trace,"xpush %i",op1(bc,&glsc));
 	break;
       case xrpush:
 	fprintf(trace,"xrpush %i",op1(bc,&glsc));
@@ -228,7 +225,14 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);
 	fprintf(trace,"boxedInvokeVal %i %i",arg1,arg2);
-	break;	
+	break;
+      case mkValueProxy:
+	arg1 = op2(bc,&glsc);
+	arg2 = op2(bc,&glsc);
+	arg3 = op1(bc,&glsc);
+	int arg4  = op1(bc,&glsc);
+	fprintf(trace,"mkValueProxy %i %i %i %i",arg1,arg2,arg3,arg4);
+	break;
       case invokeExternal:
 	arg1 = op1(bc,&glsc);
 	fprintf(trace,"invokeExternal %i",arg1);
@@ -428,7 +432,7 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	fprintf(trace,"restoreThis");
 	break;
       case pushValue:
-	fprintf(trace,"pushValue %i",op1(bc,&glsc));
+	fprintf(trace,"pushValue %i %i",op2(bc,&glsc),op1(bc,&glsc));
 	break;
       case mkVindexed:
 	fprintf(trace,"mkVindexed %i",op2(bc,&glsc));
