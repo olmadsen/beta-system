@@ -38,7 +38,7 @@
    : bytecodes ...
 */
 bool isXbeta;
-
+int arrayStrucSize = 2;
 bool newAlloc = false;
 int newAllocOff = 0;
 bool withValueProxy = false;
