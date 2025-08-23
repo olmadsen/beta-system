@@ -60,12 +60,12 @@ extern void Bfork(void * interpreter, void * B, int coreNo);
 #define BLINK_GPIO 23 // CONFIG_BLINK_GPIO - compiler complains!? 
 #endif  
 
-#ifdef __arm__
+#ifdef __arm__ 
 #else
 #define DUMP
 #endif
 
-#define TRACE
+//#define TRACE
 //#define EVENT
     
 #define useBetaHeap false
@@ -2827,17 +2827,16 @@ bool traceThreads = true;
 #endif
 	break;
       case xpushg:
-	arg1 = op1(bc,&glsc);
-	isValueObj = op1(bc,&glsc);
 	size = op1(bc,&glsc);
+	isValueObj = op1(bc,&glsc);
 	inx = vPop(thisStack);
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	
 #ifdef TRACE
 	dumpObj(trace,"xpushg",X);
-	fprintf(trace,"xpushg off: %i isValueObj: %i size: %i newAllocOff: %i\n"
-		,arg1,isValueObj,size,newAllocOff);
+	fprintf(trace,"xpushg isValueObj: %i size: %i inx: %i\n"
+		,isValueObj,size,inx);
 #endif
 	if (isValueObj == 0 ){
 	  // imply size == 1 
@@ -2870,12 +2869,11 @@ bool traceThreads = true;
 	} 
 	break;
       case xrpushg:
-	arg1 = op1(bc,&glsc); // not used
 	X = rPop(thisStack); 
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	inx = vPop(thisStack);
 #ifdef TRACE
-	fprintf(trace,"xrpushg: %i %i\n",arg1,inx);
+	fprintf(trace,"xrpushg: %i\n",inx);
 	dumpObj(trace,"xrpushg:X",X);
 #endif
 	int ix = arrayStrucSize + inx + 1; // missing range check
@@ -3049,9 +3047,8 @@ bool traceThreads = true;
 	putR(thisObj,arg1 + arg2 + newAllocOff,X);
 	break;
       case xstoreg:
-	off = op1(bc,&glsc);       // off, not used
-	isValueObj = op1(bc,&glsc);
 	size = op1(bc,&glsc);
+	isValueObj = op1(bc,&glsc);
 	X = rPop(thisStack);
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	inx = vPop(thisStack);
@@ -3059,8 +3056,8 @@ bool traceThreads = true;
 
 	int range = X->vfields[2];
 #ifdef TRACE	
-	fprintf(trace,"xstoreg %i %i %i %s[%i] = \n",off,isValueObj,size,nameOf(X),inx);
-	fprintf(trace,"range: %i size:%i inx:%i \n",range,size,i,inx);
+	fprintf(trace,"xstoreg size:%i isValueObj:%i %s inx:%i \n"
+		,size,isValueObj,nameOf(X),inx);
 	#endif
 	if ((inx / size) + 1 > range){
 	  printf("Index out of range: %i %i \n",(inx / size) + 1,range);
@@ -3070,7 +3067,8 @@ bool traceThreads = true;
 	  int val = vPop(thisStack);
 	  int ix =  arrayStrucSize + inx + size - i;
 #ifdef TRACE
-	  fprintf(trace,"xstoreg %i %i %i %s[%i] = %i\n",off,isValueObj,size,nameOf(X),ix,val);
+	  fprintf(trace,"xstoreg: size:%i isValueObj:%i %s[%i] = %i\n"
+		  ,size,isValueObj,nameOf(X),ix,val);
 #endif
 	  X->vfields[ix] = val;
 	}
