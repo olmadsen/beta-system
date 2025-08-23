@@ -351,7 +351,6 @@ betaVM:
      thisValObjDesc: ^ObjDesc;
      thisValObjDescInx: @integer;
      
-     arrayStrucSize: (#exit 2 #); (* size of origin+length of Array object *)
      newAllocOff: @integer;
      
      runMode: @integer;
@@ -709,24 +708,26 @@ betaVM:
              * fields[0] =
              * fields[1] = origin
              * fields[2] = rangee
-             * fields[3} = 'a'
-             * fields[4] = ...
+             * fields[3] = size
+             * fields[4} = 'a'
+             * fields[5] = ...
              *)
             (# X: ^ObjDesc.template;
                length: @integer; 
                ch: @char
             enter length
-            do (*'QallocTextObject:start: ' -> puttext; length -> putint; 
-               ' textDescNo: ' -> puttext; descs.textDescNo -> putint;
-               newline;*)
+            do 'QallocTextObject:length:' -> out.puttext; length -> out.putint; 
+               ' textDescNo: ' -> out.puttext; descs.textDescNo -> out.putint;
                (if descs.OD[descs.textDescNo][] = none then
                    'descs.OD[descs.textDescNo][] = none'->putline
                if);
                (* perhaps use QallocIndex as in interpreter_c.c *)
-               (1,length,1 + newAllocOff,0) 
+               (1,length,arrayStrucSize,0) 
                  -> descs.OD[descs.textDescNo].template 
                  -> X[] 
                  -> thisStack.rpush;
+               1 -> X.fields[arrayStrucSize];
+               ('QallocTextObject:I',true,out[]) -> X.dump;
                X[] -> descs.ObjPool;
                descs.textDescNo -> X.myDescInx;
                true -> X.isObj;
@@ -745,26 +746,31 @@ betaVM:
                if);
                (* seems to be a hack 
                 * 3 = LIB = origin *)
-               length -> X.fields[1 + newAllocOff]; (* pos *)
+               length -> X.fields[arrayStrucSize - 1]; 
+               1  ->  X.fields[arrayStrucSize]; (* size = 1 *)
                (*length + 100 -> X.fields[2];  range *)
-               (for i: length  repeat
+               (for i: length  repeat 
                     inner;
-                    ch -> X.fields[i + 1 + newAllocOff];
+                    ch -> out.put;
+                    ch -> X.fields[arrayStrucSize + i];
                for);
-               (*('QallocTextObject',true,out[]) -> X.dump*)
+               ('QallocTextObject:S',true,out[]) -> X.dump
             exit X[]
             #);    
           ConvertIndexedToString:
             (# X,Y: ^ObjDesc.template; length: @integer
             do thisStack.rpop -> X[];
-               X.fields[1 + newAllocOff] -> length;
-               (* X.fields[1] = length = range
-                * X.fields[2] = indexed[1]
+               X.fields[2] -> length;
+               (* arrayStrucSize = 3
+                * X.fields[0] = origin
+                * X.fields[1] = length = range
+                * X.fields[2] = size
+                * X.fields[3] = indexed[1]
                 * ...
-                * X.fields[length + 1] = indexed[length]
+                * X.fields[length + 3] = indexed[length]
                 *)
                ('ConvertIndexedToString',true,out[]) -> X.dump;
-               'newAllocOff:'-> out.puttext; newAllocOff -> out.putint; out.newline;
+
                (*(for i: X.fields.range repeat
                     X.fields[i] -> putint; ' '->put
                for);
@@ -772,14 +778,14 @@ betaVM:
                L:
                  cycle
                  (#
-                 do (if X.fields[length + 2] = 0 then 
+                 do (if X.fields[arrayStrucSize + length] = 0 then 
                         length - 1 -> length
                      else
                         leave L
                  if)#);
                (if true then
                    (* should perhpas use allocTemplate§?*)
-                   (1,length,1 + newAllocOff,0) 
+                   (1,length,arrayStrucSize,0) 
                      -> descs.OD[descs.textDescNo].template 
                      -> Y[] 
                      -> thisStack.rpush;
@@ -797,7 +803,7 @@ betaVM:
                if);
                (*Y.fields.range -> putint; newline;*)
                (for i: length repeat
-                    X.fields[i + 1 + newAllocOff] -> Y.fields[i + 1 + newAllocOff]
+                    X.fields[arrayStrucSize + i] -> Y.fields[arrayStrucSize + i]
                for);
                ('String',true,out[]) -> Y.dump;
             #);
@@ -1109,10 +1115,10 @@ betaVM:
                 * Elim dinx + newAllocOff, template should always
                 * add 2 to rangee
                 *)               
-               (size,rangee,dinx + newAllocOff,isRindexed) 
+               (size,rangee,arrayStrucSize,isRindexed) 
                  -> descs.OD[descInx].template 
                  -> callee[];
-               'AllocIndexed: '->out.puttext; descInx -> out.putint; 
+               'QallocIndexed: '->out.puttext; descInx -> out.putint; 
                ' size:'->out.puttext; size->out.putint;
                ' range:'-> out.puttext; rangee->out.putint;
                ' isRindexed:'->out.puttext; isRindexed-> out.putint; 
@@ -1121,7 +1127,7 @@ betaVM:
                descInx -> callee.myDescInx;
                callee[] -> descs.ObjPool;
                callee[] -> thisStack.rPush;
-               (*('QallocIndexed:',true,out[]) -> callee.dump;*)
+               ('QallocIndexed:',true,out[]) -> callee.dump;
             exit callee[]
             #);
           mkIndexed:
@@ -1153,14 +1159,22 @@ betaVM:
                             ('mkIndex:ref:',true,out[]) ->R.dump;
                             ('mkIndex:ref:',true,screen[]) ->R.dump;
                         if);
-                        R.id -> X.fields[1 + length - i + 1 + newAllocOff];
+                        (if true then
+                            R.id -> X.fields[1 + length - i + arrayStrucSize];
+                         else
+                            R.id -> X.fields[1 + length - i + 1 + newAllocOff];
+                        if);
                    for);
                    X[] -> thisStack.rpush
                 else
                    (for i: length repeat
                         thisStack.vpop -> V;
                         (if trace then V -> out.putint; ' ' -> out.put if);
-                        V -> X.fields[1 + length - i + 1 + newAllocOff];
+                        (if true then
+                            V -> X.fields[1 + length - i + arrayStrucSize];
+                         else
+                            V -> X.fields[1 + length - i + 1 + newAllocOff];
+                        if)
                    for);
                if);
                (if trace then out.newline if)
@@ -1401,7 +1415,8 @@ betaVM:
                     T: @text;
                  enter N[]
                  do (if descs.newAlloc then
-                        2 -> N.get -> l; 2 -> off
+                        arrayStrucSize - 1 -> N.get -> l; 
+                        arrayStrucSize -> off
                      else
                         1 -> N.get -> l; 1 -> off
                     if);
@@ -1432,6 +1447,7 @@ betaVM:
              *    5: ref
              *)
             (# trace: (# exit false #);
+               arrayStrucSize: (#exit 3 #);
                copyToX:
                  (#
                  do scanItems:
@@ -1440,7 +1456,7 @@ betaVM:
                          skipId:
                            (* zero-terminated string *)
                            (if items[ix1] <> 0 then 
-                               (ix1 + 2,items[ix1]) -> X.put;
+                               (ix1 + arrayStrucSize,items[ix1]) -> X.put;
                                (* items[ix1] -> put;*)
                                ix1 + 1 -> ix1;
                                restart skipId
@@ -1455,7 +1471,7 @@ betaVM:
                                // 3 then
                                   items[ix1] -> kind
                               if);
-                              (ix1 + 2,items[ix1]) -> X.put;
+                              (ix1 + arrayStrucSize,items[ix1]) -> X.put;
                               (*items[ix1] -> putint;' '-> put*)
                          for);
                          (if kind // 2 // 3 then
@@ -1464,22 +1480,22 @@ betaVM:
                           else
                              ix1 + 1 -> ix1;
                              ix2 + 1 -> ix2;
-                             (ix1 + 2,ix2 + 1 -> Y.get) -> X.put;
+                             (ix1 + arrayStrucSize,ix2 + 1 -> Y.get) -> X.put;
                              (if (kind <= 1) and (size = 2) then
                                  (if trace then
                                      'float: '->puttext; 
-                                     ix1 + 2 -> X.get -> putint;
+                                     ix1 + arrayStrucSize -> X.get -> putint;
                                  if);
                                  ix1 + 1 -> ix1;
                                  ix2 + 1 -> ix2;
-                                 (ix1 + 2,ix2 + 1 -> Y.get) -> X.put;
+                                 (ix1 + arrayStrucSize,ix2 + 1 -> Y.get) -> X.put;
                                  (if trace then
                                      ' -- '->puttext;
                                      ix2 - 1 -> Y.get -> putint; ','->put;  
                                      ix2     -> Y.get -> putint; ','->put;  
                                      ix2 + 1 -> Y.get -> putint; ','->put;  
                                      ix2 + 2 -> Y.get -> putint; ';'->put; 
-                                     ix1 + 2 -> X.get -> putint; newline;
+                                     ix1 + arrayStrucSize -> X.get -> putint; newline;
                          if)if)if);
                          (if ix1 < items.range then 
                              restart scanItems
@@ -1515,8 +1531,9 @@ betaVM:
                (none,descs.textDescNo,1,1,items.range,0) 
                  -> QallocIndexed;
                thisStack.rPop -> X[];
-               
+               ('snapA:',true,out[]) -> X.dump;
                copyToX;
+               ('snapB:',true,out[]) ->X.dump;
                (if false then 
                    'items.range: ' -> puttext; 
                    items.range -> putint; 
@@ -2122,9 +2139,14 @@ betaVM:
                                (*inx + newAllocOff + off -> ix;*)
                                (if inx > (2 -> X.get) then
                                    '!!! index error: ' -> puttext;
-                                   inx -> putint; ' ' -> put; 
-                                   2 -> X.get->putint;
-                                   newline
+                                   inx -> putint; ' ' -> put;
+                                   2 -> X.get->putint; ' > '->puttext;
+                                   2 -> X.get -> putint;
+                                   newline;
+                                   '!!! index error: ' -> out.puttext;
+                                   2 -> X.get->out.putint; ' > '->out.puttext;
+                                   2 -> X.get -> out.putint;
+                                   out.newline;
                                if);
                                arrayStrucSize + inx + 1 
                                  -> ix 

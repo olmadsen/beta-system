@@ -65,7 +65,7 @@ extern void Bfork(void * interpreter, void * B, int coreNo);
 #define DUMP
 #endif
 
-//#define TRACE
+#define TRACE
 //#define EVENT
     
 #define useBetaHeap false
@@ -2067,9 +2067,10 @@ void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int d
   ctx->thisObj->vfields[dinx] = rangee; 
 };
 
-Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
+Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, int size, int rangee, int isRindexed){ 
 #ifdef TRACE
-  fprintf(ctx->trace,"QallocIndexedObj(%i,%i,%i) \n",dinx,rangee,isRindexed);
+  fprintf(ctx->trace,"QallocIndexedObj(range:%i,size:%i,isR:%i) \n"
+	  ,rangee,size,isRindexed);
 #endif    
   //printf("QallocIndexed: %x\n",(int)origin);
   //printf(" %s\n",nameOf(origin));
@@ -2077,10 +2078,13 @@ Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, i
   // indexed[0] = 0
   // indexed[1] = origin
   // indexed[2] = range
-  // indexed[3] = 1st element
-  // must add 2 to range below
+  // indexed[3] = size
+  // indexed[4] = 1st element
+  // must add arrayStrucSize + 1 to range below
+  // Note! indexed[0] is not used
   if (isRindexed == 0) {
-    ctx->callee = allocTemplate(ctx,newId(ctx),descNo,isObj,rangee + 2,0);
+    ctx->callee =
+      allocTemplate(ctx,newId(ctx),descNo,isObj,rangee * size + arrayStrucSize + 1,0);
   } else {
     if (rangee > 132) {
       runTimeErrorX("Allocating ref-rep larger than 132",origin,-1);
@@ -2089,12 +2093,13 @@ Btemplate *QallocIndexed(Block *ctx, Btemplate *origin, int descNo,bool isObj, i
   };
   origin = ctx->origin;
   putR(ctx->callee,1,origin); // store origin
-  ctx->callee->vfields[dinx + newAllocOff] = rangee; 
-  // printf("QallocIndexedB: %x\n",(int)origin);
-  // int i=0;
-  // for (i = 0; i <= rangee; i++) printf(" %i",callee->vfields[i]);
-  // printf(" dinx = %i %i\n", dinx, rangee);
-  
+  ctx->callee->vfields[arrayStrucSize - 1] = rangee;
+  ctx->callee->vfields[arrayStrucSize] = size;
+  /*printf("QallocIndexed: range:%i,size:%i, %x\n",rangee,size,(int)origin);*
+  int i=0;
+  for (i = 0; i <= arrayStrucSize + rangee*size; i++)
+    printf("%i:%i, ",i,ctx->callee->vfields[i]);
+    printf("\n");*/
   rPush(ctx->thisStack,ctx->callee);
   //printf("QallocIndexedX: %x",(int)origin);
   //printf(" %s\n",nameOf(origin));
@@ -2111,14 +2116,14 @@ void mkIndexed(int descInx,bool isRef,Block *ctx) {
     R = rPop(ctx->thisStack); // QallocIndexed push X
     for (i = 1; i <= length; i++) {
       R = rPop(ctx->thisStack);
-      X->vfields[1 +  length - i + 1 + newAllocOff] = (int)R;
+      X->vfields[1 +  length - i + arrayStrucSize] = (int)R;
       dumpObj(ctx->trace,"string:",R);
     };
     rPush(ctx->thisStack,X);
     dumpObj(ctx->trace,"mkRindexed:",X);
   }else{
     for (i = 1; i <= length; i++) {
-      X->vfields[1 +  length - i + 1 + newAllocOff] = vPop(ctx->thisStack);
+      X->vfields[1 +  length - i + arrayStrucSize] = vPop(ctx->thisStack);
     }
   }
 }
@@ -2164,8 +2169,9 @@ void QallocTextObject(Block *ctx,int litInx){
    * vfields[0] =
    * vfields[1] = origin
    * vfields[2] = rangee
-   * vfields[3} = 'a'
-   * vfields[4] = ...
+   * vfields[3] = size
+   * vfields[4} = 'a'
+   * vfields[5] = ...
    */
   int dinx = 1; // start of repetition: adjust for newAllocOff in QallocIndexed
   int rangee = getLiteral(ctx->thisObj,litInx); // literals[litInx] = rangee
@@ -2177,14 +2183,15 @@ void QallocTextObject(Block *ctx,int litInx){
   int i;
   for (i = 0; i < rangee; i++) {
     char ch = getLiteral(X, litInx + i + 1);
-    ctx->callee->vfields[dinx + 1 + i + newAllocOff] = ch;
+    ctx->callee->vfields[arrayStrucSize + i + 1] = ch;
   }
 #ifdef TRACE
   dumpObj(ctx->trace,"QallocTextObject:",ctx->callee);
 #endif
-  /* printf("\nQallocTextObject:  range = %i ", rangee);
-     for (i = 0; i < 40; i++) printf(" i: %i",getV(ctx->callee,i));
-     printf("\n"); */
+  /*printf("\nQallocTextObject:  range = %i\n", rangee);
+  for (i = 0; i < arrayStrucSize + rangee + 1; i++)
+    printf(" %i:%i",i,getV(ctx->callee,i));
+    printf("\n"); */
 }
 
 char *mkCstring(Btemplate *T){
@@ -2229,25 +2236,26 @@ void C2QBstring(Block *ctx,char *S){
 
 void  ConvertIndexedAsString(Block *ctx) {
   Btemplate *X = rPop(ctx->thisStack);; 
-  int i, length  = X->vfields[1 + newAllocOff];
+  int i, length  = X->vfields[arrayStrucSize - 1];
   /*printf("\n*** ConvertIndexedAsString %i:\n", length);
-  for (i=0; i <= length + 2; i++) printf("i:%i=%i ",i,X->vfields[i]);
+  for (i=0; i < length + arrayStrucSize + 1; i++)
+    printf("i:%i=%i ",i,X->vfields[i]);
   printf("\n");
   printf("X: %x %s ",(int)X,nameOf(X));
   printf("X.origin: %x ",(int)getR(X,1));
-  printf("%s\n",nameOf(getR(X,1)));*/
+  printf("%s\n",nameOf(getR(X,1)));
+  */
   
   ctx->origin = X;
-  
   //printf("X: %x %s\n",(int)X,nameOf(X));
   //printf("\nlength: %i %i%\n",length,X->vfields[length + 2]);
-  while (X->vfields[length + 2] == 0 ) {
+  while (X->vfields[length + arrayStrucSize] == 0 ) {
     length = length - 1;
     //printf("L:%i ",length);
   }
   QallocIndexed(ctx,X,getTextDescNo(),1,1,length,0);
-  
-  /*printf("\nlength: %i \n",length);
+  /*
+  printf("\nlength: %i \n",length);
   printf("aaaD %x %s\n", (int)ctx->world,nameOf(ctx->world));
   printf("aaaD %x %s\n", (int)getR(ctx->world,3),nameOf(getR(ctx->world,3)));
   putR(ctx->callee,1,getR(ctx->world,3)); // origin - a bloody hack
@@ -2255,9 +2263,10 @@ void  ConvertIndexedAsString(Block *ctx) {
   printf("callee: %x %s\n",(int)ctx->callee,nameOf(ctx->callee));
   printf("origin: %x %s\n",(int)getR(ctx->callee,1),nameOf(getR(ctx->callee,1)));
   */
-  for (i = 2; i <= length + 1; i++) {
+  for (i = 0; i < length + 1; i++) {
     //printf("C: %i\n",X->vfields[i + newAllocOff]);
-    ctx->callee->vfields[i + newAllocOff] = X->vfields[i + newAllocOff];
+    ctx->callee->vfields[arrayStrucSize + i + 1] =
+      X->vfields[arrayStrucSize + i + 1];
   }
   //printf("origin: %x %s\n",(int)getR(ctx->callee,1),nameOf(getR(ctx->callee,1)));
 }
@@ -2269,11 +2278,11 @@ int fileOpen(Btemplate *FN){
   char *N;
   int L,i;
   N = malloc(30);
-  L = getV(FN,2);
+  L = getV(FN,arrayStrucSize - 1);
   //printf("fileOpen %i",L);
   for (i = 1; i <=L; i++)
     { //printf(" %c ", getV(FN,2 + i));
-      N[i - 1] =  getV(FN,2 + i);
+      N[i - 1] =  getV(FN,arrayStrucSize + i);
     }
   N[L] = 0;
 #ifdef __arm__
@@ -2756,8 +2765,10 @@ bool traceThreads = true;
 #endif
 	break;
       case rpushg:
-	fprintf(trace,"rpushg\n");
-	arg1 = op1(bc,&glsc);
+	arg1 = op1(bc,&glsc); // off
+#ifdef TRACE
+	fprintf(trace,"rpushg %i\n",arg1);
+	#endif
 	X = rPop(thisStack);
 	if (X == NULL) {
 #ifdef __arm__ 
@@ -2823,7 +2834,8 @@ bool traceThreads = true;
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	
-#ifdef TRACE	
+#ifdef TRACE
+	dumpObj(trace,"xpushg",X);
 	fprintf(trace,"xpushg off: %i isValueObj: %i size: %i newAllocOff: %i\n"
 		,arg1,isValueObj,size,newAllocOff);
 #endif
@@ -2831,7 +2843,9 @@ bool traceThreads = true;
 	  // imply size == 1 
 	  int ix = arrayStrucSize + inx + 1;
 	  arg3 = X->vfields[ix];
+#ifdef TRACE
 	  fprintf(trace,"ix: %i val: %i\n",ix,arg3);
+#endif
 	  vPush(thisStack,arg3);
 	}else{
 #ifdef TRACE
@@ -2854,11 +2868,6 @@ bool traceThreads = true;
 	    vPush(thisStack,arg3); 
 	  }
 	} 
-	/*else{
-	  int inx = vPop(thisStack);
-	  // vPush(thisStack,arg1 + inx + newAllocOff - 1 );
-	  vPush(thisStack,arg1 + newAllocOff + inx + 1 );
-	  } */
 	break;
       case xrpushg:
 	arg1 = op1(bc,&glsc); // not used
@@ -3049,8 +3058,10 @@ bool traceThreads = true;
 	if (isValueObj == 1) vPop(thisStack);
 
 	int range = X->vfields[2];
+#ifdef TRACE	
 	fprintf(trace,"xstoreg %i %i %i %s[%i] = \n",off,isValueObj,size,nameOf(X),inx);
 	fprintf(trace,"range: %i size:%i inx:%i \n",range,size,i,inx);
+	#endif
 	if ((inx / size) + 1 > range){
 	  printf("Index out of range: %i %i \n",(inx / size) + 1,range);
 	  runTimeErrorX("index error\n",thisObj,glsc);
@@ -4674,9 +4685,9 @@ bool traceThreads = true;
 	X->vfields[off + 1 + inx - 1] = arg2;
 	break;
       case allocIndexed:	
-	arg1 = op2(bc,&glsc);
-	arg2 = op1(bc,&glsc);
-	arg3 = op1(bc,&glsc);
+	arg1 = op2(bc,&glsc); // descInx 
+	arg2 = op1(bc,&glsc); // size 
+	arg3 = op1(bc,&glsc); // isRindexed
 #ifdef TRACE
       fprintf(trace,"allocIndexed %i %i %i\n",arg1,arg2,arg3);
 #endif
@@ -4687,7 +4698,7 @@ bool traceThreads = true;
 	rangee = vPop(thisStack);
 	if (isXbeta) {
 	  saveContext();
-	  QallocIndexed(thisBlock,thisBlock->origin,arg1,arg3,dinx,rangee,isRindexed);
+	  QallocIndexed(thisBlock,thisBlock->origin,arg1,arg3,arg2,rangee,isRindexed);
 	  restoreContext();
 	}
 	else {
