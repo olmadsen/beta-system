@@ -2832,10 +2832,10 @@ bool traceThreads = true;
 	inx = vPop(thisStack);
 	X = rPop(thisStack);
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
-	
+	if (size == 0) size = X->vfields[arrayStrucSize];
 #ifdef TRACE
 	dumpObj(trace,"xpushg",X);
-	fprintf(trace,"xpushg isValueObj: %i size: %i inx: %i\n"
+	fprintf(trace,"xpushg isValueObj: %i size: %i inx: %i, objSize: %i\n"
 		,isValueObj,size,inx);
 #endif
 	if (isValueObj == 0 ){
@@ -3055,9 +3055,10 @@ bool traceThreads = true;
 	if (isValueObj == 1) vPop(thisStack);
 
 	int range = X->vfields[2];
+	if (size == 0) size = X->vfields[arrayStrucSize];
 #ifdef TRACE	
-	fprintf(trace,"xstoreg size:%i isValueObj:%i %s inx:%i \n"
-		,size,isValueObj,nameOf(X),inx);
+	fprintf(trace,"xstoreg size:%i isValueObj:%i %s inx:%i objSize: %i\n"
+		,size,isValueObj,nameOf(X),inx,objSize);
 	#endif
 	if ((inx / size) + 1 > range){
 	  printf("Index out of range: %i %i \n",(inx / size) + 1,range);
