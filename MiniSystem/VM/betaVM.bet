@@ -44,8 +44,8 @@ event: data
   #);
 Sleep: external(# milliSec: @int64 enter milliSec do CallC #);
 init_interpreter: external
-  (# bc,imageS,valProxDescNo: @integer; newAlloc,withValProx: @boolean; E: ^event
-  enter(bc,imageS,newAlloc,withValProx,valProxDescNo)
+  (# bc,imageS,valProxDescNo: @integer; withValProx: @boolean; E: ^event
+  enter(bc,imageS,withValProx,valProxDescNo)
   do callC
   exit E[]
   #);
@@ -350,8 +350,6 @@ betaVM:
      
      thisValObjDesc: ^ObjDesc;
      thisValObjDescInx: @integer;
-     
-     newAllocOff: @integer;
      
      runMode: @integer;
      
@@ -704,7 +702,7 @@ betaVM:
             exit X[]
             #);
           QallocTextObject:
-            (* New layout for newAlloc: "abc..."
+            (* Layout for text object: "abc..."
              * fields[0] =
              * fields[1] = origin
              * fields[2] = rangee
@@ -1108,16 +1106,12 @@ betaVM:
                if);               
             #);
           QallocIndexed:
+            (* alloc Indexed object of size arrayStrucSize + rangee *)
             (# callee,Y: ^objDesc.template;
                origin: ^objDesc.template;
-               descInx,size,dinx,rangee,isRindexed: @integer
-            enter(origin[],descInx,size,dinx,rangee,isRindexed)
-            do (* dinx = 1 - always, pushed by generator, but elim!
-                * newAllocOff = 1, do elim
-                * Elim dinx + newAllocOff, template should always
-                * add 2 to rangee
-                *)               
-               (size,rangee,arrayStrucSize,isRindexed) 
+               descInx,size,rangee,isRindexed: @integer
+            enter(origin[],descInx,size,rangee,isRindexed)
+            do (size,rangee,arrayStrucSize,isRindexed) 
                  -> descs.OD[descInx].template 
                  -> callee[];
                'QallocIndexed: '->out.puttext; descInx -> out.putint; 
@@ -1149,7 +1143,7 @@ betaVM:
                
                1 -> size; (* probably size of elements???*)
                
-               (X[],descInx,size,1,length,isRindexed) 
+               (X[],descInx,size,length,isRindexed) 
                  -> QallocIndexed -> X[];
                
                (if trace then  ' elem: ' -> out.puttext; if);
@@ -1161,24 +1155,15 @@ betaVM:
                             ('mkIndex:ref:',true,out[]) ->R.dump;
                             ('mkIndex:ref:',true,screen[]) ->R.dump;
                         if);
-                        (if true then
-                            R.id -> X.fields[1 + length - i + arrayStrucSize];
-                         else
-                            R.id -> X.fields[1 + length - i + 1 + newAllocOff];
-                        if);
+                        R.id -> X.fields[1 + length - i + arrayStrucSize];
                    for);
                    X[] -> thisStack.rpush
                 else
                    (for i: length repeat
                         thisStack.vpop -> V;
                         (if trace then V -> out.putint; ' ' -> out.put if);
-                        (if true then
-                            V -> X.fields[1 + length - i + arrayStrucSize];
-                         else
-                            V -> X.fields[1 + length - i + 1 + newAllocOff];
-                        if)
-                   for);
-               if);
+                        V -> X.fields[1 + length - i + arrayStrucSize];
+               for)if);
                (if trace then out.newline if)
             #);
           asObjEnabled: @boolean;
@@ -1416,12 +1401,8 @@ betaVM:
                  (# N: ^objDesc.template; l,off: @integer;
                     T: @text;
                  enter N[]
-                 do (if descs.newAlloc then
-                        arrayStrucSize - 1 -> N.get -> l; 
-                        arrayStrucSize -> off
-                     else
-                        1 -> N.get -> l; 1 -> off
-                    if);
+                 do arrayStrucSize - 1 -> N.get -> l; 
+                    arrayStrucSize -> off;
                     (for i: l repeat
                          i + off -> N.get -> T.put; 
                     for);
@@ -1530,7 +1511,7 @@ betaVM:
                    for);
                    newline;
                if);
-               (none,descs.textDescNo,1,1,items.range,0) 
+               (none,descs.textDescNo,1,items.range,0) 
                  -> QallocIndexed;
                thisStack.rPop -> X[];
                ('snapA:',true,out[]) -> X.dump;
@@ -1576,7 +1557,6 @@ betaVM:
                first: @boolean
             do (*'***VM started:'->puttext; descInx -> putint; newline;*)
                true -> isRunning; (*screen[] -> out[];*)
-               (if descs.newAlloc then 1 -> newAllocOff if);
                false -> doTerminate;
                (if descs.OD[1][] = none then (* not used any more*)
                    'Allocating dummy template in OD[1] for repetitions'
@@ -1646,8 +1626,7 @@ betaVM:
                           *  newline; 
                           *)
                       #) -> BC;                                           
-                      (BC,imageSize,true,withValueProxy
-                      ,valueProxyDescno)
+                      (BC,imageSize,withValueProxy,valueProxyDescno)
                         -> init_interpreter;
                       isXbeta -> run_interpreter;
                       true -> first;
@@ -2094,27 +2073,6 @@ betaVM:
                         (thisObj[],X[],true,thisStack[],off,false,0
                         ,thisCode.descInx,glsc,thisStack.rTopElm) 
                           -> rPushEvent
-                     // codes.xpush then
-                        'xpush' -> exe;
-                        (*  thisStack.rpop -> X[]; - not used *)
-                        op1 -> off;
-                        thisStack.vpop -> inx;
-                        off + inx + newAllocOff
-                          -> thisObj.get 
-                          -> thisStack.vpush;
-                        (* '\nxpush: off: ' -> puttext; off -> putint;
-                         ' inx: ' -> puttext; inx -> putint; newline;*)
-                        (thisObj[],thisObj[],false,thisStack[],off,true
-                        ,inx,thisCode.descInx,glsc,thisStack.vTopElm)
-                          -> vPushEvent
-                     // codes.xrpush then
-                        'xrpush' -> exe;
-                        op1 -> off;
-                        thisStack.vpop -> inx;
-                        off + inx + newAllocOff -> thisObj.rget -> X[];
-                        X[] -> thisStack.rpush;
-                        (thisObj[],thisObj[],false,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.rTopElm)
-                          -> rPushEvent
                      // codes.xpushg then
                         (* rStack: ... X = Array-object
                          * vStack: ... inx = index into array 
@@ -2146,11 +2104,6 @@ betaVM:
                            out.newline;  
                            ('xpushg:',true,out[]) -> X.dump;
                            (if (isValueObj = 0) and (size = 1) then
-                               (* basic object: imply size = 1
-                                * off = 1, probably the same value
-                                * as used in QallocIndexed and
-                                * off + newAllocOff = 2, always!?
-                                *)
                                inx + 1
                                  -> X.get 
                                  -> value 
@@ -2431,32 +2384,7 @@ betaVM:
                         (if Y[] <> none then ('src',true,out[]) -> Y.dump if);*)
                         (off,Y[]) -> X.rput;
                         (thisObj[],thisStack[],true,X[],off,false,0,thisCode.descInx,glsc,Y[]) 
-                          -> rStoreEvent
-                     // codes.xstore then
-                        'xstore' -> exe;
-                        (*('xstoreA',true,screen[])  -> thisObj.dump;*)
-                        (* thisStack.rpop -> X[]; - not used *)
-                        op1 -> off;
-                        thisStack.vpop -> inx;
-                        (thisStack.vpop -> value,off + inx + newAllocOff)
-                          -> thisObj.assign;
-                        ' ' -> out.put; value -> out.putint; 
-                        '->' -> out.puttext; 
-                        thisObj.myName -> out.puttext;
-                        '.V[' -> out.puttext; 
-                        off -> out.putint; '+' -> out.put;
-                        inx -> out.putint; ']' -> out.put;
-                        (*('xstoreB',true,screen[])  -> thisObj.dump;*)
-                        (thisObj[],thisStack[],false,thisObj[],off,true,inx,thisCode.descInx,glsc,value) 
-                          -> vStoreEvent 
-                     // codes.xrstore then
-                        'xrstore' -> exe;
-                        op1 -> off;
-                        thisStack.vpop -> inx;
-                        thisStack.rpop -> X[];
-                        (off + inx + newAllocOff, X[]) -> thisObj.rput;
-                        (thisObj[],thisStack[],false,thisObj[],off,true,inx,thisCode.descInx,glsc,value) 
-                          -> vStoreEvent                        
+                          -> rStoreEvent                   
                      // codes.xstoreg then
                         'xstoreg' -> exe; 
                         ' size: ' -> out.puttext; op1 -> size;
@@ -2647,7 +2575,7 @@ betaVM:
                         stacksToOut;
                         (thisCode.descInx,glsc + 3 ) -> thisObj.saveReturn;
                         stacksToOut;
-                        (none,descInx,1,1,rangee,0) -> QallocIndexed;
+                        (none,descInx,1,rangee,0) -> QallocIndexed;
                         stacksToOut;
                         thisStack.rPop -> callee[];
                         thisObj[] -> callee.rPush;
@@ -2672,7 +2600,7 @@ betaVM:
                         if);
                         thisStack.vpop -> rangee;
                         (if isXbeta then
-                            (X[],descInx,size,dinx,rangee,isRindexed) 
+                            (X[],descInx,size,rangee,isRindexed) 
                               -> QallocIndexed
                          else
                             (X[],descInx,isObj,dinx,rangee,isRindexed) 

@@ -106,9 +106,6 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case rpushg:
 	fprintf(trace,"rpushg %i ", op1(bc,&glsc));
 	break;
-      case xrpush:
-	fprintf(trace,"xrpush %i",op1(bc,&glsc));
-	break;
       case xpushg:
 	fprintf(trace,"xpushg %i %i",op1(bc,&glsc),op1(bc,&glsc));
 	break;
@@ -133,12 +130,6 @@ void dumpCode(FILE *trace, ObjDesc desc){
       case rstoreg:   
 	fprintf(trace,"rstoreg %i ",op1(bc,&glsc));
 	break; 
-      case xstore:
-	fprintf(trace,"xstore %i ",op1(bc,&glsc));
-	break;
-      case xrstore:
-	fprintf(trace,"xrstore %i ",op1(bc,&glsc));
-	break;
       case xstoreg:
 	fprintf(trace,"xstoreg %i %i",op1(bc,&glsc),op1(bc,&glsc));
 	break;
@@ -154,7 +145,6 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	
 	fprintf(trace,"pushFloatConst %x %x",arg1,arg2);
 	break;
-	
       case _double:
 	fprintf(trace,"double");
 	break;

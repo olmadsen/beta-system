@@ -1190,31 +1190,25 @@ int hSize = 0;
 
 Btemplate *getR(Btemplate *obj,int inx){ 
   checkInHeap(obj);
-  if (newAlloc){
-    if ((0 <= inx) && (inx <= 1024)) {
-      return (Btemplate *)obj->vfields[inx];
-    } else {
+  if ((0 <= inx) && (inx <= 1024)) {
+    return (Btemplate *)obj->vfields[inx];
+  } else {
 #ifdef __arm__
 #else      
-      printf("getR: index error %i\n",inx);
+    printf("getR: index error %i\n",inx);
 #endif
-      return (Btemplate *)obj->vfields[inx]; // to fool compilere
-    }
-  }else{
     return (Btemplate *)obj->vfields[inx]; // to fool compilere
   }
 };
 void putR(Btemplate *obj,int inx, Btemplate *X){
   checkInHeap(obj);
-  if (newAlloc) {
-    if ((0 <= inx) && (inx <= 1024)) {
-      obj->vfields[inx] = (int)X;
-    }else{
+  if ((0 <= inx) && (inx <= 1024)) {
+    obj->vfields[inx] = (int)X;
+  }else{
 #ifdef __arm__
 #else
-      printf("putR: index error %i\n",inx);
+    printf("putR: index error %i\n",inx);
 #endif
-    }
   }
 };
 
@@ -1687,9 +1681,9 @@ void allocMain(Block *thisBlock,int descNo){
 FILE *trace_t;
 
 #ifdef __arm__
-#else
+#else 
 // Only called from betaVM and runbeta.c
-void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc,bool withValProx
+void init_interpreter(ObjDesc descs_a, int imageS, bool withValProx
 		      ,int valProxDescNo)
 {
   FILE *trace;
@@ -1707,11 +1701,10 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool newAlc,bool withValProx
   //descs = (ObjDesc) heapAlloc(NULL,imageS);
   memcpy((void *)descs,descs_a,imageS); 
 
-  newAlloc = newAlc;
-  if (newAlloc) newAllocOff = 1;
+  newAllocOff = 1;
   withValueProxy = withValProx;
   valueProxyDescNo = valProxDescNo;
-}
+} 
 #endif
 
 void set_descs(ObjDesc BC){
@@ -1743,7 +1736,7 @@ mutex1 = xSemaphoreCreateBinary();
 
   isXbeta = isXB;
   newAlloc = true;
-  if (newAlloc) newAllocOff = 1;
+  newAllocOff = 1;
   mainDescNo = getMainDescInx();  
   threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)malloc(sizeof(Block));
@@ -2165,7 +2158,7 @@ void allocFromStrucRefObj(Block *ctx,Btemplate *obj){
   }
   
 void QallocTextObject(Block *ctx,int litInx){
-  /* New layout for newAlloc: "abc..."
+  /* Layout for Text object: "abc..."
    * vfields[0] =
    * vfields[1] = origin
    * vfields[2] = rangee
@@ -2808,24 +2801,6 @@ bool traceThreads = true;
 #endif
 	
 	break;
-      case xpush:
-	arg1 = op1(bc,&glsc); // off
-	arg2 = vPop(thisStack); // inx
-	arg3 = thisObj->vfields[arg1 + arg2 + newAllocOff];
-	vPush(thisStack,arg3);
-#ifdef TRACE
-	fprintf(trace,"xpush %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
-#endif
-	break;
-      case xrpush:
-	arg1 = op1(bc,&glsc); // off
-	arg2 = vPop(thisStack); // inx
-	X = getR(thisObj,arg1 + arg2 + newAllocOff);
-	rPush(thisStack,X);
-#ifdef TRACE
-	fprintf(trace,"xrpush %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
-#endif
-	break;
       case xpushg:
 	size = op1(bc,&glsc);
 	isValueObj = op1(bc,&glsc);
@@ -2858,7 +2833,7 @@ bool traceThreads = true;
 	  }
 	}
 	break;
-      case xrpushg:
+      case xrpushg: 
 	X = rPop(thisStack); 
 	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	inx = vPop(thisStack);
@@ -3018,24 +2993,6 @@ bool traceThreads = true;
 	fprintf(trace,"rstoreg %s[%i] = %s \n",nameOf(X),arg1,nameOf(Y));
 #endif
 	break; 
-      case xstore:
-	arg1 = op1(bc,&glsc);
-	arg2 = vPop(thisStack); // inx
-	arg3 = vPop(thisStack); // value;
-#ifdef TRACE
-	fprintf(trace,"xstore %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
-#endif
-	thisObj->vfields[arg1 + arg2 + newAllocOff] = arg3;
-	break;
-      case xrstore:
-	arg1 = op1(bc,&glsc);
-	arg2 = vPop(thisStack); // inx
-	X = rPop(thisStack); // value;
-#ifdef TRACE
-	fprintf(trace,"xrstore %s[%i+%i] = %s\n",nameOf(thisObj),arg1,arg2,nameOf(X));
-#endif
-	putR(thisObj,arg1 + arg2 + newAllocOff,X);
-	break;
       case xstoreg:
 	size = op1(bc,&glsc);
 	isValueObj = op1(bc,&glsc);
