@@ -2958,7 +2958,7 @@ generator: codeGenMarker
                     (#do 'loadArgs:after:actualArg:gen:'->TT;
                        actualArg.isNonBasicValueObj->BB;
                        (actualArg.super.ATd.asDecl).isDataItem->BB;
-                       (actualArg.super.ATd.asDecl).dopt->TT
+                       (actualArg.super.ATd.asDecl).dopt->TL
                     #);
                     (if actualArg.isNonBasicValueObj 
                         and (actualArg.super.ATd.asDecl).isDataItem then
@@ -3917,7 +3917,12 @@ generator: codeGenMarker
                        'E.origin.isValueObj:'->TT;
                        (E.ATd.asDecl).origin.encOG.isValueObj -> BB;
                        'staticOff:'->TT; staticOff->II; 
-                       ('rec:',rec[])->PT(#do rec.dopt->TL #);
+                       ('rec:',rec[])->PT
+                       (#do rec.dopt->TL; 
+                          ('rec.ATd:',rec.ATd[])->PT(#do rec.ATd.doPT->TL #);
+                          rec.ATd.OG.primNo->II;
+                          rec.ATd.isIndexedValueObj -> BB
+                       #);
                        ('pRec:',pRec[])->PT(#do pRec.dopt->TL #);
                        'E.origin:'->TT;
                        (E.ATd.asDecl).origin.encOG.doPT -> TL
@@ -3934,19 +3939,23 @@ generator: codeGenMarker
                             (prec[],rec[]) 
                               -> getTypeAsOG 
                               -> (typeAsOG[],dNo,off,originIsValueObj);
+                            (if false and(rec[] <> none)
+                                and rec.ATd.isIndexedValueObj then
+                                cd.double
+                            if);
                             cd.rdouble;
-                            ctracer
+                            fctracer
                             (#do 'rec:'->TT; rec.dopt -> TL;
                                'rec.origin:'->TT; rec.origin.dopt -> TL; 
                                'E:'->TT; E.dopt->TL; 'descNo:'->TT; dNo->II;
                             #);
                             (if originIsValueObj  then
-                                ctracer
+                                fctracer
                                 (#do 'originIsValueObj:'->TT;rec.dopt->TL#);
                                 true -> originIsValueObj
                              else
                                 (* the next is probably not ok in general *)
-                                ctracer(#do 'rec.ATd:'->TT;rec.ATd.dopt->TL#);
+                                fctracer(#do 'rec.ATd:'->TT;rec.ATd.dopt->TL#);
                                 rec.ATd.OG.super.scanSons
                                 (# Ex: ^Exp
                                 do current[]-> E[];
@@ -3965,7 +3974,7 @@ generator: codeGenMarker
                             (* probably a method invocation in an object, 
                              * which is not a value object; I think!?
                              *)
-                            ctracer
+                            fctracer
                             (#do 'checkForProxy:rec=None:localInvocation?'->TT;
                                dopt -> TL; 'E:'->TT; E.dopt -> TL;
                                ('rec:',rec[])-> PT(#do rec.dopt -> TL #)#)
@@ -4017,15 +4026,12 @@ generator: codeGenMarker
                             exps[start - 1][] -> rec[]; (* becomes pRec below *)
                             fctracer
                             (#do 'start>0:'->TT; rec.dopt->TT; E.dopt->TT #)
-                        if);
-                    if);
-
+                    if)if);
                     (for i: end - start repeat
                          start + i -> ix;
                          rec[] -> pRec[]; E[] -> rec[]; exps[ix][] -> E[];
                          inner scanInv;
-                    for)
-                 #);
+                 for)#);
                loadAccessor: 
                  (* R1.R2.R3 := e
                   * loadAccessor(R1.R2.R3) = pushThis, push R1.off, push R2.off
@@ -4054,10 +4060,38 @@ generator: codeGenMarker
                            if)if);
 
                            (superAdj,0) -> E.loadArgs;
+                           cd.fcom
+                           (#do 'Bobs:A:'->TT; E.dopt->TT;ix->II; end->II;
+                              (if (ix->next) <> none then
+                                  ('rec',rec[])->PT
+                                  (#
+                                  do rec.doPT->TL;
+                                     (' rec.ATd',rec.ATD[])->PT
+                                     (#do rec.ATd.doPT->TL;
+                                        rec.ATd.isIndexedValueObj->BB
+                                     #);
+                                     (ix->next).dopt->TL;
+                              #)if)
+                           #);
+                           (if (rec[] <> none) and ((ix->next) <> none) then
+                               (* check for rec.E.foo where E = get[inx]
+                                *)
+                               (if rec.ATd.isIndexedValueObj then
+                                   cd.double;
+                                   cd.rdouble
+                               if)
+                           if);
                            (pRec[],rec[],E[]) -> checkForProxy;
-                           (rec[],E[],true,valueOff,staticOff,false
-                           ,ix->next)
+                           cd.fcom(#do 'After proxy'->TT; E.dopt->TT #);
+                           (rec[],E[],true,valueOff,staticOff,false,ix->next)
                              -> E.newInvoke;
+                           (if (rec[] <> none) and ((ix->next) <> none) then
+                               (* check for rec.E.foo where E = get[inx]
+                                *)
+                               (if rec.ATd.isIndexedValueObj then
+                                   2 -> cd.swap
+                               if)
+                           if);
                         else
                            cd.com
                            (#do 'loadAccessor:Y:'->TT; E.doPT->TL; 
@@ -4076,6 +4110,7 @@ generator: codeGenMarker
                        (#do 'doInvoke:X:'->TT; E.doPT->TL; start->II; end->II;
                           ix->II;('pRec:',pRec[])->PT(#do pRec.dopt->TL #);
                           ('rec:',rec[])->PT(#do rec.dopt->TL #);
+                          ('ix->next',ix->next)->PT(#do (ix->next).dopt->TL #)
                        #);
                     
                        (pRec[],rec[],E[]) -> checkForProxy;
