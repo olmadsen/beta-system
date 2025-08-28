@@ -1,0 +1,272 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/textmatch';
+INCLUDE '~beta/containers/list';
+
+
+
+-- lib: attributes --
+
+TextList: List
+  (# Element:: Text;
+  #);
+
+-- streamLib: attributes --
+
+getLines:
+  (# lines: ^TextList;
+  do &TextList[] -> lines[];
+     loop: (if NOT eos then
+              getLine -> lines.append;
+              restart loop;
+           if);
+  exit lines[] 
+  #);
+
+-- program: desription --
+(# argument: ^Text;
+   
+   fileName: ^Text;
+   ok: @Boolean;
+   overwrite: @Boolean;
+   
+   parseArguments:
+     (# value: ^Text;
+     do true -> ok;
+        (for index: noOfArguments - 1 repeat
+           index + 1 -> arguments -> argument[];
+           (if '-' -> argument.startsWith then
+              (if'-o' -> argument.equal then
+                 true -> ok;
+                 true -> overwrite;
+              else
+                 false -> ok;
+              if);
+           else
+              argument[] -> fileName[];
+           if)
+        for);
+        (if fileName[] = NONE then
+           false -> ok;
+        if);
+        
+     #);
+   indentFile:
+     (# inputFile: @File;
+        endings: @Integer;
+        lines: ^TextList;
+     do fileName[] -> inputFile.name;
+        inputFile.openRead;
+        inputFile.getLines -> lines[];
+        inputFile.close;
+        (if overwrite then 
+           inputFile.openWrite;
+           (lines[], inputFile[]) -> indentLines;
+           inputFile.close;
+        else
+           (lines[], screen[]) -> indentLines;
+        if);
+     #);
+   indentLines:
+     (# lines: ^TextList;
+        out: ^Stream;
+     enter (lines[], out[])
+     do lines.scan
+          (# index: @Integer;
+             row: @Integer;
+             column: @Integer;
+             token: @Char;
+             supressIndention: @Boolean;
+             nextToken:
+               (#
+               do (if index > current.length then
+                     ascii.eot -> token;
+                  else
+                     index -> current.inxGet -> token;
+                     index + 1 -> index;
+                  if);
+               #);
+             peekToken:
+               (# offset: @Integer;
+                  offsetIndex: @Integer;
+                  value: @Char;
+               enter offset
+               do index + offset - 1 -> offsetIndex;
+                  (if (offsetIndex < 1) OR (offsetIndex > current.length) then
+                     ascii.eot -> value;
+                  else
+                     offsetIndex -> current.inxGet -> value;
+                  if);
+               exit value
+               #);
+             indent:
+               (# line: ^Text;
+                  indention: @Integer;
+                  increase: @Integer;
+                  inString: @Boolean;
+               do 1 -> index;
+                  nextToken;
+                  loop: (if token -> ascii.isSpace then
+                           nextToken;
+                           restart loop;
+                        if);
+                  (if top[] <> NONE then
+                     top.column -> indention;
+                  else
+                     -1 -> indention;
+                  if);
+                  &Text[] -> line[];
+                  0 -> column;
+                  loop: (if token <> ascii.eot then
+                           token -> line.put;
+                           (if token = '\'' then
+                              (if inString then
+                                 ((-1 -> peekToken) = '\\') AND ((-2 -> peekToken) <> '\\') -> inString;
+                              else
+                                 true -> inString;   
+                              if);
+                           if);
+                           (if NOT inString then
+                              (if token = '(' then
+                                 (row, column) -> push;
+                              if);
+                              (if token = ')' then
+                                 pop;
+                              if);
+                           if);
+                           nextToken;
+                           column + 1 -> column;
+                           restart loop;
+                        if);
+                  (if indention <> -1 then
+                     line[] -> getIncrease -> increase;
+                     indention + increase -> indention;
+                  else
+                       (*
+                        * Indent start of pattern on top-level
+                        * unless indention is supressed following
+                        * fragment declaration.
+                        *)
+                     (if NOT supressIndention then 
+                        (if '(#' -> line.startsWith then
+                           2 -> indention;
+                        if)
+                     if)
+                  if);
+                  (if indention > 0 then
+                       (# current: ^Scope;
+                       do top[] -> current[];
+                          while: 
+                          (if current[] <> NONE then
+                             (if current.row = row then 
+                                current.column + indention -> current.column;
+                                current.previous[] -> current[];
+                                restart while;
+                             if);
+                          if);
+                       #);
+                     (for indention repeat
+                        ' ' -> out.put;
+                     for);
+                  if);
+                  line[] -> out.putLine;
+                  false -> inString;
+                  '--' -> line.startsWith -> supressIndention; (*
+                                                                *  Supress indention on next line on top level
+                                                                *)
+               #);
+             getIncrease:
+               (# line: ^Text;
+                  increase: @Integer;
+               enter line[]
+               do 3 -> increase;
+                  search:
+                    (#
+                    do (if '#)' -> line.startsWith then
+                          0 -> increase;
+                          leave search;
+                       if);
+                       (if 'if)' -> line.startsWith then
+                          0 -> increase;
+                          leave search;
+                       if);
+                       (if 'else' -> line.startsWith then
+                          0 -> increase;
+                          leave search;
+                       if);
+                       (if 'for)' -> line.startsWith then
+                          0 -> increase;
+                          leave search;
+                       if);
+                       (if 'enter' -> line.startsWith then
+                          0 -> increase;
+                          leave search;
+                       if);
+                       (if 'do' -> line.startsWith then
+                          0 -> increase;
+                          leave search;
+                       if);
+                       (if 'exit' -> line.startsWith then
+                          0 -> increase;
+                          leave search;
+                       if);
+                       (if '(#' -> line.startsWith then
+                          5 -> increase;
+                          leave search;
+                       if);
+                       (if '(*' -> line.startsWith then
+                          5 -> increase;
+                          leave search;
+                       if);
+                       (if '*' -> line.startsWith then
+                          1 -> increase;
+                          leave search;
+                       if);
+                       (if '//' -> line.startsWith then
+                          1 -> increase;
+                          leave search;
+                       if);
+                       (if '->' -> line.startsWith then
+                          5 -> increase;
+                          leave search;
+                       if);
+                    #);
+               exit increase
+               #);
+          do indent;
+             row + 1 -> row;
+          #);
+     #);
+   Scope:
+     (# row, column: @Integer;
+        previous: ^Scope;
+     #);
+   top: ^Scope;
+   push:
+     (# row, column: @Integer;
+        newScope: ^Scope;
+     enter (row, column)
+     do &Scope[] -> newScope[];
+        row -> newScope.row;
+        column -> newScope.column;
+        top[] -> newScope.previous[];
+        newScope[] -> top[];
+     #);
+   pop:
+     (#
+     do (if top[] <> NONE then
+           top.previous[] -> top[];
+        if)
+     #);
+   
+do parseArguments;
+   (if ok then
+      indentFile;
+   else
+      'Usage: betaindenter [-o] <file>' -> screen.putLine;
+      screen.newLine;
+      'Where:' -> screen.putLine;
+      screen.newLine;
+      '    -o Overwrite the input file with the indented version' -> screen.putLine;
+   if)
+#)
