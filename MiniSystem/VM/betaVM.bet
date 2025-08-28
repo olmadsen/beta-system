@@ -872,7 +872,8 @@ betaVM:
                obj: ^objDesc.template
             enter(descNo,isObj,vInxSize,rInxSize)
             do (if withDumps then
-                   '**** allocTemplate:'->out.puttext; descNo->out.putint; 
+                   '**** allocValueProxyTemplate:'->out.puttext;
+                   descNo->out.putint; 
                    ' '->out.put; vInxSize -> out.putint; ' ' ->out.put;
                    rInxSize -> out.putint; ' ' ->out.put;
                if);
@@ -883,9 +884,8 @@ betaVM:
                isObj -> obj.isObj;
                descs.OD[descNo].OSDvisibility -> obj.OSDvisibility; 
                (if withDumps then
-                   '**** allocTemplate: '->out.puttext; 
-                   obj.myNameDI -> out.puttext;
-                   ' visibility:' -> out.puttext;
+                   '**** allocValueProxyTemplate: '->out.puttext; 
+                   obj.myNameDI -> out.puttext; ' visibility:'->out.puttext;
                    obj.OSDvisibility -> out.putint; out.newline
                if)
             exit obj[]
@@ -975,11 +975,19 @@ betaVM:
                if)
             #);
           mkValueProxy:
-            (# descNo,off,isValueObj,originIsValueObj: @integer;
-               VP,X,Y,Z: ^objDesc.template;
+            (# descNo,off,isValueObj,originIsValueObj,size: @integer;
+               origin,holder,valueProxy,Z: ^objDesc.template;
             enter(descNo,off,isValueObj,originIsValueObj)
-            do (if off = 65535 then
-                   thisStack.vPop -> off
+            do ('thisObj',true,out[]) -> thisObj.dump;
+               thisStack.rPop->origin[]; 
+               thisStack.rPop->holder[];
+               (if off = 65535 then
+                   thisStack.vPop -> off;
+                   '>>  arrayInx:'->out.puttext; off -> out.putint; 
+                   arrayStrucSize -> holder.get -> size; 
+                   ' size:' -> out.puttext; size -> out.putint; 
+                   arrayStrucSize +(off - 1) * size -> off; 
+                   ' holderOff:'->out.puttext; off->out.putint; out.newline
                if);
                (if withDumps then
                    (if isValueObj = 1 then
@@ -991,39 +999,37 @@ betaVM:
                    ('thisObj',true,out[]) -> thisObj.dump;
                    ('thisStack',true,out[]) -> thisStack.dump;
                if);
-               (descNo,false,0,0) -> allocValueProxyTemplate -> VP[];
+               (descNo,false,0,0) -> allocValueProxyTemplate -> valueProxy[];
 
                (if originIsValueObj = 1 then
                    'originIsValueObj:'->out.puttext;
                    1 -> thisObj.rget -> Z[]; (* assuming orginOff = 1 *)
                    ('thisObj.origin',true,out[]) -> Z.dump;
-                   thisStack.rPop->X[]; (* probaly not ok *)
-                   thisStack.rPop->Y[]; (* ignored *) 
-                   (1,X[]) -> VP.rput;
-                   (2,2 -> Z.rget) -> VP.rput;
-                   (3,(3 -> Z.get) + off) -> VP.Put;
-                   (4,descNo) -> VP.put;
-               else
-                   (1,thisStack.rPop->X[]) -> VP.rput;
-                   (2,thisStack.rPop->Y[]) -> VP.rput;
-                   (3, off) -> VP.Put;
-                   (4,descNo) -> VP.put;
+                   (1,origin[]) -> valueProxy.rput; (* is origin ok here? *)
+                   (2,2 -> Z.rget) -> valueProxy.rput;
+                   (3,(3 -> Z.get) + off) -> valueProxy.Put;
+                   (4,descNo) -> valueProxy.put;
+                else
+                   (1,origin[]) -> valueProxy.rput;
+                   (2,holder[]) -> valueProxy.rput;
+                   (3, off) -> valueProxy.Put;
+                   (4,descNo) -> valueProxy.put;
                if);
-               VP[] -> thisStack.rPush;
+               valueProxy[] -> thisStack.rPush;
                (if withDumps then
-                   ('ValueProxy',true,out[]) -> VP.dump;
-                   (if X[] <> none then
-                       ('ValueOrigin',true,out[]) -> X.dump;
+                   ('ValueProxy',true,out[]) -> valueProxy.dump;
+                   (if origin[] <> none then
+                       ('ValueOrigin',true,out[]) -> origin.dump;
                    if);
-                   (if Y[] <> none then
-                       ('Holder',true,out[]) -> Y.dump;
+                   (if holder[] <> none then
+                       ('Holder',true,out[]) -> holder.dump;
                    if);
                    (if false then
                        ('thisObj',true,out[]) -> thisObj.dump;
                        ('thisStack',true,out[]) -> thisStack.dump;
                    if)
                if);
-               (*VP[] -> lastProxy[]; Y[] -> lastHolder[]*)
+               (*valueProxy[] -> lastProxy[]; holder[] -> lastHolder[]*)
             #);
           lastProxy,lastHolder: ^objDesc.template;
           returnValue:
@@ -2428,13 +2434,16 @@ betaVM:
                         (X[],arrayStrucSize + inx,Y[]) -> RtoOut;
                         (thisObj[],thisStack[],true,X[],off,true,inx,thisCode.descInx,glsc,Y[]) -> rStoreEvent                      
                      // codes.double then
-                        'double' -> exe;
+                        'double' -> exe; 
+                        stacksToOut;
                         thisStack.vdub;
                         (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent
                      // codes.rdouble then
                         'rdouble' -> exe;
+                        stacksToOut;
                         thisStack.rdub;
+                        stacksToOut;
                         (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisStack.rTopElm)              
                           -> rPushEvent
                      // codes.rpop then
@@ -2446,6 +2455,7 @@ betaVM:
                      // codes.swap then
                         (# arg1,arg2,arg3,rn: @integer
                         do 'swap' -> exe; op1 -> rn;
+                           stacksToOut;
                            thisStack.vPop -> arg1;
                            thisStack.vPop -> arg2;
                            (if rn > 0 then
@@ -2463,6 +2473,7 @@ betaVM:
                                arg1 -> thisStack.vPush;
                                arg2 -> thisStack.vPush;
                            if);
+                           stacksToOut
                         #)
                      // codes.rswap then
                         'rswap' -> exe; op1 -> inx;

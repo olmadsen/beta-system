@@ -2014,29 +2014,39 @@ void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
     thisValObjDescInx = descNo;
   }
 }
-void mkValueProxyObj(Block *ctx,int descNo,int staticOff
+void mkValueProxyObj(Block *ctx,int descNo,int off
 		  ,int isValueObj,int originIsValueObj){
-  Btemplate * VP,*X,*Y,*Z;
-    VP = allocValueProxyTemplate(ctx,newId(ctx),descNo,false,0,0);
-    if (originIsValueObj == 1) {
-      Z = (Btemplate *)ctx->thisObj->vfields[1];
-      X = rPop(ctx->thisStack);
-      Y = rPop(ctx->thisStack);
-      VP->vfields[1] = (int)X;
-      VP->vfields[2] = Z->vfields[2];
-      VP->vfields[3] = Z->vfields[3] + staticOff;
-      VP->vfields[4] = descNo;      
-    }else{
-      X = rPop(ctx->thisStack);
-      VP->vfields[1] = (int)X;
-      Y = rPop(ctx->thisStack);
-      VP->vfields[2] = (int)Y;
-      VP->vfields[3] = staticOff;
-      VP->vfields[4] = descNo;    
-    }
-    //ctx->currentDescNo = descNo;
-    rPush(ctx->thisStack,VP);
-    //callee->vfields[1] = 0;
+  Btemplate * valueProxy,*origin,*holder,*Z;
+  int size;
+  origin = rPop(ctx->thisStack);
+  holder = rPop(ctx->thisStack);
+#ifdef TRACE
+  dumpObj(ctx->trace,"thisObj",ctx->thisObj);
+  dumpObj(ctx->trace,"mkValueProxy",holder);
+#endif
+  if (off == 65535){
+    int offx = vPop(ctx->thisStack);
+    size = holder->vfields[arrayStrucSize];
+    off = arrayStrucSize + (offx - 1) * size;
+    //printf("mkValueProxyObj descNo:%i offB:%i off:%i size:%i\n"
+    //	   ,descNo,offx,off,size);
+  }
+  valueProxy = allocValueProxyTemplate(ctx,newId(ctx),descNo,false,0,0);
+  if (originIsValueObj == 1) {
+    Z = (Btemplate *)ctx->thisObj->vfields[1];
+    valueProxy->vfields[1] = (int)origin;
+    valueProxy->vfields[2] = Z->vfields[2];
+    valueProxy->vfields[3] = Z->vfields[3] + off;
+    valueProxy->vfields[4] = descNo;      
+  }else{
+    valueProxy->vfields[1] = (int)origin;
+    valueProxy->vfields[2] = (int)holder;
+    valueProxy->vfields[3] = off;
+    valueProxy->vfields[4] = descNo;    
+  }
+  //ctx->currentDescNo = descNo;
+  rPush(ctx->thisStack,valueProxy);
+  //callee->vfields[1] = 0;
 }
 
 void allocIndexedObj(Block *ctx, Btemplate *origin, int descNo,bool isObj, int dinx, int rangee, int isRindexed){ 
@@ -3076,14 +3086,22 @@ bool traceThreads = true;
 	rPush(thisStack,X);
 	break;
       case swap:
-	arg3 = op1(bc,&glsc);   // off
+	off = op1(bc,&glsc);   // off
         arg1 = vPop(thisStack);
 	arg2 = vPop(thisStack);
+	if (off > 0) arg3 = vPop(thisStack);
 #ifdef TRACE
-	fprintf(trace,"swap top-1: %i %i top: %i\n",arg3,arg2,arg1);
+	fprintf(trace,"swap top-1: %i %i top: %i\n",off,arg2,arg1);
+	//if (off > 0) printf("swap off: %i %i %i %i\n",off,arg3,arg2,arg1);
 #endif
-	vPush(thisStack,arg1);
-	vPush(thisStack,arg2);
+	if (off > 0){
+	  vPush(thisStack,arg2);
+	  vPush(thisStack,arg1);
+	  vPush(thisStack,arg3);
+	}else{
+	  vPush(thisStack,arg1);
+	  vPush(thisStack,arg2);
+	}
 	break;
       case _rswap:
 	arg1 = op1(bc,&glsc); // arg1 > 1, not handled
@@ -3293,7 +3311,7 @@ bool traceThreads = true;
 	break; 
       case boxedInvokeVal:
 	arg1 = op2(bc,&glsc);
-	arg2 = op2(bc,&glsc);
+	arg2=  op2(bc,&glsc);
 	cSaveReturn(thisObj,currentDescNo,glsc);
 	callee = rPop(thisStack);
 	rPush(callee,thisObj);
