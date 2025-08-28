@@ -451,7 +451,7 @@ void doGCmark(Block *ctx,Btemplate *root, int level){
 #ifdef __arm__
 #else    
     fprintf(ctx->trace,"\nend doGCmark:inner:2\n");
-    ¤endif
+    ï¿½endif
 #endif
 #endif
   }
@@ -1465,13 +1465,19 @@ int vTopElm(Btemplate*stack,int inx){
   if ((stack->vtop - inx) < -1) runTimeErrorX("vStack underflow:vTopElm",stack,-1);
   return stack->vstack[stack->vtop - inx];
 }
+void swapIndexed(Btemplate *stack,int inx){
+  Btemplate *obj; int v,i;
+  v = stack->vstack[stack->vtop - inx];
+  for (i = 1; i <= inx; i++)
+    stack->vstack[stack->vtop - inx + i - 1]  = stack->vstack[stack->vtop - inx + i];
+  stack->vstack[stack->vtop] = v;
+}
 void rswapIndexed(Btemplate *stack,int inx){
   Btemplate *obj; int i;
   obj = stack->rstack[stack->rtop - inx];
   for (i = 1; i <= inx; i++)
     //stack->rstack[stack->rtop - i] = stack->rstack[stack->rtop - i + 1];
-    stack->rstack[stack->rtop - inx + i - 1]
-      = stack->rstack[stack->rtop - inx + i];
+    stack->rstack[stack->rtop - inx + i - 1]  = stack->rstack[stack->rtop - inx + i];
   stack->rstack[stack->rtop] = obj;
 }
 void rshift(Btemplate *stack,int inx, bool up){
@@ -1867,7 +1873,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
   ctx->bc = (ObjDesc) myCode(ctx->thisObj);
   ctx->glsc = getAllocE(ctx->thisObj->desc);
 #ifdef TRACE
-  fprintf(ctx->trace,"\tALLOC %s(descNo:%i,gæsc:%i,adr:%i,BC:%i)\n"
+  fprintf(ctx->trace,"\tALLOC %s(descNo:%i,gï¿½sc:%i,adr:%i,BC:%i)\n"
 	  ,nameOf(ctx->thisObj),descNo,ctx->glsc,(int)ctx->thisObj,(int)ctx->bc);
 #endif
 #ifdef EVENT
@@ -3087,18 +3093,19 @@ bool traceThreads = true;
 	break;
       case swap:
 	off = op1(bc,&glsc);   // off
-        arg1 = vPop(thisStack);
-	arg2 = vPop(thisStack);
-	if (off > 0) arg3 = vPop(thisStack);
+	//if (off > 0) arg3 = vPop(thisStack);
 #ifdef TRACE
 	fprintf(trace,"swap top-1: %i %i top: %i\n",off,arg2,arg1);
 	//if (off > 0) printf("swap off: %i %i %i %i\n",off,arg3,arg2,arg1);
 #endif
 	if (off > 0){
-	  vPush(thisStack,arg2);
-	  vPush(thisStack,arg1);
-	  vPush(thisStack,arg3);
+	  swapIndexed(thisStack,off);
+	  //vPush(thisStack,arg2);
+	  //vPush(thisStack,arg1);
+	  //vPush(thisStack,arg3);
 	}else{
+      arg1 = vPop(thisStack);	
+	  arg2 = vPop(thisStack);	
 	  vPush(thisStack,arg1);
 	  vPush(thisStack,arg2);
 	}
