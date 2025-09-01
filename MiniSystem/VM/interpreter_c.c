@@ -3092,17 +3092,12 @@ bool traceThreads = true;
 	rPush(thisStack,X);
 	break;
       case swap:
-	off = op1(bc,&glsc);   // off
-	//if (off > 0) arg3 = vPop(thisStack);
+	off = op1(bc,&glsc); 
 #ifdef TRACE
-	fprintf(trace,"swap top-1: %i %i top: %i\n",off,arg2,arg1);
-	//if (off > 0) printf("swap off: %i %i %i %i\n",off,arg3,arg2,arg1);
+	fprintf(trace,"swap %i \n",off);
 #endif
 	if (off > 0){
 	  swapIndexed(thisStack,off);
-	  //vPush(thisStack,arg2);
-	  //vPush(thisStack,arg1);
-	  //vPush(thisStack,arg3);
 	}else{
       arg1 = vPop(thisStack);	
 	  arg2 = vPop(thisStack);	
@@ -3111,26 +3106,20 @@ bool traceThreads = true;
 	}
 	break;
       case _rswap:
-	arg1 = op1(bc,&glsc); // arg1 > 1, not handled
+	off = op1(bc,&glsc); 
 #ifdef TRACE
-        fprintf(trace,"rswap %i\n",arg1);
+      fprintf(trace,"rswap %i\n",off);
 #endif
-	if (arg1 > 0) {
-#ifdef TRACE	  
-	  printf("rswap: %i\n",arg1);
-#endif	  
-	  rswapIndexed(thisStack,arg1);
+	if (off > 0) {
+	  rswapIndexed(thisStack,off);
 	}else {
 	  X = rPop(thisStack);
 	  Y = rPop(thisStack);
-#ifdef TRACE
-        fprintf(trace,"\trswap %s %s\n",nameOf(X),nameOf(Y));
-#endif
-	rPush(thisStack,X);
-	rPush(thisStack,Y);
+      rPush(thisStack,X);
+      rPush(thisStack,Y);
 	}
 	break;
-      case rshiftup:
+case rshiftup:
 	arg1 = op1(bc,&glsc); 
 #ifdef TRACE
         fprintf(trace,"rshiftup %i\n",arg1);
