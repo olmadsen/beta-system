@@ -166,10 +166,11 @@ betaVM:
        exit items
        #);
      dumpObjEvent:<
-       (# obj: ^ObjDesc.runTimeObject; items: [0] @integer
+       (# obj: ^ObjDesc.runTimeObject; items: [0] @integer; 
+          objKind: @integer; (* 0: plain object, 1: value array, 2: reference array *)
        enter obj[]
        do inner
-       exit items
+       exit(items,objKind)
        #);
      startEvent:< VMevent(# event:: (# do 'start'->tx[] #) do inner #);
      allocLevel: @integer; (* Note used? *)
@@ -1384,7 +1385,7 @@ betaVM:
                            (* zero-terminated string *)
                            (if items[ix1] <> 0 then 
                                (ix1 + arrayStrucSize,items[ix1]) -> X.put;
-                               (* items[ix1] -> put;*)
+                               (*items[ix1] -> put;*)
                                ix1 + 1 -> ix1;
                                restart skipId
                            if);
@@ -1406,8 +1407,7 @@ betaVM:
                              restart scanItems
                           else
                              ix1 + 1 -> ix1;
-                             ix2 + 1 -> ix2;
-                             (ix1 + arrayStrucSize,ix2 + 1 -> Y.get) -> X.put;
+                             ix2 + 1 -> ix2; 
                              (if (kind <= 1) and (size = 2) then
                                  (if trace then
                                      'float: '->puttext; 
@@ -1419,12 +1419,12 @@ betaVM:
                                  (if trace then
                                      ' -- '->puttext;
                                      ix2 - 1 -> Y.get -> putint; ','->put;  
-                                     ix2     -> Y.get -> putint; ','->put;  
+                                     ix2   -> Y.get -> putint; ','->put;  
                                      ix2 + 1 -> Y.get -> putint; ','->put;  
                                      ix2 + 2 -> Y.get -> putint; ';'->put; 
                                      ix1 + arrayStrucSize -> X.get -> putint; newline;
                          if)if)if);
-                         (if ix1 < items.range then 
+                         (if ix1 < items.range then
                              restart scanItems
                          if);
                          (if trace then
@@ -1438,14 +1438,23 @@ betaVM:
                          for)if);
                       #);
                  #);
-               items: [0] @integer; ix1,ix2,kind: @integer;
+               copyArray:
+                  (#
+                  do '**** copyArray:'->puttext; arrayStrucSize - 1 -> X.get -> putint; ' ' -> put; arrayStrucSize -> putint; newline;
+                     (for i: (arrayStrucSize - 1 -> X.get) - 1 repeat
+                           i + 1-> putint; ':'->put;
+                           i-> Y.get -> putint; newline;
+                          (i + arrayStrucSize,i -> Y.get) -> X.put
+                     for)
+                  #);
+               items: [0] @integer; ix1,ix2,kind,objKind: @integer;
                X,Y: ^objDesc.template;
             do (if false then
                    '\n*** dumpObjPrim:'->putline;
                if);
                thisStack.rpop -> Y[];
                ('dumpObj:Y:',true,out[]) -> Y.dump;
-               Y[] -> dumpObjEvent -> items;
+               Y[] -> dumpObjEvent -> (items,objKind);
                
                (if false then
                    '\nitems:'->putline;
@@ -1459,7 +1468,15 @@ betaVM:
                  -> QallocIndexed;
                thisStack.rPop -> X[];
                ('snapA:',true,out[]) -> X.dump;
-               copyToX;
+               (if objKind 
+               // 1 // 2 then
+                  '**** copyArray'-> putline;
+                  copyArray;
+                  (4,1 (* valueArraySnap*)) -> X.put
+               else
+               1 -> ix1;
+                  copyToX;
+               if);
                ('snapB:',true,out[]) ->X.dump;
                (if false then 
                    'items.range: ' -> puttext; 
