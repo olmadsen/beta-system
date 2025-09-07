@@ -1,0 +1,695 @@
+ORIGIN 'qgenerator'
+---GeneralPattern_NewInvoke:doPart---      
+do (# handlePrimitiveOp: BooleanValue
+        (# exNo: @integer;
+           selectPrimitiveOrCompoundEQ:
+             (# OGx: ^ObjectDescriptor; DI: ^DataItem
+             do (if rec[] = none then
+                    ctracer
+                    (#do 'rec = none'->TT; dopt -> TL; 'E:'->TT; E.dopt -> TL #)
+                if);
+                (rec.ATd.asDecl).OG[] -> OGx[];
+                ctracer
+                (#do ('rec:',rec[])->PT(#do rec.dopt ->TL #);
+                   'E:'->TT; E.doPT -> TL;
+                   'OGx.label:'->TT; OGx.label -> TQ;
+                   'OGx:'->TT; OGx.dopt->TL; nl;
+                   ('rec.ATd:',rec.ATd[])->PT(#do rec.ATd.dopt -> TL #);
+                #);
+                (if (OGx.getReturnDecl -> DI[]) <> none then
+                    DI.OG[] -> OGx[]
+                if);
+
+                ctracer
+                (#do 'bobs:'->TT; OGx.primNo->II; 'OGx:'->TT; OGx.dopt->TL#);
+                (if DI[] <> none then
+                    ctracer(#do 'DI.OG:' -> TT; DI.OG.dopt -> TL #);
+                if);
+                (if OGx.primNo = 0 then
+                    ctracer
+                    (#do 'GeneralPtn:veq:rec:'->TT; rec.dopt->TL;
+                       'rec.off:'->TT; rec.ATd.newOff->II; dopt -> TL
+                    #);
+                    (rec.ATd.newOff,(rec.ATd.asDecl).OG.objSize) -> cd.vEq
+                 else
+                    (* we assume a primitive value *)
+                    OG.primNo -> cd.op
+                if)
+             #);
+           getRealExpUnit:
+             (# Ex: ^Exp; U: ^Text
+             enter Ex[]
+             do (if (Ex.getExpUnit -> U[]) <> none then
+                    (if true // '#I'->U.equal // '#F'->U.equal then
+                        none -> U[]
+                if)if)
+             exit U[]
+             #);
+           doCheck:
+             (# Recx,Ex: ^Exp; ExArg: ^ObjectSpecification; 
+             enter(recx[],Ex[])
+             do (if OG.primNo
+                 // 61 // 62 (* should never happen since 3m+10m -> 3.0m+10.0m *)
+                 // 109 (* fplus *) // 110 (* fminus *) then
+                    (if ((recx[]->getRealExpUnit) <> none) then
+                            Ex.args.scanArgs(#do current[]->ExArg[] #);
+                            (if traceUnit then
+                                '**** before:checkUnitConv:Y:'->puttext;
+                                dopt->putline; recX.dopt->dumpT;ExArg.dopt->dumptn
+                            if);
+                            (recx[],ExArg[]) -> checkUnitConv
+             if)if)#);
+        do (if (sig.isBinary) and (OG.primNo > 0) or (OG.primNo = 65 (*not*)) then
+               (if OG.primNo // vEQ_prim // vLE_prim then
+                   selectPrimitiveOrCompoundEQ
+                else
+                   (rec[],E[]) -> doCheck;
+                   (if (rec[],E[]) -> checkInt2IntWithUnitArg then
+                       (if E.ATd.OG.primNo
+                        // 61 (* + *) then
+                           109 -> cd.op
+                        // 66 (* * *) then
+                           112 -> cd.op
+                       if)
+                    else
+                       OG.primNo -> cd.op
+                   if);
+                   cd.fcom(#do 'unitConv:after'->TT #);
+               if);
+            else
+               (if (OG.IS.isExternal -> exNo) > 0 then
+                   (* Origin is on rStack here, but is not used
+                    * is popped by interpreter_c.c - not good,
+                    * should avoid generating code for loadOrigin *)
+                   (sig.id[],exNo) -> cd.invokeExternal
+                else
+                   true -> value
+           if)if);
+        #);
+      mkObjId:
+        (# OGx: ^ObjectDescriptor; vObjId: ^text
+        enter OGx[]
+        do (if OGx.vDescNo > 0 then
+               OGx.sig.dopt -> vObjId[];
+               '$' -> vObjId.put;
+               OGx.vDescNo -> vObjId.putint;
+               '$' -> vObjId.put;
+               OGx.vDescNo -> vObjId.putint; 
+            else
+               OGx.OGidWdNo -> vObjId[];
+           if) 
+        exit vObjId[]
+        #);
+      invokeVirtual:
+        (# org: ^Items; rtnOff,noOfRefArgs: @integer; vObjId: ^Text;
+           D:  ^Decl; DI: ^DataItem; recIsValObj: @Boolean
+        do OG.isValueObj -> isStatic;
+           (if rec[] <> none then
+               (if (rec.ATd.asDecl->D[]).isDataItem then
+                   D[] -> DI[];
+                   isStatic or DI.isConst or DI.OG.isValueObj -> isStatic;
+                else
+                   (if D.isPattern then
+                       (if (D.OG.getReturnDecl -> DI[]) <> none then
+                           isStatic or DI.isConst or DI.OG.isValueObj -> isStatic
+           if)if)if)if);         
+           ctracer
+           (#do 'invoke:Virtual:'->TT; sig.dopt-> TL;
+              'E:'->TT; E.dopt -> TL;
+              'E.ATd.isValueObj:'->TT; (E.ATd.asDecl).OG.isValueObj -> BB; 
+              'this:isVal:'->TT; OG.isValueObj -> BB;
+              ('rec:',rec[]) -> PT
+              (#do rec.dopt->TL; 'rec:isConst:'->TT #);
+              'isStatic:'->TT; isStatic-> BB
+           #);
+           (if OG.hasVirtualArgs then
+               pctracer(#do 'PTN:newInvoke:hasVirtualArgs:'->TT; dopt->TL #);
+           if);
+           (if isStatic then
+               (if OG.isValueObj then
+                   (sig.id[],new_descNo,staticOff - 1,inValueObj)
+                     -> cd.invokeval;
+                else
+                   (OG[],staticOff,false) -> callInvoke -> rtnOff;
+                   ctracer
+                   (#do 'GeneralPTN:invoke:after:callInvoke:X:'->TT; 
+                      rtnOff -> II #)
+               if)
+            else
+               (* OG may have ref-args that will be above the
+                * obj-ref to be dispatched.
+                * S is the obj-ref and x, y and z are obj-args
+                * The noOfRefArgs is passed to invokeV
+                * ------------      ------------
+                * |...|S|x|y|z  ==> |...|x|y|z|S
+                * ------------      ------------
+                *)
+               OG.IS.noOfObjArgs -> noOfRefArgs;
+               (if rec[] = E[] then
+                   E.origin[] -> org[];
+                   (for i: E.on repeat
+                        org.father.origin[] -> org[];
+                   for);
+                   org.encOG.isValueObj -> recIsValObj 
+               if);
+               OG[] -> mkObjId -> vObjId[];                         
+               (vObjId[],off,noOfRefArgs,recIsValObj)-> cd.invokeV
+               (# originOff::
+                    (# ISx: ^Scope
+                    do OG.IS.isEmpty -> usestub;
+                       (OG.IS.topSuper).encOG.OGidWdNo ->topSuperId[];
+                       (OG.origin[]->ISx[]).encOG.OGidWdNo -> type[];
+                       OG.IS.newOriginOff -> off;
+                       (if OG.IS.isEmpty then
+                           (OG.super.ATd.asDecl).OG.IS.newOriginOff 
+                             -> off
+               if)#)#);
+               (* Push return value; should we check useRtnVal ? *)
+               (OG[],vObjId[]) -> pushOut -> rtnOff;
+               (* callee is on rtop of rStack *);
+               ctracer(#do 'GeneralPTN:invoke:after:pushOut:'->TT; #);
+           if)
+        #);
+      getEvalEncloser:
+        (# OIx,E: ^Node; LMR: @Char 
+        enter OIx[]
+        do cd.fcom
+           (#do 'getEvalEncloser:'->TT; OIx.dopt->TT; 
+              'hasArgs:'->TT; OIx.hasArgs->BB #);
+           OIx[] -> E[];
+           loop:
+             (if true
+              // E[] = none then
+                 '*** E is none '->dumptn
+              // E.isItems then
+                 'S' -> LMR
+              // E.isArguments
+              // E.isBinaryExp 
+              // E.isAssign
+              // E.isIfThen then
+                 (if OIx.hasArgs then
+                     'M' -> LMR
+                  else
+                     'L' -> LMR
+                 if);
+              else
+                 E.father[]-> E[];
+                 restart Loop
+             if);
+        exit(E[],LMR)
+        #);
+      invokeNonVirtual:
+        (# stubDescNo: @integer; ptn: ^stdBetaCompiler.BetaPattern;
+            Ex: ^Node; LMR: @Char 
+        do ctracer
+           (#do 'invoke:nonVirtual:'->TT; sig.dopt->TL;'isAdr:'->TT;isAdr->BB#);
+           (if true
+            // isPrimitivePtn then
+               invokePrimitive
+            // OG.isValueObj then
+               invokeValueObj
+            // stdBetaATd[] <> none (*isStdBetaDecl*) then
+               '**** invoke:stdBetaPtn:'->dumpT; sig.dopt->dumpTN;
+               (sig.doPT,(stdBetaATd.theDcl.IT[]->ptn[]).OD.descNo,false) 
+                 -> cd.alloc;
+               (* 'M' is not always correct, ok in (e1,e2,)-> min -> V
+                * not in (e1,e2) -> foo,  and foo -> V
+                *)
+               E[]-> getEvalEncloser -> (Ex[],LMR);
+               cd.fcom
+               (#
+               do 'before:stdBetaCall:' -> TT; E.dopt -> TT;
+                  Ex.label -> TT; LMR -> CC;
+               #);               
+               (sig.dopt,LMR) -> (stdBetaATd.theDesc).doCall;
+               true -> useRTNval (* prevent cd.rpop *)
+            else
+               (if false and OG.hasVirtualArgs then
+                   pctracer
+                   (#do 'PTN:newInvoke:NonVirtual:hasVirtualArgs:'->TT; 
+                      dopt->TL #);
+                   
+                   (this(Pattern)[],'',QnewDesc->stubDescNo,OG.IS.newDescNo,0,0)
+                     -> ObjStubStack.add;
+                   (*stubDescNo -> handleVargs;*)
+                   ('stub',stubDescNo,4,0,false) ->  cd.invoke;
+                else
+                   (OG[],staticOff,false) -> callInvoke -> rtnOff;
+        if)if)#);
+      invokeValueObj:
+        (#
+        do ctracer
+           (#do 'invoke:valueObj:'->TT; sig.dopt->TL; 
+              'staticOff:'->TT; staticOff->II;
+              'valueOff:'->TT; valueOff->II;
+           #);
+           (if (valueOff > 0) then
+               pctracer
+               (#do 'invoke:valueObj:OBS!'->TT; sig.dopt->TL; 
+                  'staticOff:'->TT; staticOff->II;
+                  'valueOff:'->TT; valueOff->II;
+           #)if);
+           (if staticOff = 0 then
+               (* could be
+                *    P1 := Point('t','u')
+                * where this(invokeValobj) is followed by a DI::newStore;
+                * seems ok, but perhaps a clean-up
+                *)
+               ctracer(#do 'staticOff = 0'->TT #);
+            else
+               (sig.id[],OG.is.newdescno,staticOff - 1,inValueObj)
+                 -> cd.invokeVal (* inner only in LLVM-part *)
+               (# T: ^text
+               do cd.thisClassId[] -> T[]; 
+                  OG.IS.scanItemArgsReverse
+                  (# DI: ^DataItem
+                  do cd.pushThis;
+                     (if (currentArg[]->DI[]).isBasicValue then
+                         (T[],DI.newOff + staticOff) -> cd.storeX
+                      else
+                         (T[],DI.newOff + staticOff,false) -> cd.rstoreX
+        if)#)#)if)#);
+      invokePrimitive:
+        (#
+        do ctracer(#do 'invoke:primitive:'->TT; sig.dopt->TL #);
+           (if primno 
+            // this_prim then
+            // string_prim then
+               true -> useRtnVal
+            // integer_prim then
+               0 -> cd.pushConst
+            // log_prim then
+               ('log_prim',primNo) -> cd.callprim  
+            // printf_prim then
+               ('printf_prim',primNo) -> cd.callprim
+            // sqrt_prim then
+               ('sqrt_prim',primNo) -> cd.callprim  
+            // cbrt_prim then
+               ('cbrt_prim',primNo) -> cd.callprim  
+            // floatToString_prim then
+               ('floatToString_prim',primNo) -> cd.callPrim
+            else
+               E.dopt -> putline;
+               E.label -> putline; primNo -> putint; ' ' ->put;
+               isPrimitivePtn -> putBoolean; newline;
+               E[] -> warning
+               (#
+               do 'The use of the basic pattern "' -> msg; 
+                  sig.dopt -> msg;
+                  '" here may give an error' -> msg;
+        #)if)#);
+      isStatic: @boolean; rtnOff: @integer
+   do ctracer
+      (#do 'gPTN:newInvoke:'->TT; sig.dopt -> TL;
+         'ptnKind:'->TT; ptnKind -> II; 'staticOff:'->TT; staticOff->II;
+         'valueOff:'->TT; valueOff->II;
+         ('rec:',rec[])->PT(#do rec.dopt -> TL #);
+      #);
+      (if isStdBetaDecl then
+
+      if);
+      (if handlePrimitiveOp then
+          (if ptnkind // virtualptn // furtherptn // finalptn then
+              invokeVirtual
+           else
+              invokeNonVirtual
+          if);
+          (if not useRtnVal then popReturn if)
+   if)#)
+   
+---BreakPattern_newInvoke:doPart--   
+do ctracer(#do 'bPTN:newInvoke:'->TT; sig.dopt -> TL #);
+   (# doBreak:
+        (# trace:
+             (# T: ^text
+             enter T[]
+             do (if false then
+                    '**** Break: "' -> puttext; E.dopt -> puttext; 
+                    '" arg: "' -> puttext; Ex.dopt -> puttext;
+                    '" lab: "' -> puttext; Ex.label -> puttext;
+                    '"' -> put;
+                    '\n**   ON: ' -> puttext; on -> putint; 
+                    ' descNo: ' -> puttext; IS.newDescNo -> putint;
+                    ' noOfSuper: ' -> puttext; noOfSuper -> putint;
+                    newline;
+                    (if ONs > 0 then
+                        '**   BreakToSuper: ONs:' -> puttext; 
+                        ONs -> putint; newline;
+                    if);
+                    (IS.theObjectDescriptor).father.doPT -> putline;
+                    '**   dcl:'->putline;
+                    dcl.dopt -> putline
+                if)
+             #);
+           labInSuper:
+             (# ISx: ^Items; 
+             do (if ON > 1 then
+                    E.origin[] -> ISx[];
+                    (for i: ON -1 repeat
+                         (if ISx.super[] <> none then
+                             (if ISx.super.ATd.asDecl = dcl[] then
+                                (* '\n**** Break to super pattern: on: ' 
+                                   -> puttext; i -> putint;
+                                 newline;*)
+                                 i -> ONs;
+                                 (ISx.super.ATd.asDecl).OG.IS.newDescNo 
+                                   -> descNoS;
+                                 ISx[] -> IS[];
+                                 leave labInSuper;
+                              else
+                                 ISx.origin[] -> ISx[]
+             if)if)for)if)#);
+           countSuper:
+             (# ISx: ^Items
+             do IS[] -> ISx[];
+                L:
+                  (if ISx.super.ATd[] <> none then
+                      noOfSuper + 1 -> noOfSuper;
+                      (if ISx.super.ATd.asDecl = Dcl[] then
+                          (* found super *)
+                      else 
+                          (ISx.super.ATd.asDecl).OG.IS[] -> ISx[];
+                          restart L
+                  if)if)
+             exit ISx[]
+             #);
+           topSuper:
+             (# ISx: ^Items; pn,dns: @integer
+             do IS[] -> ISx[]; dn -> dns;
+                L:
+                  (if ISx.super.ATd[] <> none then
+                      pn + 1 -> pn;
+                      (ISx.super.ATd.asDecl).OG.IS[] -> ISx[];
+                      ISx.newDescNo -> dns;
+                      restart L
+                  if)
+             exit(pn,ISx[],dns)
+             #);
+           IS,superIS: ^Items; Ex : ^ObjectSpecification; dcl: ^Decl;
+           primNo,ON,ONs,descNoS,dn,noOfSuper: @integer; 
+           org: ^Items; OI: ^ObjectInvocation
+        enter primNo
+        do E.args.scanArgs(# do current[] -> Ex[]#);  
+           Ex.super.on -> ON;
+           Ex.origin[] -> IS[]; 
+           ON - 1 -> (Ex.origin[] -> IS[]).toOrigin -> IS[];
+           IS.newDescNo -> dn;
+           topSuper -> (noOfSuper,superIS[],dn);
+           (if noOfSuper > 0 then
+               superIS[] -> IS[]
+           if);
+           (if primNo
+            // restart_prim then 
+               (if (ON = 1) and (noOfSuper = 0) then
+                   IS.restartLab -> cd.jmp
+                else
+                   (ON - 1, IS.restartLab,dn,noOfSuper) -> cd.break
+               if)
+            // leave_prim then
+               (if (ON = 1) and (noOfSuper = 0) then
+                   IS.leaveLab -> cd.jmp
+                else
+                   (ON - 1, IS.leaveLab,dn,noOfSuper) -> cd.break
+        if)if)#); 
+   do (if OG.primNo
+       // restart_Prim then 
+          restart_Prim -> doBreak
+       // leave_Prim then 
+          leave_Prim -> doBreak   
+      if)
+   #) 
+---IndexPattern_newInvoke:doPart---
+do ctracer(#do 'indexPTN:newInvoke:'->TT; sig.dopt -> TL;
+           'isAdr:'->TT; isAdr->BB #);  
+   (# getIndexedArgs:
+        (# D: ^DataItem; isRef: @boolean; isValueObj,size: @integer
+        do ctracer(#do 'IndexedPTN:newInvoke:getIndexedArgs:'->TT; doPT->TL;
+                       'E:'->TT; E.doPT->TL;
+                       ('rec:',rec[])->PT(#do rec.dopt->TL #)#);
+           (if (rec[] = none) then
+               (* may happen for get[0] in res := get[0] *)
+               1 -> size;
+               (if false then
+                   1 -> cd.pushConst;
+                   62 (* minus *) -> cd.op;
+               if);
+               (* what about isRef ? *)
+               leave getIndexedArgs
+            else
+               rec.ATd.asDecl -> D[];           
+           if);
+           (* For S and R declared as:
+            *    S: ref Indexed
+            *    R: ref IndexedRef
+            * we don't know at compile-time, the size of the elements.
+            * The size argument to xpushg and xstoreg is thus passed as 0 (zero)
+            * but since size is now stored in the Indexed object; 
+            * the betaVM may then read size from the Indexed object
+            *)
+           cd.fcom(#do 'getIndexedArgs:rec.ATd:'->TT; D.dopt->TL #);
+           D.OG.scanActualArgs
+           (# i: @integer; OG: ^ObjectSpecification
+           do (if (i + 1 -> i) = 2 then
+                  current[] -> OG[];
+                  (if true
+                   // current.isBasicValue then
+                      (if OG.primNo = float_prim then
+                          2 -> size;
+                       else
+                          1 -> size
+                      if);
+                   // current.isValueObj then
+                      1 -> isValueObj;
+                      current.ObjSize -> size;
+                   else 
+                      true -> isRef;
+                      1 -> size
+           if)if)#)
+        exit(isRef,isValueObj,size)
+        #);
+      org: ^Items
+   do (if OG.primNo 
+       // indexedPut_prim then
+          (* Can indexedPut and other primtives
+           * just be opcodes? May simplify things*)
+          (# isRef: @boolean; isValueObj,size: @integer
+          do getIndexedArgs -> (isRef,isValueObj,size);
+             (if size = 0 then
+                 '!!!! indexedPut:size = 0'->putline;
+                 dopt->putline
+             if);
+             (if isRef then
+                 cd.rswap;
+                 ('inx') -> cd.xrstoreg
+              else
+                 ('inx',isValueObj,size) -> cd.xstoreg  
+          if)#)       
+       // indexedGet_prim then
+          (* check if rec is value or ref indexed *)
+          (# isRef: @boolean; isValueObj,size: @integer
+          do (if (rec[] <> none) and 
+                 ((rec.ATd.asDecl).primNo = indexedGet_prim) then
+                 (* The case for indexed::length *) 
+                 cd.fcom(#do 'bummelum'->TT #);
+                 ('inx',0,1) -> cd.xpushg;
+              else
+                 getIndexedArgs -> (isRef,isValueObj,size);
+                 ctracer(#do 'isAdr:'->TT; isAdr->BB #);
+                 (if not isAdr then
+                     (if isRef then
+                         ('inx') -> cd.xrpushg
+                      else
+                         ('inx',isValueObj,size) -> cd.xpushg
+          if)if)if)#);
+       // stringGet_prim then
+          ('inx',0,1) -> cd.xpushg  
+       // indexed_prim // rIndexed_prim then
+          (# size,isRefIndexed: @integer; D: ^DataItem
+          do cd.pushThis; (* not used by allocIndexed - just popped *)
+             E.args.scanArgs
+             (# OG: ^ObjectSpecification; i: @integer
+             do (if (i + 1 -> i) = 2 then
+                    current[] -> OG[];
+                    (if true 
+                     // OG.primNo = integer_prim then
+                        1 -> size;
+                        0 -> isRefIndexed;
+                     // OG.primNo = float_prim then
+                        2 -> size;
+                        0 -> isRefIndexed;
+                        E[] -> Warning
+                        (#
+                        do 'Indexed Floats are not implemented' -> msg
+                        #);
+                     // OG.isValueObj then 
+                        OG.objSize -> size; 
+                        0 -> isRefIndexed;                     
+                     else
+                        1 -> size;
+                        1 -> isRefIndexed;
+             if)if)#); 
+             OG[] -> objTmpStack.add;           
+             1 -> cd.pushConst; (* dinx *)
+             ((E.origin[]->org[]).encOG.OGidWdNo
+             ,OG.IS.newDescNo,size,isRefIndexed,staticOff) 
+               -> cd.allocIndexed;
+             (if staticOff > 0 then
+                 cd.pushThis;
+                 (org.encOG.OGidWdNo,staticOff) -> cd.rstoreg
+          if)#)
+       // asString_prim then
+          ('asString',primNo) -> cd.callPrim
+   if)#)
+---BitwitPattern_newInvoke:doPart---
+do '**** BitWitPtn:newInvoke:'->dumpT; dopt -> dumptn;
+   (if primNo
+   // 154 then
+      (# arg: ^Const; ODx: ^ObjectDescriptor
+      do '*** got putWord'->dumptn;
+         cd.fcom(#do 'call putWord'->TT; e.dopt -> TT #);
+         E.args.scanArgs(#do cd.fcom(#do current.dopt->TT #)#);
+         E.args.getFirstArg -> ODx[]; cd.fcom(#do ODx.dopt->TT #);
+         ODx.super.last -> arg[]; arg.T.setPos;
+         ('putWord',154,arg.T.getint) -> cd.callPrim2
+   #)if)
+--- OtherPrim_newInvoke:doPart---
+do ctracer(#do 'oPTN:newInvoke:'->TT; sig.dopt -> TL; OG.primNo->II  #); 
+   
+   (if OG.primNo
+    // inner_prim then
+       (if E.args.length > 0 then
+           E.args.scanArgs
+           (# A: ^ObjectSpecification; org: ^Items; orgIsVal: @boolean
+           do current[] -> A[]; 
+              cd.pushThis;
+              (A.super.on - 1,A.super[]) 
+                -> (E.origin[]->org[]).goOrigin -> (org[],orgIsVal);
+              org.innerInx -> cd.innerP;
+              cd.rpopThisObj
+           #)
+        else
+           (* May happen for: innerBool: { out B: var Boolean ...} *)
+           (if 'inner' -> (E.doPT).equal then
+               E.origin[] -> org[];
+               org.innerInx -> cd.innerx; 
+            else
+               (# orgIsVal: @boolean
+               do cd.pushThis;
+                  (if false (*and (adr[]=none)*) then 
+                      pctracer
+                      (#do 'oPTN:newInvoke:no_adr.superAdj'->TT;dopt -> TL#);
+                      (0,'origin-q') -> adjustOrigin;
+                   else
+                      (if true then
+                          (0,'origin-q') -> adjustOrigin;
+                       else
+                          (*(adr.superAdj,'origin-q') -> adjustOrigin;*)
+                      if)
+                  if);
+                  (E.on ,none) (* OBS! NA is none! *)
+                    -> (E.origin[]->org[]).goOrigin -> (org[],orgIsVal);
+                  org.innerInx -> cd.innerP;
+                  cd.rpopThisObj
+       #)if)if)
+   
+    // none_prim then 
+       cd.pushNone
+    // suspend_prim then
+       cd.suspendd;
+       (if coArg then
+           (# vn,rn: @integer
+           do (if (rec.ATd.asDecl).OG.primNo = this_prim then
+                  (*'**** suspend:this: ' -> puttext; rec.dopt -> putline*)
+                  (* we should get the argument of @this foo
+                   * and scan the formal parameters of foo
+                   *)
+               else
+                  (* pushThis below is wrong
+                   * possible args. must be stored in the object being resumed
+                   * This is the address on the rstack before suspend
+                   * Perhaps we can just do an rdouble before suspend!?
+                   * In any case we need to know if the objects is resumed by
+                   * a call of an attach.
+                   * A zero (0) or 1 on the vstack may be used for this
+                   * Not so easy! For attach we do not necessarily resumer 
+                   * after a suspend. 
+                   * An object must thus keep track wheter it has 
+                   * suspended itself or is premmptively suspended
+                   * When resumed, the doCall bytecode msut then pop the vstack
+                   * if preepmtively suspended, but leave if itself has supended
+                   * At one point we tried using scanNonBoundItemArgs below
+                   * but this is wrong
+                   *)
+                  (rec.ATd.asDecl).OG.IS.scanItemArgs
+                  (# DI: ^DataItem; 
+                  do (if currentArg## = DataItem## then
+                         currentArg[] -> DI[];
+                         (if DI.isValue then 
+                             vn + 1 -> vn;
+                             cd.pushThis;
+                             ('arg',DI.newOff) -> cd.storeg 
+                          else
+                             cd.pushThis;
+                             ('arg',DI.newOff) -> cd.rstoreg;
+                             rn + 1 -> rn;
+              if)if)#)if);
+              cd.mvStack;
+       #)if)
+    // resume_prim then
+       (# vn,rn: @integer
+       do (rec.ATD.asDecl).OG.IS.scanItemArgs
+          (# DI: ^DataItem; 
+          do (if currentArg## = DataItem## then
+                 currentArg[] -> DI[];               
+                 (if DI.isValue then 
+                     vn + 1 -> vn;
+                  else
+                     rn + 1 -> rn;
+          if)if)#);
+          ('Resume','D') -> cd.call;
+          cd.rpop
+       #)
+    // disable_prim then
+       ('disable',disable_prim) -> cd.callPrim
+    // enable_prim then  
+       ('enable',enable_prim) -> cd.callPrim   
+    // put_prim then 
+       ('put',OG.primNo) -> cd.Callprim
+    // get_prim then
+       ('get',OG.primNo) -> cd.callPrim
+    // attach_prim then
+       ('attach',OG.primNo) -> cd.callPrim;
+       cd.rPop;
+    // cmpAndSwap_prim then
+       (# I: ^Invocation
+       do E.father -> I[];
+          L:
+            I.scanSons
+            (# R: ^Exp
+            do cd.swap;
+               ('cmpAndSwap',OG.primNo ) -> cd.callPrim;
+               leave L
+       #)#)
+    // fork_prim then
+       ('fork',OG.primNo ) -> cd.callPrim
+    // sleep_prim then
+       ('sleep',OG.primNo ) -> cd.callPrim;
+    // thisCore_prim then
+       (*OG.markForCodeGen*)
+    // file_open_prim then
+       ('file_open',primNo) -> cd.callPrim
+    // file_get_prim then
+       ('File_get',primNo) -> cd.callPrim
+    // file_eof_prim then
+       ('File_eof',primNo) -> cd.callPrim
+    // file_close_prim then
+       ('File_close',primNo) -> cd.callprim     
+    // dumpObj_prim then
+       ('dumpObj_prim',primNo) -> cd.callprim  
+    // log_prim then
+       ('log_prim',primNo) -> cd.callprim  
+    // printf_prim then 
+       ('printf_prim',primNo) -> cd.callprim            
+   if)
+
+ 
