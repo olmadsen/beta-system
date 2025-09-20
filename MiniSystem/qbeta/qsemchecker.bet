@@ -1213,11 +1213,38 @@ semchecker: UnitHandler
                       -> receiver.getVqual 
                       -> (OGSx[],dstQual[]);
                     
-                    (right[],srcQual[],dstQual[],true) 
-                      -> (receiver.ATd.asDecl).checkQual;
+                    (right[],srcQual[],dstQual[],true) -> (receiver.ATd.asDecl).checkQual;
                  exit(srcQual[],dstQual[])
                  #);
-               
+               checkLeftNotConstVal:
+                  (* Check that we do not have an assigment C.X := exp 
+                   * where C is a constant value object declared like C: val SomeValueType 
+                   *)
+                  (# D: ^DataItem;
+                  do left.scanSons
+                     (# rec,OI: ^ ObjectInvocation
+                     do (if current.isObjectInvocation then
+                            current[] -> OI[];
+                            (if (rec[] <> none) and rec.ATd.IsDataItem then
+                                rec.ATd[] -> D[];
+                                (if D.isConst and D.isValue then 
+                                    (if trx then
+                                        '**** Assign:checkLeftIsNotConst:'->dumptn; 
+                                        D.dopt -> putheadN;
+                                        OI.dopt -> dumptn;
+                                    if);
+                                    this(AssignmentStatement)[] -> semanticError
+                                    (#
+                                    do 'The receiver: "'->msg; rec.doPT->msg; 
+                                       '" is a constant value object declared as:\n     "'->msg;
+                                       rec.ATd.dopt->msg; 
+                                       '"\n     It is not possible '->msg;
+                                       'to assign to a variable in a constant value object.\n'->msg;
+                                       '     In this case: "'->msg; OI.doPT->msg; '"'->msg
+                                    #)
+                              if)if)if);
+                        OI[] -> rec[];
+                     #)#);
                org: ^Items; srcQual,dstQual: ^ObjectDescriptor
             do (if traceGetVqual then
                    '**** AssignStatement:semCheck: '-> puttext; dopt->putline
@@ -1227,10 +1254,23 @@ semchecker: UnitHandler
                (this(AssignmentStatement)[],left.last,right.super.ATd.asDecl
                ,srcQual[],dstQual[]) 
                  -> org.checkForLocalsConflict;
+               checkLeftNotConstVal;
                enclosingOGwithIS -> encOG[] -> eOG[];
                srcQual[] -> theSrcQual[];
                true -> done
             #);
+          checkWriter:< BooleanValue 
+             (* returns true if this(node) modifies the state of ? *)
+             (# OD: ^ObjectDescriptor
+             enter OD[]
+             do (if trx then
+                    '**** Assign:checkWriter: ' -> dumpT; left.dopt->dumpTN;
+                    '**   origin:'->dumptn;
+                    (left.last).ATd.origin.dopt -> putheadN;
+                    '**   OD:'->dumpTN; OD.dopt->putHeadN;
+                if);
+                (left.last).ATd.origin.encOG[] = OD[] -> value
+             #);
           getVqual::
             (#
             do (if false then
@@ -1417,7 +1457,54 @@ semchecker: UnitHandler
                        '**** getDecl:singular:not handled:'->puttext;
                        dopt ->putheadN
                if)if)
-            #);          
+            #);      
+                beingComputed: @boolean;
+          getMethodKind::
+             (# handleAssign: BooleanValue
+                  (# asg: ^AssignmentStatement 
+                  enter asg[]
+                  do  (if origin.encOG[] -> asg.checkWriter then 
+                          (if trx then '**** handleAssign:isWriter!'->dumptn; if);
+                          methodWriter -> methodKind;
+                          true -> value
+                      if)
+                  #);
+                handleOI: BooleanValue
+                  (# OI: ^ObjectInvocation
+                  enter OI[]
+                  do (if (OI.ATd[] <> none) and (OI.ATd.OG.primno = 0) and OI.ATd.isPattern then
+                         (if trx then '**** handleOI:'->dumpt; OI.dopt->dumpT if);
+                         (if OI.ATd.OG.getMethodKind = methodWriter then (* Avoid recursion here *)
+                             methodWriter -> methodKind;
+                             true -> value;
+                             (if trx then 'isWriter'->dumptn; if)
+                         if)
+                     if)
+                  #);
+             do (if (methodKind = 0) and not beingComputed then
+                    (if trx then 
+                        '**** compute methodKind' -> dumptn; dopt->putheadN;
+                        '**   traverse:'->dumpTN;
+                    if);
+                    true -> beingComputed;
+                    scan:
+                       scanSons
+                       (#
+                       do current.traverse
+                          (# pred::
+                             (# 
+                             do theNode.isObjectInvocation or theNode.isAssign -> value;
+                                (if true 
+                                 // theNode.isAssign then
+                                    (if theNode[]->handleAssign then true-> done; leave scan if)
+                                 // theNode.isObjectInvocation then
+                                    (if theNode[]->handleOI then true -> done; leave scan if)
+                                if)
+                       #)#)#);
+                    false -> beingComputed
+                if);
+                methodKind -> value ;
+             #)
        #);
      Items::<
        (# checkInterfaceRestrictions::
@@ -1735,15 +1822,46 @@ semchecker: UnitHandler
                       true -> (OI.getqual).isObj 
                   if)
                  #);
+            checkOIwriterOnVal:
+                 (# rec,OI: ^ObjectInvocation; D: ^DataItem
+                 enter(rec[],OI[])
+                 do (if rec.ATd.isDataItem then
+                       rec.ATd[] -> D[];
+                       (if D.isConst and D.isValue then
+                           (if false then
+                              '**** checkOIwriterOnVal:rec:'->dumpT; rec.dopt->dumpT;
+                              'OI:'->dumpT; OI.dopt->dumpTN;
+                               D.isConst -> putBoolean; ' ' ->put; D.isValue->putBoolean; ' ' ->put;
+                               OI.ATd.isPattern -> putBoolean; newline;
+                              'rec:'->dumpT; rec.ATd.dopt -> dumptn;
+                              'OI.ATd:'->dumpTN; OI.ATd.dopt ->dumptn
+                           if);
+                           (if OI.ATd.isPattern then
+                               (if OI.ATd.OG.getMethodKind = methodWriter then
+                                   this(Invocation)[] -> semanticError
+                                   (#
+                                   do 'The receiver: "'->msg; rec.doPT->msg; '"'->msg;
+                                      ' is a constant value object declared as:\n     "'->msg; 
+                                      rec.ATd.dopt->msg;
+                                      '"\n     The pattern: "'->msg;  OI.dopt->msg; '"'->msg; 
+                                      ' may change the state of the receiver'->msg
+                #)if)if)if)if)#);
                noneMet: @Boolean
-            do (if traceGetVqual then
+            do (if trx or traceGetVqual then
                    '**** Invocation:semCheck: '-> puttext; dopt -> putline;
                    '**   encOG:' -> puttext; encOG[] -> putDoPT; newline
                if);
-               (*none -> rec[]*)
+               scanSons
+                  (# recx,OI: ^ObjectInvocation
+                  do (if current.isObjectInvocation then
+                         current[] -> OI[];
+                        (if recx[] <> none then (recx[],OI[]) -> checkOIwriterOnVal if);
+                        OI[] -> recx[]
+                    if)
+                  #);
                scanSons
                (# OI: ^ObjectInvocation
-               do (if not isLast and (current## = objectInvocation##) then
+               do (if not isLast and current.isObjectInvocation then
                       current[] -> OI[];
                       (if OI.ATd[] = none then 
                           OI.dopt -> dumpTN;
@@ -1761,11 +1879,9 @@ semchecker: UnitHandler
                           (if (OI.ATd.asDecl).OG.primNo <> rEq_prim then
                               this(Invocation)[] -> semanticError
                               (#
-                              do '"none" in "' -> msg;
-                                 dopt -> msg; '"'  -> msg;
+                              do '"none" in "' -> msg; dopt -> msg; '"'  -> msg;
                                  ' cannot access an attribute' ->  msg
-                      #)if)if)
-                  if);
+                  #)if)if)if);
                   rec[] -> markPossibleIsObj;
                   (rec[],encOG[]) -> current.semCheck -> eOG[];
                   current[] -> rec[];
