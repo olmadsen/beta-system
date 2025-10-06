@@ -277,12 +277,12 @@ semchecker: UnitHandler
                            '" cannot be assigned to "' -> puttext;
                            doPT -> puttext; '"' -> put; newline;
                            '**   in object:\n' -> putline;
-                           (enclosingObjectDescriptor).father.dopt->putline;
+                           (enclosingObjectDescriptor).father.dopt->putHeadN;
                            inner error;
-                           (if false then
+                           (if true then
                                '**** srcQual:' -> puttext; 
                                (if srcQual[] <> none then
-                                   srcQual.dopt -> putline
+                                   srcQual.dopt -> putHeadN
                                 else
                                    'none'->putline
                                if);
@@ -290,12 +290,12 @@ semchecker: UnitHandler
                                (srcOS.getQual).dopt -> putline;  
                                '**** dstQual:' -> puttext; 
                                (if dstQual[] <> none then
-                                   dstQual.dopt -> puthead
+                                   dstQual.dopt -> putHeadN
                                 else
                                    'none' -> putline
                                if);
                                '**** dstOG.getQual:' -> puttext; 
-                               (getQual).dopt -> puthead
+                               (getQual).dopt -> putheadN
                  if)#)if)#);
                emitTrace:
                  (#                    
@@ -398,7 +398,7 @@ semchecker: UnitHandler
                 * I.e. OG = Unit and no items
                 * This may be a problem and perhaps we should get Unit.qual!?
                 *)
-               (if traceGetVQual then
+               (if  traceGetVQual then
                    '**** before:checkUnits:'->dumpT; dopt -> putheadN;;
                    srcOs.dopt -> putHeadN;;
                    srcQual.dopt -> putheadN;; dstQual.dopt -> putheadN;;
@@ -422,7 +422,7 @@ semchecker: UnitHandler
                           'as declared by "val"'->putline
                        #)
                     else
-                       error
+                       error(#do 'BIM'->putline #)
                    if)
                 else
                    (if false then
@@ -503,8 +503,14 @@ semchecker: UnitHandler
                     // OG.primNo = rIndexed_prim then
                        (* similar to indexed_prim above *)
 
-                    // OG.isBasicValue then
-                       (* The value_prim cases below is to handle
+                    // OG.isBasicValue and not dstQual.isNonBasicValueObj 
+                      or
+                       (dstQual.isBasicValue) and (srcQual.isBasicValue)
+                    then
+                       (* OBS! For Indexed, not dstQual.isNonBasicValueObj overrides the integer type of the
+                        * element type hvis is integer; we should include and Any-type.
+                        * We also need to handle this for Array.
+                        * The value_prim cases below is to handle
                         *    _V: ?Value 
                         * in patterns integer, char and boolean
                         *)
@@ -541,8 +547,8 @@ semchecker: UnitHandler
                                 else
                                    error
                                if)                               
-                            else
-                               error
+                            else 
+                               error(#do 'BUM'->dumptn #)
                            if)
                         else
                            error
@@ -619,7 +625,8 @@ semchecker: UnitHandler
                                    srcQual.father.father.doPT -> puthead
                            if)#);
                         else
-                           (if srcOS.primNo = indexedGet_prim then
+                           (if srcOS.primNo 
+                            // indexedGet_prim then
                                ('!!! Not handled:indexGet_prim',srcOS[]) 
                                  -> putPT;
                                (* fix that the type of the indexed DI is 
@@ -635,7 +642,11 @@ semchecker: UnitHandler
                                   '"\n     cannot be assigned to:\t"' 
                                     -> puttext;
                                   doPT -> puttext; '"' -> put; newline;
-                                  (if false then
+                                  (if true then
+                                      '**** OG.isBasicValue:'->dumpT; OG.isBasicValue-> putboolean;
+                                      ' dstQual.isNonBasicValueObj:'->dumpT; dstQual.isNonBasicValueObj ->putboolean;
+                                      ' dstQual.isValueObj:'->dumpt; dstQual.isValueObj->putboolean;
+                                      newline;
                                       '**** dstQual: ' -> putline;
                                       dstQual.dopt -> puthead;
                                       '**** srcQual: ' -> putline;
@@ -879,6 +890,49 @@ semchecker: UnitHandler
                     if)
                  exit(srcQual[],dstQual[])
                  #);
+               checkForArrayPut:
+                 (# trace: (#exit false #);
+                    theArg,srcQual,dstQual,OGx: ^ObjectDescriptor; org: ^Items; Ix: ^Invocation
+                enter(theArg[],dstQual[])
+                 do (if (inx = 1) and ((fArgs[inx].origin.encOG->OGx[]).primno = indexedput_prim) then 
+                        (if trace then
+                            '**** CheckActualArgs:A:'->dumpT; fArgs[inx].dopt->dumpTN; '---\n'->dumptn;
+                            (fArgs[inx].origin.encOG).label -> dumpTN;
+                            (fArgs[inx].origin.encOG).father.dopt->dumpTN; '===\n'->dumptn;
+                            theArg.dopt-> dumpTN; theArg.label -> dumptn;
+                            theArg.father.label -> dumpTN;
+                            theArg.father.father.label -> dumpTN;
+                            theArg.father.father.father.label -> dumpTN;
+                        if);
+                        theArg.father.father.father[]->Ix[];
+                        L:
+                          Ix.scanSons
+                          (# n: @integer; pre,OIx: ^ObjectInvocation
+                          do (*current.dopt -> dumpTN;*)
+                             current[] -> OIx[];
+                             (*OIx.ATd.dopt->dumpTN;*)
+                             (if OIx.ATd[] = (fArgs[inx].origin.encOG).father[] then
+                                 (if false then
+                                        '!!!! bingo!  pre:'->dumptN; ('pre:',pre[])->putPT;
+                                        ('pre.ATd:',pre.ATd[]) -> putPT;
+                                 if);
+                                 (if (pre[] <> none) and (pre.ATd[] <> none) then
+                                     pre.ATd.OG.scanActualArgs
+                                     (# i: @integer; OG: ^ObjectSpecification
+                                     do (if (i + 1 -> i) = 2 then
+                                            (if false then current.label->dumptN; if);
+                                            current[] -> OG[]; 
+                                            (if false then (OG.super.last->OIx[]).label -> dumpTN; if);
+                                            (OG.super.last->OIx[]).ATd.OG[] -> dstQual[];
+                                            (if trace then '**** new dstQual:'->dumpTN; dstQual.dopt->putHeadN if);
+                                            leave L;
+                                 if)#)if);
+                                 leave L
+                             if);
+                             current[] -> pre[];
+                    #)if)
+                    exit dstQual[]
+                    #);
                org: ^Items; DI: ^DataItem
             do <<SLOT sem_ptn_checkActualArgs:descriptor>>;
                OG.IS.scanNonBoundItemArgs
@@ -891,7 +945,7 @@ semchecker: UnitHandler
                0 -> inx;
                actualArgs.scanArgs
                (# E: ^ObjectCall; OGS: ^OGsequence; 
-                  srcQual,dstQual: ^ObjectDescriptor; 
+                  srcQual,dstQual,OGx: ^ObjectDescriptor; org: ^Items; Ix: ^Invocation
                do inx + 1 -> inx;
                   (if inx > top then 
                       actualArgs[] -> SemanticError
@@ -903,9 +957,7 @@ semchecker: UnitHandler
                       #)
                    else
                       (current[],inx) -> checkIfSuperIsSig;
-                      (* theOI.savedOGS is the OGsequence for theOI
-                       * calling this pattern
-                       *)
+                      (* theOI.savedOGS is the OGsequence for theOI calling this pattern *)
                       <<SLOT sem_ptn_argAtInx:descriptor>>;
                       (* After making getOGsequenceOfArg, the prints in
                        * the trace slots may not be meaningful
@@ -913,7 +965,8 @@ semchecker: UnitHandler
                       theOI.savedOGS[] -> getOGsequenceOfArg -> OGS[];
                       (encOG[],false,OGS[]) 
                         -> fArgs[inx].getVqual 
-                        -> (OGS[],dstqual[]);                      
+                        -> (OGS[],dstqual[]); 
+                      (current[],dstQual[]) -> checkForArrayPut -> dstQual[];
                       (none,theOI.enclosingObjectDescriptor)
                         -> current.semcheck -> srcQual[];
                       (current[],srcQual[],dstQual[])
