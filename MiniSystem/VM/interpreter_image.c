@@ -61,7 +61,7 @@ typedef struct Btemplate {
   int id;
   int valOff;
   bool isObj; 
-  int vstack[16];  
+  int vstack[32];  
   struct Btemplate *rstack[16];
   int vtop; int rtop;
   int lscStack[16];
@@ -259,6 +259,7 @@ enum {
   fge = 126,
   fne = 127,
   fexp = 136,
+  funaryminus = 137,
   pushFloatConst = 113,
   fstoreg = 114,
   fpushg = 115,
@@ -276,7 +277,11 @@ enum {
   vpushg = 138,
   vstoreg = 139,
   fvpushg = 140,
-  fvstoreg = 141
+  fvstoreg = 141, 
+  nop = 151,
+  pushBetaenvObj = 152,
+  prim2 = 153,
+  pushc4 = 154
 };
 
 

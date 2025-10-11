@@ -1,5 +1,6 @@
 ORIGIN '~beta/guienv/guienvsystemenv';
 INCLUDE '~beta/basiclib/math';
+INCLUDE '~beta/sysutils/time';
 INCLUDE 'objectImage';
 INCLUDE '../compiler_IF/directoryComponents';
 INCLUDE 'Primitives';
@@ -65,7 +66,7 @@ close_interpreter: external(# do callC #);
 
 betaVM:
   (# ready: @boolean;
-     mkRunTrace: (#exit false #);
+     mkRunTrace: (#exit true #);
      withDumps: (#exit false #);
      testConc: (# exit false #);
      valueProxyDescNo: @integer;
@@ -674,6 +675,10 @@ betaVM:
                  -> X[] 
                  -> thisStack.rpush;
                X[] -> descs.ObjPool;
+               (if verbose then 
+                   (if traceSize then length -> putint; newline if);
+                   length + descs.objPool.size -> descs.objPool. size;
+               if);
                descs.textDescNo -> X.myDescInx;
                true -> X.isObj;
                (if world[] = none then
@@ -728,7 +733,10 @@ betaVM:
                1 -> X.fields[arrayStrucSize];
                (if withDumps then ('QallocTextObject:I',true,out[]) -> X.dump if);
                X[] -> descs.ObjPool;
-               (if verbose then length + descs.objPool.size -> descs.objPool. size if);
+               (if verbose then 
+                   (if traceSize then length -> putint; newline if);
+                   length + descs.objPool.size -> descs.objPool. size;
+               if);
                descs.textDescNo -> X.myDescInx;
                true -> X.isObj;
                descs.OD[descs.textDescNo].OSDvisibility -> X.OSDvisibility;
@@ -879,7 +887,7 @@ betaVM:
                    rInxSize -> out.putint; ' ' ->out.put;
                if);
                &descs.OD[descNo].template[] -> obj[];
-               descs.OD[valueProxyDescNo].objSize  -> obj.fields.new;
+               descs.OD[valueProxyDescNo].objSize  -> (obj.myObjDesc).objSize -> obj.fields.new;
                descNo -> obj.myDescInx;
                obj[] -> descs.ObjPool;
                isObj -> obj.isObj;
@@ -1076,6 +1084,10 @@ betaVM:
                descs.OD[descInx].OSDvisibility -> callee.OSDvisibility;
                descInx -> callee.myDescInx;
                callee[] -> descs.ObjPool;
+               (if verbose then 
+                   (if traceSize then rangee -> putint; ' ' -> put; size -> putint; newline if);
+                   rangee * size + descs.objPool.size -> descs.objPool. size;
+               if);
                callee[] -> thisStack.rPush;
                (if withDumps then ('QallocIndexed:',true,out[]) -> callee.dump if);
             exit callee[]
@@ -1775,6 +1787,15 @@ betaVM:
                          glsc + 2 -> glsc
                       exit arg
                       #);
+                    op4:
+                      (# arg: @ integer
+                      do (for i: 4 repeat
+                              (*thisCode.B[glsc + i - 1] -> puthex; newline;*)
+                              thisCode.B[glsc + i - 1] %putByteAt (@@arg + i - 1)
+                         for);
+                         glsc + 4 -> glsc;
+                      exit arg
+                      #);
                     op8:
                       (# X: @real; L1,L2: @integer
                       do (for i: 8 repeat
@@ -1876,6 +1897,12 @@ betaVM:
                      // codes.pushc2 then
                         'pushc2' -> exe;
                         op2 -> thisStack.vpush; 
+                        (thisObj[],thisObj[],false,thisStack[],0,false
+                        ,0,thisCode.descInx,glsc,thisStack.vTopElm) 
+                          -> vPushEvent
+                     // codes.pushc4 then
+                        'pushc4' -> exe;
+                        op4 -> thisStack.vpush; 
                         (thisObj[],thisObj[],false,thisStack[],0,false
                         ,0,thisCode.descInx,glsc,thisStack.vTopElm) 
                           -> vPushEvent
@@ -2142,9 +2169,8 @@ betaVM:
                      // codes.vEq then
                         (# R: [10]@ integer; size, mode, di,off:  @integer;
                            Lobj: ^ObjDesc.template; B: @integer
-                        do
-                           'veq' -> exe; op2 -> off; op1 -> size;
-                          (if withDumps then  stacksToOut if);
+                        do 'veq' -> exe; op2 -> off; op1 -> size;
+                           (if withDumps then  stacksToOut if);
                            thisStack.vPop -> mode; (* NO *)
                            (if mkRunTrace then  '\n**** values: ' -> out.puttext if);
                            (for i: size repeat 
@@ -2677,6 +2703,11 @@ betaVM:
                             if);
                             allocLevel - 1 -> allocLevel
                         if);
+                        (*X[]->descs.objPool.freeIfLast;*)
+                        (* probably not safe if X is pushed on stack;
+                         * do not work for part objects X: obj T; 
+                         * RTN from T is last object allocated, but we do not know that its reference is stored
+                         *)
                         (if withDumps then 'rtn:after' ->  stacksToOut if)
                      // codes.rtnV then
                         'rtnV' -> exe; 
@@ -2875,12 +2906,7 @@ betaVM:
                         descs.OD[descInx].BC.enterE -> glsc;
                      // codes.stop then
                         'stop' -> exe;
-                        (if verbose then
-                            '\n\nNo of objects: ' -> puttext; 
-                            descs.ObjPool.id -> putint; 
-                            ' total size: '->puttext;
-                            descs.objPool.size -> putint; newline;
-                        if);
+                        (if verbose then descs.objPool.printStat if);
                         true -> doTerminate
                      // codes.prim then
                         '%prim' -> exe;
@@ -2983,6 +3009,8 @@ betaVM:
                             #)
                          // prim.dumpObj_prim then
                             objSnap
+                         // prim.cputime_prim then
+                           cpuTime -> thisStack.vpush
                         if)
                      // codes.prim2 then
                         'prim2'->exe; 

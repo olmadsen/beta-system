@@ -4,6 +4,7 @@ INCLUDE '../compiler_IF/compiler_IF';
 INCLUDE 'ByteImage';
 INCLUDE 'interpreterAPI'
 ---lib:attributes---
+traceSize: (#exit false #);
 arrayStrucSize: (#exit 3 #); (* origin+length+size for Array object *)
 RuntimeDescriptors:
   (# OD: [4] ^ObjDesc; top: @integer;
@@ -107,18 +108,56 @@ RuntimeDescriptors:
        #);
      objPool: @ 
        (# id: @integer; obj: ^objDesc.template;
-          pool: [30000] ^objDesc.template;
-          size: @integer; verbose: @boolean
+          pool: [30000] ^objDesc.template; diCount: [OD.range] @integer; zero: @ integer;
+          size: @integer; verbose: @boolean;
+          freeIfLast:
+             (* do not work for part objects *)
+             (# X: ^objDesc.template;
+             enter X[]
+             do (if (X.id = id) and not X.isObj then 
+                    (*none -> pool[id][];*) id - 1 -> id; 
+                    (if id < 1 then '?'->put; 0 -> id if); 
+                    (*'!' -> put *) 
+                if)
+             #);
+          printStat:
+             (# noOfObjects: @integer
+             do '\nObj stat:\n'->putline;
+                '0: ' -> puttext; zero -> putint; newline;
+                zero -> noOfObjects;
+                (for i: diCount.range repeat
+                     (if diCount[i] > 0 then
+                        noOfObjects + diCount[i] -> noOfObjects;
+                         i -> putint; ':'->put; diCount[i] -> putint; 
+                         ' size:'-> puttext; OD[i].objSize + 2 -> putint; 
+                         '\t' -> put;
+                         OD[i].myId -> putline;  
+                if)for);
+                '\n\nNo of objects: ' -> puttext; noOfObjects-> putint; 
+                 ' total size: '->puttext; size -> putint; 
+                 ' Ref2IntMap.max:' ->puttext;  id -> putint; ' range:' -> puttext; pool.range -> putint; newline;
+             #)
        enter obj[]
-       do (if (id + 1 -> id ) > pool.range then
-              pool.range -> pool.extend
+       do (*'ID:'->puttext; id -> putint; ' > '->puttext;*)
+          (if (id + 1 -> id) > pool.range then
+              pool.range -> pool.extend;  (*newline; pool.range->putint; newline*)
           if);
           id -> obj.id;
           obj[] -> pool[id][];
           (if verbose then
-              (if false then
+              (if true then
+                  (if obj.myDescInx > 0 then
+                      (*obj.myDescInx-> putint; ','->put; OD.range -> putint;*)
+                      (if obj.myDescInx > diCount.range then obj.myDescInx -> diCount.extend if);
+                      (*  ','->put; OD.range -> putint; newline; *)
+                      diCount[(obj.myDescInx)] + 1 -> diCount[(obj.myDescInx)];
+                  else
+                      zero + 1 -> zero
+              if)if);
+              (if traceSize then
                  (obj.myObjDesc).name[]->puttext; ' size:'->puttext; size -> putint;
                  ' objSize:' -> puttext; (obj.myObjDesc).objSize->putint; 
+                 ' id:'->puttext; id -> putint; newline
               if);
               (obj.myObjDesc).objSize + size + 2 -> size;
               (if false then ' newSize:'->puttext; size -> putint; newline if)
@@ -992,6 +1031,17 @@ ByteCode:
           op div 256 -> B[top - 1];
           op mod 256 -> B[top]
        #);
+     emit4: 
+       (# op: @integer
+       enter op
+       do (if (top + 4 -> top) > B.range then
+              B.range-> B.extend
+          if);
+          (for i: 4 repeat
+               %getByteAt(@@op + i - 1) -> B[top - 4 + i];
+               (*B[top - 8 + i] -> puthex; newline*)
+          for);
+       #);
      emit8:
        (# op: @real
        enter op
@@ -1067,6 +1117,21 @@ ByteCode:
             do B[inx]*256 + B[inx+1] -> out.putint; 
                inc; inc
             #);
+          op4:
+            (# X: @integer
+            do (for i: 4 repeat
+                    (*B[inx + i - 1] -> puthex; newline;*)
+                    B[inx + i - 1] %putByteAt (@@X + i - 1)
+               for);
+               
+               (*(B[inx] % sll 24) %bOR X -> X;
+               (B[inx + 1] % sll 16) %bOR X -> X;
+               (B[inx + 2] % sll 8) %bOR X -> X;
+                B[inx + 3] %bOR X -> X;*)
+               
+               inx + 4 -> inx;
+               X -> out.putint
+            #);
           op8:
             (# X: @real
             do (for i: 8 repeat
@@ -1107,6 +1172,10 @@ ByteCode:
                     // codes.pushc2 then
                        '\tpushc2 ' -> cde;
                        op2; 
+                       nl
+                    // codes.pushc4 then
+                       '\tpushc4 ' -> cde;
+                       op4; 
                        nl
                     // codes.pushNone then
                        '\tpushNone ' -> cde; nl
@@ -1571,7 +1640,8 @@ byteCodes:
      vEq: (# exit 150 #);
      nop: (#exit 151 #);
      pushBetaenvObj: (#exit 152 #);
-     prim2: (#exit 153 #)
+     prim2: (#exit 153 #);
+     pushc4: (#exit 154 #)
   #);
 
      

@@ -31,6 +31,7 @@ extern void Bfork(void * interpreter, void * B, int coreNo);
 #include <math.h>
 #include <stdlib.h>
 #include <stdbool.h>
+// #include <time.h> don't work, compiler error
 
 #ifdef linux
 #include <string.h> 
@@ -1371,7 +1372,7 @@ void dumpStackX(Btemplate *obj){
 
 void vPush(Btemplate *thisStack,int V){
   int i;
-  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) {
+  if ((thisStack->vtop = thisStack->vtop + 1) > 32 ) {
 #ifdef __arm__
     putstr("vPush: ");
     putstr(nameOf(thisStack));
@@ -3969,6 +3970,13 @@ case rshiftup:
 	    for (i = 0; i < strlen(buf); i++)
 	      X->vfields[2 + i + newAllocOff] = buf[i];
 	    break;
+	  case 161: // cpuTime
+        // vPush(thisStack,clock());
+		vPush(thisStack,0);
+	    break;
+	  case prim2:
+           printf("prim2 MISSING %i\n",arg1);
+	  break;
 	  default:
 	    RTE2("\n\n*** prim: missing case: ",arg1);
 	    runTimeError("prim: missing case");
@@ -4052,6 +4060,9 @@ case rshiftup:
 	X = rPop(thisStack); // should be assigned to eventprocessor.fields[1][]
 	thisBlock->world = X;
 	betaWorld = X;
+	break;
+	case pushBetaenvObj:
+        printf("pushBetaenvObj MISSING\n");
 	break;
       case saveStringOrigin:
 #ifdef TRACE
@@ -4471,6 +4482,13 @@ case rshiftup:
 #endif
 	vPush(thisStack,arg1);
 	break;
+	case pushc4:
+	   arg1 = op4(bc,&glsc);
+	   vPush(thisStack,arg1);
+#ifdef TRACE
+	fprintf(trace,"pushc4 %i\n",arg1);
+#endif
+	break;
       case fplus:
 	float2 = fPop(thisStack);
 	float1 = fPop(thisStack);
@@ -4484,6 +4502,9 @@ case rshiftup:
 	float3 = float1 - float2;
 	//printf("fminus: %f %f %f\n",float1,float2, float3);
 	fPush(thisStack,float3);	
+	break;
+	case funaryminus:
+	   fPush(thisStack,- fPop(thisStack));
 	break;
       case fmult:
 	float2 = fPop(thisStack);
@@ -4500,23 +4521,23 @@ case rshiftup:
 	fPush(thisStack,float3);
 	break;
       case fexp:
-	top1 = vPop(thisStack);
-	float1 = fPop(thisStack);
-	//printf("**** fexp: %f %i\n",float1,top1);
-	float2 = float1;
-	if (top1 > 0) {
-	  for (i = 1; i < top1; i++) {
-	    float2 = float2 * float1;
-	  }
-	}else {
-	  for (i = 1; i < -top1; i++) {
-	    float2 = float2 * float1;
-	  }
-	  float2 = 1 / float2;
-	}
-	//printf("**** fexp:res: %f\n",float2); 
-	fPush(thisStack,float2);
-	break;
+		top1 = vPop(thisStack);
+		float1 = fPop(thisStack);
+		//printf("**** fexp: %f %i\n",float1,top1);
+		float2 = float1;
+		if (top1 > 0) {
+		  for (i = 1; i < top1; i++) {
+		    float2 = float2 * float1;
+		  }
+		}else {
+		  for (i = 1; i < -top1; i++) {
+		    float2 = float2 * float1;
+		  }
+		  float2 = 1 / float2;
+		}
+		//printf("**** fexp:res: %f\n",float2); 
+		fPush(thisStack,float2);
+		break;
       case feq:
 	float2 = fPop(thisStack);
 	float1 = fPop(thisStack);
@@ -4723,7 +4744,10 @@ case rshiftup:
 	saveContext();
 	allocFromStrucRefObj(thisBlock,thisBlock->origin);
 	restoreContext();
-
+    case nop:
+#ifdef TRACE
+	fprintf(trace,"nop\n");
+#endif
 	break;
       case _break:
 	arg1 = op1(bc,&glsc);
