@@ -281,7 +281,8 @@ enum {
   nop = 151,
   pushBetaenvObj = 152,
   prim2 = 153,
-  pushc4 = 154
+  pushc4 = 154,
+  mkIndexedValueProxy = 155
 };
 
 

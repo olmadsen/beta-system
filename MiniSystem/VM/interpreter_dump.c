@@ -223,7 +223,13 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	int arg4  = op1(bc,&glsc);
 	fprintf(trace,"mkValueProxy %i %i %i %i",arg1,arg2,arg3,arg4);
 	break;
-      case invokeExternal:
+    case mkIndexedValueProxy:
+	   	arg1 = op2(bc,&glsc);
+	    arg3 = op1(bc,&glsc);
+	    arg4  = op1(bc,&glsc);
+	    fprintf(trace,"mkIndexedValueProxy %i %i %i",arg1,arg3,arg4);
+	break;
+    case invokeExternal:
 	arg1 = op1(bc,&glsc);
 	fprintf(trace,"invokeExternal %i",arg1);
 	break;
@@ -460,7 +466,7 @@ void dumpDesc(FILE *trace, int xdescNo) {
 	    ,descNo(desc),oS,iI,desc_getInt2(desc,originOff_index));
     fprintf(trace,"isValObj:%i\n",getIsValObj(xdescNo));
     /* the tests for VS and RS are no longer needed since all fields
-     * are pæaced in the dynamixe array fields
+     * are pï¿½aced in the dynamixe array fields
      */
     if (oS >= 64) {
       fprintf(trace,"\n\n");

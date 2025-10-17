@@ -3306,7 +3306,7 @@ case rshiftup:
         invokeValObj(thisBlock,arg1,arg2,arg3);
 	restoreContext();
 	break; 
-      case boxedInvokeVal:
+    case boxedInvokeVal:
 	arg1 = op2(bc,&glsc);
 	arg2=  op2(bc,&glsc);
 	cSaveReturn(thisObj,currentDescNo,glsc);
@@ -3318,21 +3318,33 @@ case rshiftup:
         invokeValObj(thisBlock,arg1,arg2,0);
 	restoreContext();
 	break;
-      case mkValueProxy:
-	dscNo = op2(bc,&glsc);
-	off = op2(bc,&glsc);
-	isValueObj = op1(bc,&glsc);
-	originIsValueObj = op1(bc,&glsc);
+    case mkValueProxy:
+	   dscNo = op2(bc,&glsc);
+	   off = op2(bc,&glsc);
+	   isValueObj = op1(bc,&glsc);
+	   originIsValueObj = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"mkValueProxy %i %i %i %i %i\n"
-		,dscNo,off,isValueObj,originIsValueObj);
+	   fprintf(trace,"mkValueProxy %i %i %i %i %i\n",dscNo,off,isValueObj,originIsValueObj);
 #endif
-	saveContext();
-	mkValueProxyObj(thisBlock,dscNo,off,isValueObj,originIsValueObj);
-	restoreContext();
-	break;
-      case invokeExternal:
-	arg1 = op1(bc,&glsc);
+	   saveContext();
+	   mkValueProxyObj(thisBlock,dscNo,off,isValueObj,originIsValueObj);
+	   restoreContext();
+	   break;
+    case mkIndexedValueProxy:
+	   dscNo = op2(bc,&glsc);
+	   off = 65535; // op2(bc,&glsc);
+	   isValueObj = op1(bc,&glsc);
+	    originIsValueObj = op1(bc,&glsc);
+#ifdef TRACE
+	   fprintf(trace,"mkValueProxy %i %i %i %i %i\n",dscNo,off,isValueObj,originIsValueObj);
+#endif
+	   saveContext();
+	   // we need to make mkIndexedValueProxy as in betaVM
+	   mkValueProxyObj(thisBlock,dscNo,off,isValueObj,originIsValueObj);
+	   restoreContext();
+	   break;
+    case invokeExternal:
+	   arg1 = op1(bc,&glsc);
 #ifdef TRACE
         fprintf(trace,"invokeExternal: %i \n",arg1);
 #endif
@@ -4484,7 +4496,7 @@ case rshiftup:
 	break;
 	case pushc4:
 	   arg1 = op4(bc,&glsc);
-	   vPush(thisStack,arg1);
+	   vPush(thisStack,arg1); 
 #ifdef TRACE
 	fprintf(trace,"pushc4 %i\n",arg1);
 #endif
