@@ -66,10 +66,11 @@ close_interpreter: external(# do callC #);
 
 betaVM:
   (# ready: @boolean;
-     mkRunTrace: (#exit false #);
+     mkRunTrace: (#exit true #);
      genEvents: (#exit false #);
-     withDumps: (#exit false #);
+     withDumps: (#exit true #);
      testConc: (# exit false #);
+     withNewProxy: @Boolean;
      valueProxyDescNo: @integer;
      noPause: @boolean;
      init:<
@@ -971,7 +972,7 @@ betaVM:
             (# descNo,off,isValueObj,originIsValueObj,size: @integer;
                origin,holder,valueProxy,Z: ^objDesc.template;
             enter(descNo,off,isValueObj,originIsValueObj)
-            do  (if withDumps then  ('thisObj',true,out[]) -> thisObj.dump if);
+            do (if withDumps then  ('thisObj',true,out[]) -> thisObj.dump if);
                thisStack.rPop->origin[]; 
                thisStack.rPop->holder[];
                (if withDumps then
@@ -1112,6 +1113,7 @@ betaVM:
                    out.newline;
                if);
                false -> isValObj;
+            exit callee[]
             #);
           QallocIndexed:
             (* alloc Indexed object of size arrayStrucSize + rangee *)
@@ -2061,6 +2063,9 @@ betaVM:
                      // codes.fvpushg then
                         'fvpushg' -> exe; op1 -> off;
                         thisStack.rpop -> X[]; 
+                        (if withDumps then
+                            ('fvpushg:X:',true,out[]) -> X.dump;
+                        if);
                         (if X[] = none then
                             3 -> fatalError; leave loop
                         if);
@@ -2532,6 +2537,29 @@ betaVM:
                                 ('Invoke:lastHolder:X:',true,out[])
                                   -> lastHolder.dump;
                         if)if)
+                     // codes.invokeWithProxy then
+                        'invokeWithProxy' -> exe; op2 -> descInx; op2 -> off; op1 -> isObj; 
+                        (# valueOff,isValueObj,originIsValueObj,valueDescNo: @integer; 
+                           callee,origin,holder: ^objDesc.template;
+                        do  op2 -> valueOff;
+                            op1 -> isValueObj; op1 -> originIsValueObj;
+                            op2 -> valueDescNo;
+                            (if false then
+                                'invokeWithProxy '->puttext; descInx->putint; ' '->put; off->putint; ' '->put; isObj->putint;
+                                ' '->put; valueOff->putint; ' '->put; isValueObj->putint; ' '->put; originIsValueObj->putint;
+                                ' '->put; valueDescNo->putint; newline
+                            if);
+                            thisStack.rPop->origin[]; 
+                            (if withDumps then ('origin',true,out[]) -> origin.dump if);
+                            thisStack.rPop->holder[];
+                            (if withDumps then ('holder',true,out[]) -> holder.dump if);
+                            (descInx,off,isObj = 1) -> invoke -> callee[];
+                            (1,origin[]) -> callee.rput;
+                            (2,holder[]) -> callee.rput;
+                            (3,valueOff) -> callee.Put;
+                            (4,valueDescNo) -> callee.put;
+                            (if withDumps then ('callee',true,out[]) -> callee.dump if);
+                        #)
                      // codes.mkVindexed then
                         'mkVindexed' -> exel;
                         (op2,false) -> mkIndexed
@@ -2631,13 +2659,13 @@ betaVM:
                           do 'invokeV ' -> exel;
                              op1 -> dinx; op1 -> inx; (* noOfRefArgs*)
                              op1 -> recIsValObj;
-                             (if withDumps then stacksToOut if);
+                             (if withDumps then 'invokev:'->stacksToOut if);
                              (if inx > 0 then
                                  (for i: inx repeat
                                       thisStack.rpop -> R[top + 1 -> top][]
                              for)if);
                              thisStack.rpop -> X[]; 
-                             (if withDumps then ('invokev:X:',true,out[]) -> X.dump if);
+                             (if withDumps then ('invokev:rec:',true,out[]) -> X.dump if);
                              (if X[] = none then 
                                  3 -> fatalError;
                                  leave loop 
@@ -2647,15 +2675,14 @@ betaVM:
                              if);
                              (if true
                               // isValObj then
-                                 (if mkRunTrace then '\n** Invokev:mainP:in:valueObj'->out.putline if);
+                                 (if mkRunTrace then '\n!!!! OBS! Invokev:mainP:isValObj=true!'->out.putline if);
                                  thisValObjDesc.vdtTable[dinx] -> descInx; 
-                              // (recIsValObj = 1) then
+                              // (recIsValObj = 1) then 
                                  4 -> X.get -> ix;
                                  (if mkRunTrace then 
-                                     '\n** Invokev:rec:valueObj:' -> out.putline; 
+                                     '\n** Invokev:rec:valueObj:' -> out.puttext; 
                                      (X.myObjDesc).myId -> out.puttext;
-                                     ' ' -> out.put;
-                                     ix -> out.putint; ' ' -> out.put;
+                                     ' ' -> out.put; ix -> out.putint; ' ' -> out.put;
                                  if);
                                  descs.OD[ix].vdtTable[dinx] -> descInx;
                                  0 -> ix 
@@ -2676,14 +2703,19 @@ betaVM:
                               if);
                              (thisCode.descInx,glsc) -> thisObj.saveReturn;
                              descs.OD[descInx].bc[] -> thisCode[];
-                             thisObj[] -> Y[] -> callee.rPush;
+                             thisObj[] -> callee.rPush;  (* return information for callee.return *)
                              thisStack[] -> callee.rPush; 
-                             X[] -> thisStack.rpush;
+                             (if not withNewProxy or (recIsValObj = 0) then 
+                                 X[] -> thisStack.rpush;   (* rec = X is the origin for callee *)
+                             if);
                              callee[] -> thisObj[];
                              descs.OD[descInx].BC.allocE -> glsc;
                              (for i: inx repeat
                                   R[top - i + 1][] -> thisStack.rpush
                              for);
+                             (if withDumps then
+                                 'invokev:end:thisObj'->stacksToOut;
+                             if);
                              (* we need to distinguish if we generate 
                               * an object or an activation. 
                               * For now we assume an activation
@@ -2712,10 +2744,9 @@ betaVM:
                         (if withDumps then 'mvStack:after:'->stacksToOut if);
                      // codes.setThisStack then
                         'setThisStack' -> exe;
-                        (*('setThisStack:thisObj',true,screen[])  -> thisObj.dump;*)
-                        (*StacksToOut;*)
+                        (if withDumps then 'setThisStack:thisObj'->stacksToOut if);
                         thisObj.rTopElm -> thisStack[];
-                        (*StacksToOut*)
+                        (if withDumps then 'setThisStack:after:thisStack'->stacksToOut if);
                      // codes.rpopThisObj then
                         'rpopThisObj' -> exe;
                         (*stacksToOut;*)
