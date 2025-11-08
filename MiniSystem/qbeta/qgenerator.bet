@@ -1355,9 +1355,49 @@ generator: codeGenMarker
                  (T[],DI.newOff,false) -> cd.rstoreX
           if)#)              
        #);
+     getValueAtt:
+        (# theOG: ^ObjectDescriptor; rec,prec: ^Exp; vOff,vDno,arrayObjSize: @integer; isLocal,isvalueObj,inValueObj,recInValueObj: @boolean;
+           org: ^Items; 
+           checkIfArrayGet: BooleanValue
+              (# recDecl: ^Decl; 
+              do rec.ATd.asDecl -> recDecl[];
+                 (if recDecl.OG.primNo = indexedGet_prim then
+                     L: rec.father.scanSons(#do (if current[] = rec[] then leave L if); current[] -> prec[] #);
+                     fctracer
+                       (#do 'getValueAtt:indexedGet:'->TT; rec.dopt->TT; 'father:'->TT; rec.father.dopt -> TL;
+                             ('pRec:',pRec[])->PT(#do prec.dopt->TQ; prec.ATd.dopt->TL; 
+                             'arrayObjSize:'->TT; (prec.ATd.asDecl).getIndexedValueSize->II #)
+                       #);
+                       (if prec[] <> none then
+                           (prec.ATd.asDecl).getIndexedValueSize -> arrayObjSize;
+                           ((prec.ATd.asDecl).OG.super.last).ATd.OG.IS.newDescNo -> vDno
+                       if)
+                 if)
+           #)
+        enter(theOG[],rec[])
+        do (if theOG.origin.encOG.isValueObj -> inValueObj then    
+               (if rec[] <> none then
+                    rec.ATd.newOff -> vOff;
+                    rec.ATd.getDescNo -> vDno;
+                    rec[] -> recDeclInValueObj -> recInValueObj;
+                    checkIfArrayGet (* missing dNo for array elm type *)
+                else
+                   true -> isLocal;
+                   (theOG.origin[]->org[]).newDescNo -> vDno
+               if);
+               fctracer
+               (#do 'getValueInfo:'->TT; 'inValueObj:'->TT; inValueObj->BB;
+                    ('rec:',rec[])->PT(#do rec.dopt->TQ #); 'vOff:'->TT; vOff -> II; 'vDno:'->TT; vDno->II;
+                    'isLocal:'->TT; isLocal->BB;
+                    'arrayObjSize:'->TT; arrayObjSize->II;
+                    'recInValObj:'->TT; recInValueObj-> BB; 'theOG:'->TT; theOG.dopt #)
+           if)
+        exit(inValueObj,vOff,vDno,isLocal,arrayObjSize,recInValueObj)
+        #);
      callInvoke:
-       (# theOG: ^ObjectDescriptor; staticOff,valueOff,valDno: @integer; originIsValueObj,fromStub: @boolean;
-          T: ^text; rtnOff: @integer; rec: ^Exp; org: ^Items
+       (# theOG: ^ObjectDescriptor; staticOff,valueOff,valDno,arrayObjSize: @integer; originIsValueObj,fromStub: @boolean;
+          T: ^text; rtnOff: @integer; rec: ^Exp; org: ^Items; 
+          vOff: @integer; inValueObj,isLocal,recInValueObj,done: @Boolean
        enter(theOG[],staticOff,fromStub,rec[],valueOff)
        do (if true or (valueOff = -1) then 
               fctracer
@@ -1365,9 +1405,20 @@ generator: codeGenMarker
                       'theOG.origin.isValueObj:'->TT; theOG.origin.encOG.isValueObj->BB;
                       ('rec:',rec[]) -> PT(#do rec.dopt->TL; #)
                  #)if);
+          (if withNewProxy then 
+              (theOG[],rec[]) -> getValueAtt -> (inValueObj,vOff,valDno,isLocal,arrayObjSize,recInValueObj);
+              (if inValueObj then
+                  (*'**** KUK:'->dumpt; theOG.ogID->dumpt; isValueArrayElm->putboolean; newline;*)
+                  (theOG.OGid,theOG.IS.newDescNo,theOG.IS.objSize,staticOff,theOG.isObj
+                    ,valDno,vOff - 1,false(*isValueObj*),arrayObjSize,recInValueObj)
+                    -> cd.invokeWithProxy;
+                    true -> done;
+          if)if);
+          (if not done then
           (if withNewProxy and (rec[] <> none) then 
-              (if rec.isCartesianValueObj and (valueOff = 0) then
-                  pfctracer(#do 'receiver.isValueObj:'->TT; rec.dopt->TT; theOG.dopt->TT; nl;
+              (if rec.isCartesianValueObj (*and (valueOff = 0)*) then
+                  fctracer(#do 'receiver.isValueObj:'->TT; rec.dopt->TT; 'rec.ATd.off:'->TT; rec.ATd.newoff -> II; 
+                                'theOG:'->TT; theOG.dopt->TT; nl;
                                 'vOff:'->TT; valueOff->II; 'theOG.origin.isValueObj:'->TT; theOG.origin.encOG.isValueObj ->BB #)
           if)if);
           (if withNewProxy and ((valueOff = -1) or (valueOff >= 0) and theOG.origin.encOG.isValueObj) then
@@ -1384,14 +1435,14 @@ generator: codeGenMarker
              (if true
               // valueOff > 0 then
                 (theOG.OGid,theOG.IS.newDescNo,theOG.IS.objSize,staticOff,theOG.isObj
-                 ,rec.ATd.getDescNo,valueOff - 1,false(*isValueObj*),originIsValueObj)
+                 ,rec.ATd.getDescNo,valueOff - 1,false(*isValueObj*),0,originIsValueObj)
                  -> cd.invokeWithProxy
-              // valueOff = 0 then 'bobs:'->dumpt; valueOff -> putint; ' ' ->put; theOG.dopt->dumptn;
+              // valueOff = 0 then (*'bobs:'->dumpt; valueOff -> putint; ' ' ->put; theOG.dopt->dumptn;*)
                 (theOG.OGid,theOG.IS.newDescNo,theOG.IS.objSize,staticOff,theOG.isObj
-                 ,rec.ATd.getDescNo,valueOff - 1,false(*isValueObj*),originIsValueObj)
+                 ,rec.ATd.getDescNo,valueOff - 1,false(*isValueObj*),0,originIsValueObj)
                  -> cd.invokeWithProxy
                  
-              else pfctracer(#do 'callinvoke:valueOff<=0:'->TT; theOG.OGid->TQ; valueOff->II; nl; 'theOG.origin:'->TT; theOG.origin.encOG.dopt->TL #);
+              else fctracer(#do 'callinvoke:valueOff<=0:'->TT; theOG.OGid->TQ; valueOff->II; nl; 'theOG.origin:'->TT; theOG.origin.encOG.dopt->TL #);
                  (if (rec[] = none) and theOG.origin.encOG.isValueObj then 
                      (theOG.origin[]->org[]).newDescNo -> valDno
                   else
@@ -1399,7 +1450,7 @@ generator: codeGenMarker
                   if);
                  (if withNewProxy then -1 -> valueOff else -2 -> valueOff if);
                 (theOG.OGid,theOG.IS.newDescNo,theOG.IS.objSize,staticOff,theOG.isObj
-                 ,valDno,valueOff,false(*isValueObj*),originIsValueObj)
+                 ,valDno,valueOff,false(*isValueObj*),0,originIsValueObj)
                  -> cd.invokeWithProxy
              if)
           else
@@ -1434,7 +1485,7 @@ generator: codeGenMarker
                   (* vStack = [...], rStack = [..., possible origin, callee] *)
                   (if not newFeature then 'OBS'->dumptn;
                       (theOG[],theOG[],false) -> storeOrigins;
-          if)#)if);
+          if)#)if)if);
           (if not fromStub then 
               (theOG[],T[]) -> pushOut -> rtnOff;
               ctracer(#do 'callInvoke:after:pushOut:'->TT; rtnOff->II #);
@@ -3562,6 +3613,7 @@ generator: codeGenMarker
                          (* only check R1 ? probably not! *)
                          leave L
          #)if)#);
+         
      Invocation::
        (* E1.E2.E3
         *    E1.pushThis
@@ -3944,7 +3996,7 @@ generator: codeGenMarker
                            fctracer(# do 'receiver_is_valueObj:'->TT; rec.dopt->TQ; E.dopt->TQ #);
                            (prec[],rec[]) 
                               -> getTypeAsOG 
-                              -> (typeAsOG[],dNo,off,originIsValueObj);
+                              -> (typeAsOG[],dNo,off,originIsValueObj); (* typeAsOG not used *)
                            cd.rdouble; (* adr(holder) *) (* shall we do this if originIsValueObj - see below ? *)
                            fctracer
                             (#do 'rec:'->TT; rec.dopt -> TL; 'rec.origin:'->TT; rec.origin.dopt -> TL; 
@@ -4050,7 +4102,7 @@ generator: codeGenMarker
 
                            (superAdj,0) -> E.loadArgs;
                            ctracer
-                           (#do 'Bobs:A:'->TT; E.dopt->TT;ix->II; end->II;
+                           (#do 'loadAccessor:Y:'->TT; E.dopt->TT;ix->II; end->II;
                               (if (ix->next) <> none then
                                   ('rec',rec[])->PT
                                   (#
@@ -4076,18 +4128,13 @@ generator: codeGenMarker
                            (if (rec[] <> none) and ((ix->next) <> none) then
                                (* check for rec.E.foo where E = get[inx] *)
                                (if rec.ATd.isIndexedValueObj then 
-                                   (if false then
-                                      'BUM'->putline;
-                                       rec.dopt-> dumptn;
-                                       rec.ATd.dopt -> dumpTN;
-                                       E.dopt -> dumpTN;
-                                   if);
+                                   ctracer(#do 'loadAccessor:Z:rec:'->TT; rec.dopt-> TT; 'rec.ATd:'->TT; rec.ATd.dopt -> TQ;
+                                       'E:'->TT; E.dopt -> TQ;
+                                   #);
                                    rec.ATd.getIndexedValueSize -> cd.swap
                            if)if)
                         else
-                           cd.com
-                           (#do 'loadAccessor:Y:'->TT; E.doPT->TL; 
-                              ('rec:',rec[])->PT(#do rec.dopt->TL #)#);
+                           ctracer(#do 'loadAccessor:end:'->TT; E.doPT->TL; ('rec:',rec[])->PT(#do rec.dopt->TL #)#);
                            (rec[],valueOff,ix->next) -> E.loadAccessor
                  if)#)#);
                doInvoke: 

@@ -882,9 +882,8 @@ betaVM:
                obj: ^objDesc.template
             enter(descNo,isObj,vInxSize,rInxSize)
             do (if withDumps then
-                   '**** allocValueProxyTemplate:'->out.puttext;
-                   descNo->out.putint; 
-                   ' '->out.put; vInxSize -> out.putint; ' ' ->out.put;
+                   '**** allocValueProxyTemplate:descNo:'->out.puttext;
+                   descNo->out.putint; ' '->out.put; vInxSize -> out.putint; ' ' ->out.put;
                    rInxSize -> out.putint; ' ' ->out.put;
                if);
                &descs.OD[descNo].template[] -> obj[];
@@ -894,7 +893,6 @@ betaVM:
                isObj -> obj.isObj;
                descs.OD[descNo].OSDvisibility -> obj.OSDvisibility; 
                (if withDumps then
-                   '**** allocValueProxyTemplate: '->out.puttext; 
                    obj.myNameDI -> out.puttext; ' visibility:'->out.puttext;
                    obj.OSDvisibility -> out.putint; out.newline
                if)
@@ -2311,7 +2309,11 @@ betaVM:
                         (if Y[] = none then
                             '!!!! Holder = Y is none'->putline;
                         if);
+                        (if withDumps then
+                            ('vstoreg:holder',true,out[]) -> Y.dump
+                        if);
                         3 -> X.get -> inx;
+                        (if mkRunTrace then ' inx:'->out.puttext; inx -> out.putint if);
                         (off + inx,value) -> Y.put;
                         (if false then
                             (X[],off + inx,value) -> VtoOut;
@@ -2539,11 +2541,65 @@ betaVM:
                         if)if)
                      // codes.invokeWithProxy then
                         'invokeWithProxy' -> exe; op2 -> descInx; op2 -> off; op1 -> isObj; 
-                        (# valueOff,isValueObj,originIsValueObj,valueDescNo,vo: @integer; 
-                           callee,origin,holder,proxy: ^objDesc.template; old: (#exit false #)
+                        (# arrayProxy:
+                              (# inx: @integer
+                              do thisStack.rPop->origin[];  thisStack.rPop->holder[];
+                                 thisStack.vPop -> inx;
+                                 (if mkRunTrace then '>>  arrayInx:'->out.puttext; inx -> out.putint if); 
+                                 arrayStrucSize + (inx - 1) * arrayObjSize -> inx; 
+                                 (if mkRunTrace then 
+                                     ' holderOff:'->out.puttext; inx->out.putint;
+                                     ' valueDescNo:'->out.puttext; valueDescNo->out.putint;
+                                     out.newline 
+                                 if);
+                                 (if withDumps then
+                                     (if isValueObj = 1 then
+                                         '\n**** mkValueProxy:valueProxyDescNo: ' -> puttext;
+                                         valueProxyDescNo -> putint;
+                                         ' valueDescNo:'->puttext; valueDescNo -> putint;
+                                         ' inx: ' -> puttext; inx -> putint; newline;
+                                     if);
+                                     (if origin[] <> none then ('origin',true,out[]) -> origin.dump if);
+                                     ('holder',true,out[]) -> holder.dump;
+                                 if);
+                                 (if true then
+                                     (descInx,off,isObj = 1) -> invoke -> proxy[];
+                                 else
+                                    (valueDescNo,false,0,0) -> allocValueProxyTemplate -> proxy[];
+                                 if);
+                                 (if originIsValueObj = 1 then
+                                     (if mkRunTrace then 'originIsValueObj:'->out.puttext if);
+                                     1 -> thisObj.rget -> Z[]; (* assuming orginOff = 1 *)
+                                     (if withDumps then ('thisObj.origin',true,out[]) -> Z.dump if);
+                                     (1,origin[]) -> proxy.rput; (* is origin ok here? *)
+                                     (2,2 -> Z.rget) -> proxy.rput;
+                                     (3,(3 -> Z.get) + inx) -> proxy.Put;
+                                     (4,valueDescNo) -> proxy.put;
+                                 else
+                                     (1,origin[]) -> proxy.rput;
+                                     (2,holder[]) -> proxy.rput;
+                                     (3, inx) -> proxy.put;
+                                     (4,valueDescNo) -> proxy.put;
+                                 if);
+                                 proxy[] -> thisStack.rPush;
+                                 (if withDumps then
+                                     ('proxy',true,out[]) -> proxy.dump;
+                                     (if origin[] <> none then
+                                         ('ValueOrigin',true,out[]) -> origin.dump;
+                                     if);
+                                     (if holder[] <> none then
+                                         ('Holder',true,out[]) -> holder.dump;
+                                     if);
+                                     (if false then
+                                         ('thisObj',true,out[]) -> thisObj.dump;
+                                         ('thisStack',true,out[]) -> thisStack.dump;
+                           if)if)#);
+                        
+                           valueOff,isValueObj,originIsValueObj,valueDescNo,arrayObjSize,vo: @integer; 
+                           callee,origin,holder,proxy,Z: ^objDesc.template; old: (#exit false #)
                         do  op2 -> valueOff;
                             op1 -> isValueObj; op1 -> originIsValueObj;
-                            op2 -> valueDescNo;
+                            op2 -> valueDescNo; op1 -> arrayObjSize;
                             (if true
                              // (valueOff = 65535) and (originIsValueObj = 0) then ' local'->out.puttext
                              // (valueOff = 65535) and (originIsValueObj =1) then
@@ -2553,7 +2609,11 @@ betaVM:
                              else
                                 'no match'->out.puttext
                             if);
-                            (if valueOff = 65535 then  
+                            (if arrayObjSize > 0 then
+                                ' array'->out.puttext; 'array' -> stackstoout;
+                                arrayProxy;
+                            else
+                               (if valueOff = 65535 then  
                                 (if old then thisStack.vPop -> valueOff 
                                  else
                                     thisStack.rPop -> proxy[]; 
@@ -2575,7 +2635,7 @@ betaVM:
                                     1 -> proxy.rget -> origin[];
                                     2 -> proxy.rget -> holder[];
                                     3 -> proxy.get -> valueOff; 
-                                    (if withDumps then valueoff -> out.putint; ' ' ->out.put if);
+                                    (if mkRunTrace then 'valueOff:'->out.puttext; valueoff -> out.putint; ' ' ->out.put if);
                                 else
                                     thisStack.rPop->origin[]; 
                                     thisStack.rPop->holder[];
@@ -2601,6 +2661,7 @@ betaVM:
                             (3,valueOff + vo) -> callee.Put;
                             (4,valueDescNo) -> callee.put;
                             (if withDumps then ('callee',true,out[]) -> callee.dump if);
+                            if)
                         #)
                      // codes.mkVindexed then
                         'mkVindexed' -> exel;
