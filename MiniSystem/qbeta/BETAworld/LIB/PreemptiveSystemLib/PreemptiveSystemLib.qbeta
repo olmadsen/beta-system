@@ -2,7 +2,22 @@ PreemptiveSystemLib: obj
    %visible Collections, LIB.StringLib,LIB.Collections.QueueLib
    PreemptiveSystem:
       PreemptiveProcess: GeneralProcess
-         %globals SQS
+         --%globals SQS
+         ControlledProcess: PreemptiveProcess
+            until:<
+               out BB: var boolean
+               inner(until)
+            put('C')
+            inner(ControlledProcess)
+         repeatX:
+            Exe:< ControlledProcess
+               put('E')
+               inner(Exe)
+            watcher:= Exe("W") -- Ex makes a suspend, and returns to here
+            put('!')
+            L: do
+               sleep(1000)
+               restart(L)
          repeat: 
             until:<
                out BB: var boolean
@@ -11,14 +26,19 @@ PreemptiveSystemLib: obj
             inner(repeat)
             anActiveDoUntil := none
          anActiveDoUntil: ref repeat
+         watcher: ref ControlledProcess
          checkSuspend: 
             out B: var boolean
-            if (anActiveDoUntil =/= none) :then
-               --"found active repeat\n".print
-               B := anActiveDoUntil.until
+            --if (anActiveDoUntil =/= none) :then
+            --   --"found active repeat\n".print
+            --   B := anActiveDoUntil.until
+            if (watcher =/= none) :then
+               B := watcher.until
 
          ("PreemptiveProcess: " + id +"\n").print
          status := p_status.ACTIVE
+         put('?')
+         this(preemptiveProcess).id.print
          SQS.insert(this(PreemptiveProcess))
          ("Suspend: " + id +"\n").print
          this(PreemptiveProcess).suspend
@@ -32,8 +52,25 @@ PreemptiveSystemLib: obj
          ACTIVE: val 1
          WAITING: val 2
          TERMINATED: val 3
-      SQS: obj LIB.Collections.QueueLib.Queue
-         ...
+      SQS: obj
+         Q: obj LIB.Collections.QueueLib.Queue
+         L: obj LockLib.Lock("SQS:Lock:")
+         %Public	 
+         entry: 
+            --put('E')
+            L.get
+            inner(entry)
+            L.free    
+            --put('F')
+         insert: entry
+            in P: ref PreemptiveProcess
+            ("I:" + P.id + "\n").print
+            Q.insert(P)
+         removeNext: 
+            out P: ref PreemptiveProcess
+            entry
+               P := Q.removeNext
+         L.init
       scheduler:
          "Scheduler\n".print
          loop: do
@@ -43,7 +80,7 @@ PreemptiveSystemLib: obj
             --if (active == last) :then
             --    ("active = last:"+active.id+"\n").print
             if (active =/= none) :then
-               --("active: " + active.id+"\n").print
+               ("active: " + active.id+"\n").print
                active.attach(50)
                if (active.status = p_status.ACTIVE) :then
                   if (active.checkSuspend) :then
@@ -52,6 +89,7 @@ PreemptiveSystemLib: obj
                      last := active
                      SQS.insert(active)
                restart(loop)
+            restart(loop)
             "Scheduler terminated".print
       console: obj
          L: obj LockLib.Lock("Console:lock")
@@ -68,23 +106,26 @@ PreemptiveSystemLib: obj
      P1: obj PreemptiveProcess("P1")
         ch: var Char
         ch := 'a'
-        repeat
-            until::
-               BB := ch > 'g'
-            loop: do
+        put('X')
+        repeatX
+            exe::
+               until::
+                  BB := ch > 'g'
+               put('#')
                put(ch)
                ch := ch + 1
-               restart(loop)
+               restart(exe)
         ...
-     P2: obj PreemptiveProcess("P2")
-        ch: var Char
-        ch := 'A'
-        repeat
-            until::
-               BB := ch > 'J'
-            loop: do
-               put(ch)
-               ch := ch + 1
-               restart(loop)
+     --P2: obj PreemptiveProcess("P2")
+     --   ch: var Char
+     --   ch := 'A'
+     --   repeatX
+     --       exe::
+     --          until::
+     --             BB := ch > 'J'
+     --          put('%')
+     --          put(ch)
+     --          ch := ch + 1
+     --          restart(exe)
         ...
      "aPsys\n".print
