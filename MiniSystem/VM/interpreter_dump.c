@@ -54,7 +54,7 @@ void dumpGCinfo(FILE *trace,ObjDesc desc){
 
 void dumpCode(FILE *trace, ObjDesc desc){
   ObjDesc bc;
-  int opCode,arg1,arg2,arg3,bcTop,glsc;
+  int opCode,arg1,arg2,arg3,arg4,arg5,arg6,arg7,bcTop,glsc;
 
   bc = getByteCode(desc);
   bcTop = getBCtop(desc);
@@ -204,6 +204,17 @@ void dumpCode(FILE *trace, ObjDesc desc){
 	arg2 = op2(bc,&glsc);
 	arg3 = op1(bc,&glsc);
 	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
+	break;
+	case invokeWithProxy:
+	   // op2->descInx; op1->isObj; op2->valueOff; op1->isValueObj;op1->originIsValueObj; op2->valueDescNo; op1->arrayObjSize;
+       arg1 = op2(bc,&glsc);
+	   arg2 = op1(bc,&glsc); 
+       arg3 = op2(bc,&glsc); 
+	   arg4 = op1(bc,&glsc);
+       arg5 = op1(bc,&glsc);
+	   arg6 = op2(bc,&glsc); 
+       arg7 = op1(bc,&glsc); 
+	   fprintf(trace,"invokeWithProxy %i %i %i %i %i %i %i\n",arg2,arg2,arg3,arg4,arg5,arg6,arg7);
 	break;
       case invokeVal:
 	arg1 = op2(bc,&glsc);

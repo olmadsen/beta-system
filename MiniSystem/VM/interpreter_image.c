@@ -42,6 +42,7 @@ int arrayStrucSize = 3;
 bool newAlloc = false;
 int newAllocOff = 0;
 bool withValueProxy = false;
+bool withNewProxy = false;
 int valueProxyDescNo = 0;
 
 //for Arduino, typdef apparently must be in the beginning of the file!?
@@ -282,7 +283,8 @@ enum {
   pushBetaenvObj = 152,
   prim2 = 153,
   pushc4 = 154,
-  mkIndexedValueProxy = 155
+  mkIndexedValueProxy = 155,
+  invokeWithProxy = 156
 };
 
 

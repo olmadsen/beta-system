@@ -1691,7 +1691,7 @@ FILE *trace_t;
 #else 
 // Only called from betaVM and runbeta.c
 void init_interpreter(ObjDesc descs_a, int imageS, bool withValProx
-		      ,int valProxDescNo)
+		      ,int valProxDescNo, bool withNewProx)
 {
   FILE *trace;
   trace = fopen("code.s","w");
@@ -1711,6 +1711,7 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool withValProx
   newAllocOff = 1;
   withValueProxy = withValProx;
   valueProxyDescNo = valProxDescNo;
+  withNewProxy = withNewProx;
 } 
 #endif
 
@@ -1883,7 +1884,7 @@ void allocObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,in
 #endif
 };
 
-void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
+void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,int rInxSize, int allocQObj){
   // OBS! for isXbeta calls of allocObj may have to be replaced by allocQObj
 #ifdef TRACE
   fprintf(ctx->trace,"\n\tFROM %s(descNo:%i,%i,%i) ",nameOf(ctx->thisObj),ctx->currentDescNo,ctx->glsc,(int)*ctx->bc);
@@ -1896,7 +1897,8 @@ void allocQObj(Block *ctx,Btemplate *origin,int descNo,bool isObj,int vInxSize,i
   rPush(ctx->callee,ctx->thisObj);
   rPush(ctx->callee,ctx->thisStack);
   if (isXbeta){
-    rPush(ctx->thisStack,origin); // OBS - cf invokeObj
+	if (allocQObj == 0)
+        rPush(ctx->thisStack,origin); // OBS - cf invokeObj
   }else{
     rPush(ctx->callee,origin); // OBS - cf invokeObj
   }
@@ -1968,6 +1970,46 @@ void invokeObj(Block *ctx,int descNo,int staticOff,int vInxSize,int rInxSize){
 #endif  
 };
 
+void invokeWithSimpleProxy(Block *ctx,int descInx,int isObj,int valueDescNo,int valueOff,int isValueObj,int originIsValueObj){
+   Btemplate *proxy, *origin, *holder, *callee, *X;
+   int vo = 0;
+   //printf("invokeWithProxy %i\n",valueOff);
+   if (originIsValueObj == 1) vo = valueOff;
+   if (valueOff == 65535){
+	  proxy = rPop(ctx->thisStack);
+	  origin = (Btemplate *)proxy->vfields[1];
+	  holder = (Btemplate *)proxy->vfields[2];
+	  valueOff = proxy->vfields[3];
+   }else{
+      origin = rPop(ctx->thisStack);
+      holder = rPop(ctx->thisStack);
+   }
+   
+   //printf("invokeWithProxy:B %i\n",valueOff);
+
+   invokeObj(ctx,descInx,isObj == 1,12,0); // must fix arguments, perhpas just access global callee?
+   if (originIsValueObj == 1){
+      X = rTopElm(ctx->thisStack,0);
+	  valueOff = X->vfields[3]; // can this conflict with case 65535 above ?
+   }
+   ctx->callee->vfields[1] = (int) origin;
+   ctx->callee->vfields[2] = (int) holder;
+   ctx->callee->vfields[3] = valueOff + vo;
+   ctx->callee->vfields[4] = valueDescNo;
+	
+   //printf("Not implemented %i %i \n",valueOff,vo);
+   //if (ctx->callee == NULL) { printf("ctx->callee == NULL\n"); } else{printf("ctx->callee =/= NULL\n");};
+   //if (ctx->output == NULL) { printf("ctx->outpuy == NULL\n"); } else{printf("ctx->output =/= NULL\n");};
+   //printf(" %i %i %i %i\n",ctx->callee->vfields[1],ctx->callee->vfields[2],ctx->callee->vfields[3],ctx->callee->vfields[4]);
+   //dumpObj(ctx->output,"invokeWithSimpleProxy:callee",ctx->callee);
+   //printf("after dumpObj\n");
+}
+
+void invokeWithArrayProxy(Block *ctx,int descInx,int isObj,int valueDescNo, int isValueObj, int arrayObjSize,int originIsValueObj){
+
+	printf("Not implemented \n");
+
+}
 void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
   Btemplate *callee;
   
@@ -2587,7 +2629,7 @@ bool traceThreads = true;
     threadId = thisBlock->threadId;
   }
 
-  int opCode,off,inx,value,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode
+  int opCode,off,inx,value,descInx,isObj,valueOff,valueDescNo,arrayObjSize,arg1,arg2,arg3,dscNo,V,isValueObj,size,mode
     ,originIsValueObj,recIsValObj;
   int dinx,isRindexed,rangee,i,top1,top2;
   double float1, float2, float3;
@@ -3262,10 +3304,10 @@ case rshiftup:
 	if (rTopElm(thisStack,0) == NULL)
 	  runTimeErrorX("Origin of invoke is NONE",thisObj,glsc); 
 	break;
-      case invoke:
+    case invoke:
 	arg1 = op2(bc,&glsc);
 	arg2 = op2(bc,&glsc);
-        arg3 = op1(bc,&glsc);
+    arg3 = op1(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"invoke %i %i %i",arg1,arg2,arg3);
 #endif
@@ -3277,7 +3319,35 @@ case rshiftup:
 	restoreContext();
 	//fprintf(trace,"thisObj: %s thisStack: %s\n",nameOf(thisObj),nameOf(thisStack));
 	break;
-      case mkVindexed:
+	case invokeWithProxy:
+	   // op2->descInx; op1->isObj; op2->valueOff; op1->isValueObj;op1->originIsValueObj; op2->valueDescNo; op1->arrayObjSize;
+       descInx = op2(bc,&glsc);
+	   isObj = op1(bc,&glsc); 
+       valueOff = op2(bc,&glsc); 
+	   isValueObj = op1(bc,&glsc);
+       originIsValueObj = op1(bc,&glsc);
+	   valueDescNo = op2(bc,&glsc); 
+       arrayObjSize = op1(bc,&glsc); 
+       //printf("invokeWithProxy %i %i %i %i %i %i %i\n",descInx,isObj,valueOff,isValueObj,originIsValueObj,valueDescNo,arrayObjSize);
+#ifdef TRACE	   
+       fprintf(trace,"invokeWithProxy %i %i %i %i %i %i %i\n",descInx,isObj,valueOff,isValueObj,originIsValueObj,valueDescNo,arrayObjSize);
+#endif
+	   
+                        /*(if arrayObjSize > 0 then
+                            (if mkRunTrace then ' array'->out.puttext; 'array' -> stackstoout if);
+                            (descInx,isObj,valueDescNo,isValueObj,arrayObjSize,originIsValueObj) -> invokeWithArrayProxy;
+                        else
+                            (descInx,isObj,valueDescNo,valueOff,isValueObj,originIsValueObj) -> invokeWithSimpleProxy
+                        if)*/
+	   saveContext();
+	   if (arrayObjSize > 0)
+	      invokeWithArrayProxy(thisBlock,descInx,isObj,valueDescNo,isValueObj,arrayObjSize,originIsValueObj);
+		else{
+           invokeWithSimpleProxy(thisBlock,descInx,isObj,valueDescNo,valueOff,isValueObj,originIsValueObj);
+	   }
+	   restoreContext();
+	break;
+    case mkVindexed:
 	arg1 = op2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"mkVindexed %i ", arg1);
@@ -3303,7 +3373,7 @@ case rshiftup:
 	fprintf(trace,"invokeval %i %i %i",arg1,arg2,arg3);
 #endif
 	saveContext();
-        invokeValObj(thisBlock,arg1,arg2,arg3);
+    invokeValObj(thisBlock,arg1,arg2,arg3);
 	restoreContext();
 	break; 
     case boxedInvokeVal:
@@ -3989,6 +4059,9 @@ case rshiftup:
 	  case prim2:
            printf("prim2 MISSING %i\n",arg1);
 	  break;
+	  case 162: // markHeapTop
+           // only valid for BETAvm.bet - heapTop adr on stack - we just leave it
+	  break;
 	  default:
 	    RTE2("\n\n*** prim: missing case: ",arg1);
 	    runTimeError("prim: missing case");
@@ -4184,11 +4257,12 @@ case rshiftup:
 	fprintf(trace,"\n");
 #endif
 	break;
-      case invokev: 
+    case invokev: 
 	dinx = op1(bc,&glsc);
 	inx = op1(bc,&glsc); // noOfRefArgs
 	recIsValObj = op1(bc,&glsc); // origin is value object
 #ifdef TRACE
+    //if (withNewProxy) printf("\n**** invokev:withNewProxy\n");
 	fprintf(trace,"invokev %i %i %i",dinx,inx,recIsValObj);
 #endif	
 	refArgsTop = 0;
@@ -4199,37 +4273,51 @@ case rshiftup:
 	  }
 	} 
 	X = rPop(thisStack);
-	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
-	
+    if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
+#ifdef TRACE
+	dumpObj(trace,"X:A:",X);
+	fprintf(trace," recIsValObj %i \n ",recIsValObj);
+#endif
 	switch(isValObj){
 	  case true:
 #ifdef TRACE
-	    fprintf(trace,"\ninvokev: isValObj\n");
+	    fprintf(trace,"\n**   invokev: isValObj\n");
 	    StacksToOut(trace,thisObj,thisStack);
 #endif
-	    dscNo = vdtTableOfDesc(trace,thisValObjDesc,dinx);
+        if (withNewProxy){
+           // (X.myObjDesc).vdtTable[dinx] -> descInx; 
+		   // dscNo = myObjDesc(X)->vdtTable[dinx];
+		   dscNo = vdtTable(trace,X,dinx);
+		}else{
+    	   dscNo = vdtTableOfDesc(trace,thisValObjDesc,dinx);
+		}
 	    break;
-	default:
-	  if (recIsValObj == 1){
+	  default:
+	    if (recIsValObj == 1){
 #ifdef TRACE
-	    fprintf(trace,"\ninvokev: origin:isValObj");
+	    fprintf(trace,"\n**   invokev: origin:isValObj\n");
 #endif
-	    if (withValueProxy) {
-	      arg1 = X->vfields[4]; // descNo of valueObj
-	      dscNo = vdtTableOfDesc(trace,getDesc(arg1),dinx);
-	    }else{
-	      dscNo = vdtTableOfDesc(trace,getDesc(vTopElm(thisStack,0)),dinx);
-	    }
+	       if (withValueProxy) {
+	          arg1 = X->vfields[4]; // descNo of valueObj
+	          dscNo = vdtTableOfDesc(trace,getDesc(arg1),dinx);
+	       }else{
+	          dscNo = vdtTableOfDesc(trace,getDesc(vTopElm(thisStack,0)),dinx);
+	       }
 	  }else
-	    dscNo  = vdtTable(trace,X,dinx); 
+	       dscNo  = vdtTable(trace,X,dinx); 
 	}
 #ifdef TRACE
-	fprintf(trace,"Virtual:desc:binding: %i\n",arg3);
+	fprintf(trace,"Virtual:desc:binding: %i\n",dscNo);
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
-	allocQObj(thisBlock,X,dscNo,false,0,0);
+	allocQObj(thisBlock,X,dscNo,false,0,0,recIsValObj);
 	restoreContext();
+	if (withNewProxy && (recIsValObj == 1)){
+		for (i = 1; i <= 4; i++) {
+			callee->vfields[i] = X->vfields[i];
+		}
+	}
 	if (inx > 0) {
 	  for (i = 1; i <= inx; i++) {
 	    rPush(thisStack,refArgs[refArgsTop - i  + 1]);
@@ -4241,6 +4329,8 @@ case rshiftup:
 	isValObj = false;
 #ifdef TRACE
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
+	dumpObj(trace,"X",X);
+    dumpObj(trace,"invokev:",callee);
 #endif
 	break;
       case sendx: 
