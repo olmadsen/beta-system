@@ -57,7 +57,7 @@ For this reason, postwimp has been added as a submodule to beta-system. So insid
 
 ```
 cd postwimp
-it submodule init
+git submodule init
 git submodule update
 ```
 
@@ -75,15 +75,17 @@ git clone --recurse-submodules git@github.com:olmadsen/beta-system.git r5.5
 
 The Beta System uses some other software packages:
 
-Microsoft Visual Studio .NET 2003
+#### Microsoft Visual Studio .NET 2003
 
-if you don't have access to VS2003, you may contact olm@cs.au.dk or Peter.andersen@alexandra.dk for help.
+If you don't have access to VS2003, you may contact olm@cs.au.dk or Peter.andersen@alexandra.dk for help.
 
 VS2003 can also be downloaded from the internet, only a selection of them are required.
 E.g. from ```http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html```.
-30-08-2023  VS2003 is now included as a ZIP file in the setup directory in the root of the GIT checkout, see below.
+30-08-2023 VS2003 is now included as a ZIP file in the setup directory in the root of the GIT checkout, see below.
 
-### Using VS2003 linker
+**Correction: ** The above should probaly be changed suhc that a suser is asked to place VS2003 in ```C/Program Files```.
+
+#### Using VS2003 linker
 
 The Beta System uses the linker from VS2003.
 
@@ -213,12 +215,14 @@ Beta programs using the gui-library guienv requires that X-libraies are installe
 #### Ubuntu
 On Ubuntu there was an issue with the compiler on 
 
-beta bvmbeta
+```beta bvmbeta```
 
-gave this message form the linker
+gave this message from the linker
 
+```
 ld: cannot find -lXp
 ld: cannot find -lXext
+```
 
 When trying to use
 ```
