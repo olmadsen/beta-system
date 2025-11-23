@@ -165,15 +165,158 @@ A Beta program in the file ```foo.bet``` may be compiled by executing
 
 # Installing The qBeta System
 
-* The qBeta System is currenlty in the folder MiniSystem - plans to rename to qBetaSystem
+* The qBeta System is currenlty in the folder ```MiniSystem``` - plans to rename to qBetaSystem
 * QBS is part of MBS, so if you check-out MBS, you also have QBS.
 * You must also install Cygwin as described above
 * You don't need VS2003
-* You must setup BETALIb as desribed above.
+* You must setup ```BETALIb``` as desribed above.
+* You must add ```MiniSystem/bin/``` to your path.
+* You find the qBeta library in ```MiniSystem/qBeta/BETAworld```
+* The qBeta compiler may be invoked by ```qbeta foo``` where ```foo.qbeta``` is a qBeta program.
+* The qBeta SDE may be invoked by ```qenv```.
 
 # Further notes on The Mjølner Beta System
 In this Section, we mention further issues regarding MBS, but most of the stuff is probaly not relevant for most users of MBS.
 
 ### Running mbs_boot
 
-Do we need to include this section?
+To boot the Beta System run the command mbs_boottrack
+
+This, however, does unfortunately not work. Some time ago attempts were made to fix, but it was not completed.
+
+Part of this has been to make MBS running on a 64-bit Linux.
+
+Currently 3 Word files are attached - don't remember which one is the newest one - this has to be investigated. The file "OK - ..." is an email  correspondence with Henry Michael Lassen and seems older than the two other files, so we dont have to consider it.
+
+BUT: booting the system should not be necessary since the necessary binaries are included in the checkout from GitHub.
+
+30-08-2023 The following now works (with a few errors) on newest cygwin 64bit, windows 11:
+
+##### Force re-parsing of everything
+
+mbs_rmast -u
+
+##### Rebuild everything from scratch, with a copy of the output in boottrack.out
+
+```
+mbs_boottrack | tee boottrack.out
+```
+### Note on Beta programs using X-windows
+
+Beta programs using the gui-library guienv requires that X-libraies are installed. 
+
+#### Ubuntu
+On Ubuntu there was an issue with the compiler on 
+
+beta bvmbeta
+
+gave this message form the linker
+
+ld: cannot find -lXp
+ld: cannot find -lXext
+
+When trying to use
+
+sudo apt install libx11-dev
+sudo responds that this package is already installed
+
+The following got It to work
+
+sudo apt install libxext-dev
+
+And form this page, we got libXp:
+
+https://www.ibm.com/support/pages/how-configure-ubuntu-1604-ubuntu-1804-or-ubuntu-2004-run-ibm-rational-clearcase
+...
+
+Additionally, X-based GUI ClearCase tools require the library libXp, which is not available on Ubuntu 16.04 or Ubuntu 18.04.
+
+Note: As of ClearCaseÆ version 9.0.1.1 and version 9.0.0.5, the libxp package does not need to be installed.
+
+That library is available on Ubuntu 14.04, you can install it using the following commands:
+
+$ cd /tmp
+$ wget http://mirrors.kernel.org/ubuntu/pool/main/libx/libxp/libxp6_1.0.2-1ubuntu1_i386.deb
+$ sudo dpkg --install libxp6_1.0.2-1ubuntu1_i386.deb
+
+In /usr/lib/i386-linux-gnu, we need to create a link in order for libXp to refer to the correct version.
+
+sudo ln -s libXp.so.6 libXp.so
+MBS on Ubuntu 64 
+
+The proces described in the attached papers has led to a version of the Beta compiler that runs on 64-bit Ubuntu.
+
+Recently the Eriks Ernst Betarun was just copied to ../beta/r5.5/lib/linux and then the compiler seems to work. At least it compiles compiler/TST/tst - but some (harmless?) warnings from compilation of C programs.
+The compiler used is called beta64 in /home/olm - it is not clear how it was created;-)
+
+But Beta seems to run on CS/AU 64-bit Ubuntu. HAs bee copied to /home/olm/beta/r5.5/bin/linux.
+
+When compiling e.g. MiniSystem/qbeta/compiler.bet, gcc fails on Motif/X files – probably needs to be installed. See attempts below to install!?
+
+#### 64-bits ubuntu stuff
+64-bit Linux – at least Ubuntu 64 – cannot execute a 32-bit executable unless 32-bit libraries are installed. These may be installed as described here: installing 32-bit libraries 
+To run a 32-bit executable file on a 64-bit multi-architecture Ubuntu system, you have to add the i386 architecture and install the three library packages libc6:i386, libncurses5:i386, and libstdc++6:i386: 
+
+```
+sudo dpkg --add-architecture i386
+```
+
+Or if you are using Ubuntu 12.04 LTS (Precise Pangolin) or below, use this: 
+
+```
+echo "foreign-architecture i386" > /etc/dpkg/dpkg.cfg.d/multiarch
+```
+
+Then:
+
+```
+sudo apt-get update
+sudo apt-get install libc6:i386 libncurses5:i386 libstdc++6:i386
+```
+
+After these steps, you should be able to run the 32-bit application:
+
+```
+./example32bitprogram
+```
+
+And also from
+
+```
+http://stackoverflow.com/questions/23498237/compile-program-for-32bit-on-64bit-linux-os-causes-fatal-error
+```
+
+To compile 32 bit binaries on 64 bit Linux version, you have to Install libx32gcc development package and 32 bit GNU C Library
+try this:
+
+```
+sudo apt-get install libx32gcc-4.8-dev
+```
+
+and
+```
+sudo apt-get install libc6-dev-i386
+```
+#### Installing Motif and X11
+Tried installing - but qbeta/qcompiler still does not compile motif/X11 libs
+
+```
+sudo apt-get install libmotif-dev
+sudo apt-get install libx11-dev:i386
+```
+
+Perhaps this is for 64-bit Linux - :i386 seems to install 32-bit versions of the libraries
+sudo apt-get install libx11-dev:i386 libxt-dev:i386 libmotif-dev:i386 libxp-dev:i386
+
+#### Implementing Beta for Mac OS
+MBS was implemented for a number of OS's including the Mac before the processor was changed to be an Intel x86.
+The compiler has modules for generating code for the x86 and the object code format used by the Mac - whether or not the it is correct regarding the object code format has to be confirmed.
+So in principle it should be possible to assemble a compiler for Mac OS using existing modules. It still remains to be done;-)
+
+There is an attempt to port to Intel-based Mac - a new machine type: mac_ix86 and a directory GENERATOR/MAC_IX86 has been made, but it is  incomplete.
+Not clear if created by OLM or Henry Michael Lassen - but probably OLM, since it does not seem to be checked-in at SVN.
+There are several mac-related machine types: mac, ppcmac, macosx.
+Note that when compiling with -t mac_ix86, it seems that 'mac' matches 'mac_ix86' - i.e. a match is found i a machine type like 'mac' matches a prefix og e.g. mac_ix86.
+
+There are MACHO modules - the object-file format of the Mac - however, there seems to be ppc dependent code in some of the files - e.g. MACHOmachine.bet and MACOSXmacho.bet.
+MAC_IX86 has a file MAC_IX86macho which is a modified copy of MACOSXmacho.bet
