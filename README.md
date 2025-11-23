@@ -2,21 +2,22 @@ This reposotory contains **The Mjølner Beta System**, which consits of a compil
 
 In addition it contains **The qBeta System,** which consists of a compiler for qbeta, a library of qBeta objects and an SDE for qBeta.
 
-Beta was developed by Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Møller-Pedersen and Kristen Nygaard. Here are some references:
+**Beta** was developed by Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Møller-Pedersen and Kristen Nygaard. Here are some references:
 1. B.B. Kristensen, O.L Madsen, B. Møller-Pedersen, K. Nygaard, Abstraction Mechanisms in the Beta Peogramming Language, POPL 1983.
 2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, Object-oriented Programmin in the ebta Programming language, ACM,Addison Wesley, 1993. Out of print, but a PDF-file is available in this repository.
 3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen, The When, Why and ... , ACM/SIPGPLAN Conference on History of Programming languages, San Diego, 2007.
 
 The MJølner Beta System was originally developed as part of the Nordic Mjølner Project and afterwards by Mjølner Informatics LtD. and Aarhs University.  The following people took part in the development, Peter Andersen, Lars Bak, Jørgen Lindskov Knudsen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, +++ to be completed.
 
-qBeta is a relatively new language developed by Ole Lehrmann Madsen and derived from Beta. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
+**qBeta** is a relatively new language developed by Ole Lehrmann Madsen and derived from Beta. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
 
 # Installing The Mjølner Beta System
 In this Section, we describe how to install The Mjølner Beta System (MBS) from GitHub.
-The Beta System is currently running on Windows 11 and Ubuntu-32.
+MBS used to run on a number of platforms, including Linux, Mac, Windows, SUN, and others. 
+MBS is currently only running on Windows 11 and Ubuntu-32.
 Attempts have been made to make Beta run on Ubuntu-64 and MacOs, but so far this has not succeeded.
 
-To gain access to the GitHub repostpry, mail to ```olm@cs.au.dk``` to be added as a collaborator.
+To gain access to the GitHub repository, mail to ```olm@cs.au.dk``` to be added as a collaborator.
 We plan to make the repository public.
 
 R5.5 is the newest version of MBS.
@@ -194,7 +195,9 @@ BUT: booting the system should not be necessary since the necessary binaries are
 
 ##### Force re-parsing of everything
 
+```
 mbs_rmast -u
+```
 
 ##### Rebuild everything from scratch, with a copy of the output in boottrack.out
 
@@ -216,18 +219,21 @@ ld: cannot find -lXp
 ld: cannot find -lXext
 
 When trying to use
-
+```
 sudo apt install libx11-dev
 sudo responds that this package is already installed
-
+```
 The following got It to work
-
+```
 sudo apt install libxext-dev
+```
 
-And form this page, we got libXp:
+And form this page, we got ```libXp```:
 
+```
 https://www.ibm.com/support/pages/how-configure-ubuntu-1604-ubuntu-1804-or-ubuntu-2004-run-ibm-rational-clearcase
 ...
+```
 
 Additionally, X-based GUI ClearCase tools require the library libXp, which is not available on Ubuntu 16.04 or Ubuntu 18.04.
 
@@ -235,14 +241,18 @@ Note: As of ClearCaseÆ version 9.0.1.1 and version 9.0.0.5, the libxp package d
 
 That library is available on Ubuntu 14.04, you can install it using the following commands:
 
+```
 $ cd /tmp
 $ wget http://mirrors.kernel.org/ubuntu/pool/main/libx/libxp/libxp6_1.0.2-1ubuntu1_i386.deb
 $ sudo dpkg --install libxp6_1.0.2-1ubuntu1_i386.deb
+```
 
 In /usr/lib/i386-linux-gnu, we need to create a link in order for libXp to refer to the correct version.
 
+```
 sudo ln -s libXp.so.6 libXp.so
 MBS on Ubuntu 64 
+```
 
 The proces described in the attached papers has led to a version of the Beta compiler that runs on 64-bit Ubuntu.
 
