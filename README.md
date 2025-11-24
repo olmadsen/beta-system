@@ -1,4 +1,4 @@
-This repository contains **The Mjølner Beta System** (MBS), which consists of a compiler for Beta, a library of Beta patterns, and an SDE.
+This repository contains **The Mjølner Beta System** (MBS), which consists of a compiler for Beta, a library of Beta patterns, and an SDE for Beta.
 
 In addition, it contains **The qBeta System,** which consists of a compiler for qBeta, a library of qBeta objects and an SDE for qBeta.
 
@@ -18,6 +18,8 @@ The results of the Mjølner Project are documented in:
 The following people have taken part in the development of MBS: Peter Andersen, Lars Bak, Flemming Gram Kristensen, Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth, +++ to be completed.
 
 **qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
+The web-site https://qbeta.dev has a very preliminary and incomplete description of qBeta. 
+qBeta is used in the book _An Introduction to Programming as Modeling_ by Ole Lehrmann Madsen and Birger Møller-Pedersen and is published on the web-site [https://oopm.org](https://oopm.org).
 
 # Installing The Mjølner Beta System
 In this Section, we describe how to install MBS from GitHub.
