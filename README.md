@@ -7,7 +7,9 @@ In addition, it contains **The qBeta System,** which consists of a compiler for 
 2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, Object-Oriented Programming in the Beta Programming Language, ACM, Addison Wesley, 1993. Out of print, but a PDF-file is available in this repository.
 3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen, The When, Why and Why not of the Beta Programming Language, ACM SIGPLAN conference on History of Programming Languages (HOPL 2007) - San Diego, USA.
 
-The MJølner Beta System was originally developed as part of the Nordic Mjølner Project and afterwards by Mjølner Informatics LtD. and Aarhs University.  The following people took part in the development, Peter Andersen, Lars Bak, Jørgen Lindskov Knudsen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, +++ to be completed.
+The MJølner Beta System was originally developed as part of the Nordic Mjølner Project and afterwards by Mjølner Informatics LtD. and Aarhs University.  The following people took part in the development, Peter Andersen, Lars Bak, Flemming Gram Kristensen,
+Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth,
++++ to be completed.
 
 1. Object-oriented Environments: The Mjølner Approach, Jørgen Lindeskov Knudsen, Mads Løfgren, Boris Magnussen, Ole Lehrmann Madsen (eds.), Prentice Hall, 1994.
 
@@ -24,10 +26,10 @@ We plan to make the repository public.
 
 R5.5 is the newest version of MBS.
 
-It is recommended to place beta in ```C:/beta/r5.5```:
+It is recommended to establish a directory called `beta` and then place `r5.5` in this directory.
 
 ```
-cd c:
+...
 mkdir beta
 cd beta
 ```
@@ -40,20 +42,20 @@ git clone git@github.com:olmadsen/beta-system.git r5.5
 
 This will create a local copy of the repository (called ```r5.5```) on your machine.
 
-You can ```git status, git diff, git add, git commit```, etc. relative to this local repository.
+You can `git status`, `git diff`, `git add`, `git commit`, etc. relative to this local repository.
 
-To propagate your changes to the official github repository use ```git push.``` To get contributions from others from the github repository to your own repository use ```git pull```.
+To propagate your changes to the official github repository use `git push.` To get contributions from others from the github repository to your own repository use `git pull`.
 
 ## About the postwimp library
-The postwimp library is currently a separate repository on github.
-To check it out separately you use
+The `postwimp` library is currently a separate repository on github.
+To check it out separately use:
 
 ```
 git clone git@github.com:olmadsen/beta-postwimp.git postwimp
 ```
 
 You will most likely want to use it inside a beta-system clone (e.g. ```r5.5``` (as above). 
-For this reason, postwimp has been added as a submodule to beta-system. So inside your ```r5.5``` clone, you can activate the submodule as suh:
+For this reason, `postwimp` has been added as a submodule to beta-system. So inside your ```r5.5``` clone, you can activate the submodule as such:
 
 ```
 cd postwimp
@@ -70,6 +72,15 @@ git clone --recurse-submodules git@github.com:olmadsen/beta-system.git r5.5
 ```
 
 ## MBS on Windows
+Here we describe how to install MBS on a Windows machine. MBS is currently running on Windows 11.
+
+It is recommended to to place the `beta` directory in `c:`:
+```
+cd c:
+mkdir beta
+cd beta
+```
+And then checkout `beta`from GitHub.
 
 ### Required Software
 
@@ -77,13 +88,13 @@ The Beta System uses some other software packages:
 
 #### Microsoft Visual Studio .NET 2003
 
-If you don't have access to VS2003, you may contact olm@cs.au.dk or Peter.andersen@alexandra.dk for help.
+If you don't have access to VS2003, you may contact Ole Lehrmann Madsen at olm@cs.au.dk or Peter Andersen at Peter.andersen@alexandra.dk for help.
 
 VS2003 can also be downloaded from the internet, only a selection of them are required.
 E.g. from ```http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html```.
 30-08-2023 VS2003 is now included as a ZIP file in the setup directory in the root of the GIT checkout, see below.
 
-**Correction: ** The above should probaly be changed suhc that a suser is asked to place VS2003 in ```C/Program Files```.
+**Correction: ** The above should probably be changed such that a user is recommended to place VS2003 in `C/Program Files`.
 
 #### Using VS2003 linker
 
@@ -111,56 +122,39 @@ In addition to the default packages, you must include these packages:
 
 You may want to add the following to ```C:/cygwin64/home/<username>/.inputrc```:
 
-**Ignore case while completing**
-
 ```
+Ignore case while completing
 set completion-ignore-case on
 ```
 
-You may want to add the following to your ```C:/cygwin64/home/<username>/.bashrc```
-
-**Set cygwin window size to 100 chars wide, 60 lines high**
-
+You may want to add the following to your `C:/cygwin64/home/<username>/.bashrc`:
 ```
+Set cygwin window size to 100 chars wide, 60 lines high
 echo -en "\e[8;60;100t";
 ```
-Setup of environment variables for cygwin
+### Setup of environment variables for cygwin ###
 30-08-2023 The following complete setup works in newest cygwin 64 bit on Windows 11. Add to your C:/cygwin64/home/<username>/.bashrc
 
-### Set up BETA environment
-
 ```
+# Set up BETA environment
 echo Setting up BETA r5.5
 export BETALIB="c:/beta/r5.5"
 export BETAOPTS="-s 38"
 export MIASDK="ms"
-```
- 
-### Set up PATH to include BETA binaries and administrative scripts (without using wrappers)
 
-```
+# Set up PATH to include BETA binaries and administrative scripts (without using wrappers)
 export CYGBETA=`cygpath $BETALIB` # for use in cygwin paths
 export PATH="$CYGBETA/bin/nti_ms:$CYGBETA/bin/admin:${PATH}"
-```
- 
-### Add Visual Studio 2003 to INCLUDE, PATH and LIB environment variables
 
-```
+# Add Visual Studio 2003 to INCLUDE, PATH and LIB environment variables
 export INCLUDE="c:/Program Files/Microsoft Visual Studio .NET 2003/Vc7/Include/;c:/Program Files/Microsoft Visual Studio .NET 2003/Vc7/PlatformSDK/Include/;$INCLUDE"
 export PATH="/cygdrive/c/Program Files/Microsoft Visual Studio .NET 2003/SDK/v1.1/Bin:/cygdrive/c/Program Files/Microsoft Visual Studio .NET 2003/Vc7/Bin/:/cygdrive/c/Program Files/Microsoft Visual Studio .NET 2003/Common7/IDE/:$PATH"
 export LIB="c:/Program Files/Microsoft Visual Studio .NET 2003/Vc7/Lib/;c:/Program Files/Microsoft Visual Studio .NET 2003/Vc7/PlatformSDK/Lib;$LIB"
-```
 
-### Set prompt to display BETA info, username, directory
-
-```
+# Set prompt to display BETA info, username, directory
 PS1="\n[r5.5-$MIASDK]\n\[\033]0;\w\007\033[32m\]$USER@\h \[\033[33m\w\033[0m\]\n$ "
 cd $BETALIB
 ```
-
-???
- Original text - slightly different for VS2003 setup...
-
 
 ### Compiling Beta programs
 
@@ -169,6 +163,8 @@ A Beta program in the file ```foo.bet``` may be compiled by executing
 ```beta foo```
 
 # Installing The qBeta System
+
+The text here is currently only an itemized draft and will be expanded.
 
 * The qBeta System is currenlty in the folder ```MiniSystem``` - plans to rename to qBetaSystem
 * QBS is part of MBS, so if you check-out MBS, you also have QBS.
@@ -181,11 +177,12 @@ A Beta program in the file ```foo.bet``` may be compiled by executing
 * The qBeta SDE may be invoked by ```qenv```.
 
 # Further notes on The Mjølner Beta System
-In this Section, we mention further issues regarding MBS, but most of the stuff is probaly not relevant for most users of MBS.
+In this Section, we mention further issues regarding MBS.
+Most of these issues are mainly notes for the developers of MBS and probably not relevant for most users of MBS.
 
 ### Running mbs_boot
 
-To boot the Beta System run the command mbs_boottrack
+To boot the Beta System run the command `mbs_boottrack`.
 
 This, however, does unfortunately not work. Some time ago attempts were made to fix, but it was not completed.
 
@@ -195,19 +192,15 @@ Currently 3 Word files are attached - don't remember which one is the newest one
 
 BUT: booting the system should not be necessary since the necessary binaries are included in the checkout from GitHub.
 
-30-08-2023 The following now works (with a few errors) on newest cygwin 64bit, windows 11:
-
-##### Force re-parsing of everything
+30-08-2023 The following now works (with a few errors) on newest Cygwin 64bit, windows 11:
 
 ```
+# Force re-parsing of everything
 mbs_rmast -u
-```
-
-##### Rebuild everything from scratch, with a copy of the output in boottrack.out
-
-```
+# Rebuild everything from scratch, with a copy of the output in boottrack.out
 mbs_boottrack | tee boottrack.out
 ```
+
 ### Note on Beta programs using X-windows
 
 Beta programs using the gui-library guienv requires that X-libraies are installed. 
@@ -234,16 +227,16 @@ The following got It to work
 sudo apt install libxext-dev
 ```
 
-And form this page, we got ```libXp```:
+And from this page, we got ```libXp```:
 
 ```
 https://www.ibm.com/support/pages/how-configure-ubuntu-1604-ubuntu-1804-or-ubuntu-2004-run-ibm-rational-clearcase
-...
 ```
+...
 
-Additionally, X-based GUI ClearCase tools require the library libXp, which is not available on Ubuntu 16.04 or Ubuntu 18.04.
+Additionally, X-based GUI ClearCase tools require the library `libXp`, which is not available on Ubuntu 16.04 or Ubuntu 18.04.
 
-Note: As of ClearCaseÆ version 9.0.1.1 and version 9.0.0.5, the libxp package does not need to be installed.
+Note: As of ClearCase version 9.0.1.1 and version 9.0.0.5, the `libxp` package does not need to be installed.
 
 That library is available on Ubuntu 14.04, you can install it using the following commands:
 
@@ -253,7 +246,7 @@ $ wget http://mirrors.kernel.org/ubuntu/pool/main/libx/libxp/libxp6_1.0.2-1ubunt
 $ sudo dpkg --install libxp6_1.0.2-1ubuntu1_i386.deb
 ```
 
-In /usr/lib/i386-linux-gnu, we need to create a link in order for libXp to refer to the correct version.
+In `/usr/lib/i386-linux-gnu`, we need to create a link in order for `libXp` to refer to the correct version.
 
 ```
 sudo ln -s libXp.so.6 libXp.so
@@ -270,8 +263,9 @@ But Beta seems to run on CS/AU 64-bit Ubuntu. HAs bee copied to /home/olm/beta/r
 When compiling e.g. MiniSystem/qbeta/compiler.bet, gcc fails on Motif/X files – probably needs to be installed. See attempts below to install!?
 
 #### 64-bits ubuntu stuff
-64-bit Linux – at least Ubuntu 64 – cannot execute a 32-bit executable unless 32-bit libraries are installed. These may be installed as described here: installing 32-bit libraries 
-To run a 32-bit executable file on a 64-bit multi-architecture Ubuntu system, you have to add the i386 architecture and install the three library packages libc6:i386, libncurses5:i386, and libstdc++6:i386: 
+64-bit Linux – at least Ubuntu 64 – cannot execute a 32-bit executable unless 32-bit libraries are installed. These may be installed as described here: installing 32-bit libraries .
+
+To run a 32-bit executable file on a 64-bit multi-architecture Ubuntu system, you have to add the i386 architecture and install the three library packages `libc6:i386,` `libncurses5:i386`, and `libstdc++6:i386`: 
 
 ```
 sudo dpkg --add-architecture i386
@@ -313,26 +307,32 @@ and
 ```
 sudo apt-get install libc6-dev-i386
 ```
+
 #### Installing Motif and X11
-Tried installing - but qbeta/qcompiler still does not compile motif/X11 libs
+Tried installing - but `qbeta/qcompiler` still does not compile `motif/X11` libs
 
 ```
 sudo apt-get install libmotif-dev
 sudo apt-get install libx11-dev:i386
 ```
 
-Perhaps this is for 64-bit Linux - :i386 seems to install 32-bit versions of the libraries
+Perhaps this is for 64-bit Linux - `:i386 seems` to install 32-bit versions of the libraries
+
+```
 sudo apt-get install libx11-dev:i386 libxt-dev:i386 libmotif-dev:i386 libxp-dev:i386
+```
 
 #### Implementing Beta for Mac OS
+The text below is form the time where Mac-computers were running on an Intel x86 processor, and since is no longer the case, the text below is no longer relevant.
+
 MBS was implemented for a number of OS's including the Mac before the processor was changed to be an Intel x86.
 The compiler has modules for generating code for the x86 and the object code format used by the Mac - whether or not the it is correct regarding the object code format has to be confirmed.
 So in principle it should be possible to assemble a compiler for Mac OS using existing modules. It still remains to be done;-)
 
-There is an attempt to port to Intel-based Mac - a new machine type: mac_ix86 and a directory GENERATOR/MAC_IX86 has been made, but it is  incomplete.
+There is an attempt to port to Intel-based Mac - a new machine type: `mac_ix86` and a directory `GENERATOR/MAC_IX86` has been made, but it is  incomplete.
 Not clear if created by OLM or Henry Michael Lassen - but probably OLM, since it does not seem to be checked-in at SVN.
-There are several mac-related machine types: mac, ppcmac, macosx.
-Note that when compiling with -t mac_ix86, it seems that 'mac' matches 'mac_ix86' - i.e. a match is found i a machine type like 'mac' matches a prefix og e.g. mac_ix86.
+There are several mac-related machine types: `mac`, `ppcmac`, `macosx`.
+Note that when compiling with `-t mac_ix86`, it seems that 'mac' matches `mac_ix86` - i.e. a match is found i a machine type like `mac` matches a prefix og e.g. `mac_ix86`.
 
-There are MACHO modules - the object-file format of the Mac - however, there seems to be ppc dependent code in some of the files - e.g. MACHOmachine.bet and MACOSXmacho.bet.
-MAC_IX86 has a file MAC_IX86macho which is a modified copy of MACOSXmacho.bet
+There are MACHO modules - the object-file format of the Mac - however, there seems to be ppc dependent code in some of the files - e.g. `MACHOmachine.bet` and `MACOSXmacho.bet`.
+`MAC_IX86` has a file `MAC_IX86macho` which is a modified copy of `MACOSXmacho.bet`.
