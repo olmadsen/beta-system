@@ -1,27 +1,31 @@
-This reposotory contains **The Mjølner Beta System**, which consists of a compiler for Beta, a library of Beta patterns, and an SDE.
+This repository contains **The Mjølner Beta System** (MBS), which consists of a compiler for Beta, a library of Beta patterns, and an SDE.
 
-In addition, it contains **The qBeta System,** which consists of a compiler for qbeta, a library of qBeta objects and an SDE for qBeta.
+In addition, it contains **The qBeta System,** which consists of a compiler for qBeta, a library of qBeta objects and an SDE for qBeta.
 
 **Beta** was developed by Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Møller-Pedersen and Kristen Nygaard. Here are some references:
-1. B.B. Kristensen, O.L Madsen, B. Møller-Pedersen, K. Nygaard, Abstraction Mechanisms in the Beta Programming Language, POPL 1983.
-2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, Object-Oriented Programming in the Beta Programming Language, ACM, Addison Wesley, 1993. Out of print, but a PDF-file is available in this repository.
-3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen, The When, Why and Why not of the Beta Programming Language, ACM SIGPLAN conference on History of Programming Languages (HOPL 2007) - San Diego, USA.
+1. B.B. Kristensen, O.L Madsen, B. Møller-Pedersen, K. Nygaard: _Abstraction Mechanisms in the Beta Programming Language_, POPL 1983.
+2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, _Object-Oriented Programming in the Beta Programming Language_, ACM, Addison Wesley, 1993. Out of print, but a PDF-file is available in this repository.
+3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen: _The When, Why and Why not of the Beta Programming Language_, ACM SIGPLAN conference on History of Programming Languages (HOPL 2007) - San Diego, USA.
 
-The MJølner Beta System was originally developed as part of the Nordic Mjølner Project and afterwards by Mjølner Informatics LtD. and Aarhs University.  The following people took part in the development, Peter Andersen, Lars Bak, Flemming Gram Kristensen,
-Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth,
-+++ to be completed.
+The first Beta compiler was developed at Aarhus University. 
+This was followed the Nordic Mjølner Project where the SDE was developed and the compiler was further developed.
+After completion of The Mjølner Project the devlopment was continuet at Mjølner Informatics LtD. and Aarhus University. 
+As of today ownership of MBS is at Aarhus University, but only minor changes have been made for some time.
+The results of the Mjølner Project are documented in:
 
-1. Object-oriented Environments: The Mjølner Approach, Jørgen Lindeskov Knudsen, Mads Løfgren, Boris Magnussen, Ole Lehrmann Madsen (eds.), Prentice Hall, 1994.
+1. Jørgen Lindeskov Knudsen, Mads Løfgren, Boris Magnussen, Ole Lehrmann Madsen (eds.): _Object-oriented Environments: The Mjølner Approach_,  Prentice Hall, 1994.
 
-**qBeta** is a relatively new language developed by Ole Lehrmann Madsen and derived from Beta. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
+The following people have taken part in the development of MBS: Peter Andersen, Lars Bak, Flemming Gram Kristensen, Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth, +++ to be completed.
+
+**qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
 
 # Installing The Mjølner Beta System
-In this Section, we describe how to install The Mjølner Beta System (MBS) from GitHub.
+In this Section, we describe how to install MBS from GitHub.
 MBS used to run on a number of platforms, including Linux, Mac, Windows, SUN, and others. 
 MBS is currently only running on Windows 11 and Ubuntu-32.
 Attempts have been made to make Beta run on Ubuntu-64 and MacOs, but so far this has not succeeded.
 
-To gain access to the GitHub repository, mail to ```olm@cs.au.dk``` to be added as a collaborator.
+To gain access to the GitHub repository, mail to `olm@cs.au.dk` to be added as a collaborator.
 We plan to make the repository public.
 
 R5.5 is the newest version of MBS.
@@ -40,9 +44,9 @@ To checkout the system do this:
 git clone git@github.com:olmadsen/beta-system.git r5.5
 ```
 
-This will create a local copy of the repository (called ```r5.5```) on your machine.
+This will create a local copy of the repository (called `r5.5`) on your machine.
 
-You can `git status`, `git diff`, `git add`, `git commit`, etc. relative to this local repository.
+You can use `git status`, `git diff`, `git add`, `git commit`, etc. relative to this local repository.
 
 To propagate your changes to the official github repository use `git push.` To get contributions from others from the github repository to your own repository use `git pull`.
 
@@ -54,8 +58,8 @@ To check it out separately use:
 git clone git@github.com:olmadsen/beta-postwimp.git postwimp
 ```
 
-You will most likely want to use it inside a beta-system clone (e.g. ```r5.5``` (as above). 
-For this reason, `postwimp` has been added as a submodule to beta-system. So inside your ```r5.5``` clone, you can activate the submodule as such:
+You will most likely want to use it inside a beta-system clone (e.g. `r5.5` (as above). 
+For this reason, `postwimp` has been added as a submodule to `beta-system`. So inside your `r5.5` clone, you can activate the submodule as such:
 
 ```
 cd postwimp
@@ -63,7 +67,7 @@ git submodule init
 git submodule update
 ```
 
-You will then get the postwimp directory populated with the files, with changes separately tracked against the beta-postwimp.git repository.
+You will then get the `postwimp` directory populated with the files, with changes separately tracked against the `beta-postwimp.git` repository.
 
 If you are checking out the entire beta system, and would like to check out postwimp together with the rest, you can do it as such:
 
@@ -79,6 +83,7 @@ It is recommended to to place the `beta` directory in `c:`:
 cd c:
 mkdir beta
 cd beta
+git clone git@github.com:olmadsen/beta-system.git r5.5
 ```
 And then checkout `beta`from GitHub.
 
@@ -90,15 +95,15 @@ The Beta System uses some other software packages:
 
 If you don't have access to VS2003, you may contact Ole Lehrmann Madsen at olm@cs.au.dk or Peter Andersen at Peter.andersen@alexandra.dk for help.
 
-VS2003 can also be downloaded from the internet, only a selection of them are required.
-E.g. from ```http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html```.
+VS2003 can also be downloaded from the internet, only part of it is required.
+E.g. from `http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html`.
 30-08-2023 VS2003 is now included as a ZIP file in the setup directory in the root of the GIT checkout, see below.
 
 **Correction: ** The above should probably be changed such that a user is recommended to place VS2003 in `C/Program Files`.
 
 #### Using VS2003 linker
 
-The Beta System uses the linker from VS2003.
+The Beta compiler uses the linker from VS2003.
 
 So rename ```/usr/bin/link.exe``` to ensure that the linker from VS2003 is used.
 
@@ -106,7 +111,7 @@ The VS2003 linker named ```link.exe``` is located in the folder ```$VS2003/Vc7/b
 
 ### Cygwin
 
-Cygwin is a Unix-like shell  and accompanying command line tools for Windows.
+Cygwin is a Unix-like shell and accompanying command line tools for Windows.
 
 An installer may be downloaded from:
 
@@ -123,17 +128,17 @@ In addition to the default packages, you must include these packages:
 You may want to add the following to ```C:/cygwin64/home/<username>/.inputrc```:
 
 ```
-Ignore case while completing
+# Ignore case while completing
 set completion-ignore-case on
 ```
 
 You may want to add the following to your `C:/cygwin64/home/<username>/.bashrc`:
 ```
-Set cygwin window size to 100 chars wide, 60 lines high
+# Set cygwin window size to 100 chars wide, 60 lines high
 echo -en "\e[8;60;100t";
 ```
 ### Setup of environment variables for cygwin ###
-30-08-2023 The following complete setup works in newest cygwin 64 bit on Windows 11. Add to your C:/cygwin64/home/<username>/.bashrc
+30-08-2023 The following complete setup works in newest Cygwin 64 bit on Windows 11. Add to your `C:/cygwin64/home/<username>/.bashrc`:
 
 ```
 # Set up BETA environment
@@ -258,9 +263,9 @@ The proces described in the attached papers has led to a version of the Beta com
 Recently the Eriks Ernst Betarun was just copied to ../beta/r5.5/lib/linux and then the compiler seems to work. At least it compiles compiler/TST/tst - but some (harmless?) warnings from compilation of C programs.
 The compiler used is called beta64 in /home/olm - it is not clear how it was created;-)
 
-But Beta seems to run on CS/AU 64-bit Ubuntu. HAs bee copied to /home/olm/beta/r5.5/bin/linux.
+But Beta seems to run on CS/AU 64-bit Ubuntu. Has been copied to `/home/olm/beta/r5.5/bin/linux`.
 
-When compiling e.g. MiniSystem/qbeta/compiler.bet, gcc fails on Motif/X files – probably needs to be installed. See attempts below to install!?
+When compiling e.g. `MiniSystem/qbeta/compiler.bet`, `gcc` fails on `Motif/X` files – probably needs to be installed. See attempts below to install!?
 
 #### 64-bits ubuntu stuff
 64-bit Linux – at least Ubuntu 64 – cannot execute a 32-bit executable unless 32-bit libraries are installed. These may be installed as described here: installing 32-bit libraries .
@@ -296,7 +301,7 @@ And also from
 http://stackoverflow.com/questions/23498237/compile-program-for-32bit-on-64bit-linux-os-causes-fatal-error
 ```
 
-To compile 32 bit binaries on 64 bit Linux version, you have to Install libx32gcc development package and 32 bit GNU C Library
+To compile 32 bit binaries on 64 bit Linux version, you have to install `libx32gcc` development package and 32 bit GNU C Library
 try this:
 
 ```
@@ -323,7 +328,7 @@ sudo apt-get install libx11-dev:i386 libxt-dev:i386 libmotif-dev:i386 libxp-dev:
 ```
 
 #### Implementing Beta for Mac OS
-The text below is form the time where Mac-computers were running on an Intel x86 processor, and since is no longer the case, the text below is no longer relevant.
+The text below is from the time where Mac-computers were running on an Intel x86 processor, and since is no longer the case, the text below is no longer relevant.
 
 MBS was implemented for a number of OS's including the Mac before the processor was changed to be an Intel x86.
 The compiler has modules for generating code for the x86 and the object code format used by the Mac - whether or not the it is correct regarding the object code format has to be confirmed.
