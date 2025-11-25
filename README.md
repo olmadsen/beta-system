@@ -99,11 +99,11 @@ The Beta System uses some other software packages:
 
 If you don't have access to VS2003, you may contact Ole Lehrmann Madsen at olm@cs.au.dk or Peter Andersen at Peter.andersen@alexandra.dk for help.
 
-VS2003 can also be downloaded from the internet, only part of it is required.
-E.g. from `http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html`.
-30-08-2023 VS2003 is now included as a ZIP file in the setup directory in the root of the GIT checkout, see below.
+VS2003 can also be downloaded from the internet, e.g. from `http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html`.
 
-**Correction: ** The above should probably be changed such that a user is recommended to place VS2003 in `C/Program Files`.
+The setup of environment variables below, assumes that VS2003 is placed in `C\Program Files`.
+
+Only part of VS2003 is used, but currently we have no record of which parts.
 
 #### Using VS2003 linker
 
