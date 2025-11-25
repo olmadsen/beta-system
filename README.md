@@ -3,19 +3,21 @@ This repository contains **The Mjølner Beta System** (MBS), which consists of a
 In addition, it contains **The qBeta System,** which consists of a compiler for qBeta, a library of qBeta objects and an SDE for qBeta.
 
 **Beta** was developed by Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Møller-Pedersen and Kristen Nygaard. Here are some references:
-1. B.B. Kristensen, O.L Madsen, B. Møller-Pedersen, K. Nygaard: _Abstraction Mechanisms in the Beta Programming Language_, POPL 1983.
-2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, _Object-Oriented Programming in the Beta Programming Language_, ACM, Addison Wesley, 1993. Out of print, but a PDF-file is available in this repository.
-3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen: _The When, Why and Why not of the Beta Programming Language_, ACM SIGPLAN conference on History of Programming Languages (HOPL 2007) - San Diego, USA.
+1. B.B. Kristensen, O.L Madsen, B. Møller-Pedersen, K. Nygaard: _Abstraction Mechanisms in the Beta Programming Language_, POPL 1983, [DOI](https://dl.acm.org/doi/10.1145/567067.567094)
+2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, _Object-Oriented Programming in the Beta Programming Language_, ACM, Addison Wesley, 1993, [DOI](https://dl.acm.org/doi/book/10.5555/221048). Out of print, but a PDF-file is available in this repository.
+3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen: _The When, Why and Why not of the Beta Programming Language_, ACM SIGPLAN conference on History of Programming Languages (HOPL 2007) - San Diego, USA, [DOI](https://dl.acm.org/doi/10.1145/1238844.1238854)
 
-The first Beta compiler was developed at Aarhus University. 
+The first Beta compiler was developed at Aarhus University, Aarhus, Denmark. 
 This was followed the Nordic Mjølner Project where the SDE was developed and the compiler was further developed.
-After completion of The Mjølner Project the devlopment was continuet at Mjølner Informatics LtD. and Aarhus University. 
-As of today ownership of MBS is at Aarhus University, but only minor changes have been made for some time.
+After completion of The Mjølner Project the development was continued at [Mjølner Informatics LtD](https://mjolner.com) and Aarhus University. 
+As of today the ownership of MBS is at Aarhus University, but only minor changes have been made for some time.
 The results of the Mjølner Project are documented in:
 
-1. Jørgen Lindeskov Knudsen, Mads Løfgren, Boris Magnussen, Ole Lehrmann Madsen (eds.): _Object-oriented Environments: The Mjølner Approach_,  Prentice Hall, 1994.
+1. Jørgen Lindskov Knudsen, Mads Løfgren, Boris Magnussen, Ole Lehrmann Madsen (eds.): _Object-oriented Environments: The Mjølner Approach_,  Prentice Hall, 1994.
 
-The following people have taken part in the development of MBS: Peter Andersen, Lars Bak, Flemming Gram Kristensen, Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth, +++ to be completed.
+The following people have made significant contributions to MBS: Peter Andersen, Lars Bak, Flemming Gram Kristensen, Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth.
+
+For a complete list of contributors to the code base, execute `git shortlog -s -n` in your clone of the repository.
 
 **qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
 The web-site https://qbeta.dev has a very preliminary and incomplete description of qBeta. 
