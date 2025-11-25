@@ -175,15 +175,19 @@ A Beta program in the file ```foo.bet``` may be compiled by executing
 
 The text here is currently only an itemized draft and will be expanded.
 
-* The qBeta System is currenlty in the folder ```MiniSystem``` - plans to rename to qBetaSystem
+* The qBeta System is currenlty in the folder `MiniSystem` - it is planned to rename it to `qBetaSystem`.
 * QBS is part of MBS, so if you check-out MBS, you also have QBS.
-* You must also install Cygwin as described above
-* You don't need VS2003
-* You must setup ```BETALIb``` as desribed above.
-* You must add ```MiniSystem/bin/``` to your path.
-* You find the qBeta library in ```MiniSystem/qBeta/BETAworld```
-* The qBeta compiler may be invoked by ```qbeta foo``` where ```foo.qbeta``` is a qBeta program.
-* The qBeta SDE may be invoked by ```qenv```.
+* You must also install Cygwin as described above.
+* You don't need VS2003.
+* You must define the environment variable `BETALIB` as described above.
+* You must add `MiniSystem/bin/` to your path.
+* The qBeta compiler may be invoked by `qbeta foo` where `foo.qbeta` is a qBeta program.
+* The qBeta SDE may be invoked by `qenv`.
+* The best available documentation fo qBeta is the book https://oopm.org.
+* The qBeta library is in the directory `MiniSystem/qBeta/BETAworld`.
+* The organization of `BETAworld`is described in https://oopm.org in the Section about [Modules](https://oopm.org/?page_id=3032).
+
+
 
 # Further notes on The Mjølner Beta System
 In this Section, we mention further issues regarding MBS.
@@ -332,7 +336,9 @@ sudo apt-get install libx11-dev:i386 libxt-dev:i386 libmotif-dev:i386 libxp-dev:
 ```
 
 #### Implementing Beta for Mac OS
-The text below is from the time where Mac-computers were running on an Intel x86 processor, and since is no longer the case, the text below is no longer relevant.
+The text below is from the time where Mac-computers were running on an Intel x86 processor, and since this is no longer the case, the text below is not relevant.
+
+**Old text**
 
 MBS was implemented for a number of OS's including the Mac before the processor was changed to be an Intel x86.
 The compiler has modules for generating code for the x86 and the object code format used by the Mac - whether or not the it is correct regarding the object code format has to be confirmed.
