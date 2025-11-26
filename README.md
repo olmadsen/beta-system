@@ -19,9 +19,13 @@ The following people have made significant contributions to MBS: Peter Andersen,
 
 For a complete list of contributors to the code base, execute `git shortlog -s -n` in your clone of the repository.
 
-**qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
+**qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE caled **qEnv**__.
 The web-site https://qbeta.dev has a very preliminary and incomplete description of qBeta. 
 qBeta is used in the book _An Introduction to Programming as Modeling_ by Ole Lehrmann Madsen and Birger Møller-Pedersen and is published on the web-site [https://oopm.org](https://oopm.org).
+
+qBeta has so far primerily been used to experiment with new language mechanisms, which means that the implementation is not robust enough for production code. The implementation is thus not suitable for prodcution code.
+The same is the case for qEnv.
+You are welcome to try out qBeta and qEnv, but both the qBeta compiler and qEnv are very unstable. 
 
 # Installing The Mjølner Beta System
 In this Section, we describe how to install MBS from GitHub.
@@ -197,7 +201,7 @@ Most of these issues are mainly notes for the developers of MBS and probably not
 
 To boot the Beta System run the command `mbs_boottrack`.
 
-This, however, does unfortunately not work. Some time ago attempts were made to fix, but it was not completed.
+This, however, does unfortunately not work. Some time ago attempts were made to fix it, but it was not completed.
 
 Part of this has been to make MBS running on a 64-bit Linux.
 
