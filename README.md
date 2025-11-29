@@ -19,9 +19,13 @@ The following people have made significant contributions to MBS: Peter Andersen,
 
 For a complete list of contributors to the code base, execute `git shortlog -s -n` in your clone of the repository.
 
-**qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE.
+**qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE caled **qEnv**__.
 The web-site https://qbeta.dev has a very preliminary and incomplete description of qBeta. 
 qBeta is used in the book _An Introduction to Programming as Modeling_ by Ole Lehrmann Madsen and Birger Møller-Pedersen and is published on the web-site [https://oopm.org](https://oopm.org).
+
+qBeta has so far primerily been used to experiment with new language mechanisms, which means that the implementation is not robust enough for production code. The implementation is thus not suitable for prodcution code.
+The same is the case for qEnv.
+You are welcome to try out qBeta and qEnv, but both the qBeta compiler and qEnv are very unstable. 
 
 # Installing The Mjølner Beta System
 In this Section, we describe how to install MBS from GitHub.
@@ -99,11 +103,11 @@ The Beta System uses some other software packages:
 
 If you don't have access to VS2003, you may contact Ole Lehrmann Madsen at olm@cs.au.dk or Peter Andersen at Peter.andersen@alexandra.dk for help.
 
-VS2003 can also be downloaded from the internet, only part of it is required.
-E.g. from `http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html`.
-30-08-2023 VS2003 is now included as a ZIP file in the setup directory in the root of the GIT checkout, see below.
+VS2003 can also be downloaded from the internet, e.g. from `http://download.cnet.com/Microsoft-Visual-Studio-NET-2003-Service-Pack-1/3000-10250_4-10729888.html`.
 
-**Correction: ** The above should probably be changed such that a user is recommended to place VS2003 in `C/Program Files`.
+The setup of environment variables below, assumes that VS2003 is placed in `C\Program Files`.
+
+Only part of VS2003 is used, but currently we have no record of which parts.
 
 #### Using VS2003 linker
 
@@ -175,15 +179,19 @@ A Beta program in the file ```foo.bet``` may be compiled by executing
 
 The text here is currently only an itemized draft and will be expanded.
 
-* The qBeta System is currenlty in the folder ```MiniSystem``` - plans to rename to qBetaSystem
+* The qBeta System is currenlty in the folder `MiniSystem` - it is planned to rename it to `qBetaSystem`.
 * QBS is part of MBS, so if you check-out MBS, you also have QBS.
-* You must also install Cygwin as described above
-* You don't need VS2003
-* You must setup ```BETALIb``` as desribed above.
-* You must add ```MiniSystem/bin/``` to your path.
-* You find the qBeta library in ```MiniSystem/qBeta/BETAworld```
-* The qBeta compiler may be invoked by ```qbeta foo``` where ```foo.qbeta``` is a qBeta program.
-* The qBeta SDE may be invoked by ```qenv```.
+* You must also install Cygwin as described above.
+* You don't need VS2003.
+* You must define the environment variable `BETALIB` as described above.
+* You must add `MiniSystem/bin/` to your path.
+* The qBeta compiler may be invoked by `qbeta foo` where `foo.qbeta` is a qBeta program.
+* The qBeta SDE may be invoked by `qenv`.
+* The best available documentation fo qBeta is the book https://oopm.org.
+* The qBeta library is in the directory `MiniSystem/qBeta/BETAworld`.
+* The organization of `BETAworld`is described in https://oopm.org in the Section about [Modules](https://oopm.org/?page_id=3032).
+
+
 
 # Further notes on The Mjølner Beta System
 In this Section, we mention further issues regarding MBS.
@@ -193,7 +201,7 @@ Most of these issues are mainly notes for the developers of MBS and probably not
 
 To boot the Beta System run the command `mbs_boottrack`.
 
-This, however, does unfortunately not work. Some time ago attempts were made to fix, but it was not completed.
+This, however, does unfortunately not work. Some time ago attempts were made to fix it, but it was not completed.
 
 Part of this has been to make MBS running on a 64-bit Linux.
 
@@ -332,7 +340,9 @@ sudo apt-get install libx11-dev:i386 libxt-dev:i386 libmotif-dev:i386 libxp-dev:
 ```
 
 #### Implementing Beta for Mac OS
-The text below is from the time where Mac-computers were running on an Intel x86 processor, and since is no longer the case, the text below is no longer relevant.
+The text below is from the time where Mac-computers were running on an Intel x86 processor, and since this is no longer the case, the text below is not relevant.
+
+**Old text**
 
 MBS was implemented for a number of OS's including the Mac before the processor was changed to be an Intel x86.
 The compiler has modules for generating code for the x86 and the object code format used by the Mac - whether or not the it is correct regarding the object code format has to be confirmed.
