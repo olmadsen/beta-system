@@ -1296,6 +1296,7 @@ void dumpObj(FILE *trace,char *name,Btemplate *X){
   fprintf(trace,"\nRstack: ");
   dumpRstack(trace,X);
   fprintf(trace,"\n");
+  for (i = 1; i < 5; i++ ) vdtTable(trace,X,i);
 }
 
 #endif
@@ -2819,7 +2820,7 @@ bool traceThreads = true;
       case rpushg:
 	arg1 = op1(bc,&glsc); // off
 #ifdef TRACE
-	fprintf(trace,"rpushg %i\n",arg1);
+	fprintf(trace,"rpushg %i",arg1);
 	#endif
 	X = rPop(thisStack);
 	if (X == NULL) {
@@ -2855,7 +2856,7 @@ bool traceThreads = true;
 #endif
 	rPush(thisStack,Y);
 #ifdef TRACE
-	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
+	fprintf(trace," %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
 	//dumpObj(trace,"rpushg",Y); // implies segmentation fault
 #endif
 	
@@ -4184,13 +4185,14 @@ case rshiftup:
 	  glsc = getDoE(getDesc(arg2));
 	}
 	break;
-      case innerP:
-	arg1 = op1(bc,&glsc);
-        X = rPop(thisStack);
+    case innerP:
+	   arg1 = op1(bc,&glsc);
+       X = rPop(thisStack);
         rPush(X,thisObj);
         thisObj = X;
 #ifdef TRACE
-	fprintf(trace,"innerP %i",arg1);
+	fprintf(trace,"innerP %i\n",arg1);
+	dumpObj(trace,"innerP:X:",X);
 #endif
 	arg2 = vdtTable(trace,X,arg1); // descNo
 #ifdef TRACE
@@ -4203,10 +4205,8 @@ case rshiftup:
 	  glsc = getDoE(getDesc(arg2));
 	}
 	break;
-
-
-        break;
-      case innera:
+    break;
+    case innera:
 	arg1 = op1(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"innera %i",arg1);
@@ -4461,15 +4461,15 @@ case rshiftup:
 #endif
 	vPush(thisStack, X == Y);
 	break;
-      case rne:
-	X = rPop(thisStack);
-	Y = rPop(thisStack);
+    case rne:
+	   X = rPop(thisStack);
+	   Y = rPop(thisStack);
 #ifdef TRACE
 	fprintf(trace,"rne %i != %i\n",(int)X,(int)Y);
 #endif
-	vPush(thisStack,X != Y);
-	break;    
-      case seq:
+	   vPush(thisStack,X != Y);
+	   break;    
+    case seq:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
 	//printf("\nseq:struc: %s %s\n",nameOf(X),nameOf(Y));

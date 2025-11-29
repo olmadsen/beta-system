@@ -1,131 +1,124 @@
 PreemptiveSystemLib: obj
    %visible Collections, LIB.StringLib,LIB.Collections.QueueLib
    PreemptiveSystem:
-      PreemptiveProcess: GeneralProcess
-         --%globals SQS
-         ControlledProcess: PreemptiveProcess
-            until:<
-               out BB: var boolean
-               inner(until)
-            put('C')
-            inner(ControlledProcess)
-         repeatX:
-            Exe:< ControlledProcess
-               put('E')
-               inner(Exe)
-            watcher:= Exe("W") -- Ex makes a suspend, and returns to here
-            put('!')
-            L: do
-               sleep(1000)
-               restart(L)
-         repeat: 
-            until:<
-               out BB: var boolean
-               inner(until)
-            anActiveDoUntil := this(repeat)
-            inner(repeat)
-            anActiveDoUntil := none
-         anActiveDoUntil: ref repeat
-         watcher: ref ControlledProcess
-         checkSuspend: 
-            out B: var boolean
-            --if (anActiveDoUntil =/= none) :then
-            --   --"found active repeat\n".print
-            --   B := anActiveDoUntil.until
-            if (watcher =/= none) :then
-               B := watcher.until
-
-         ("PreemptiveProcess: " + id +"\n").print
-         status := p_status.ACTIVE
-         put('?')
-         this(preemptiveProcess).id.print
-         SQS.insert(this(PreemptiveProcess))
-         ("Suspend: " + id +"\n").print
-         this(PreemptiveProcess).suspend
-         --console.display
-         --   ("Attach: " + id +"\n").print
-         inner(PreemptiveProcess)
-         status := P_status.TERMINATED
       P_status: obj 
          %globals
          %Public	 
          ACTIVE: val 1
          WAITING: val 2
          TERMINATED: val 3
-      SQS: obj
-         Q: obj LIB.Collections.QueueLib.Queue
-         L: obj LockLib.Lock("SQS:Lock:")
-         %Public	 
-         entry: 
-            --put('E')
-            L.get
-            inner(entry)
-            L.free    
-            --put('F')
-         insert: entry
-            in P: ref PreemptiveProcess
-            ("I:" + P.id + "\n").print
-            Q.insert(P)
-         removeNext: 
-            out P: ref PreemptiveProcess
-            entry
-               P := Q.removeNext
-         L.init
+      PSYSprocess: -- GeneralProcess
+          %id "PSYSprocess"
+          repeat: PSYSProcess --("repeat")
+             %id "repeat_process"
+             untilC:<
+                out BB: var Boolean
+                inner(untilC)
+             put('@')
+             newline
+             " Hello world\n".print
+             newRepeat := this(repeat)
+             activate(this(repeat))
+             put('/')
+             caller := this(PreemptiveProcess)
+             this(repeat).suspend
+             put('&')
+             inner(repeat)
+             status := p_status.TERMINATED
+          status: var integer
+          id: var StringLib.String
+          newRepeat: ref repeat
+          caller: ref PreemptiveProcess
+          put('P')
+          inner(PSYSprocess)
+      PreemptiveProcess: PSYSprocess
+          activateX:
+             status := p_status.ACTIVE
+             activate(this(PreemptiveProcess))
+          console.display
+             ("<ACT=" + id + ">").print
+          this(PreemptiveProcess).suspend -- for repeat we suspend here,
+          -- but we never start repeat
+          put('$')
+          inner(PreemptiveProcess)
+          status := p_status.TERMINATED
+      %private
+      SQS: obj LIB.Collections.QueueLib.Queue
+      activate:
+         in P: ref PSYSprocess
+         disable
+         P.status := P_status.ACTIVE
+         SQS.insert(P)
+         enable
       scheduler:
          "Scheduler\n".print
          loop: do
-            active: ref PreemptiveProcess
-            last: ref PreemptiveProcess
+            active: ref PSYSprocess
             active := SQS.removeNext
-            --if (active == last) :then
-            --    ("active = last:"+active.id+"\n").print
             if (active =/= none) :then
                ("active: " + active.id+"\n").print
-               active.attach(50)
+               active.attach(100)
                if (active.status = p_status.ACTIVE) :then
-                  if (active.checkSuspend) :then
-                     ("\n" + active.id + " is suspended\n").print
+                  put('S')
+                  if (active.newRepeat =/= none) :then
+                     "\nnewRepeat:\n".print
+                     active.status := p_status.WAITING
+                     put('A')
+                     if  active.newRepeat.untilC :then
+                        ("\n" + active.id + " is suspended\n").print
+                        active.caller.status :=p_status.ACTIVE
+                        active.status := p_status.TERMINATED
+                        active.newRepeat := none
+                     :else
+                        put('+')
+                        SQS.insert(active)
                   :else
-                     last := active
                      SQS.insert(active)
+               :else
+                  put('-')
                restart(loop)
+            :else
+               put('F')
             restart(loop)
-            "Scheduler terminated".print
+            -- "Scheduler terminated".print
       console: obj
          L: obj LockLib.Lock("Console:lock")
          %public
          display: 
             L.get
+            disable
             inner(display)
+            enable
             L.free
          L.init
       "PreemptiveSystem:\n".print
       inner(PreemptiveSystem)
       scheduler
    aPsys: obj PreemptiveSystem
-     P1: obj PreemptiveProcess("P1")
+     P1: obj PreemptiveProcess --("P1")
         ch: var Char
         ch := 'a'
         put('X')
-        repeatX
-            exe::
-               until::
+        repeat
+            %id "repeat_inv"
+            untilC::
                   BB := ch > 'g'
-               put('#')
-               put(ch)
-               ch := ch + 1
-               restart(exe)
+            put('#')
+            put(ch)
+            ch := ch + 1
+            --restart(repeat)
         ...
      --P2: obj PreemptiveProcess("P2")
      --   ch: var Char
      --   ch := 'A'
      --   repeatX
      --       exe::
-     --          until::
+     --          untilC::
      --             BB := ch > 'J'
      --          put('%')
      --          put(ch)
      --          ch := ch + 1
      --          restart(exe)
         ...
+     P1.activateX
      "aPsys\n".print

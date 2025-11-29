@@ -536,15 +536,14 @@ checker: Parser
                         rsize + 1 -> rsize -> originOff
                  if)#);
             do (if traceAlloc then
-                   '**** items:alloc:'->puttext; dopt -> putheadN;
+                   '**** items:alloc:'->puttext; (if true then encOG.ogID-> putline else dopt -> putheadN if);
                if);
                (if traceNoGlobals then
                    (if globalRestrictionsInMain then
-                       '*** thisOG does not acces global attributes:\n '
-                         -> puttext;
+                       '*** thisOG does not acces global attributes:\n ' -> puttext;
                        father.father.doPT -> puthead
                if)if);
-               (if super.ATd[] <> none then
+               (if super.ATd[] <> none then (* OBS!we should test if alloc has been made for super *)
                    (if superDesc[] = none then
                        ('Items:alloc:superDesc=none',this(Items)[])->putPT;
                        super.doPT -> dumptn;
@@ -1187,12 +1186,13 @@ checker: Parser
             (#
             do 0 -> vsize -> rsize -> dsize -> originOff
                  -> noOfInner -> innerInx;
-               false -> done;
+               false -> done -> hasInn;
                inner
             #);
           newInnerX: ^Pattern;
           newOriginOff:< IntegerValue;
           vsize,rsize,dsize,originOff,noOfInner,innerInx: @integer;
+          hasInn,
           isStringModule,
           done: @boolean (* codegen done*)
        #);
@@ -2195,7 +2195,8 @@ checker: Parser
                    (if org.noOfInner = 1 then 
                        org.dsize + 1 
                          -> org.dsize 
-                         -> org.innerInx 
+                         -> org.innerInx;
+                       (if false then 'org.innerInx:'->dumpT; org.innerInx-> putint; ' '->put; org.encOG.OGid-> putline; if)
                if)if);
             #);     
           alloc::< 
@@ -2215,17 +2216,16 @@ checker: Parser
                     if)
                  #);
             do (if traceAlloc then
-                   '**** Ptn:alloc: ' -> puttext; sig.doPT -> putline;
+                   '**** Ptn:alloc: ' -> puttext; sig.doPT -> putline; 
                if);
                enclIT[] -> OG.alloc;
                (if ptnKind 
                 // virtualPtn then 
-                   (if false then
-                       '**** alloc:virtual ptn: ' -> puttext; 
-                       enclIT.dsize -> putint; ' ' -> put;
-                       sig.doPT -> putline;
-                   if);
                    enclIT.dsize + 1 -> enclIT.dsize -> off;
+                   (if false then
+                       '**** alloc:virtual ptn: ' -> puttext; sig.doPT -> puthead; ' off: '->puttext;
+                       off -> putint; ' in:'->puttext; enclIT.encOG.ogID->putline
+                   if);
                    (*add*)
                 // furtherPtn // finalPtn then
                    (if false then
@@ -2944,7 +2944,7 @@ checker: Parser
           alloc:: 
             (# 
             do (if traceAlloc then
-                   '**** INV:alloc: ' -> puttext; doPT -> putline;
+                   '**** INV:alloc: ' -> puttext; doPT -> putHeadN;
                if);
                scanSons(# do enclIT[] -> current.alloc #);
             #);
@@ -2990,6 +2990,26 @@ checker: Parser
                  do '**** OI:checkOIStdBeta:'->dumpT; dopt->dumptn;
                     integerDecl.OG.IS[] -> basicScope[]
                  #);
+                markInner:
+                   (# A: ^ObjectDescriptor; org: ^Items
+                   do (if traceVDTalloc then
+                          '**** got inner:'->dumpT; dopt -> dumptn;
+                      if);
+                      (if args.noOfSons <> 1 then 
+                          (if false then
+                              this(ObjectInvocation)[] -> semanticError
+                              (#do 'Inner mush have exacly one argument:'->msg
+                              #);
+                          else
+                             (if origin.isItems then
+                                 true -> (origin[]->org[]).hasInn
+                          if)if)
+                      else
+                         args.getFirstArg -> A[];
+                         (none,basicScope[],none(*basicScope[]*),true) -> A.check;
+                      true -> (A.super.last).ATd.OG.IS.hasInn;
+                      if)
+               #);
                handleArgs:
                   (#
                   do (if false then
@@ -3007,7 +3027,7 @@ checker: Parser
                             'Only patterns can have arguments; "' -> msg;
                             ptnId.dopt -> msg; '" is not a pattern' -> msg
                   #)if)if)#);
-               BS: ^Scope
+               BS: ^Scope; pNo: @integer
             do (if traceCheck or traceGetVqual then
                    '**** ObjectInvocation:checkOI: '->puttext;
                    dopt->puthead; ' ' -> put;
@@ -3022,7 +3042,7 @@ checker: Parser
                    checkOIStdBeta;
                    leave checkOI 
                if);
-               (if (ATd.asDecl).primNo 
+               (if (ATd.asDecl).primNo  -> pNo
                 // this_prim then
                    (* ad hoc - must be fixed *)
                    (# A: ^Item; OD: ^ObjectDescriptor
@@ -3112,6 +3132,9 @@ checker: Parser
                    #);
                 else
                    handleArgs;
+                   (if pNo = inner_prim then 
+                       markInner
+                   if);
                    (* ok if static/dynamicObject - what does
                     * this mean?
                     * If pattern, scope is the desc of the return value

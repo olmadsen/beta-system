@@ -4,7 +4,8 @@ INCLUDE 'qrestrictions';
 variants: restrictions
   (# traceEmbedding: @boolean; 
      Module::<
-       (# Qalloc:: 
+       (# vdtAlloc:: (# do OG.vdtAlloc #);
+          Qalloc:: 
             (#
             do cTracer(#do 'Qalloc:module:'->TT; moduleName -> TT #);
                (if traceAlloc then
@@ -20,7 +21,8 @@ variants: restrictions
                (* OG.Qalloc is called from generator *)
        #)#);
      ModuleItem::<
-       (# Qalloc:: 
+       (# vdtAlloc:: (#do MD.vdtAlloc #);
+          Qalloc:: 
             (# 
             do cTracer(#do 'ModuleItem:Qalloc:' ->TT; doPT ->TL #); 
                (if isChecked then 
@@ -31,7 +33,8 @@ variants: restrictions
                    (*MD.qOff[1] -> qOff[1]*)
        if)#)#);
      DataItem::<
-       (# Qalloc:: 
+       (# vdtAlloc:: (#do OG.vdtAlloc #);
+          Qalloc:: 
             (# diSize: @integer
             do (if traceAlloc then
                    '**** DataItem:qalloc: ' -> puttext; dopt -> putheadN
@@ -170,7 +173,11 @@ variants: restrictions
                scan(#do (1,IT[]) -> current.Qalloc #)
        #)#);
      Signature::< 
-       (# Qalloc:: 
+       (# vdtAlloc:: 
+           (#
+           do (if traceVDTalloc then 'Signature:vdtAlloc:'->dumpT; dopt -> dumpTN if)
+           #);
+          Qalloc:: 
             (# D: ^Decl
             do (if not isAllocated then
                    (if traceAlloc then
@@ -206,7 +213,7 @@ variants: restrictions
                       (*'!!!! Arg:ptn:qalloc:'->dumpT; current.dopt->putline;*)
                       (1,IT[]) -> current.Qalloc
        if)#)#)#);
-     AssignmentStatement::<
+      AssignmentStatement::<
        (# Qalloc::
             (#
             do (if traceAlloc then
@@ -233,6 +240,19 @@ variants: restrictions
        #);
      ObjectDescriptor::<
        (# marked: @boolean;
+          vdtAlloc::
+             (#
+             do (if traceVDTalloc then '**** OD:vdtAlloc:' -> dumpT; ogID -> dumpTN if);
+                (if IS.superDesc[] <> none then
+                    (if not IS.superDesc.vdtAllocDone
+                        and (objectDecl.OG.IS[] <> IS.superDesc[]) then
+                       (if traceVDTalloc then 
+                           '**   super:need:vdtAlloc:'->dumpT; super.dopt->dumpTN;
+                       if);
+                       IS.superDesc.encOG.vdtAlloc
+                if)if);
+                IS.vdtAlloc;
+             #);
           Qalloc::
             (* Should be called when genClass for this OG is called *)
             (# E:^Exp; ptn: ^Pattern
@@ -452,6 +472,42 @@ variants: restrictions
                             * handles a possible super?*)
                            superDesc.originIsValue -> value
             if)if)if)#);
+          vdtAllocDone: @boolean;
+          vdtAlloc::
+             (# 
+             do (if traceVDTalloc then '**** Items:vdtAlloc:'->dumpT;encOG.ogID->dumpTN if);
+                (if superDesc[] <> none then
+                    (if traceVDTalloc then '**   checkSuper:'->dumpT; super.dopt->dumpTN if);
+                    superDesc.dSize -> dSize;
+                 else
+                    (if objectDecl.OG.IS[] <> this(Items)[] then
+                        1 -> dsize;
+                     else
+                        0 -> dSize; (* JUST for testing *)
+                if)if);
+                (if hasInn then 
+                    dSize + 1 -> dSize -> innerInx;
+                    (if traceVDTalloc then '**   innerMarked:'->dumpTN if)
+                if);
+                scanSons
+                (#
+                do dSize -> current.allocVirtual -> dSize
+                #);
+                (*checkInner:
+                   IS.scanSons
+                   (#
+                   do (if this(ObjectDescriptor)[] -> current.hasInner then
+                          IS.dSize + 1 -> IS.dSize -> IS.innerInx;
+                          leave checkInner
+                      if)
+                   #);*)
+                (if traceVDTalloc and (dsize > 0) then 
+                    '**   '->dumpT; encOG.OGid->dumpT; 'dSize:'->dumpt; dSize->putint; newline
+                if);
+                true -> vdtAllocDone;
+                scanSons(#do current.vdtAlloc #);
+             #);
+          
           Qalloc:: 
             (# allocOrigin:
                  (# org: ^Items; N: ^Node
@@ -621,7 +677,32 @@ variants: restrictions
           clear::< (# do 0 -> qsize[1]; inner #);
        #);
      Pattern::<
-       (# Qalloc:: 
+       (# vdtAlloc:: (#do OG.vdtAlloc #);
+          allocVirtual::
+             (#
+             do (if traceVDTalloc and (ptnKind >= virtualPtn) then
+                    '**   PTN:allocVirtual:'->dumpT; ptnkind -> putint; ' '->put; sig.dopt-> dumpTN
+                if);
+                (if ptnKind
+                 // virtualPtn then
+                    inx + 1 -> inx -> off;
+                    (if traceVDTalloc then
+                        '**   isVirtual:'->dumpT; off -> putint; newline 
+                    if);
+                 // furtherPtn // finalPtn then
+                    (if traceVDTalloc then
+                        '**   isFurther/Final:'->dumpT; off -> putint; 
+                        vDcl[]<>none->putboolean; newline 
+                    if);
+                    (if vDiDcl[] = none then
+                    (if vDcl[] = none then
+                        '!!!! vDcl=none:'->dumPT; dopt->putheadN;
+                        origin.dopt->putheadN
+                    if);
+                    vDcl.off -> off
+                if)if)
+             #);
+          Qalloc:: 
             (# allocStub:
                  (# P: ^Pattern; OGs: ^ObjectDescriptor; dNo: @integer; 
                     errs: ^Stream; T: ^text
@@ -724,7 +805,26 @@ variants: restrictions
                   (1,IT[]) -> current.Qalloc;
        #)#)#);
      ObjectInvocation::<
-       (# Qalloc:: 
+       (# hasInner::
+             (# org: ^Items
+             do (if traceVDTalloc then 
+                    '**** OI:hasInner:'->dumpT; dopt->dumpTN
+                if);
+                (if (ATd.asDecl).OG.primno = inner_prim then 
+                args.scanArgs
+                (# A: ^ObjectSpecification
+                do current[] -> A[];
+                    A.super.on - 1 
+                        -> (args.origin[]->org[]).toOrigin -> org[]; 
+                    'theOD:' ->dumpTN; theOD.dopt->dumpTN;
+                    'org:'->dumpTN; org.dopt->dumpTN; 
+                    (if org[] = theOD.IS[] then 
+                        '**    found inner:'->dumpT; dopt->dumptN;
+                        true -> value;
+                    if)
+                #)if)
+             #);
+          Qalloc:: 
             (# ptn: ^Pattern
             do (if traceAlloc then
                    '**** OI:Qalloc:'->dumpT; doPT->putheadN;
@@ -870,5 +970,9 @@ variants: restrictions
           init: (# do 0 -> labCount #);
        #);
   do QNewDesc.init;
+     (if useVDTalloc then
+         '**** vdtAlloc:' -> putline;
+          main.vdtAlloc; (* should be all modules *)
+     if);
      inner
   #)
