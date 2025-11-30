@@ -19,11 +19,11 @@ The following people have made significant contributions to MBS: Peter Andersen,
 
 For a complete list of contributors to the code base, execute `git shortlog -s -n` in your clone of the repository.
 
-**qBeta** is a relatively new language derived from Beta developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE caled **qEnv**__.
+**qBeta** is a relatively new language derived from Beta and developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE called **qEnv**.
 The web-site https://qbeta.dev has a very preliminary and incomplete description of qBeta. 
 qBeta is used in the book _An Introduction to Programming as Modeling_ by Ole Lehrmann Madsen and Birger Møller-Pedersen and is published on the web-site [https://oopm.org](https://oopm.org).
 
-qBeta has so far primerily been used to experiment with new language mechanisms, which means that the implementation is not robust enough for production code. The implementation is thus not suitable for prodcution code.
+qBeta has so far primerily been used to experiment with new language mechanisms. The implementation is thus not suitable for prodcution code.
 The same is the case for qEnv.
 You are welcome to try out qBeta and qEnv, but both the qBeta compiler and qEnv are very unstable. 
 
@@ -93,7 +93,6 @@ mkdir beta
 cd beta
 git clone git@github.com:olmadsen/beta-system.git r5.5
 ```
-And then checkout `beta`from GitHub.
 
 ### Required Software
 
