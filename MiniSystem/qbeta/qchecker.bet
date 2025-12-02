@@ -3012,25 +3012,52 @@ checker: Parser
                     integerDecl.OG.IS[] -> basicScope[]
                  #);
                 markInner:
-                   (# A: ^ObjectDescriptor; org: ^Items; ATd: ^Decl; 
-                      OI: ^ObjectInvocation; on: @integer
+                   (# isSubOfInner: BooleanValue
+                         (# D: ^Decl; topSuper: ^Items;
+                         do (this(ObjectInvocation).ATd[]->D[]).OG.IS.topSuper -> topSuper[];
+                            (D.OG.IS[] <> topSuper[]) and (topSuper.encOG.primNo = inner_prim) -> value
+                         #);
+                      A: ^ObjectDescriptor; org: ^Items; ATd: ^Decl; 
+                      OI: ^ObjectInvocation; on: @integer; INV: ^Invocation
                    do (if traceVDTalloc then
                           '**** OI:markInner:'->dumpT; args.noOfArgs->putint; 
                           ' '->put; dopt->dumptn;
                       if);
+                      (if this(ObjectInvocation).ATd[] = none then (* inner(xxx) where xxx is undeclared*) 
+                          '**** leave MarkInner:'->dumpt; dopt -> dumptn;
+                      leave markInner if);
                       (if args.noOfSons <> 1 then 
-                          (if false then
+                          (* In general inner must have the form inner(ptn) where ptn is an enclosig pattern
+                           * We must handle the following situations in a special way:
+                           *  innerBool: inner { ... }
+                           *     here inner appears as a superpattern with no argument
+                           *  BB := innerBool
+                           *    here we call a subptn of inner
+                           *  Both forms are ok and tested for below
+                           *  For both we must se hasInn and noOfInner
+                           *  Note, we should be able to only have hasInn
+                           *)
+                          (if not ((father[]->INV[]).isSuper or isSubOfInner) then 
                               this(ObjectInvocation)[] -> semanticError
-                              (#do 'Inner mush have exacly one argument:'->msg
-                              #);
+                              (#do 'Inner must have exacly one argument:'->msg;
+                                   (if false then
+                                   (father[]->INV[]).isSuper -> putboolean;
+                                   (father[]->INV[]).label -> msg; '---<n'->msg;
+                                   father.dopt->msg;  '---\n'->msg;
+                                   father.father.dopt->msg; '===\n'->msg;
+                                   this(ObjectInvocation).ATd.dopt->msg;
+                                   '===\n'->msg;
+                                   (this(ObjectInvocation).ATd.OG.IS.topSuper).dopt -> msg
+                              if)#);
                           else
                              (if origin.isItems then
-                                 (if true then
-                                     '**   IS:Items:'->dumpt; (origin[]->org[]).dopt->dumpTN;
+                                 (if traceVDTalloc then
+                                     '**   IS:Items:'->dumpt; dopt->dumpTN;
+                                     '**   origin:'->dumpTN; (origin[]->org[]).dopt->dumpTN;
                                  if);
                                  true -> (origin[]->org[]).hasInn;
                                  1 -> (origin[]->org[]).noOfInner;
-                                 (if true then
+                                 (if traceVDTalloc then
                                      '-------A:'->dumptn;(origin[]->org[]).dopt->dumpTN;
                                      '-------B:'->dumptn;(origin[]->org[]).dopt->dumpTN;
                                       '------C:'->dumptn;(origin[]->org[]).dopt->dumpTN;
@@ -3050,12 +3077,13 @@ checker: Parser
                                      '!!!! markInner:super.noOfSons<>1:'->dumpT; dopt ->putline
                                   else
                                     A.super.last-> OI[]; 
-                                    OI.ptnID[] -> (origin[]->org[]).searchContext -> (ATd[],on);
+                                    OI.ptnID[] -> (origin.origin[]->org[]).searchContext -> (ATd[],on);
                                    (if ATd[] <> none then
-                                       '** found:'->dumpT; on -> putint; newline;
-                                       ATd.dopt->dumpTN;
+                                       (if traceVDTalloc then
+                                           '** found:'->dumpT; on -> putint; newline; ATd.dopt->putHeadN
+                                       if);
                                        ATd[] -> OI.ATd[] -> A.super.ATd[];
-                                       on -> OI.on
+                                       on -> OI.on -> A.super.on
                                     else
                                        this(objectInvocation)[] -> semanticError
                                          (#
@@ -3068,12 +3096,13 @@ checker: Parser
                          if);
                          true -> (A.super.last).ATd.OG.IS.hasInn;
                          1 -> (A.super.last).ATd.OG.IS.noOfInner;
-                         (if true then
+                         (if traceVDTalloc and (ATd[] <> none)  then
                              '(A.super.last).ATd:'->dumpT; (A.super.last).ATd.dopt->putheadN;
-                             '------A:'->dumptn;(origin[]->org[]).dopt->putHeadN;
-                             '------B:'->dumptn;(org.origin[]->org[]).dopt->putHeadN;
-                             '------C:'->dumptn;(org.origin[]->org[]).dopt->putHeadN;
-                      if)if)
+                             origin[]->org[];
+                             (for i: ON repeat
+                                  '**** origin: '->dumpT; i -> putint; newline; org.dopt->putHeadN;
+                                  org.origin[]->org[]
+                      for)if)if)
                #);
                handleArgs:
                   (#
