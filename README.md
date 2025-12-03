@@ -178,16 +178,16 @@ A Beta program in the file ```foo.bet``` may be compiled by executing
 
 The text here is currently only an itemized draft and will be expanded.
 
-* The qBeta System is currenlty in the folder `MiniSystem` - it is planned to rename it to `qBetaSystem`.
+* The qBeta System (QBS) is currenlty in the folder `qBetaSystem`.
 * QBS is part of MBS, so if you check-out MBS, you also have QBS.
 * You must also install Cygwin as described above.
 * You don't need VS2003.
 * You must define the environment variable `BETALIB` as described above.
-* You must add `MiniSystem/bin/` to your path.
+* You must add `qBetaSystem/bin/` to your path.
 * The qBeta compiler may be invoked by `qbeta foo` where `foo.qbeta` is a qBeta program.
 * The qBeta SDE may be invoked by `qenv`.
 * The best available documentation fo qBeta is the book https://oopm.org.
-* The qBeta library is in the directory `MiniSystem/qBeta/BETAworld`.
+* The qBeta library is in the directory `qBetaSystem/qBeta/BETAworld`.
 * The organization of `BETAworld`is described in https://oopm.org in the Section about [Modules](https://oopm.org/?page_id=3032).
 
 
@@ -276,7 +276,7 @@ The compiler used is called beta64 in /home/olm - it is not clear how it was cre
 
 But Beta seems to run on CS/AU 64-bit Ubuntu. Has been copied to `/home/olm/beta/r5.5/bin/linux`.
 
-When compiling e.g. `MiniSystem/qbeta/compiler.bet`, `gcc` fails on `Motif/X` files – probably needs to be installed. See attempts below to install!?
+When compiling e.g. `qBetaSystem/qbeta/compiler.bet`, `gcc` fails on `Motif/X` files – probably needs to be installed. See attempts below to install!?
 
 #### 64-bits ubuntu stuff
 64-bit Linux – at least Ubuntu 64 – cannot execute a 32-bit executable unless 32-bit libraries are installed. These may be installed as described here: installing 32-bit libraries .
