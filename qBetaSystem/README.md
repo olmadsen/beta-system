@@ -3,29 +3,36 @@ development environment for the qBeta language.
 In its current state it is quite
 incomplete and unstable.
 
-** Compiler
+## Compiler
 
-In directory qbeta
+In directory `qbeta`.
 
-Parser: does currently not catch all syntax errors - i.e. some
-errorneous programs will pass the parser, and subesquent phaes may
-fail.
+The compiler does currently not catch all errors - i.e. some
+errorneous programs will pass the compiler, and subesquent pand execution of it mail fail.
 
-Compile qbeta.bet using the std. BETA compiler
-Call: qbeta foo.bet 
+Compile `qbeta.bet`using the std. Beta compiler: 
 
-** VM
+```beta qbeta.bet```
 
-A  VM for qBeta interpreted by BETA and C.
+Compilimg and executing a qBetaprogram: `qbeta foo.bet`.
 
-** qenv
+## VM
 
-The new IDE
+A VM for qBeta interpreted by BETA and C.
 
-Compile qenv.bet using std. BETA compiler
-Run: qenv
+## qenv
 
-**BETAworld:
+The new IDE.
+
+Compile `qenv.bet` using std. BETA compiler:
+
+```beta qenv```
+
+Run: 
+
+```qenv```
+
+## BETAworld
 
 A nested structure of folders containing qBeta modules
 
