@@ -4,7 +4,8 @@ In addition, it contains **The qBeta System,** which consists of a compiler for 
 
 **Beta** was developed by Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Møller-Pedersen and Kristen Nygaard. Here are some references:
 1. B.B. Kristensen, O.L Madsen, B. Møller-Pedersen, K. Nygaard: _Abstraction Mechanisms in the Beta Programming Language_, POPL 1983, [DOI](https://dl.acm.org/doi/10.1145/567067.567094)
-2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, _Object-Oriented Programming in the Beta Programming Language_, ACM, Addison Wesley, 1993, [DOI](https://dl.acm.org/doi/book/10.5555/221048). Out of print, but a PDF-file is available in this repository.
+2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, _Object-Oriented Programming in the Beta Programming Language_, ACM, Addison Wesley, 1993, [DOI](https://dl.acm.org/doi/book/10.5555/221048). Out of print, but a PDF-file is available in this repository. 
+**You may find this book in the directory `TheBetaBook`**.
 3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen: _The When, Why and Why not of the Beta Programming Language_, ACM SIGPLAN conference on History of Programming Languages (HOPL 2007) - San Diego, USA, [DOI](https://dl.acm.org/doi/10.1145/1238844.1238854)
 
 The first Beta compiler was developed at Aarhus University, Aarhus, Denmark. 
