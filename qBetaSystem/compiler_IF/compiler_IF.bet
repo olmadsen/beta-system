@@ -1,0 +1,825 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/sysutils/objinterface';
+INCLUDE 'directoryComponents'
+INCLUDE 'log';
+---lib:attributes---
+int2text: (# V: @integer; T: @text enter V do V -> T.putint exit T[] #);
+putTI: (# T: ^text; V: @integer enter(T[],V) do T[] -> puttext; V -> putint#);
+putTextL:
+  (# T: [0] ^text
+  enter T
+  do (for i: T.range repeat
+          T[i][] -> puttext
+     for)
+  #);
+printNotNone:
+  (# T: ^Text
+  enter T[]
+  do (if T[] <> none then
+         T[] -> puttext
+      else
+         '-none-'->puttext
+     if);
+  #);
+printhead:
+  (# T: ^text; il,ic: @integer; ch: @char
+  enter T[]
+  do (if T[] = none then
+         'none\n' -> puttext
+      else
+         loop:
+            (if ic < T.length then
+                (if il < 6 then
+                    ic + 1 -> ic -> T.inxGet -> ch -> put;
+                    (if ch = ascii.newline then il + 1 -> il if);
+                    restart loop 
+            if)if);
+         '\n..........\n\n' -> puttext
+     if)
+  #);
+putHead:
+  (# T: ^text; n: @integer;
+     hasNL: BooleanValue
+       (#
+       do L:
+            T.scanAll
+            (#do (if (ch = ascii.newline) -> value then leave L if)#)
+       #); 
+     lines:<(#do 5 -> n; inner #);
+     emitNL: @boolean
+  enter T[]
+  do lines;
+     (if hasNl -> emitNL then newline if);
+     inner;
+     L:
+       T.scanAll
+       (#
+       do ch -> put;
+          (if ch = ascii.newline then n - 1 -> n if);
+          (if n = 0 then '...'->puttext; leave L if)
+       #);
+     (if emitNL then newline if);
+  #);
+putheadN: putHead(#do true -> emitNL #);
+dumpC: (# enter put do ' ' -> put #);
+dumpT: (# T: ^Text enter T[]  do T[] -> putText; ' ' -> put #);
+dumpQ: (# T: ^Text enter T[]  do '"'->put; T[]->putText; '"'->put; ' '->put #);
+dumpQN: (# enter dumpQ do newline #);
+dumpTN: (# enter puttext do newline #);
+dumpB: (# enter putBoolean do ' ' -> put #);
+dumpI: (# enter putInt do ' ' -> put #);
+dumpNL: (#do newline #);
+Tree: DirectoryModules
+  (# genEvents, (* = VM.genEvents - if false, do not generate events for debugger *)
+     traceVisible: @boolean;
+     kinds: @ (* new kinds - to replace all other representations of kinds *)
+       (# simple: (# exit 1 #);
+          constRef: (# exit 2 #);
+          varRef: (# exit 3 #);
+          constVal: (# exit 4 #);
+          varVal: (# exit 5 #);
+          indexed: (# exit 6 #);
+          string: (# exit 7 #);
+          ptn: (# exit 8 #);
+          virtualPtn: (# exit 9 #);
+          furtherPtn: (# exit 10 #);
+          finalPtn: (# exit 11 #);
+          varPtn: (# exit 12 #);
+          forInx: (# exit 13 #);
+          objModule: (# exit 14 #);
+          ptnModule: (# exit 15 #);
+          action: (# exit 16 #);
+          
+          asText:
+            (# K: @integer; T: ^text
+            enter K
+            do (if K
+                // simple then 'simple' -> T[]
+                // constRef then 'constRef' -> T[]
+                // varRef then 'varRef' -> T[]
+                // constVal then 'constVal' -> T[]
+                // varVal then 'varVal' -> T[]
+                // indexed then 'indexed' -> T[]
+                // string then 'string' -> T[]
+                // ptn then 'ptn' -> T[]
+                // virtualPtn then 'virtualPtn' -> T[]
+                // furtherPtn then 'furtherPtn' -> T[]
+                // finalPtn then 'finalPtn' -> T[]
+                // varPtn then 'varPtn' -> T[]
+                // forInx then 'forInx' -> T[]
+                // objModule then 'objModule' -> T[]
+                // ptnModule then 'ptnModule' -> T[]
+                // action then 'action' -> T[]
+               if)
+            exit T[]
+       #)#);
+     SimpleKind: (# exit 1 #);
+     PatternKind: (# exit 2 #);
+     ReferenceKind: (# exit 3 #);
+     RepetionKind: (# exit 4 #);
+     VirtualKind: (# exit 5 #); 
+     FloatKind: (# exit 6 #);
+     StringKind: (# exit 7 #);
+     
+     isXbeta: @boolean;
+     noComments: @boolean;
+     TopNode:
+       (# vNode:< TopNode;
+          SuperScope:< TopNode;
+          label:< (# lab: ^text do '???' -> lab[]; inner exit lab[] #);
+          
+          doPP:
+            (#
+            do &text[] -> ly[];
+               0 -> ind;
+               PP;
+               false -> mark;
+            exit ly[]
+            #);
+          PP:< 
+            (# 
+            do ly.newline;
+               (for i: ind repeat ' ' -> ly.put for);
+               '(' -> ly.put; 
+               inner;
+               (if son[] = none then
+                   ')' -> ly.put;
+                else
+                   ind + 1 -> ind;
+                   scanSons(# do current.PP  #);
+                   ')' -> ly.put;
+                   ind - 1 -> ind
+               if);
+            exit ly[] 
+            #); 
+          doP:
+            (# pos: @integer; break: @boolean;
+            enter(pos,break)
+            do &text[] -> lx[];
+               (0,true) -> PT;
+            exit lx[]
+            #);
+          doPT:
+            (#
+            enter mark
+            do &text[] -> lx[];
+               PT;
+               false -> mark;
+            exit lx[]
+            #);
+          doPTnoComments:
+            (#
+            do true -> noComments;
+               &text[] -> lx[];
+               PT;
+               false -> noComments;
+            exit lx[]
+            #);
+          length:< integerValue(# do inner #);
+          superPP:
+            (# mkBreak:<
+                 (# pos: @integer; break: @boolean;
+                 enter(pos,break)
+                 do inner
+                 #);
+               isLastLineWhiteSpace: BooleanValue
+                 (* value: true, 
+                  *   if last line of lx has only white space
+                  *   or lx.length = 0
+                  *)
+                 (# ch: @char; ix: @integer
+                 do lx.length -> ix;
+                    (* check chars backwards,:
+                     *    lx[lex.length], lx[lx.length-1], ...
+                     *)
+                    L:
+                      (if ix > 0 then                        
+                          ix -> lx.inxGet -> ch;
+                          (if true
+                           // ch = ascii.newline then
+                              true -> value;
+                              leave isLastLineWhiteSpace
+                           // ch <= ' ' then;
+                              ix - 1 -> ix;
+                              restart L
+                          if)
+                       else
+                          true -> value
+                 if)#);           
+               printComment:
+                 (# trace:
+                      (#
+                      do (if false then
+                             (if false then
+                                 '('->lx.put;
+                                 comment.scanAll
+                                 (#do ch->lx.putint; ' '->lx.put #);
+                                 ')'->lx.put;
+                             if);
+                             (if singleLineCom <> lastLineIsWhiteSpace then 
+                                 '?'->lx.put;
+                             if);
+                             (if singleLineCom then
+                                 'sC:T,'->lx.puttext 
+                              else 'sC:F,'->lx.puttext;
+                             if);
+                             (if lastLineIsWhiteSpace then
+                                 'lW:T'->lx.puttext 
+                              else 'lW:F'->lx.puttext;
+                             if);
+                             (if comBeforeFirstItem then
+                                 '[cB:T]'->lx.puttext
+                              else
+                                 '[cB:F]'->lx.puttext
+                      if)if)#);
+                    singleLineCom, (* true: a single-line comment *)
+                    lastLineIsWhiteSpace: @boolean; 
+                    (* true: last line is white space *)
+                    notFirst: @boolean; (* true for lines after the first line
+                                         * in a multi-line comment *)
+                    comPos: @integer; (* position of comment 
+                                       *    For code like:
+                                       *       ClassA:
+                                       *          X: var integer
+                                       *          -- comment A
+                                       *    comPos = pos
+                                       *       ClassB:
+                                       *          Y: var integer
+                                       *       -- comment B
+                                       *    comPos = pos - 3
+                                       *    We use comPos to indent comment *)
+                    ix: @integer
+                 do (if comment[] <> none then
+                        comment.setPos;
+                        1 -> ix;
+                        emit:
+                          (# 
+                          do isLastLineWhiteSpace -> lastLineIsWhiteSpace;
+                             (ix ->comment.inxGet) = '<' -> singleLineCom;
+                             trace;
+                             (if singleLineCom then
+                                 comment.get;
+                                 comment.getint - 3 -> comPos;
+                                 (if false then
+                                     comPos -> lx.putint; ':'->lx.put;
+                                     (if pos <> comPos then
+                                         '!'->lx.put;
+                                 if)if);
+                                 (if not comBeforeFirstItem or notFirst then
+                                     (comPos,true) -> mkBreak;
+                                 if)
+                              else 
+                                 comment.getint;
+                                 (if not lastLineIsWhiteSpace then
+                                     ' ' -> lx.put 
+                             if)if);
+                             comment.get; (* read '>' *)
+                             '--' -> lx.puttext;
+                             comment.scan
+                             (# 
+                             do (if ch <> ascii.newline then
+                                    ch -> lx.put;
+                                 else (* multi line comment *)
+                                    true -> notFirst;
+                                    comment.pos + 1 -> ix;
+                                    restart emit 
+                             if)#);
+                             (if comBeforeFirstItem then 
+                                 (comPos,true) -> mkBreak 
+                 if)#)if)#);
+               pos: @integer; break: @boolean;
+            enter(pos,break)                
+            do inner
+            #);
+          comment: ^text; 
+          (* A possible comment associated with this(TopNode) 
+           * A single-line comment has the form
+           *    '<n> hello world' 
+           *         if only white space before the comment
+           *    'n> how are you' 
+           *         if the comment appears after  some code on the same line
+           * No \n in a single-line comment
+           * A multi-line comment has the form
+           *    '<n> abc...\n<n> qwe...\n<n> xyz...'
+           *        if only white space before the comment
+           *    'n> abc...\n<n> qwe...\n<n> xyz...'
+           *        if the first comment appears after some code;
+           *        2nd, 3rd, ... have white space before the comments
+           * A \n appears between the lines.
+           *)
+          comBeforeFirstItem: @boolean;
+          (* comBeforeFirstItem = true 
+           *    comment is before the first Item in an ObjectDescriptor
+           *)
+          PT:< SuperPP
+            (# block:
+                 (# pos,width: @integer; break: @boolean
+                 enter(pos,width)
+                 do lineWidth < (pos + width) -> break;
+                    (*'&'->lx.put;
+                    lineWidth -> lx.putint; ','->lx.put;
+                    pos->lx.putint;  ','->lx.put; width -> lx.putint;  
+                    ','->lx.put;*)
+                    inner
+                 #);
+               mkBreak::
+                 (# 
+                 do (if lx.length > 0 then (* no break or space if first line *)
+                        (if break then
+                            lx.newline;
+                            (for i: pos repeat ' ' -> lx.put for)
+                         else
+                            inner
+                 if)if)#);
+               mkBreak0: mkBreak(##);
+               mkBreak1: mkBreak(# do ' ' -> lx.put #);
+            do (if mark then lx.getpos -> beginPos  if);
+               inner;
+               (if mark then lx.getpos -> endPos if)
+            exit lx[]
+            #);
+          emitHTML:<
+            (#
+            do inner 
+            #);
+          doHTML:
+            (#
+            do &text[] -> lx[];
+               HTML
+            exit lx[]
+            #);
+          HTML:< SuperPP
+            (#  mkBreak::
+                 (#
+                 do (if break then
+                        '<br>\n' -> lx.append;
+                        (for i: pos repeat '&nbsp;' -> lx.append for)
+                    if)
+                 #);
+               indent:
+                 (# pos: @integer
+                 enter pos
+                 do (for i: pos repeat '&nbsp;' -> lx.append for);
+                 #);
+            do inner
+            #);          
+          son,next,last,father: ^TopNode;
+          clear:< (* Sets all variables in AST to initial values
+                   * Needed when compile is called more than once
+                   * on the same AST
+                   *)
+            (# 
+            do false -> isChecked -> beingChecked; 
+               inner;
+               scanSons(# do current.clear #)
+            #);
+          append:
+            (# N: ^TopNode
+            enter N[]
+            do (if N[] = none then 
+                   '!!!! Tree:append: argument is None ' -> putline;
+                   (*(dumpStack,'Tree.bet::TopNode::append') -> stop*)
+               if);
+               (if son[] = none then
+                   N[] -> son[]
+                else
+                   N[] -> last.next[]
+               if);
+               N[] -> last[];
+               this(TopNode)[] -> N.father[]
+            #);
+          noOfSons: IntegerValue
+            (#
+            do scanSons(# do value + 1 -> value #)
+            #);
+          scanSons:
+            (# current: ^vNode;
+               next: (# exit current.next[] #);
+               isFirst: @boolean;
+               isLast: (# exit current.next[] = none #);
+            do son[] -> current[];
+               true -> isFirst;
+               Loop:
+                 (if current[] <> none then
+                     inner;
+                     current.next[] -> current[];
+                     false -> isFirst;
+                     restart loop
+                 if)
+            #);
+          scanReverse:
+            (# current: ^TopNode;
+               isLast: @boolean;
+               L: [5] ^TopNode; top: @integer
+            do scanSons
+               (# do (if (top+1->top) > L.range then L.range -> L.extend if);
+                  current[] -> L[top][]
+               #);
+               (for i: top repeat 
+                    L[top+1-i][] -> current[];
+                    i = top -> isLast;
+                    INNER
+               for)
+            #);
+          scanSubTree:
+            (# doIt:<
+                 (# current: ^topNode
+                 enter current[]
+                 do inner 
+                 #);
+            do this(topNode)[] -> doIt;
+               scanSons
+               (#
+               do &current.scanSubTree
+                  (# doIT:: (# do current[] -> this(scanSubTree).doIT #)#)
+               #)
+            #);
+          scanSubTreeX:
+            (# doIt:<
+                 (# current: ^topNode
+                 enter current[]
+                 do inner 
+                 #);
+            do scanSons
+               (#
+               do current[] -> doIt;
+                  &current.scanSubTree
+                  (# doIT:: (# do current[] -> this(scanSubTree).doIT #)#)
+               #)
+            #);        
+          getComment:<
+            (# comm: ^text
+            do inner
+            exit comm[]
+            #);
+          doInsert:<
+            (# N,atN: ^TopNode;
+            enter(N[],atN[])
+            do inner
+            #);
+          doDelete:<
+            (# N: ^text
+            enter N[]
+            do inner
+            #);
+          doMoveUp:< (#  N: ^TopNode enter N[] do inner #);
+          adjustForSingularImp:< 
+            (# bPos,ePos: @integer;
+               OD: ^TopNode;
+            enter(OD[],bPos,ePos) 
+            do inner 
+            exit(OD[],bPos,ePos)
+            #);          
+          adjustForSingularImp_X:< 
+            (# bPos,ePos: @integer;
+               OD: ^TopNode;
+            enter(OD[],bPos,ePos) 
+            do inner 
+            exit(OD[],bPos,ePos)
+            #);
+          replaceEntity:<
+            (# errors: ^stream;
+               path2Module,T: ^text
+            enter(path2Module[],T[])
+            do inner
+            exit errors[]
+            #);
+          objDescEQ:< booleanValue
+            (# trace: (#exit false #);
+               dn: @integer 
+            enter dn 
+            do (if trace then
+                   '*** objDescEq: ' -> puttext; dn -> putint; newline if);
+               inner;
+               (if trace then ' ' -> put; value -> putBoolean if);
+            #);
+          findNodeAtPos:<
+            (# pos: @integer; N: ^TopNode;
+               trace: (# exit false #)
+            enter pos
+            do inner
+            exit N[]
+            #);
+          findNodeAtBCpos:<
+            (# lsc: @integer; N: ^TopNode
+            enter lsc
+            do inner
+            exit N[]
+            #);
+          theModule:<
+            (* Bindings in parser::module and parser.:nameApl *)
+            (# ModulePtn:< TopNode;
+               md: ^ModulePtn
+            do inner;
+               (md[],'theModule',this(TopNode)[]) -> noBinding
+            exit md[]
+            #);
+          moduleName:< 
+            (# N: ^Text 
+            do inner;
+               (N[],'moduleName',this(TopNode)[]) -> noBinding
+            exit N[] #);
+          pathToModuleFN:< (# path: ^text do inner exit path[] #);
+          innFile:< (# F: ^File enter F[] do inner exit F[] #);
+          doHandleDirmodules:< (# do inner #);
+          theImodule:
+            (# iM: ^iModule;
+               M: ^TopNode
+            do (if (theModule -> M[]) <> none then
+                   &iModule[] -> iM[];
+                   M[] -> iM.M[]
+               if)
+            exit iM[]
+            #);
+          isNameApl:< (# Na: ^TopNode do inner exit Na[] #);
+          getDeclModule:<
+            (# to: ^iModule;
+               dclx: ^TopNode
+            do inner
+            exit(to[],dclx[])
+            #);
+          isAmodule:< (# M: ^iModule do inner exit M[] #);
+          changeAttName:< 
+            (# oldName,newName: ^text enter(oldName[],newName[]) do inner #); 
+          getEntries:<
+            (* An entry has  the form
+             *    entry = (name,sort = (kind,entity))
+             * For an objectDesc, a declaration is an entyr:
+             *    dcl = (nameDcl, item=(kind,objectSpec))
+             *)
+            (# add:
+                 (# T,N: ^text; E: ^TopNode
+                 enter(T[],E[])
+                 do (*'**   add:'->puttext; T[] -> puttext; ' ' -> put;*)
+                    T.copy -> N[];
+                    (if E[] <> none then
+                        (* E.dopt -> putline;*)
+                        E.skind -> N.puttext
+                     else
+                        '%' -> N.put; (*newline*)
+                    if);
+                    1 -> names.extend; 1 -> entries.extend;
+                    N[] -> names[names.range][]; 
+                    E[] -> entries[entries.range][]
+                 #);
+               names: [0] ^Text; entries: [0]^TopNode
+            do inner
+            exit(names[],entries[])
+            #);
+          sort:< 
+            (# S: ^TopNode 
+            do inner;
+               (S[],'Sort',this(TopNode)[]) -> noBinding;
+            exit S[]#);
+          entity:< 
+            (# E: ^TopNode 
+            do inner; 
+               (E[],'Entity',this(TopNode)[]) -> noBinding
+            exit E[] #);
+          myDesc:< 
+            (# OD: ^TopNode
+            do inner;  
+               (if OD[] = none then
+                   'Trans:myDesc:missing virtual binding in sub: ' -> putline;
+                   doPT -> putline ;
+                   PP -> putline
+               if)
+            exit OD[] 
+            #);
+          getODorigin:< (#  OD: ^TopNode do inner  exit OD[] #); 
+          kind:< (# ch: @char do '?' -> ch; inner exit ch #);
+          sKind:< 
+            (# S: ^text do '?' -> S[]; inner exit S[] #);   
+          xKind:< (# K: @integer do inner exit K #);
+          enclosingImperative:<
+            (# imp: ^TopNode
+            do inner;
+               (if imp[] = none then 
+                   (if father[] <> none then 
+                       father.enclosingImperative -> imp[];
+               if)if)
+            exit imp[]
+            #);
+          findNextImp:<
+            (# bcp: @integer; impx: ^TopNode
+            enter bcp
+            do inner
+            exit impx[]
+            #);
+          actionPos:<
+            (# begin: @integer 
+            do inner
+            exit begin
+            #);
+          actionBCPos:<
+            (# BC,dNo: @integer 
+            do inner
+            exit(dNo,BC)
+            #);
+          doMapBCposToCharRange:<
+            (# lsc,B,E: @integer
+            enter lsc
+            do inner
+            exit(B,E)
+            #);
+          beginPos,endPos: @integer; (* position of this(TopNode) in .bet file *)
+          beginBCP,endBCP: @integer; (* bytecode position at beginning and 
+                                      * end of this TopNode set by 
+                                      * generator::imperative::gen
+                                      *)          
+          setOSDVisibility:< 
+            (# value: @integer enter value do inner #);
+          configureX:< 
+            (# visibility: @integer do inner exit visibility #);
+          setUpOrigin:< 
+            (# org: ^ SuperScope (* TopNode *)
+            enter org[]
+            do org[] -> origin[]; 
+               (*'**** setUporigin:'-> puttext; label -> putline;
+               (if origin[] <> none then
+                   origin.dopt -> putline
+               if);*)
+               inner 
+            #);
+
+          getDescNo:< 
+            (# dNo: @integer 
+            do inner;
+               (if dNo = 0 then
+                   (*'\n**** Perhaps no binding of virtual getDescNo: ' ->puttext;
+                   'dNo = 0 label: ' -> puttext; label -> putline;
+                   this(topNode).doPt -> putline*)
+               if)
+            exit dNo 
+            #);
+          getOrigin:< (# org: ^TopNode do inner exit org[] #);
+               
+          collectSimple:<
+            (# addSimple: ##SimpleCollector
+            enter addSimple##
+            do inner
+            #);
+          getNameForOff:<
+            (# attOff,descNo: @integer; isRef,isIndexed: @boolean;
+               NM: ^text
+            enter(attOff,descNo,isRef,isIndexed)
+            do inner
+            exit NM[]
+            #);
+          visibility:< 
+            (# VI: @ integer; done: @boolean
+            do (if traceVisible then
+                   '**** Compiler_IF:visibility: '->puttext; label -> putline;
+               if);
+               inner;
+               (if traceVisible then               
+                   '**   Compiler_IF:visibility:end:'->puttext; VI->putint;
+                   ' ' -> put; label -> puttext;
+                   ' DONE:'->puttext; done -> putBoolean; newline;
+               if);
+            exit VI 
+            #);
+          
+          isChecked,beingChecked: @boolean;
+          origin: ^SuperScope
+       do inner
+       exit this(TopNode)[]
+       #);
+     getObjectDesc:< 
+       (# descNo: @integer; D: ^TopNode 
+       enter descNo 
+       do inner;
+          (if D[] = none then
+              '\n!!!! getObjectDesc got none for descNo: ' -> puttext;
+              descNo -> putint; newline
+          ;if)
+       exit D[]
+       #);
+     SimpleCollector:
+       (# name: ^text; off,kind: @integer; dcl: ^TopNode;
+       enter(name[],off,kind,dcl[])
+       do inner
+       #);
+     theErrorModule:< 
+       (# eModule: ^Object; iM: ^iModule
+       do inner;
+          (if eModule[] <> none then
+              &iModule[] -> iM[];
+              eModule[] -> IM.M[]
+          if)
+       exit iM[] 
+       #);
+     pathToErrorModule:< (# path: ^text do inner exit path[] #);
+     mainDescNo:< integerValue;
+     runtimeDescs:< 
+       (# rtDescs: ^Object do inner exit rtDescs[] #);
+     
+     iModule:< 
+       (# eq: BooleanValue
+            (# M1: ^iModule
+            enter M1[]
+            do (if M1[] <> none then
+                   M[] = M1.M[] -> value
+                else 
+                   M[] = NONE -> value;
+                   '\n***iModule: argument M1 is none'->putline;
+               if)
+            #);
+          doPT: (# exit true -> M.doPT #);
+          name:< (# exit M.moduleName #);
+          pathToFN: (# exit M.pathToModuleFN #);
+          inFile: 
+            (# F: ^File enter F[] do(*exit*) F[]-> M.innFile -> F[] exit F[] #);
+          handleDirModules: (#do M.doHandleDirModules #);
+          origin: 
+            (#
+            exit (M.getOrigin).theiModule 
+            #);
+          desc:< (# exit M.MyDesc #);
+          M: ^TopNode;
+       exit M[] 
+       #);
+     iRootModule:< (# rootM: ^iModule do inner exit rootM[] #);
+
+     browserItem:<
+       (# T,N: ^text; kind: @char; xKind: @integer; syntaxErr: @boolean 
+       enter T[]
+       do inner
+       exit(N[],xKind,kind,syntaxErr)
+       #);
+     mkDecl:<
+       (# name: ^text; kind: @char; 
+          pathToinn: ^Text; (* the current path to inn 
+                             * needed for parsing a module 'mod: /'
+                             * Consider if really needed!? *)
+          errors: ^Text; dcl: ^TopNode;
+       enter(name[],kind,pathToinn[])
+       do inner
+       exit(errors[],dcl[])
+       #);     
+     parseDecl:<
+       (# in: ^Text; errors: ^stream; dcl: ^TopNode
+       enter in[]
+       do inner
+       exit(errors[],dcl[])
+       #);
+     parseX_Decl:<
+       (# in: ^Text; 
+          errors: ^stream; dcl: ^TopNode;
+          name: ^Text; kind: @integer
+       enter in[]
+       do inner
+       exit(errors[],dcl[],name[],kind)
+       #);
+     pModuleX:<
+       (# inn: ^text; iM: ^iModule
+       enter inn[]
+       do inner
+       exit iM[]
+       #);
+     mkModuleItem:<
+       (# name: ^text; kind: @char; pathToModule: ^text; moduleF: ^File;
+          itemT,att: ^text; dcl: ^TopNode;
+       enter(name[],kind,pathToModule[],moduleF[])
+       do inner 
+       exit(itemT[],att[],dcl[])
+       #);     
+     handle: (# first,last: @integer enter(first,last) do inner #); 
+     handleReservedId:<
+       (# theHandler: ##handle;
+          inn: ^text; first,last: @integer
+       enter(inn[],theHandler##)
+       do inner;
+       #);
+     noBinding:
+       (# N: ^object; T: ^Text; thisNode: ^TopNode
+       enter(N[],T[],thisNode[])
+       do (if N[] = none then
+              '\n*** Virtual: ' -> puttext;  T[] -> puttext;
+              ' may not be bound' -> putline;
+              thisNode.doPT -> putline;
+          if)
+       #);
+     lineWidth: @integer;
+     
+     mark: @boolean;  (* True if beginPos and endPos are updated in AST
+                       * mark = True when using doPT for doing PT to
+                       *             edit buffer
+                       * mark = false when using doPT for debugging purposes
+                       *)
+     withPos: @boolean; (* called from minienv and positions are included
+                         * Elim this var from miniCompiler::parser *)
+     lx,ly: ^text; (* lx used by PT, ly by PP *)
+     ind,accL: @ integer;
+     
+     LG: ^LOG;
+     fullPath: @boolean;       
+     theM: ^TopNode;
+     FN: ^text;
+     iMain: ^iModule;
+     error_stream: ^Stream
+  enter(LG[],fullPath,theM[],FN[])  
+  do 80-> linewidth;
+     inner
+  exit(iMain[],error_stream[])
+  #)
