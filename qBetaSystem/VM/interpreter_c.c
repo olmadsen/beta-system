@@ -2694,6 +2694,7 @@ bool traceThreads = true;
       case pushthis:
 #ifdef TRACE
 	fprintf(trace,"pushthis\n");
+	dumpObj(trace,"pushThis",thisObj);
 #endif
 #ifdef __arm__
 #ifdef armtrace	
@@ -4275,7 +4276,7 @@ case rshiftup:
 	X = rPop(thisStack);
     if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 #ifdef TRACE
-	dumpObj(trace,"X:A:",X);
+	dumpObj(trace,"\n**   invokev:rec:",X);
 	fprintf(trace," recIsValObj %i \n ",recIsValObj);
 #endif
 	switch(isValObj){
@@ -4307,7 +4308,7 @@ case rshiftup:
 	       dscNo  = vdtTable(trace,X,dinx); 
 	}
 #ifdef TRACE
-	fprintf(trace,"Virtual:desc:binding: %i\n",dscNo);
+	fprintf(trace,"\n**   Virtual:desc:binding: %i\n",dscNo);
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
 #endif
 	saveContext();
