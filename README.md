@@ -47,7 +47,7 @@ cd beta
 To checkout the system do this:
 
 ```
-git clone git@github.com:olmadsen/beta-system.git r5.5
+git clone https://github.com/olmadsen/beta-system.git r5.5
 ```
 
 This will create a local copy of the repository (called `r5.5`) on your machine.
@@ -61,7 +61,7 @@ The `postwimp` library is currently a separate repository on github.
 To check it out separately use:
 
 ```
-git clone git@github.com:olmadsen/beta-postwimp.git postwimp
+git clone https://github.com/olmadsen/beta-postwimp.git postwimp
 ```
 
 You will most likely want to use it inside a beta-system clone (e.g. `r5.5` (as above). 
@@ -78,7 +78,7 @@ You will then get the `postwimp` directory populated with the files, with change
 If you are checking out the entire beta system, and would like to check out postwimp together with the rest, you can do it as such:
 
 ```
-git clone --recurse-submodules git@github.com:olmadsen/beta-system.git r5.5
+git clone --recurse-submodules https://github.com/olmadsen/beta-system.git r5.5
 ```
 
 ## MBS on Windows
@@ -89,7 +89,7 @@ It is recommended to to place the `beta` directory in `c:`:
 cd c:
 mkdir beta
 cd beta
-git clone git@github.com:olmadsen/beta-system.git r5.5
+git clone https://github.com/olmadsen/beta-system.git r5.5
 ```
 
 ### Required Software
