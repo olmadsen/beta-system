@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-96 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) Aarhus University
  * multithread.c
  * by Peter Andersen, Morten Grouleff
  */

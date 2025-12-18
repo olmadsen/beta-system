@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-98 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) Aarhus University
  * aoa.c
  * by Stephan Erbs Korsholm and Morten Grouleff.
  */
