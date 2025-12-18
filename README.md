@@ -177,6 +177,7 @@ There is no official support of MBS, but the compiler may in case of system erro
 You should thus not contact Mjølner Informatics.
 You may perhaps raise an issue at GitHub.
 You may also contact Ole Lehrmann Madsen at `olm@cs.au.dk`, but there is no guarantee for an answer.
+We are working on eliminating messages referring to Mjølner Informatics.
 
 # Installing The qBeta System
 
