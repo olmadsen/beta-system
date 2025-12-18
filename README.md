@@ -10,11 +10,12 @@ In addition, it contains **The qBeta System,** which consists of a compiler for 
 
 The first Beta compiler was developed at Aarhus University, Aarhus, Denmark. 
 This was followed the Nordic Mjølner Project where the SDE was developed and the compiler was further developed.
-After completion of The Mjølner Project the development was continued at [Mjølner Informatics LtD](https://mjolner.com) and Aarhus University. 
-As of today the ownership of MBS is at Aarhus University, but only minor changes have been made for some time.
 The results of the Mjølner Project are documented in:
 
 1. Jørgen Lindskov Knudsen, Mads Løfgren, Boris Magnussen, Ole Lehrmann Madsen (eds.): _Object-oriented Environments: The Mjølner Approach_,  Prentice Hall, 1994.
+
+After completion of The Mjølner Project, the development was continued at [Mjølner Informatics LtD](https://mjolner.com) and Aarhus University. 
+As of today the ownership of MBS is at Aarhus University, but only minor changes have been made for some time.
 
 The following people have made significant contributions to MBS: Peter Andersen, Lars Bak, Flemming Gram Kristensen, Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth. We may have missed some people here. If you think you have made significant contributions, please contact Ole Lehrmann Madsen (`olm@cs.au.dk`).
 
@@ -171,6 +172,11 @@ cd $BETALIB
 A Beta program in the file ```foo.bet``` may be compiled by executing
 
 ```beta foo```
+### Support
+There is no official support of MBS, but the compiler may in case of system errors recommend you to contact Mjølner Informatics. However, as mentioned above, Mjølner Informatics is no longer maintaining MBS.
+You should thus not contact Mjølner Informatics.
+You may perhaps raise an issue at GitHub.
+You may also contact Ole Lehrmann Madsen at `olm@cs.au.dk`, but there is no guarantee for an answer.
 
 # Installing The qBeta System
 
