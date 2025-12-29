@@ -18,6 +18,7 @@ variants: restrictions
                    cTracer(#do 'Module:alloc:off:'->TT; qOff[1]->II; dopt->TL#)
                if);
                (1,IT[]) -> sig.Qalloc;
+               (if newFeature then (1,IT[]) -> OG.Qalloc if)
                (* OG.Qalloc is called from generator *)
        #)#);
      ModuleItem::<
@@ -37,7 +38,12 @@ variants: restrictions
           Qalloc:: 
             (# diSize: @integer
             do (if traceAlloc then
-                   '**** DataItem:qalloc: ' -> puttext; dopt -> putheadN
+                   '**** DataItem:qalloc: ' -> puttext; dopt -> putheadN;
+                  'isValue:'->dumpt;  isValue -> putboolean;
+                  ' isPrimitive:' -> dumpt; OG.isPrimitive -> putboolean;
+                  ' isValObj: ' -> dumpt; OG.isValueObj -> putboolean;
+                  ' isBasicValue:' -> dumpt; isBasicValue -> putboolean; 
+                  ' freeDiKind:'->dumpT; freeDiKind->putboolean; newline
                if);
                cTracer
                (#
@@ -82,23 +88,26 @@ variants: restrictions
                               '**** indexed: ' -> puttext; dopt -> putline;
                               ptn.dopt -> puthead
                           if);
-                          (if ptn.OG.IS.newDescNo = 0 then
+                          (if (ptn.OG.IS.newDescNo = 0) and not ptn.OG.IS.isEmpty then
+                              (if false then
+                                   '**** DI:Qalloc:allocSuper.ATd.origin:'->dumpTN; ptn.dopt->putHeadN;
+                              if);
                               (1,ptn.origin[]) -> ptn.OG.qAlloc;
                           if);
                           (if traceAlloc then
                               dopt -> putline; ptn.dopt -> putline
                           if);
                           ptn.new_size -> diSize;
-                          cTracer
+                          pcTracer
                           (#do 'B:'->TT; diSize->II; 'ptn:'->TT;ptn.dopt->TL #);
-                          cTracer(#do'newDescNo:'->TT; ptn.OG.IS.newDescNo->II#)
+                          pcTracer(#do'newDescNo:'->TT; ptn.OG.IS.newDescNo->II#)
                    #)if);
 
                    (if not nameListInDcL then
                        IT.qsize[1] + 1 -> qoff[1];
                        IT.qsize[1] + diSize -> IT.qsize[1];
                    if);
-                   cTracer
+                   pcTracer
                    (#do 'diSize:'->TT; diSize->II; 'IT.qSize:'->TT; 
                       IT.qsize[1]->II 
                    #);
@@ -111,16 +120,18 @@ variants: restrictions
                    (if not nameListInDcL then                   
                        IT.qsize[1] + diSize -> IT.qsize[1] -> qoff[1];
                    if);
-                   cTracer(#do 'DI:Qalloc:off:'->TT; qOff[1]->II; dopt->TL#);
-                   (if isConst then
-                       (* For R: ref T, dont call T.Qalloc *)
+                   pcTracer(#do 'DI:Qalloc:off:'->TT; qOff[1]->II; dopt->TL; 'isConst:'->TT; isConst->BB #);
+                   (if isConst (*or newFeature*) then
+                       (* For R: ref T, dont call T.Qalloc! OBS!
+                        * R.size = 1, T.size is thus not needed
+                        *)
                        (1,IT[]) -> OG.Qalloc
                if)if);
                diSize -> diXsize;
                (1,IT[]) -> sig.Qalloc;
                (* OG.Qalloc is called from qgenerator *)
             #);
-          diXsize: @integer;
+          diXsize: @integer; (* what is the purpose ? *)
           objSize:: (#do OG.objSize -> value  #)
        #);
      NameDecl::<
@@ -161,7 +172,7 @@ variants: restrictions
                          father.father.father.label -> putline;
                          (* shall be done in AST after parsing *)
                      if);
-                     father.father.father[] -> ATd[];
+                     father.father.father[] -> ATd[]; (* what is this ? *)
                      restart L
        if)#)#);
      NameList::<
@@ -183,9 +194,12 @@ variants: restrictions
                    (if traceAlloc then
                        '**** Signature:Qalloc:'->puttext; dopt -> dumpTN
                    if);
-                   IT.qsize[1] -> paramItems.qsize[1];
-                   (1,IT[]) -> paramItems.Qalloc;
-                   paramItems.qsize[1] -> IT.qsize[1];
+                   (if not newFeature or (IT[] <> none) then
+                       (* The case if initial call of rootModule.Qalloc *)
+                       IT.qsize[1] -> paramItems.qsize[1];
+                       (1,IT[]) -> paramItems.Qalloc;
+                       paramItems.qsize[1] -> IT.qsize[1];
+                   if);
                    true -> isAllocated;
             if)#);
           clear::< (# do false -> isAllocated #);
@@ -272,7 +286,7 @@ variants: restrictions
 
                (if IS.QdescNo[1] > 0 then
                    (* Must find out why Qalloc is called a second time
-                    * Perhaps because we for R: ref T used to call T.Qalloc;
+                    * Perhaps because we for R: ref T used to call T.Qalloc; OBS!
                     * For R: obj T, we still call T.Qalloc for all such R!
                     *)
                    (if false then
@@ -319,16 +333,14 @@ variants: restrictions
                            (* !!! Imply call of old newDesc below!? *)
                if)if)if);
                
-               cTracer(#do 'OG:Qalloc:isObjectDesc: ' -> TT; 
-                        isObjectDesc->BB;
-                        ' isObjectDesc: ' -> TT; isObjectDesc->BB;
+               cTracer(#do 'OG:Qalloc:isObjectDesc:' -> TT; isObjectDesc->BB;
                         ' hasItems: ' -> TT; hasItems -> BB;
                      #);
                cTracer(#do
-                        'super.hasVirtualArgs: ' -> TT;
+                        'super.hasVirtualArgs:' -> TT;
                         super.hasVirtualArgs -> BB;
-                        ' not super.isPrimitive: ' -> TT;
-                        not super.hasVirtualArgs -> BB
+                        ' not super.isPrimitive:' -> TT;
+                        not super.isPrimitive -> BB
                      #);
                cTracer
                (#do dopt -> TL; nl; 'super: ' -> TT; super.dopt -> TL; nl;
@@ -361,8 +373,12 @@ variants: restrictions
                (#do 'OG:reAlloc:'->TT; 'descNo:'->TT; IS.descNo -> II;
                   (origin[]->org[]).encOG.primno -> II; doPT -> TL
                #);
+               (if traceAlloc then
+                   '**** OD:reAlloc:'->dumpT; doPT->putHeadN;
+               if);
                (if ((origin[]->org[]).encOG.primNo = String_prim) then
                    cTracer(#do 'OG:reAlloc:String:'->TT; #);
+                   (if traceAlloc then '**   OD:reAlloc:String:'->dumptn if);
                    IS.scanAllDecls(#do 0 -> currentDcl.qOff[1] #);
                    1 -> IS.qSize[1]; (* origin *)
                    IS.scanAllDecls
@@ -371,7 +387,7 @@ variants: restrictions
                           cTracer(#do   'currentDcl:this:' -> TT#);
                           IS.qsize[1] + 1 -> currentDcl.qoff[1];
                           IS.qsize[1] + 1 -> IS.qsize[1];
-                       else
+                       else false -> currentDcl.allocDone;
                           (1,IS[]) -> currentDcl.Qalloc;
                       if);
                       cTracer
@@ -554,9 +570,14 @@ variants: restrictions
                #);
                (if isArgs then
                   (* '**** isArgs:'->dumpT; dopt -> dumpTN;*)
-               if);
-               (if not isArgs then
-                   (if (super.ATd[] <> none) then
+               if); 
+               (if not isArgs (* this(IT) does not represent parameters *) then
+                   (if (super.ATd[] <> none) then (*'**   super.ATd[]<>none'->dumptn;
+                       super.ATd.allocDone -> putboolean; ' ' -> put;
+                       super.ATd.OG.allocDone -> putboolean; ' ' -> put;
+                       super.ATd.OG.IS.allocDone -> putboolean; newline;*)
+
+                       (if newFeature then (1,none) ->super.ATd.qalloc if); 
                        (* We have
                         *    OG = Super { ... }
                         * (1) super is a Name: normal case
@@ -675,7 +696,35 @@ variants: restrictions
                        if)if)if);
                        (*(1,this(items)[]) -> sig.Qalloc*)
                if)if);
+               (if newFeature then
+                   scanSons 
+                   (# Ix: ^Item; D: ^Decl
+                   do (if (current[]-> Ix[]).isDataItem then
+                          (*'**   doAlloc:'->dumpt; Ix.dopt->dumptn;*)
+                          (1, this(Items)[]) -> Ix.Qalloc;
+                          (*'**   off:'->dumpt; Ix.dopt->dumpt; 
+                          (Ix[]->D[]).newoff->putint; newline;*)
+                   if)#);
+                   true -> allocDone; 
+                   (if encOG[] <> none then true -> encOG.allocDone; if);
+                   (if false then
+                       scanAllItemDecls
+                       (# n: @integer;
+                          doPut: 
+                          (#
+                          do '**** layout:'->dumpt; 
+                              (if sig[]<> none then sig.dopt->dumptN; if);
+                          #);
+                       do (if currentDcl.isDataitem then
+                              (if (n + 1 -> n) = 1 then doPut if);
+                              currentDcl.sig.dopt->dumpT; 
+                              currentDcl.newoff -> putint; 
+                              newline;
+                       if)#);
+                   if)
+               if);
                scanSons (#do (1,this(items)[]) -> current.Qalloc #);
+               
                cTracer(#do 'Items:Qalloc:END:objSize:'->TT; qsize[1] -> II;
                         ' newDescNo:'->TT; newDescNo -> II;  dopt->TL #);
             #);
@@ -693,9 +742,7 @@ variants: restrictions
              do (if OG.IS.vdtAllocDone then leave VDTalloc if);
                 (if traceVDTalloc then 
                     '**** PTN:vdtAlloc:'->dumpT; sig.dopt->dumpTN;
-                                 '------'->dumptn;(origin[]->org[]).dopt->putheadN;;
-                                  '------'->dumptn;(origin[]->org[]).dopt->putheadN;
-                                   '------'->dumptn;(origin[]->org[]).dopt->putheadN;
+                    '------'->dumptn;(origin[]->org[]).dopt->putheadN;
                 if); 
                 OG.vdtAlloc 
              #);
@@ -752,26 +799,45 @@ variants: restrictions
                    '**** ptn:qalloc: ' -> puttext; sig.dopt -> puttext;
                    ' ' -> put; ptnKind -> putint;  ' ' -> put;
                    isprimitive -> putBoolean;  ' ' -> put;
-                   OG.isBasicValue -> putboolean; newline;
+                   OG.isBasicValue -> putboolean; 
+                   ' ptnKind:'->dumpT; ptnKind -> putint;
+                   newline;
+               if);
+               (if newFeature and OG.isChecked then 
+                   (if traceAlloc then '**** PTN:new_Qalloc:'->dumpT; sig.dopt->dumptN if);
+                   (1,IT[])->OG.Qalloc;
+                   (if ptnKind
+                    // plainPtn then
+                    // virtualPtn then
+                       (if not OG.hasItems then
+                           (* see more below *)
+                           allocStub
+                       if)
+                    // furtherPtn // finalPtn then 
+                       (if not OG.hasItems then allocStub if)
+                   if);
+                   leave Qalloc
                if);
                (if true 
                 // isPrimitive then
-                   (if OG.IS.newDescNo = 0 then
-                       (*(1,IT[]) -> OG.Qalloc;*)
-                       (* more stuff in checker:ptn:alloc *)
+                   (if OG.IS.newDescNo = 0 then 
+                       (if false then '**** ptn:qalloc:newDescNo=0:' -> puttext; sig.dopt -> putline;if);
+                       (if newFeature then (1,IT[]) -> OG.Qalloc; if)
+                       (* more stuff in checker:ptn:alloc - alloc is aliminated *)
                    if);
                 // OG.isBasicValue and not isVirtual then   
                    (if false then 
                        '\n*** pattern:qalloc:SimpleValue: ' -> putline;
                        doPT -> printHead;
                    if);
-                   (if OG.IS.newDescNo = 0 then
-                      (* (1,IT[]) -> OG.Qalloc*)
+                   (if OG.IS.newDescNo = 0 then 
+                       (if false then '**** ptn:qalloc:newDescNo=0:X:' -> puttext; sig.dopt -> putline; if);
+                      (if newFeature then (1,IT[]) -> OG.Qalloc if)
                    if); 
                 else
                    cTracer(#do 'Pattern:Qalloc:B:'->TT; sig.id[] ->TT #);
                    (if ptnKind
-                    // plainPtn then                 
+                    // plainPtn then
                     // virtualPtn then
                        (* Is there a more general way to handle this *)
                        (if not OG.hasItems then
@@ -891,6 +957,14 @@ variants: restrictions
                                          '**   setvDescNo: '->puttext;
                                          OGx.vDescNo -> putint; newline
        if)if)if)#)if)#)if)#)#);
+     LabelDecl::<
+        (# Qalloc::
+              (#
+              do (if newFeature and OG.isChecked then
+                     (if traceAlloc then '**** LabelDecl:Qalloc:'->dumpT; sig.dopt->dumpTN if);
+                     (1,IT[]) -> OG.Qalloc
+              if)#)
+        #); 
      IfThen::<
        (# Qalloc::
             (#
@@ -993,5 +1067,7 @@ variants: restrictions
   do QNewDesc.init;
      (if verbose then '**** VDT ALLOC ****' -> putline if);
      rootModule.vdtAlloc;
+     (if verbose then '**** QALLOC ****' -> putline if);
+     (if newFeature then rootModule.qAlloc; if);
      inner
   #)
