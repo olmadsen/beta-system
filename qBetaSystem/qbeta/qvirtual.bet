@@ -1,4 +1,5 @@
-ORIGIN 'qabstractSyntaxTree'
+ORIGIN 'qabstractSyntaxTree';
+INCLUDE 'assert'
 ---astlib:attributes---
 (* The patterns here are called from semchecker via 
  * semchecker::ObjectInvocation::getVqual, which is called from
@@ -26,7 +27,7 @@ OGsequence: SuperOGsequence
      (*pred: ^OGsequence;*)
      isRemote: @boolean;
      (*isNest: @Boolean;*)
-     innerDOG: ^ObjectDescriptor;
+     innerDOG: ^ObjectDescriptor; (* what is this? Defined in ENC when pred=none *)
      pathToSuper:
        (# OGsuper: ^ObjectDescriptor; on,pn: @integer; E: ^Exp; 
           D: ^Decl; ptn: ^Pattern; i: @integer; isR: @boolean;
@@ -44,19 +45,22 @@ OGsequence: SuperOGsequence
           if);
           L:
             DOG.super.scanExps
-            (#
-            do (if traceGetVqual then
-                   '**   exp:'->dumpT; current.dopt -> dumpTN;
-               if);
+            (# emitDump: 
+                  (# isArg: @Boolean enter isArg
+                  do '**** innerDOG:'->dumpT; isArg->dumpB;
+                      innerDOG.dopt->putHeadN; 
+                      ('DOG.super.scan',0,0) -> print
+                  #)
+            do (if traceGetVqual then '**   exp:'->dumpT; current.dopt -> dumpTN if);
                (i + 1 -> i) > 1 -> isR;
                current[] -> E[];
-               (if (current[] = innerDOG[]) then
+               (if (current[] = innerDOG[]) then emitDump;
                    leave L
                if);
                (if (innerDOG[] <> none) and (E.args[] <> none) then
                    E.args.scanSons
                    (#
-                   do (if (current[] = innerDOG[]) then
+                   do (if (current[] = innerDOG[]) then true -> emitDump;
                           leave L
             if)#)if)#);
           (if DOG.super.isImplSuper then
@@ -64,8 +68,10 @@ OGsequence: SuperOGsequence
               0 -> on;
               DOG.super.pn -> pn; 
               (if D.OG.IS.isEmpty then
-                  '**** implicitSuper:'->dumpT; pn -> dumpI; D.OG.IS.isEmpty->dumpB; 
-                  D.OG.super.on -> dumpI; D.OG.super.pn->dumpI; D.dopt->dumpTN;
+                  (if traceGetVqual then
+                      '**** implicitSuper:'->dumpT; pn -> dumpI; D.OG.IS.isEmpty->dumpB; 
+                      D.OG.super.on -> dumpI; D.OG.super.pn->dumpI; D.dopt->dumpTN;
+                  if);
                   D.OG.super.on -> on; (D.OG.super.last).pn + pn -> pn
               if); 
            else
@@ -120,38 +126,25 @@ OGsequence: SuperOGsequence
         * ENC[D1,D2,...,Dn] = PRE(j) o ENC(i) 0 ENC[D1,D2,...,Dn-1]
         *    where Path(Dn) = (i,j)
         *)
-       (# S: ^OGsequence; OGsuper,OGx: ^ObjectDescriptor; 
+       (# encOGS: ^OGsequence; OGsuper,superDOG: ^ObjectDescriptor; 
           level,onx,pnx: @integer; isR: @boolean; id: ^Text; org: ^Scope
        enter(id[],level)
-       do (if traceGetVqual then 
-              ('**** ENC:'->(id.copy).prepend,0,level) -> print 
-          if);
+       do (if traceGetVqual then ('**** ENC:'->(id.copy).prepend,0,level) -> print if);
           (if true 
-           // isNest then
-              (if pred[] = none then
-                  ('!!!! ENC:isNest:pred is none',0,level) -> print
-              if);
-              (* ENC([D1,D2,...,Dn-1,nest(Dn)]) = [D1,D2,...,Dn-1] *)
-              pred[] -> S[];
-           // isRemote then
-              (* ENC([D1,D2,...,Dn-1,R.Q]) = remote(ENC[D1,D2,...,Dn-1],R) *)
-              pred.DOG[] -> OGx[]; (* pred <> none always! *)
-              (DOG[],OGx[],pred[],level) -> Remote -> S[]
            // pred[] = none then (* head *)
               (* ENC([D]) = [D.origin] *)
-              (if DOG.origin[] = none then 
-                  '!!!! ENC: DOG.origin is none!'->putline; print;
-                  this(OGsequence)[] -> S[];
-                  stop
-               else                  
-                  (if (DOG.origin[]->org[]).encOG[] = none then 
-                      '!!!! ENC: DOG.origin.encOG is none!'->putline if);
-                  (org.encOG[],false,none) -> OGsequence -> S[];
-                  DOG[] -> S.innerDOG[]
-              if);
+              (DOG.origin[] <> none,'ENC: DOG.origin is none!')->assertFail(#do print#);
+              ((DOG.origin[]->org[]).encOG[] <> none,'ENC: DOG.origin.encOG is none!')-> assert;
+              (org.encOG[],false,none) -> OGsequence -> encOGS[];
+              DOG[] -> encOGS.innerDOG[] (* head.DOG? *)
+           // isNest then
+              (* ENC([D1,D2,...,Dn-1,nest(Dn)]) = [D1,D2,...,Dn-1] *)
+              pred[] -> encOGS[];
+           // isRemote then (* ENC([D1,D2,...,Dn-1,R1.R2.R3.Q]) *)
+              pred.DOG[] -> superDog[]; (* superDOG = Dn-1, DOG = Q *)
+              (DOG[],superDog[],pred[],level) -> Remote -> encOGS[]
            else
-              (* ENC([D1,D2,...,Dn-1,Dn]) 
-               *          = PRE[j] o ENC[on] o ENC([D1,D2,...,Dn-1])
+              (* ENC([D1,D2,...,Dn-1,Dn]) = PRE[pn] o ENC[on] o ENC([D1,D2,...,Dn-1])
                * where path(Dn-1.super) = (on,pn)
                *)
               pred.pathToSuper -> (OGsuper[],onx,pnx,isR);
@@ -161,81 +154,71 @@ OGsequence: SuperOGsequence
                   ' pred.DOG: ' -> puttext; pred.DOG.doPT -> putheadN;
                   '**   OGsuper: ' -> puttext; OGsuper.dopt -> PutheadN
               if);
-              (id[],level + 1) -> pred.ENC -> S[];
+              (id[],level + 1) -> pred.ENC -> encOGS[];
               (if traceGetVqual then 
                   '**   ENC:[pnx=' -> puttext;  pnx -> putint;
                   ']oENC[onx=' -> puttext; onx -> putint; 
                   ']' -> put;newline 
               if);
               (if isR then '!!!! ComputeOGs:isR:Check it!'->putline if);
-              (for i: onx repeat (id[],level + i) -> S.ENC -> S[] for);
-              (for i: pnx repeat level -> S.PRE -> S[] for);
+              (for i: onx repeat (id[],level + i) -> encOGS.ENC -> encOGS[] for);
+              (for i: pnx repeat level -> encOGS.PRE -> encOGS[] for);
           if);
-          (if traceGetVqual then ('**   ENC:result:',0,level) -> S.print if)
-       exit S[]
+          (if traceGetVqual then ('**   ENC:result:',0,level) -> encOGS.print if)
+       exit encOGS[]
        #);
 
      Remote:
-       (* this(OGs) = [D1,D2,...,Dn,R] or
-        *           = [D1,D2,...,Dn,R.Q]
-        * remote([D1,D2,...,Dn],R)
-        *    = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa),Rd)
-        *    where path(Ra) = (Rd,0,j)
-        *    Rd: ref Sa
-        *  remote([D1,D2,...,Dn],R.Q)
-        *    = nest(app(super[j] o remote([D1,D2,...,Dn,R),Ta,Td)))
-        *    where path(Qa) = (Qd,0,j)
-        *    Qd: ref Ta
+       (* this(OGs) = [D1,D2,...,Dn,R1.R2.R3.Q]
+        * superDOG = Dn, predOGS = [D1,D2,...,Dn], thisDOG = Q
+        * remote([D1,D2,...,Dn],R) = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa),Rd)
+        *    where path(Ra) = (Rd,0,j), Rd: ref Sa
+        *  remote([D1,D2,...,Dn],R.Q) = nest(app(super[j] o remote([D1,D2,...,Dn,R),Ta,Td)))
+        *    where path(Qa) = (Qd,0,j), Qd: ref Ta
         *)
-       (# superDOG,DOGx,OGx: ^ObjectDescriptor; S,Sx: ^OGsequence; level: @integer
-       enter(superDOG[],DOGx[],S[],level)
-       do (if traceGetVqual then 
-              ('**** Remote:',0,level) -> S.print;
-              '**   DOGx: '->puttext; DOGx.dopt -> puthead; 
+       (# superDOG,thisDOG,OGx: ^ObjectDescriptor; predOGS,Sx: ^OGsequence; level: @integer
+       enter(thisDOG[],superDOG[],predOGS[],level)
+       do (if traceGetVqualShort then 
+              ('**** Remote:',0,level) -> predOGS.print;
+              '**   thisDOG: '->puttext; thisDOG.dopt -> puthead; 
           if);
-          L: DOGx.super.scanExps
+          L: superDOG.super.scanExps
             (# E: ^Exp; D: ^SuperDataItem
             do current[] -> E[]; 
-               (if (E.ATd.asDecl).OG[] = superDOG[] then 
-                   (* move to if not isLast below*)
-                   (if traceGetVqual then
-                       '**** remote:got:superDOG:' -> puttext;
-                       superDOG.dopt -> puthead;
-                       ('remote:',0,level) -> S.print;
+               (if (E.ATd.asDecl).OG[] = thisDOG[] then 
+                   (* move to below, if not isLast - but what is this? *)
+                   (if traceGetVqualShort then
+                       '**** remote:got:thisDOG:' -> puttext;
+                       thisDOG.dopt -> putheadN;
+                       ('remote:',0,level) -> predOGS.print;
                    if);
                    leave L;
                if);
-               (if traceGetVqual then
+               (if traceGetVqualShort then
                    '**   remote:scanSons:E:"' -> puttext; 
-                   E.dopt -> puttext; '" E.ATd.label:' -> puttext;
-                   E.ATd.label -> puttext;
+                   E.dopt -> puttext; '" E.ATd.label:' -> puttext; E.ATd.label -> puttext;
                    ' E.on: '->puttext; E.on ->putint;
                    ' E.pn: ' -> puttext; E.pn -> putint;
                    ' E.ATd:' -> putline; E.ATd.dopt -> putline;
                if);
                (if not isLast then
-                   (* remote([D1,D2,...,Dn],R)
-                    *    = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa),Sd)
-                    *    where path(Ra) = (Rd,i,j)
-                    *    Rd: ref Sa;
-                    *    Sd: ...
+                   (* remote([D1,D2,...,Dn],R) = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa),Sd)
+                    *    where path(Ra) = (Rd,i,j), Rd: ref Sa; Sd: ...
                     *)
                    (* DOG = R.Q where Q is not remote and R = R1.R2.Rn, n >=1 *)
                    (if traceGetVqual then '**   remote:first:'-> putline if);
-                   (for i: E.on repeat ('remote:',level + i) -> S.ENC -> S[] for);
-                   (for i: E.pn repeat level -> S.PRE -> S[] for);
+                   (for i: E.on repeat ('remote:',level + i) -> predOGS.ENC -> predOGS[] for);
+                   (for i: E.pn repeat level -> predOGS.PRE -> predOGS[] for);
                    (* Is E.ATd ok? We have Ra => Rd: ref Sa; ... Sa => Sd: ...
                     * E.ATd = Rd: ref Sa - should perhaps be?
-                    * But append seems ok!?
-                    * Is OGx below ok?
+                    * But append seems ok!? Is OGx below ok?
                     *);
-                   (E.ATd.asDecl,level) -> S.append -> (S[],OGx[]);
-                   S[] -> Sx[];                 
-                   (OGx[],true,Sx[]) -> OGsequence -> S[];
-               if);  
-            #);
-          (if traceGetVqual then ('**** remote:END',0,level) -> S.print if)
-       exit S[]
+                   (E.ATd.asDecl,level) -> predOGS.append -> (predOGS[],OGx[]);
+                   predOGS[] -> Sx[];                 
+                   (OGx[],true,Sx[]) -> OGsequence -> predOGS[];
+           if)#);
+          (if traceGetVqual then ('**** remote:END',0,level) -> predOGS.print if)
+       exit predOGS[]
        #);  
      append:
        (# D: ^Decl(*SuperDataItem*); S,Sx: ^OGsequence; OGx: ^ObjectDescriptor; 
