@@ -115,6 +115,10 @@ So rename ```/usr/bin/link.exe``` to ensure that the linker from VS2003 is used.
 
 The VS2003 linker named ```link.exe``` is located in the folder ```$VS2003/Vc7/bin```.
 
+If you have problems with invoking the VS2003 linker, you may want to inspect the `bat`-file invoking the linker. The `bat`-file and the accompanying `rsp`-file is placed in the `nti_ms` directory. By default these files are deleted by the compiler after linking has taken place. You may use the `'-p'` switch to keep these files.
+
+`beta -q hello`
+
 ### Cygwin
 
 Cygwin is a Unix-like shell and accompanying command line tools for Windows.
@@ -172,6 +176,9 @@ cd $BETALIB
 A Beta program in the file ```foo.bet``` may be compiled by executing
 
 ```beta foo```
+
+You mau use the `'-q'` switch to suppress some of the warnings issued by the compiler.
+
 ### Support
 There is no official support of MBS, but the compiler may in case of system errors recommend you to contact Mjølner Informatics. However, as mentioned above, Mjølner Informatics is no longer maintaining MBS.
 You should thus not contact Mjølner Informatics.
