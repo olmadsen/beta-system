@@ -47,10 +47,11 @@ OGsequence: SuperOGsequence
             DOG.super.scanExps
             (# emitDump: 
                   (# isArg: @Boolean enter isArg
-                  do '**** innerDOG:'->dumpT; isArg->dumpB;
-                      innerDOG.dopt->putHeadN; 
-                      ('DOG.super.scan',0,0) -> print
-                  #)
+                  do (if false then 
+                         '**** innerDOG:'->dumpT; isArg->dumpB;
+                          innerDOG.dopt->putHeadN; 
+                          ('DOG.super.scan',0,0) -> print
+                  if)#)
             do (if traceGetVqual then '**   exp:'->dumpT; current.dopt -> dumpTN if);
                (i + 1 -> i) > 1 -> isR;
                current[] -> E[];
@@ -121,18 +122,6 @@ OGsequence: SuperOGsequence
        exit(OGsuper[],on,pn,isR)
        #);
      encLevel: @integer;
-     inINV: BooleanValue
-        (# N: ^Node
-        enter N[]
-        do L: (if true
-               // N.isInvocation and (N.noOfSons > 1) then
-                  '**** inINV:'->dumpT; N.doPP->dumpTN; true->value
-               // N.isItems then
-               else 
-                  N.father[] -> N[];
-                  restart L
-              if)
-        #);
      ENC:
        (* ENC[D] = [D.origin]
         * ENC[D1,D2,...,Dn] = PRE(j) o ENC(i) 0 ENC[D1,D2,...,Dn-1]
@@ -141,36 +130,49 @@ OGsequence: SuperOGsequence
        (# encOGS: ^OGsequence; OGsuper,superDOG: ^ObjectDescriptor; 
           level,onx,pnx: @integer; isR: @boolean; id: ^Text; org: ^Scope;
           getEncOG: 
-             (* chek for DOG = OD(Invocation(BracketedExp(Invocation *)
              (# inv: ^Invocation;  OI: ^ObjectInvocation; BE: ^BracketedExp; prev: ^Exp; N: ^Node;
                 encOG: ^ObjectDescriptor;
                 setEncOG:
+                   (* superInv = R1.R2.R3.P; assigns a reference to encOG *)
                    (# superInv: ^Invocation; prev: ^Exp
                    enter superInv[] 
-                   do superInv.scanSons (#do (if not isLast then current[] -> prev[] if)#);
-                      (if traceGetVqualShort then
-                          '**** ENC:head:remoteOD:'->dumpT; DOG.dopt->putheadN;
-                          prev.ATD.dopt->putheadN;
+                   do superInv.scanSons (#do current[] -> theI[];(if not isLast then current[] -> prev[] if)#);
+                      (if true or traceGetVqualShort then
+                          '**** ENC:head:remoteOD:prev:'->dumpT; prev.doPT->dumpTN; 
+                          '**   DOG:'->dumpT; DOG.dopt->putheadN;
+                          '**   prev.ATd:'->dumpT; prev.ATd.dopt->putheadN;
+                          '**   prev.ATd.OG.isEmpty:'->dumpT;  prev.ATd.OG.IS.isEmpty->dumpB;
+                          ' not hasVirtualArgs:'->dumpT; not (prev.ATd.OG.super.last).ATd.OG.hasVirtualArgs->dumpB; newline;
                       if);
-                      prev.ATd.OG[] -> encOG[]
+                      prev.ATd.OG[] -> encOG[];
+                      (* prev.ATd = ref/obj ObjSpec where ObjSpec = Foo{...}, Foo(#Bar),
+                       * Go to ObjSpec.decl if no items and no virtuals args; also for R: ref Foo(#bar)
+                       *)
+                      (if prev.ATd.OG.IS.isEmpty and not (prev.ATd.OG.super.last).ATd.OG.hasVirtualArgs then 
+                          prev.ATd.OG.super.ATd.OG[] -> encOG[];
+                          (if false then '**    superDecl:'->dumpT; encOG.doPT -> putHeadN
+                      if)if);
+                      prev.on -> goON; prev.pn->goPN
                    #)
              do (if (DOG.super.noOfSons > 1)  then 
                     DOG.super -> setEncOG
                  else
                     org.encOG[] -> encOG[]; (* simple case without remoteOD *)
                     (if (DOG.super.noOfSons = 1) and not DOG.super.isEmpty then
+                        (* chek for DOG = OD(Invocation(BracketedExp(Invocation *)
                         DOG.super.last -> N[];
                         (if N.isBracketedExp then
                             N[] -> BE[];
                             (if (BE.NoOfSons = 1) and (BE.son[]->N[]).isInvocation then
                                 (if N.noOfSons > 1 then
                                     N[] -> setEncOG
-                                if)
-                            if)
-                        if)
-                 if)if)
+                                if);
+                             else
+                                'BUM:'->dumpT; DOG.dopt -> putheadN
+                 if)if)if)if)
              exit encOG[]
-             #)
+             #);
+             goON,goPN: @integer; theOD: ^ObjectDescriptor; theI: ^Exp
        enter(id[],level)
        do (if traceGetVqual then ('**** ENC:'->(id.copy).prepend,0,level) -> print if);
           (if true 
@@ -182,21 +184,12 @@ OGsequence: SuperOGsequence
               (if traceGetVqualShort then
                   '**** ENC:head:'->dumpT; DOG.super.noOfSons-> dumpI; DOG.dopt->putheadN
               if);
-              (if false and (DOG.super.noOfSons > 1) then 
-                 (# remoteD: ^Decl; prev: ^Exp
-                  do DOG.super.scanSons (#do (if not isLast then current[] -> prev[] if)#);
-                     (if prev.ATd.isDecl then
-                         (prev.ATd.OG[],false,none) -> OGsequence -> encOGS[];
-                         (if traceGetVqualShort then
-                            '**** ENC:head:remoteOD:'->dumpT; DOG.dopt->putheadN;
-                             prev.ATD.dopt->putheadN;
-                  if)if)#)
-              else
-                 (if false then
+              (if false then
                     (getEncOG,false,none) -> OGsequence -> encOGS[];
+                    (if ((goON > 0) or (goPN > 0)) then encOGS.print if)
                  else
                     (org.encOG[],false,none) -> OGsequence -> encOGS[];
-              if)if);
+              if);
               DOG[] -> encOGS.innerDOG[] (* head.DOG? *)
            // isNest then
               (* ENC([D1,D2,...,Dn-1,nest(Dn)]) = [D1,D2,...,Dn-1] *)
@@ -286,6 +279,10 @@ OGsequence: SuperOGsequence
        exit predOGS[]
        #);  
      append:
+       (* append path from D.super to decl of super
+        * D may be a dataItem: R: ref/obj ...
+        *   or a pattern returning a datum: P: { ..., out R: ref/obj ... }
+        *)
        (# D: ^Decl(*SuperDataItem*); S,Sx: ^OGsequence; OGx: ^ObjectDescriptor; 
           MI: ^ModuleItem; ATd: ^decl; level: @integer; DI: ^DataItem
        enter(D[],level)
@@ -293,20 +290,26 @@ OGsequence: SuperOGsequence
               '**** append:label: '->puttext; D.label -> puttext; 
                ' dcl: ' -> puttext; D.dopt -> putheadN;
                '**   isEmpty: '  -> puttext; D.OG.IS.isEmpty -> putboolean;
-               '\n**   hasVargs: ' -> puttext; D.OG.hasVirtualArgs ->putboolean;
-               newline
+               '\n**   hasVargs: ' -> puttext; D.OG.hasVirtualArgs ->putboolean; newline
+          if);
+          (if false then 
+              (not D.isPattern,'OGsequence:append:invoked with pattern:')
+                 -> assert(#do D.dopt -> putHeadN #)
           if);
           (if D.isModuleItem then (D[]->MI[]).MD[] -> D[] if); 
           this(OGsequence)[] -> S[];
-          (if D.OG.IS.isEmpty
-              and
-              (not D.OG.hasVirtualArgs
-              or D.isDataItem and not (D[]->Di[]).isConst)
+          (if D.OG.IS.isEmpty and (not D.OG.hasVirtualArgs or D.isDataItem and not (D[]->Di[]).isConst)
               (* We need to understand this! 
                * For ChemicalPlantSystem, not isConst is needed
+               *   handles theSchedule: ref Schedule, IS.isEmpty, Schedule hasVirtualArgs, but not isConst
                * For CityLink, we dont need it!?
+               * D: obj/ref S, S is a pattern
                *)
               then
+              (if D.OG.hasVirtualArgs then
+                  (if false and D.isDataItem and not (D[]->Di[]).isConst then
+                      '**** virtual:append:'->dumpT; D.dopt->dumpTN
+              if)if);
               D.OG.super.scanExps(*ons*)
               (# i: @integer; E: ^Exp
               do (if (i + 1 -> i) > 1 then
@@ -339,6 +342,9 @@ OGsequence: SuperOGsequence
                  (ATd.asDecl).OG[] -> OGx[]
               #)
            else
+              (* D: obj S{ ... }, singular
+               * D: obj S, S has virtual args => implict singular
+               *)
               D.OG[] -> OGx[]
           if);          
           (if traceGetVqual then '**   append:END:\n' -> puttext if);
