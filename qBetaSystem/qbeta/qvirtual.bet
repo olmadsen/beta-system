@@ -28,7 +28,7 @@ OGsequence: SuperOGsequence
    *)
   (# thisOGS:: OGsequence;
      isRemote: @boolean; (* DOG is a remote super of pred.DOG *)
-     innerDOG: ^ObjectDescriptor; (* innerDOG.origin.encOG* = OG1, i.e. the immediate 
+     initialDOG: ^ObjectDescriptor; (* initialDOG.origin.encOG* = OG1, i.e. the immediate 
                                    * encloser of the application qualified by the virtual
                                    * none for OGi, i > 1 and sometimes also for i = 1 ???
                                    *)
@@ -39,8 +39,8 @@ OGsequence: SuperOGsequence
               '**** pathToSuper: '->puttext; 
               (if DOG.super.isImplSuper then 'implicitSuper: ' -> puttext if);
               '"'->put; DOG.super.dopt -> puthead; '" of:DOG: ' -> puttext; DOG.doPT -> putheadN;
-              (if innerDOG[] <> none then
-                  '**   innerDOG: ' -> puttext; innerDOG.doPT -> putheadN
+              (if initialDOG[] <> none then
+                  '**   initialDOG: ' -> puttext; initialDOG.doPT -> putheadN
           if)if);
           (if not DOG.isChecked then
               (* this happens*) (none,DOG.origin[],DOG.origin[],true) -> DOG.check;
@@ -50,19 +50,23 @@ OGsequence: SuperOGsequence
             (# emitDump: 
                   (# isArg: @Boolean enter isArg
                   do (if true then 
-                         ('**** innerDOG:',isArg)->dumpTB; innerDOG.dopt->putHeadN; 
-                         ('DOG.super.scan',0,0) -> print
+                         ('**** initialDOG:',isArg)->dumpTB; initialDOG.dopt->putHeadN; 
+                         ('pathToSuper:got:initialDOG:',0,0) -> print
                   if)#);
                 initialDOGinArgs: BooleanValue
+                   (* check if initialDOG is an argument of E - but why ? *)
                    (# E: ^Exp; 
                    enter E[]
-                   do L: (if (E[] = innerDOG[])->value then emitDump; 
+                   do L: (if (E[] = initialDOG[])->value then (* do we ever come here? *)
+                             emitDump; 
                              leave L
-                      else
-                        (if (innerDOG[] <> none) and (E.args[] <> none) then
-                            E.args.scanSons
-                            (#
-                            do (if (E[] = innerDOG[])-> value then leave L; true -> emitDump; 
+                          else
+                            (if (initialDOG[] <> none) and (E.args[] <> none) then
+                                E.args.scanSons
+                                (#
+                                do (if (E[] = initialDOG[])-> value then 
+                                       true -> emitDump; 
+                                       leave L; 
                    if)#)if)if)#)
             do (if traceGetVqual then '**   pathToSuper:exp:'->dumpT; current.dopt -> dumpTN if);
                (i + 1 -> i) > 1 -> isR;
@@ -70,31 +74,25 @@ OGsequence: SuperOGsequence
                (if E[] -> initialDOGinArgs then leave L if);
             #);
           (if DOG.super.isImplSuper then
-              DOG.super.ATd[] -> D[];
+              DOG.super.ATd[] -> D[]; (* D is a virtaul pattern/binding *)
               0 -> on;
               DOG.super.pn -> pn; 
-              (if newfeature and D.OG.IS.isEmpty then
-                  (if traceGetVqualShort then
-                      '**** implicitSuper:DOG.super.pn:'->dumpT; pn -> dumpI; 
-                      'D.OG.super.on'->dumpT; D.OG.super.on -> dumpI; 
-                      'D.OG.super.pn'->dumpT; D.OG.super.pn->dumpI; 
-                      '\n**   D = DOG.super.ATd:'->dumpT; D.dopt->dumpTN;
-                  if);
+              (if newfeature and D.OG.IS.isEmpty then (* D has the form V:< A, no mainpart *)
                   D.OG.super.on -> vNameOn; (D.OG.super.last).pn -> vNamePn;
                   true -> isvName
               if); 
            else
-              (if traceGetVqual then
-                 (* if E.isEmpty, we have DOG = (OG(Invocation('???') ...)*)
-                 '**   pathToSuper:E:"' -> puttext; E.dopt -> puthead; 
-                 '" E.on=' -> puttext; E.on -> putint;
-                 ' E.pn=' -> puttext; E.pn -> putint;
-                 ' DOG.super.pn='->puttext; DOG.super.pn -> putint;
-                 ' isR=' -> puttext; isR -> putboolean; newline;
-              if);
               E.ATd[] -> D[];
               E.on -> on; 
               E.pn -> pn; 
+          if);
+          (if traceGetVqual then
+              '**   pathToSuper:E:' -> dumpT; 
+              (if DOG.super.isImplSuper then 'implicSuper'->dumpT else  E.dopt -> puthead if);
+              (' isR',isR) -> dumpTB;
+              ('on',on) -> dumpTI; ('pn',pn) -> dumpTI;
+              ('vNameON',vNameOn)->dumpTI; ('vNamePn',vNamePn)->dumpTI; 
+              '\n**   D = DOG.super.ATd:'->dumpT; D.dopt->dumpTN;
           if);
           L:
           (if true
@@ -135,7 +133,7 @@ OGsequence: SuperOGsequence
         * ENC[D1,D2,...,Dn] = PRE(j) o ENC(i) 0 ENC[D1,D2,...,Dn-1]
         *    where Path(Dn) = (i,j)
         *)
-       (# encOGS: ^OGsequence; OGsuper,superDOG: ^ObjectDescriptor; 
+       (# encOGS: ^OGsequence; OGsuper,predDOG: ^ObjectDescriptor; 
           level,onx,pnx,vNameOn,vNamePn: @integer; 
           isR: @boolean; id: ^Text; org: ^Scope;
           getEncOG: 
@@ -207,13 +205,14 @@ OGsequence: SuperOGsequence
                  else
                     (org.encOG[],false,none) -> OGsequence -> encOGS[];
               if);
-              DOG[] -> encOGS.innerDOG[] (* head.DOG? *)
+              DOG[] -> encOGS.initialDOG[] (* head.DOG? *)
            // isNest then
               (* ENC([D1,D2,...,Dn-1,nest(Dn)]) = [D1,D2,...,Dn-1] *)
               pred[] -> encOGS[];
            // isRemote then (* ENC([D1,D2,...,Dn-1,R1.R2.R3.Q]) *)
-              pred.DOG[] -> superDog[]; (* superDOG = Dn-1, DOG = Q *)
-              (DOG[],superDog[],pred[],level) -> Remote -> encOGS[]
+              (* ENC([D1,D2,...,Dn-1,R.P]) = remote(enc([D1,D2,...,Dn-1]),R) *)
+              pred.DOG[] -> predDOG[]; (* predDOG = Dn-1, DOG = Q *)
+              (DOG[],predDOG[],pred.ENC,level) -> Remote -> encOGS[]
            else
               (* ENC([D1,D2,...,Dn-1,Dn]) = PRE[pn] o ENC[on] o ENC([D1,D2,...,Dn-1])
                * where path(Dn-1.super) = (on,pn)
@@ -250,22 +249,22 @@ OGsequence: SuperOGsequence
 
      Remote:
        (* this(OGs) = [D1,D2,...,Dn,R1.R2.R3.Q]
-        * superDOG = Dn, predOGS = [D1,D2,...,Dn], thisDOG = Q
-        * superDOG = predOGS.DOG, thisDOG = this(OGsequence).DOG; they need not be parameters
+        * predDOG = Dn, predOGS = [D1,D2,...,Dn], thisDOG = Q
+        * predDOG = predOGS.DOG, thisDOG = this(OGsequence).DOG; they need not be parameters
         * Simple case: remote([D1,D2,...,Dn],Ra) where Dn = Ra.P{...}
         * remote([D1,D2,...,Dn],Ra) = nest(app(super[j] o enc[i]([D1,D2,...,Dn]),Sa),Rd)
         *    where path(Ra) = (Rd,0,j), Rd: ref Sa
         *  remote([D1,D2,...,Dn],R.Q) = nest(app(super[j] o remote([D1,D2,...,Dn,R),Ta,Td)))
         *    where path(Qa) = (Qd,0,j), Qd: ref Ta
         *)
-       (# superDOG,thisDOG,OGx: ^ObjectDescriptor; predOGS,Sx: ^OGsequence; level: @integer
-       enter(thisDOG[],superDOG[],predOGS[],level)
+       (# predDOG,thisDOG,OGx: ^ObjectDescriptor; predOGS,Sx: ^OGsequence; level: @integer
+       enter(thisDOG[],predDOG[],predOGS[],level)
        do (if traceGetVqualShort then 
-               '**** REMOTE:superDOG:'->dumpT; superDOG.dopt->putHeadN;
+               '**** REMOTE:predDOG:'->dumpT; predDOG.dopt->putHeadN;
               ('**   REMOTE:predOGS',0,level) -> predOGS.print;
               ('**   REMOTE:superOGS',0,level) -> print;
           if);
-          L: superDOG.super.scanExps  (* Ra.P.scanExps *)
+          L: predDOG.super.scanExps  (* Ra.P.scanExps *)
             (# Ra: ^Exp; Rd: ^Decl; n: @integer
             do current[] -> Ra[]; Ra.getATd -> Rd[]; n + 1 -> n;
                (if traceGetVqualShort then
@@ -287,7 +286,7 @@ OGsequence: SuperOGsequence
                     *)
                    (* DOG = R.Q where Q is not remote and R = R1.R2.Rn, n >=1 *)
                    (if newfeature and (n > 1) then 
-                       '!!!! REMOTE:BUM: n > 1: '->dumpT; superDOG.dopt->putheadN;
+                       '!!!! REMOTE:BUM: n > 1: '->dumpT; predDOG.dopt->putheadN;
                    if);
                    (if traceGetVqualShort then
                        '**   REMOTE:Ra.on,pn:'-> dumpT;  Ra.on->dumpI; Ra.pn->dumpI; newline;
@@ -307,12 +306,12 @@ OGsequence: SuperOGsequence
                    (Ra.getATd,level) -> predOGS.append -> (predOGS[],OGx[]);
                    (if traceGetVqual then
                        ('**   REMOTE:after:append:',0,0)->predOGS.print; '**   OGx:'->dumpt; OGx.dopt->dumptn;
-                       '**     superDOG:'->dumpT; superDOG.dopt -> putheadN; 
-                       '**   superDOG.last:'->dumpT; (superDOG.super.last).label->dumpT;
-                       (superDOG.super.last).dopt->dumpT; ('pn',(superDOG.super.last).pn)->dumpTI; newline
+                       '**     predDOG:'->dumpT; predDOG.dopt -> putheadN; 
+                       '**   predDOG.last:'->dumpT; (predDOG.super.last).label->dumpT;
+                       (predDOG.super.last).dopt->dumpT; ('pn',(predDOG.super.last).pn)->dumpTI; newline
                    if);
-                   (if (superDOG.super.last).pn > 0 then
-                        (for i: (superDOG.super.last).pn - 1 repeat level -> predOGS.PRE -> predOGS[] for);
+                   (if (predDOG.super.last).pn > 0 then
+                        (for i: (predDOG.super.last).pn - 1 repeat level -> predOGS.PRE -> predOGS[] for);
                         (if traceGetVqualShort then ('**   xtendedOGS:',0,0) -> predOGS.print if)
                    if);
                    predOGS[] -> Sx[];                 
@@ -593,8 +592,8 @@ OGsequence: SuperOGsequence
           (if isRemote then 'r:' -> puttext if);
           (if isNest then 'nest(' -> puttext if);
           DOG.OGid -> puttext;
-          (if innerDOG[] <> none then 
-              '!'->put; innerDOG[] -> D[];
+          (if initialDOG[] <> none then 
+              '!'->put; initialDOG[] -> D[];
               L: (if  (D[] = DOG[]) then 
                      '+'->put
                  else
@@ -603,7 +602,7 @@ OGsequence: SuperOGsequence
                         restart L 
                     else '-'->put 
           if)if)if);
-          (if innerDOG[] = DOG[] then '='-> put if);
+          (if initialDOG[] = DOG[] then '='-> put if);
           (if hasBinding then '&' -> put if);
           (if isNest then ')' -> put if);
           (if L = 0 then ']' -> put; newline else ',' -> put if)
