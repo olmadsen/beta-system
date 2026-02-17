@@ -31,6 +31,25 @@ void Bfork(void * interpreter, void * B, int coreNo)
     putstr("coreNo not in 1,2,3\n");
   }
 }
+
+// 2026-02-17, OLM: added the following dummy declarations to make linker happy
+int _close(int file) { return -1; }
+int _lseek(int file, int ptr, int dir) { return 0; }
+int _read(int file, char *ptr, int len) { return 0; }
+int _write(int file, char *ptr, int len) { return len; }
+void _exit(int status) { while (1) {} }
+int _isatty(int file) { return 1; }
+int _fstat(int file, void *st) { return 0; }
+void *_sbrk(int incr) {
+    extern char _end;
+    static char *heap_end;
+    if (!heap_end)
+        heap_end = &_end;
+    char *prev_heap_end = heap_end;
+    heap_end += incr;
+    return prev_heap_end;
+}
+
 void main(void *ftbBlob, unsigned int machType) {
   volatile static int X,V;
   static int8_t CL = 0;

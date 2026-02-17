@@ -676,6 +676,7 @@ Btemplate * doGCsweep(Block *ctx,Btemplate *root){
   }
   if (free < 500) {
 #ifdef __arm__
+    putstr("Garbage collection terminated");
 #else
     printf("\n\nOBS! ****** no free space in heap, free: %i\n",free);
     runTimeError("Garbage collection terminated");
@@ -1053,7 +1054,7 @@ void doBGC(Block *ctx,Btemplate *root){
 #endif
 
 #if defined traceGC_0
-  #ifdef __arm__
+#ifdef __arm__
 #else
   fprintf(ctx->trace,"\n*** after doGC:\n");
   fprintf(ctx->trace,"thisObj       : %x %s\n",ctx->thisObj,nameOf(ctx->thisObj));
@@ -1126,7 +1127,10 @@ void *heapAlloc(Block *ctx,int size) {
     //printf("heapTop after: %i size: %i\n",heapTop,size);
     if ((heapTop + size) > (heapMax - 8)) {
       // (heapTop - 8) since we need space for a free block at the end
+#ifdef __arm__
+#else
       printf("\n\n!!!! Heap overflow: doBGC\n");
+#endif
       lastFreeInHeap =(Btemplate *)&heap[heapTop];
       doBGC(ctx,mainObj);
       //runTimeError("\n\n*** Heap overflow");
@@ -1168,7 +1172,10 @@ void *heapAlloc(Block *ctx,int size) {
   }
   //printf("malloc %x %x %i\n",(int)obj,0x7fffffff,(int)obj);
   if ((int)obj >= 0x7fffffff){
+#ifdef __arm__
+#else
        printf("OBS!\n");
+#endif
   }
   return obj;
 }
@@ -2007,9 +2014,10 @@ void invokeWithSimpleProxy(Block *ctx,int descInx,int isObj,int valueDescNo,int 
 }
 
 void invokeWithArrayProxy(Block *ctx,int descInx,int isObj,int valueDescNo, int isValueObj, int arrayObjSize,int originIsValueObj){
-
+#ifdef __arm__
+#else
 	printf("Not implemented \n");
-
+#endif
 }
 void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
   Btemplate *callee;
@@ -2170,10 +2178,14 @@ void mkIndexed(int descInx,bool isRef,Block *ctx) {
     for (i = 1; i <= length; i++) {
       R = rPop(ctx->thisStack);
       X->vfields[1 +  length - i + arrayStrucSize] = (int)R;
+#ifdef TRACE
       dumpObj(ctx->trace,"string:",R);
+#endif
     };
     rPush(ctx->thisStack,X);
+#ifdef TRACE
     dumpObj(ctx->trace,"mkRindexed:",X);
+#endif
   }else{
     for (i = 1; i <= length; i++) {
       X->vfields[1 +  length - i + arrayStrucSize] = vPop(ctx->thisStack);
@@ -3069,7 +3081,10 @@ bool traceThreads = true;
 		,size,isValueObj,nameOf(X),inx,objSize);
 	#endif
 	if (inx > range){
+#ifdef __arm__
+#else
 	  printf("Index out of range: %i %i \n",(inx / size) + 1,range);
+#endif
 	  runTimeErrorX("index error\n",thisObj,glsc);
 	}
 	inx = arrayStrucSize + (inx - 1) * size + size;
@@ -3356,7 +3371,7 @@ case rshiftup:
 #endif
 	saveContext();
 	mkIndexed(arg1,false,thisBlock); 
-	restoreContext(true,thisBlock);
+	restoreContext(); //(true,thisBlock);
 	break;
       case mkRindexed:
 	arg1 = op2(bc,&glsc);
@@ -4002,7 +4017,10 @@ case rshiftup:
 	    vPush(thisStack,fileEos(vPop(thisStack)));
 	    break;
 	  case 133: // file_close
+#ifdef __arm__
+#else
 	    fileClose(vPop(thisStack));
+#endif
 	    break;
           case 140: // dumpObj
 
@@ -4045,7 +4063,10 @@ case rshiftup:
 	    //printf("floatToString\n");
 	    float1 = fPop(thisStack);
 	    //gcvt(float1, 6, buf);
+#ifdef __arm__
+#else
 	    sprintf(buf, "%f", float1);
+#endif
 	    //printf("%s %i\n",buf,strlen(buf));
 	    saveContext;
 	    X = QallocIndexed(thisBlock,NULL,getTextDescNo(),1,1,strlen(buf),0);
@@ -4059,7 +4080,10 @@ case rshiftup:
 		vPush(thisStack,0);
 	    break;
 	  case prim2:
+#ifdef __arm__
+#else
            printf("prim2 MISSING %i\n",arg1);
+#endif
 	  break;
 	  case 162: // markHeapTop
            // only valid for BETAvm.bet - heapTop adr on stack - we just leave it
@@ -4149,7 +4173,10 @@ case rshiftup:
 	betaWorld = X;
 	break;
 	case pushBetaenvObj:
+#ifdef __arm__
+#else
         printf("pushBetaenvObj MISSING\n");
+#endif
 	break;
       case saveStringOrigin:
 #ifdef TRACE

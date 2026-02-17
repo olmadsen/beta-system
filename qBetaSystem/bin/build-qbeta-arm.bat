@@ -1,8 +1,8 @@
 @ECHO OFF
 
 echo %BETALIB%
-set BL=%BETALIB%/MiniSystem/VM
-set BLA=%BL%/qb-arm
+set BL=%BETALIB%/qBetaSystem/VM
+set BLA=%BL%/qbeta-arm
 echo %BL%
 
 ls %1 %BLA%/rpi.x %BL%/runbeta-arm.c %BLA%/qbeta-clib.c  %BLA%/qbeta-slib.S  %BLA%/init_mmuL.S
