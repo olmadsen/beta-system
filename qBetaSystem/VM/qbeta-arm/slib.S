@@ -1,5 +1,6 @@
         .section ".text.startup"
 
+1:  b 1b
         .global _start
         .balign 0x20
 _start:
@@ -61,6 +62,7 @@ init_core:
         // Initialize stack pointer
         // Each core gets a 1kB stack from the range 0x03fff000 - 0x04000000
         ldr sp, =0x04000000
+        ldr sp, =_estack
         lsl r0, r3, #10
         sub sp, sp, r0
 

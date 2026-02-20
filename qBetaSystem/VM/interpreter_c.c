@@ -17,6 +17,7 @@
 //   #include "qb-arm/rpi-gpio.h"   
 //   #include "qb-arm/armc-uart.c"
 //   #include "qb-arm/led.c"
+//#define armtrace
 #endif
 
 #ifdef __arm__
@@ -115,7 +116,11 @@ void RTE2(char *msg, int errNo){
 #ifdef withGC
 #define heapMax 80000000
 #else
+#ifdef arm
+#define heapMax 100000
+#else
 #define heapMax 100000000
+#endif
 #endif
 
 volatile unsigned char heap[heapMax]; // perhaps initialize to zero?
@@ -1223,12 +1228,18 @@ void putR(Btemplate *obj,int inx, Btemplate *X){
 Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
   int objS = objSize(getDesc(descNo));
   int size = sizeof(Btemplate) + (objS + 1 + vInxSize) * sizeof(int);
+#ifdef arm
+   putstr("allocTemplate:A:\n");
+#endif
  
   //printf("BT:%i objSize:%i vInxSize:%i size:%i xs:%i\n",sizeof(Btemplate),objSz,vInxSize,size,xsize);
 
   hSize = hSize + size;
   //fprintf(trace,"allocTemplate(%i,%i) ",size, hSize);
   Btemplate *obj = (Btemplate*)heapAlloc(ctx,size);
+#ifdef arm
+   putstr("allocTemplate:B:\n");
+#endif
   //fprintf(ctx->trace,"\ntemplate obj: %x: %i %i %i\n",(int)obj,descNo,vInxSize,size);
   obj->desc = getDesc(descNo);
   obj->id = ID; 
@@ -1240,7 +1251,9 @@ Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, 
   obj->lsc = 0;
   int i = 0;
   for (i = 0; i < objS + 1 +vInxSize; i++) obj->vfields[i] = 0; 
-
+#ifdef arm
+   putstr("allocTemplate:C:\n");
+#endif
   return obj;
 }
 
@@ -1681,7 +1694,13 @@ void *interpreter(void *B);
 #endif
 
 void allocMain(Block *thisBlock,int descNo){ 
+#ifdef arm
+   putstr("allocMain:A:\n");
+#endif
   mainObj = allocTemplate(thisBlock,1000,descNo,true,0,0);
+#ifdef arm
+   putstr("allocMain:B:\n");
+#endif
   thisBlock->thisModule = mainObj;
   thisBlock->thisObj = thisBlock->thisModule; 
   thisBlock->thisStack = thisBlock->thisModule;
@@ -1753,20 +1772,18 @@ mutex1 = xSemaphoreCreateBinary();
   isXbeta = isXB;
   newAlloc = true;
   newAllocOff = 1;
-  mainDescNo = getMainDescInx();  
+  mainDescNo = getMainDescInx();
   threadStubDescNo = mainDescNo + 2;
   thisBlock = (Block *)malloc(sizeof(Block));
   //thisBlock = (Block *)heapAlloc(NULL,sizeof(Block));
   // OBS trace not defined here!
   thisBlock->trace = trace;
   thisBlock->bc = descs;
-
 #ifdef DUMP
   int imageS = getImageSize();
   fprintf(trace,"C interpreter: mainDescNo: %i imageS: %i mainDesc: %x\n"
 	  ,mainDescNo,imageS,(int)getDesc(mainDescNo));
 #endif
-
   thisBlock->bc = getByteCode(getDesc(mainDescNo));
   thisBlock->currentDescNo = mainDescNo;
   stringTable = descs + getStringTableIndex();

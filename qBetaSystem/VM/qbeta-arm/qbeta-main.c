@@ -1,9 +1,16 @@
 #include "header.h"
+#include <sys/types.h>
+#include <errno.h>
+#include <reent.h>
+
+extern char _end;     // from linker
+extern char _estack;  // define this in linker script!
+
 extern unsigned char BC[];
 
 #include "../interpreter_c.c"
 
-void putint(int V)
+void putint(ptrdiff_t V)
 { int X;
   char d[8];
   int i; 
@@ -40,13 +47,40 @@ int _write(int file, char *ptr, int len) { return len; }
 void _exit(int status) { while (1) {} }
 int _isatty(int file) { return 1; }
 int _fstat(int file, void *st) { return 0; }
-void *_sbrk(int incr) {
+void *_sbrk_Q(ptrdiff_t incr) {
     extern char _end;
     static char *heap_end;
+    putstr("Invoking _sbrk: ");
+    putint(incr);
+    putstr("\n");
     if (!heap_end)
         heap_end = &_end;
     char *prev_heap_end = heap_end;
     heap_end += incr;
+    putstr("END:_sbrk\n");
+    return prev_heap_end;
+}
+
+void *_sbrk_r(struct _reent *r, ptrdiff_t incr)
+{
+    static char *heap_end;
+    char *prev_heap_end;
+    //putstr("Invoking _sbrk_r: ");
+    //putint(incr);
+    //putstr("\n");
+
+    if (heap_end == 0)
+        heap_end = &_end;
+
+    prev_heap_end = heap_end;
+
+    if (heap_end + incr > &_estack) {
+        r->_errno = ENOMEM;
+        return (void *) -1;
+    }
+
+    heap_end += incr;
+    //putstr("END:_sbrk_r\n");
     return prev_heap_end;
 }
 

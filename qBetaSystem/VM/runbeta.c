@@ -1,5 +1,4 @@
-/* Interpreter: main program for executing filles foo.BC on linux or cygwin
- * platforms.
+/* Interpreter: main program for executing files foo.BC on linux or cygwin platforms.
  * Compiled using qcompiler -C foo
  * For RaspberryPi / ARM , user runbeta-arm.c
  */
@@ -98,7 +97,7 @@ int main(int argc, char *argv[]){
     return -1;
   }
   
-  init_interpreter((ObjDesc)bc,size);
+  init_interpreter((ObjDesc)bc,size,true,0,true);
   run_interpreter(1);
   bool first = true;
   getEvent(first); 
