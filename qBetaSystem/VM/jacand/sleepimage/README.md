@@ -6,8 +6,7 @@ This folder contains a complete boot image to be loaded on a FAT32 formatted (fi
 of an) SD card, intended to be used to boot a Raspberry Pi 3 into a state where all cores are asleep and
 awaiting a debugger.
 
-The set up and instructions how to use it is available on the [Confluence
-page](https://confluence.alexandra.dk/display/NEBS/Raspberry+Pi+3+Model+B).
+The set up and instructions how to use it is available on the [Hardware Setup](../docs/hardware_setup.md) page.
 
 The current bootloader files to put on a Raspberry Pi boot image is available from the official
 [boot files repository](https://github.com/raspberrypi/firmware/tree/master/boot).
