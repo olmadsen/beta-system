@@ -201,7 +201,7 @@ The text here is currently only an itemized draft and will be expanded.
 * The best available documentation fo qBeta is the book https://oopm.org.
 * The qBeta library is in the directory `qBetaSystem/qBeta/BETAworld`.
 * The organization of `BETAworld`is described in https://oopm.org in the Section about [Modules](https://oopm.org/?page_id=3032).
-* See also `qBetaSystem/VM/qbeta-arm/qBeta-RPI-Arm.md`.
+* See also [`qBetaSystem/VM/qbeta-arm/qBeta-RPI-Arm.md`](.qBetaSystem/VM/qbeta-arm/qBeta-RPI-Arm.md.).
 
 # Further notes on The Mjølner Beta System
 In this Section, we mention further issues regarding MBS.
