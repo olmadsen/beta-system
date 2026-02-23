@@ -114,8 +114,12 @@ void main(void *ftbBlob, unsigned int machType) {
   set_descs(BC);  
   run_interpreter(1); // isXB = 1 
   getEvent(true); 
+  putstr("qbeta:main:end\n");
+  while (1) ;
 }
 
 void exit(int no){
+  putstr("qbeta:exit\n");
   while (1) ;
+  putstr("qbeta:exit:X\n");
 }
