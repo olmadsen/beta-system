@@ -340,19 +340,16 @@ generator: codeGenMarker
                        (* OG is a ValueObject returning a Basic value 
                         * like integer
                         *    mkIntB: ... out V: var integer ...
-                        * We shall thus not allocate a value obj, 
-                        * but a plain integer
+                        * We shall thus not allocate a value obj, but a plain integer,
                         * the invocation of mkIntB shall be boxed.
-                        * If OG is valueObj then
-                        * newOff = 0 does not work
+                        * If OG is valueObj then newOff = 0 does not work
                         *)
-                       ctracer(#do 'DI:valueObj:' -> TT; sig.dopt -> TT #);
+                       fctracer(#do 'DI:gen:valueObj:primitivePtn:' -> TT; sig.dopt -> TT #);
                        (true,0,0) -> OG.gen 
-                    else (* when is newOff needed here? *)
-                       ctracer(#do 'DI:add:BP3: ' -> TT; sig.dopt -> TT #);
+                    else (* V: val 105 + 1; W: var foo(e) *)
+                       fctracer(#do 'DI:gen:basicValue:compound-exp: ' -> TT; dopt -> TT #);
                        (if nameListInDcl then
-                           (true,0,(this(DataItem).sig.names.firstDecl).NewOff) 
-                             -> OG.gen;
+                           (true,0,(this(DataItem).sig.names.firstDecl).NewOff) -> OG.gen;
                         else
                            (true,0,this(DataItem).NewOff) -> OG.gen;
                    if)if);
@@ -631,7 +628,7 @@ generator: codeGenMarker
                  #);
                accessObj:
                  (#
-                 do fctracer(#do 'DI:loadAccessor:Obj:'->TT;dopt->TL #);
+                 do ctracer(#do 'DI:loadAccessor:Obj:'->TT;dopt->TL #);
                     (sig.id[],NewOff) -> cd.rpushg
                  #)
                
@@ -696,7 +693,7 @@ generator: codeGenMarker
                  #);
                invokeValueObj:
                  (# dn: @integer; ITx:  ^Items
-                 do ctracer
+                 do fctracer
                     (#do 'DI:newInvoke:invokeValueObj:'->TT; dopt->TL;
                        'E.ATd:'->TT; E.ATd.dopt -> TL;
                        'isAdr:'->TT; isAdr->BB;
@@ -705,12 +702,12 @@ generator: codeGenMarker
                        ITx.primNo -> II
                     #);
                     (if (origin[] -> ITx[]).primNo
-                     // vEq_prim // vLE_prim then
+                     // vEq_prim // vLE_prim then fctracer(#do 'vEq'->TT #);
                         loadPrimitive
-                     else
-                        (if isAdr then
+                     else fctracer(#do 'NOT vEq'->TT #);
+                        (if isAdr then fctracer(#do 'isAdr'->TT #);
                            (* (sig.id[],newOff) -> cd.rpushg*)
-                         else
+                         else fctracer(#do 'BUM'->TT #);
                             (if OG.IS.isEmpty then
                                 (OG.super.ATd.asDecl).OG.IS.newDescNo -> dn
                              else
@@ -802,7 +799,7 @@ generator: codeGenMarker
                right,rightQual: ^ObjectDescriptor;
                (* we think: ptn.OG = rightQual - so elim ptn *)
             enter(valueOff,isNotRemote,dstE[],ptn[],rightQual[],right[])
-            do fctracer
+            do ctracer
                (#do 'DI:newStore:'->TT; dopt->TL;
                   ('newOff:',newOff)->TI; ('valueOff:',valueOff)->TI;
                   'dstE:'->TT; dstE.dopt->TL;
@@ -1109,7 +1106,7 @@ generator: codeGenMarker
                ctracer
                (#do 'handleAssign:after:right:'->TT; dopt->TL; #);
                leftE.ATd.asDecl -> leftDI[];
-               fctracer(#do 'leftE:'->TT; leftE.dopt->TT; 
+               ctracer(#do 'leftE:'->TT; leftE.dopt->TT; 
                            'leftE.ATd:'->TT; leftE.ATd.dopt -> TT; 
                            leftE.ATd.label->TT; leftE.ATd.newOff->II ; nl;
                            'leftDI:'->TT; leftDI.dopt -> TL; leftDI.newOff->II ;
@@ -1148,7 +1145,7 @@ generator: codeGenMarker
                    '**** Assignment:before:checkUnitConv:X:'->puttext; dopt -> putline
                if);
                (left[],right[]) -> checkUnitConv;
-               fctracer
+               ctracer
                (# OGs:  ^OGsequence; qual: ^ObjectDescriptor;
                do 'Assign:end:'->TT; dopt->TL; 
                   'isNotRemote:'->TT; isNotRemote-> BB;
@@ -2744,7 +2741,7 @@ generator: codeGenMarker
                      -> cd.endClass;
                    cd.bcPos -> endBCP;
                    (if innerInx > 0 then
-                       fctracer(#do 'before:cd.vdtTable:'->TT #);
+                       ctracer(#do 'before:cd.vdtTable:'->TT #);
                        (innerInx,0,true,'innerX') -> cd.vdtTable; 
                    if);
                    BindVirtuals;
@@ -2912,6 +2909,23 @@ generator: codeGenMarker
                             formalArg.dopt -> TT;
                          #);            
                       #);
+                    checkForValueArg:
+                       (# E: ^Exp; arg: ^ObjectDescriptor; D: ^Decl
+                       enter(E[],arg[])
+                       do (if (vEq_prim <= E.ATd.OG.primNo) and (E.ATd.OG.primNo <= 57)  then
+                              (*'**** in vEQ:'->dumpT; E.dopt -> dumpt;*)
+                              (if arg.IS.isEmpty then
+                                  arg.super.ATd[] -> D[];
+                                  (if D.isPattern and D.OG.isValueObj and not D.isBasicValue then
+                                     E[] -> warning
+                                     (#
+                                     do 'The argument "' -> msg; D.sig.dopt -> msg;
+                                        '" of the relational operator in "'->msg; E.dopt ->msg;
+                                        '"\n     is a value pattern '->msg;
+                                        '\n     This is is currently not supported by the qbeta compiler' ->msg;
+                                        '\n     The program will thus fail when executed' -> msg
+                                     #)
+                       if)if)if)#);
                     formalArg: ^DataItem; actualArg: ^ObjectSpecification;
                     superOG: ^ObjectDescriptor; mp:  ^Module;
                     valueOff: @integer
@@ -2919,8 +2933,8 @@ generator: codeGenMarker
                  do (* E is the exp with arguments actArgs,this(Pattern) = E.ATd
                      * formalArg is arg no. argInx of this(Pattern)
                      *)
-                    ctracer(#do 'NonVirtArg:'->TT; E.doPT -> TL; E.label->TL;
-                               'ActArg:' -> TT;actualArg.dopt->TQ;
+                    fctracer(#do 'NonVirtArg:'->TT; E.doPT -> TL; E.label->TL;
+                               'ActArg:' -> TT;actualArg.dopt->TQ; actualArg.Label->TQ;actualArg.doPP->TQ;
                                'isValue:' -> TT;  actualArg.isValueObj->BB;
                                'formalArg:('->TT; formalArg.doPT->TL;
                                'B:' -> TT; formalArg.OG.isBasicValue -> BB;
@@ -2933,6 +2947,7 @@ generator: codeGenMarker
                         0 -> cd.pushConst;                        
                         leave handleNonVirtualArg
                     if);
+                    (E[],actualArg[]) -> checkForValueArg;
                     (* The call of gen should perhaps have the receiver as an argument!?
                      * Currenly we handle stuff af gen that depends on the receiver
                      *)
@@ -2953,7 +2968,7 @@ generator: codeGenMarker
                                  actualArg.isCompositeValueObj -> BB
                               #)
                     if);
-                    ctracer(#do 'loadArgs:before:actual.gen:'->TT; actualArg.dopt->TT #);
+                    fctracer(#do 'loadArgs:before:actual.gen:'->TT; actualArg.dopt->TT #);
                     (true,superAdj,staticOff) -> actualArg.gen -> (mp[],valueOff);
                     ctracer
                     (#do 'loadArgs:after:actualArg:gen:'->TT;
@@ -3168,8 +3183,8 @@ generator: codeGenMarker
                 // restart_prim // leave_prim then
                    (* skip *)
                 else 
-                   ctracer(#do 'ptn:loadArgs:E:'->TT; E.dopt->TL #);
-                   ctracer(#do 'args:'->TT; E.args.dopt->TL #);
+                   fctracer(#do 'ptn:loadArgs:E:'->TT; E.dopt->TL #);
+                   fctracer(#do 'args:'->TT; E.args.dopt->TL #);
                    E.args.scanArgs
                    (#
                    do (if (argTop+1 -> argTop) > actArgs.range then 
@@ -4108,7 +4123,7 @@ generator: codeGenMarker
                     (#do 'doInvoke:'->TT; doPT->TL; start->II; end->II; 'useRtnVal:'-> TT; useRtnVal->BB #);
                     (start,end) -> scanInv
                     (#
-                    do ctracer
+                    do fctracer
                        (#do 'doInvoke:X:'->TT; E.doPT->TL; start->II; end->II;
                           ix->II;('pRec:',pRec[])->PT(#do pRec.dopt->TL #);
                           ('rec:',rec[])->PT(#do rec.dopt->TL #);
@@ -4709,15 +4724,16 @@ generator: codeGenMarker
                (rec[],valueOff,next[]) -> ATd.loadAccessor
             #);
          newInvoke::
+            (* this(OI) = E ? *)
             (# stubDescNo,rtnOff: @integer
-            do ctracer(#do 'OI:newInvoke:'->TT; doPT -> TL #);    
+            do fctracer
+                 (#do 'OI:newInvoke:'->TT; doPT->TL; ('rec:',rec[])->PT(#do rec.dopt->TT#) #);    
                (if hasVirtualArgs then
                    (* the code here should be in gPTN:newinvoke,
                     * but we then need to move handleVargs there too
                     *)
                    ctracer
-                   (#do 'OI:newInvoke:NonVirtual:hasVirtualArgs:'->TT; 
-                      dopt->TL #);                   
+                   (#do 'OI:newInvoke:NonVirtual:hasVirtualArgs:'->TT; dopt->TL #);                   
                    (ATd.asDecl,'',QnewDesc->stubDescNo,
                    (ATd.asDecl).OG.IS.newDescNo,0,0)
                      -> ObjStubStack.add;
@@ -4907,12 +4923,12 @@ generator: codeGenMarker
             do (if trace then
                    '**** BinaryExp:gen: ' -> puttext; dopt -> putline;
                if);
-               ctracer(#do 'BinaryExp:gen:'->TT; dopt->TQ#);               
+               fctracer(#do 'BinaryExp:gen:'->TT; dopt->TQ #);               
                (true,0,0) -> leftRec.gen -> (MP[],vOff);
-               ctracer(#do 'BinaryExp:gen:before:loadargs'->TT; dopt->TQ#);
+               fctracer(#do 'BinaryExp:gen:before:loadargs'->TT; dopt->TQ#);
                (M[],superAdj,staticOff) -> (M.ATd.asDecl).loadArgs;
                (M[],M[],true,staticOff,0,false,none) -> M.newInvoke;
-               ctracer(#do 'BinaryExp:gen:before:end'->TT; dopt->TQ#);
+               fctracer(#do 'BinaryExp:gen:end:'->TT; dopt->TQ#);
             #);
           loadOrigin::
             (#
