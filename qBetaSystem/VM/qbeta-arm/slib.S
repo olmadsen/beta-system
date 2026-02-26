@@ -442,7 +442,8 @@ cmpAndSwap:
 	bl putNL
 	pop {r0,r1,r2,r3,lr}
 
-	ldrex r4,[r0]
+	
+        
 
 	/*
 	push {r0,r1,r2,r3,r4,lr}

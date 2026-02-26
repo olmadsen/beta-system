@@ -3057,8 +3057,7 @@ bool traceThreads = true;
 	int R[10]; int di,mode; int B = 1;
 	if (operator != 50) {
 #ifdef __arm__
-        putstr("\n!!!! relational operator %i is not implemented\n",operator);
-#elseif
+#else
 		printf("\n!!!! relational operator %i is not implemented\n",operator);
 #endif
 	}
@@ -3507,7 +3506,7 @@ case rshiftup:
 #elif defined __XTENSA__
 	  gpio_set_level(BLINK_GPIO, arg3);
 #elif defined  __CYGWIN__
-	  printf("digitalWrite(%i,%i) not implemented for this platform\n",arg2,arg3);
+	  //printf("digitalWrite(%i,%i) not implemented for this platform\n",arg2,arg3);
 	  //rPush(thisStack,Y); // just a dummy
 #endif
 	    break;        
