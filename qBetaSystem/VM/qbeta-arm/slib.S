@@ -25,7 +25,6 @@ el1_vector_table:
         b el1_interrupt_vector
         b el1_fast_interrupt_vector
 
-
 el2_start:
         // Read core number - only 0 is allowed here,
         // and other cores should never pass by here
@@ -46,9 +45,6 @@ unexpected_return:
 	ldr r0, =unexpected_return_txt
         bl putstr
         b sleep        // Sleep forever
-        
-
-
 
 init_core:
         // Initialize core.
@@ -83,10 +79,6 @@ init_core:
         
         bx lr
 
-        
-
-
-
 hypervisor_dropout:
         // Drop from HYP to SVC mode
         // This function clobbers: {r0}
@@ -106,10 +98,6 @@ hypervisor_dropout:
         eret
         mov lr, r0
         bx lr
-
-        
-
-
 
 init_memory:
         // Initialize the memory system - set up caches and MMU
@@ -175,7 +163,6 @@ init_memory:
         subs r3, #1
         bne 2b
 
-
         // SMP is implemented in the CPUECTLR register.
 3:      mrrc p15, 1, r0, r1, c15  // Read CPUECTLR.
 	orr r0, r0, #(0x1 << 6)   // Set SMPEN.
@@ -192,10 +179,6 @@ init_memory:
 	isb
 
         bx lr
-        
-
-
-
         
         // *******
         //
@@ -300,10 +283,6 @@ print_core:
         bl putch
         pop {lr}
         bx lr
-
-
-
-
 
         // *******
         //
@@ -419,101 +398,45 @@ putNL:
 	pop {r0,r1,r2,r3,lr}
 	bx lr
 		
+
 .globl cmpAndSwap
-cmpAndSwap:	
+cmpAndSwap:
+	// r0 = adr of mem loc
+	// r1 = old value
+	// r2 = new value
+retry:
+    ldrex r3, [r0]
+    cmp r3, r1
+    bne fail
+    strex r3, r2, [r0]
+    cmp r3, #0
+    bne retry
+    dmb ish
+    mov r0, #1
+    bx lr
+fail:
+    clrex
+    mov r0, #0
+    bx lr
+cmpAndSwapX:	
 	// r0 = adr of mem loc
 	// r1 = old value
 	// r2 = new value
 	
-	push {r0,r1,r2,r3,lr}
-	bl puthex	
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
-	
-	push {r0,r1,r2,r3,lr}
-	mov r0,r1
-	bl puthex
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
-
-	push {r0,r1,r2,r3,lr}	
-	mov r0,r2
-	bl puthex
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
-
-	
-        
-
-	/*
-	push {r0,r1,r2,r3,r4,lr}
-	ldr r0,=#100
-	bl putch
-	bl putNL
-	pop {r0,r1,r2,r3,r4,lr}
-
-	push {r0,r1,r2,r3,r4,lr}
-	mov r0,r1
-	bl puthex
-	bl putNL
-	pop {r0,r1,r2,r3,r4,lr}
-	
-	push {r0,r1,r2,r3,lr}
-	mov r0,r4
-	bl puthex
-	bl putNL
-	pop {r0,r1,r2,r3,lr}*/
-	
-	/*push {r0,r1,r2,r3,lr}
-	ldr r0,=#98
-	bl raw_putc
-	pop {r0,r1,r2,r3,lr}*/
-	
 	cmp r1,r4
 	bne fail
-	/*
-	push {r0,r1,r2,r3,lr}
-	ldr r0,=#97
-	bl putch
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
 
-	push {r0,r1,r2,r3,lr}
-	mov r0,r2
-	bl puthex
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
-
-	push {r0,r1,r2,r3,lr}
-	bl puthex
-	bl putNL
-	pop {r0,r1,r2,r3,lr}*/
 	
 	strex r3,r2,[r0]  // conditionally store r2 in [r0], succes/fail r3
 
-	push {r0,r1,r2,r3,lr}
-	mov r0,r3
-	bl puthex
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
 	
 	cmp r3,#0
-	bne fail
-
-	push {r0,r1,r2,r3,lr}
-	ldr r0,=#98
-	bl putch
-	pop {r0,r1,r2,r3,lr}
+	bne failX
 	
 	ldr r0, =#1
 	dmb
 	bx lr
-fail:
-	push {r0,r1,r2,r3,lr}
-	ldr r0,=#99
-	bl putch
-	bl putNL
-	pop {r0,r1,r2,r3,lr}
+failX:
 	
 	ldr r0, =#0
 	bx lr
@@ -526,6 +449,34 @@ fail:
         // 
         // *******
         
+@ lock_mutex: SMP-sikker, korrekt barrierer
+.global lock_mutexX
+lock_mutexX:
+    mov     r1, #1          @ MUTEX_LOCKED = 1
+1:
+    ldrexb  r2, [r0]        @ Læs nuværende værdien
+    cmp     r2, #0          @ Er låsen fri?
+    bne     2f              @ Hvis ikke, vent
+    strexb  r3, r1, [r0]    @ Prøv at låse
+    cmp     r3, #0          @ Lykkedes det?
+    bne     1b              @ Hvis ikke, prøv igen
+    dmb     ish             @ Garanter synlighed af låsning
+    bx      lr              @ Returner (låst)
+
+2:
+    clrex                   @ Nulstil exclusive monitor
+    wfe                     @ Vent på event
+    b       1b              @ Prøv igen
+
+@ unlock_mutex: Korrekt frigivelse
+.global unlock_mutexX
+unlock_mutexX:
+    dmb     ish             @ Garanter synlighed af data før låsen frigives
+    mov     r1, #0          @ MUTEX_UNLOCKED = 0
+    strb    r1, [r0]        @ Frigiv låsen
+    dsb     ishst           @ Garanter synlighed før SEV
+    sev                     @ Væk alle ventende kerner
+    bx      lr
 #define locked 1
 #define unlocked 0
 
@@ -543,39 +494,27 @@ lock_mutex:
 	dmb                   // Memory barrier before accessing protected resource
 	bx lr
         
-1:      dsb                   // Commit any outstanding memory writes before going to sleep
+1:      clrex
+        dsb ishst                  // Commit any outstanding memory writes before going to sleep
         wfe                   // Sleep while waiting for mutex to become unlocked
         b 0b                  // Retry lock
-
 
         // unlock_mutex
         // Declare for use from C as extern void unlock_mutex(int8_t *mutex)//
         .global unlock_mutex
 unlock_mutex:	
         ldr r1, =unlocked
-        dmb                   // Memory barrier before releasing protected resource
+        dmb ishst                  // Memory barrier before releasing protected resource
         strb r1, [r0]         // Unlock mutex
         dsb                   // Wait for the store to take effect before the notification
 	sev                   // Wake/notify all sleeping cores
         bx lr
-
-
-
-
-
-
-        
-
         
         .data
 
         .p2align 14
 ttb0_base:
 	.space 16 * 1024
-
-        
-
-
 
         // *******
         //

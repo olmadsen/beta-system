@@ -126,7 +126,11 @@ int digitalWrite(int pin, int value) {
   return ((&GPCLR0)[pin/32] & (1<<(pin%32))) ? 1 : 0;
 }
 
-
+void sleep(int C){
+  //putstr("sleep:");
+  while (C > 0) C = C - 1;
+  //putstr("end:sleep");
+}
 
 
 

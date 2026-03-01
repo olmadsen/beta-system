@@ -24,6 +24,7 @@
 typedef void *FILE;
 extern void putint(int V);
 extern void Bfork(void * interpreter, void * B, int coreNo);
+extern void sleep(int C);
 //extern int cmpAndSwap(int adr, int old, int new);
 
 #else
@@ -3481,6 +3482,7 @@ case rshiftup:
 #elif defined  __CYGWIN__
 	  printf("pinMode(%i,%i) not implemented for this platform\n"
 		 ,arg2,arg3);
+	  rPush(thisStack,Y); // just a dummy
 #endif
 	  break;
 	case 2: // arm: digitalWrite
@@ -3720,6 +3722,15 @@ case rshiftup:
 #endif
 #endif
 	  break;
+	case 15:
+     arg1 = vPop(thisStack);
+	 Y = rPop(thisStack); // origin - not used
+#ifdef __arm__
+	 sleep(arg1);
+#elif defined  __CYGWIN__
+    //printf("\nSleep %i\n",arg1);
+#endif	
+    break;
 	}
 	break;
       case doExit:
@@ -3862,11 +3873,9 @@ case rshiftup:
 	    //char *fileName = heapAlloc(thisBlock,12);
 	    char *fileName = (char *)malloc(12);
 #ifdef __arm__
-
 #else
 	    if (sprintf (fileName,"traceF%i.s",threadNo + 1) < 0) printf("sprintf error\n");
 #endif
-
 	    B->traceFile = fileName;
 	    //threadNo = threadNo + 1;
 	    B->threadId = threadNo + 1;
