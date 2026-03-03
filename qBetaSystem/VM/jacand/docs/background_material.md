@@ -177,6 +177,11 @@ is here: <https://github.com/raspberrypi/firmware/tree/master/boot>
 Documentation on the boot folder is here:
 <https://www.raspberrypi.com/documentation/computers/configuration.html#boot-folder-contents>
 
+> [!NOTE]
+> A lot of settings have changed in `config.txt` since this section was authored in early 2023. So a lot of
+> the details in the following subsections are incomplete / inaccurate. Please consult the links for the
+> latest documentation if and when details are important.
+
 
 ### Stage 0 – locate bootcode.bin
 

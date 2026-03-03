@@ -71,7 +71,7 @@ SD Card Preparation
    48c48
    < # reset_config trst_and_srst srst_push_pull
    ---
-   > reset_config trst_and_srst srst_push_pull
+   > reset_config trst_and_srst srst_push_pull srst_gates_jtag
    ``` 
  - Using your favourite text editor make the following corrections to
    `/usr/share/openocd/scripts/board/rpi3.cfg`, defining the target-side of the setup:
@@ -80,13 +80,19 @@ SD Card Preparation
    < # Raspberry Pi boards only expose Test Reset (TRST) pin, no System Reset (SRST)
    < reset_config trst_only
    ---
-   > # Raspberry Pi boards expose Test Reset (TRST) pin and System Reset (SRST) pin
-   > reset_config trst_and_srst srst_push_pull
+   > # Raspberry Pi reset is defined in the interface/raspberrypi-gpio-connector.cfg file
+   > # and should only be defined once!
    ```
- - SMP
+ - And finally, make the following corrections to `/usr/share/openocd/scripts/target/bcm2837.cfg` to enable
+   SMP support using the "hardware threads" feature (`hwthread`):
+   ```diff
+   54a55,56
+   >    $_TARGETNAME configure -rtos hwthread
+   >    $_TARGETNAME configure -coreid $_core
+   ```
 
 > [!NOTE]
-> **FIXME**: SMP configuration for GDB / OpenOCD
+> **FIXME**: Reset configuration for GDB / OpenOCD
 
 
 Wiring
@@ -122,3 +128,28 @@ the picture below -- yours may of course vary)
 ![The connected boards](connected.png)
 
 The power supply is connected to the controller board (only!!) and we are ready to start hacking...
+
+
+Running OpenOCD
+---------------
+
+The OpenOCD debugger backend should be started in SMP mode, which will enable it to pick up the 4 individual
+cores and treat them as a single SMP multi-core processor with 4 threads (thread 1-4 for core 0-3) emulated by
+the `hwthreads` driver:
+
+```
+openocd -c 'set USE_SMP 1' -f interface/raspberrypi-native.cfg -f board/rpi3.cfg 
+```
+
+> [!NOTE]
+> Currently, the only stable way to properly reset the target is by invoking `monitor reset` in
+> `gdb`, and then kill and restart the `openocd` process and reconnecting `gdb` to the new backend
+>
+> **FIXME**: The reason for this complicated reset operation is because of a race between the bootloader
+> executing on the target's VideoCore after the reset and the `openocd` debugger backend (see the [bootloader
+> step-by-step](background_material.md#the-raspberry-pi-bootloader-step-by-step) description. Both of these
+> controls the Arm state and both assume that they have exclusive control. In order to fix this properly, the
+> `openocd` reset operation must be modified to wait for the bootloader to complete the startup (which will
+> usually take a few seconds) before it attempts to take control of the Arm. The `sleepimage` was designed for
+> this exact use case, as it will keep the cores spinning at the start address until `gdb` takes over and
+> loads an image.
