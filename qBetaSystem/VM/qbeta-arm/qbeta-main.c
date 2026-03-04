@@ -10,15 +10,18 @@ extern unsigned char BC[];
 
 #include "../interpreter_c.c"
 
-void putint(ptrdiff_t V)
+void putint(int V ) // (ptrdiff_t V)
 { int X;
   char d[8];
   int i; 
+  bool isNeg = V < 0;
+  if (isNeg) V = -V;
   for (i = 0; i < 8; i++) d[i] = '0';
   for (i = 0; i < 8; i++) {
     d[7 - i] = '0' + V % 10;
     V = V / 10;
   }
+  if (isNeg) putch('-');
   for (i = 0; i < 8; i++) {putch(d[i]);}
 }
 

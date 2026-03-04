@@ -1331,8 +1331,9 @@ void runTimeErrorX(char *msg, Btemplate *thisObj, int glsc){
   putstr(msg);
   putstr(" obj: ");
   putstr(nameOf(thisObj));
+  putstr(" descno:");
   putint(descNo(thisObj->desc));
-  putch(',');
+  putstr(" glsc:");
   putint(glsc);
   putstr("\n");
 #else
@@ -1394,17 +1395,24 @@ void dumpStackX(Btemplate *obj){
 
 void vPush(Btemplate *thisStack,int V){
   int i;
+  i = thisStack->vtop;
   if ((thisStack->vtop = thisStack->vtop + 1) > 32 ) {
 #ifdef __arm__
-    putstr("vPush: ");
-    putstr(nameOf(thisStack));
-    dumpVstack(NULL,thisStack);
+    putstr("vPush:overflow:");
+	putint(V);
+	putstr(" vtop:");
+	putint(thisStack->vtop);
+	putstr(" before:");
+	putint(i);
+	putstr("\n");
+    //putstr(nameOf(thisStack));
+    //dumpVstack(NULL,thisStack);
 #else
     printf("\n\nvstack %s [",nameOf(thisStack)); // <<<<<<< OBS FIX
     for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
     printf("]\n");
-#endif 
-    runTimeErrorX("vstack overflow(vPush)",thisStack,-1);
+#endif
+    runTimeErrorX("vpush:vstack overflow(vPush)",thisStack,-1);
   }
   thisStack->vstack[thisStack->vtop] = V;
 }
@@ -1426,7 +1434,7 @@ void fPush(Btemplate *thisStack, double X){
     for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
     printf("]\n");
 #endif 
-    runTimeErrorX("vstack overflow",thisStack,-1);
+    runTimeErrorX("fpush:vstack overflow",thisStack,-1);
   }
 
   thisStack->vstack[thisStack->vtop - 1] = V.A[0];
@@ -1447,7 +1455,7 @@ void XdumpRstack(char *S,Btemplate *stack){
 void rPush(Btemplate *stack,Btemplate *R){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
   checkInHeap(R);
-  if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeErrorX("stack overflow",stack,-1);
+  if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeErrorX("rpush:rstack overflow",stack,-1)	;
   stack->rstack[stack->rtop] = R;
   //XdumpRstack("rPush",stack);
   //printf(" push: %i\n",(int)R);
@@ -1525,7 +1533,7 @@ void rshift(Btemplate *stack,int inx, bool up){
 }
 void lscPush(Btemplate *stack,int V){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
-  if ((stack->lscTop = stack->lscTop + 1) > 16 ) runTimeErrorX("lscStack overflow",stack,-1);
+  if ((stack->lscTop = stack->lscTop + 1) > 16 ) runTimeErrorX("lscpush:lscStack overflow",stack,-1);
   stack->lscStack[stack->lscTop] = V;
 }
 
@@ -1539,7 +1547,7 @@ void cSaveReturn(Btemplate *obj,int descNo, int lsc){
   //for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
   //fprintf(trace,"\n");
   if ((obj->lscTop = obj->lscTop + 2) > 16) 
-    runTimeErrorX("lsc stack overflow",obj,-1);
+    runTimeErrorX("cSaveReturn:lsc stack overflow",obj,-1);
   obj->lscStack[obj->lscTop-1] = descNo;
   obj->lscStack[obj->lscTop] = lsc;
 }
@@ -2550,22 +2558,23 @@ void doSuspend(Block *ctx,Btemplate *callee, bool preemptive){
   rPush(ctx->thisStack,callee);
 };
 
+/******************************* interpreter ********************/
 #if defined(linux)
 void  *interpreter(void *B){
-  
+
 #elif defined  __CYGWIN__
-  DWORD WINAPI interpreter(LPVOID B){;
+DWORD WINAPI interpreter(LPVOID B){;
 
 #elif defined __arm__
 void  *interpreter(void *B){;
     putstr("interpreter:start\n");
 #else
-    void  *interpreter(void *B){; // musy be fixed for ESF32
-      //printf("In interpreter\n");
+void  *interpreter(void *B){; // musy be fixed for ESF32
+    //printf("In interpreter\n");
 #endif
 
-      Block *thisBlock = (Block *)B;
-      int threadId;
+  Block *thisBlock = (Block *)B;
+  int threadId;
   threadId = thisBlock->threadId;
   thisBlock->ID = 1000;
 
@@ -2582,8 +2591,7 @@ void  *interpreter(void *B){;
   char *msg;
 #endif
 #endif
-
-
+ 
   bool hasThreads = false;
 
 #ifdef linux
@@ -2595,9 +2603,9 @@ void  *interpreter(void *B){;
 #endif
 
 #ifdef withGC
-bool traceThreads = true;
+  bool traceThreads = true;
 #else
- bool traceThreads = false;
+  bool traceThreads = false;
 #endif
 
 #ifdef __arm__
@@ -2676,81 +2684,78 @@ bool traceThreads = true;
 #ifdef EVENT
   mkEvent(start_event,0,thisObj,0,true,thisBlock->currentDescNo,thisBlock->glsc);
 #endif
-  while (running)
-    { //printf("Running\n");
+  while (running) { 
+	//printf("Running\n");
 
-      if (suspendEnabled == 1) {
-	timeToSuspend = timeToSuspend - 1;
-	if (timeToSuspend <= 0) {
-	  if (enablee != 0) {
-	    suspendEnabled = suspendEnabled - 1;
-	    if (suspendEnabled > 0) RTE2("\npSuspend: %i\n",suspendEnabled);
-
-	    saveContext();
-	    doSuspend(thisBlock,enablee,true);
-	    restoreContext();
-	    enablee = 0;
-	  }
-	}
-      }
+    if (suspendEnabled == 1) {
+ 	   timeToSuspend = timeToSuspend - 1;
+	   if (timeToSuspend <= 0) {
+	      if (enablee != 0) {
+	         suspendEnabled = suspendEnabled - 1;
+	         if (suspendEnabled > 0) RTE2("\npSuspend: %i\n",suspendEnabled);
+	         saveContext();
+	         doSuspend(thisBlock,enablee,true);
+	         restoreContext();
+	         enablee = 0;
+	}}}
 #ifdef TRACE
-      fprintf(trace,"%s>%i:\t",nameOf(thisObj),glsc + 1);
-      // we add one to glsc to have same numbering as in foo..s and code.s
-      // Beta arrays starts with 1, C arrays with 0 
+    fprintf(trace,"%s>%i:\t",nameOf(thisObj),glsc + 1);
+    // we add one to glsc to have same numbering as in foo..s and code.s
+    // Beta arrays starts with 1, C arrays with 0 
 #endif
-      opCode = bc[glsc]; glsc = glsc + 1;
-      /*if (gcInProgress) {
+    opCode = bc[glsc]; glsc = glsc + 1;
+    /*if (gcInProgress) {
 	printf("Interpreter:gcInProgress: threadNo: %i %s\n",threadId,nameOf(thisObj));
 	}*/
       
 #ifdef __arm__
 #ifdef armtrace
-      putstr("op: ");
-      putint(opCode);
-      putstr("\n");
+  putstr("op: ");
+  putint(opCode);
+  putstr("\n");
 #endif
 #else
-      if (doTrace)
+  if (doTrace)
 	printf("*** %i %s: Op: %i, glsc: %i\n",threadId,nameOf(thisObj),opCode,glsc);
 #endif
-      if (cnt == 0) {
+  if (cnt == 0) {
 	//blink();
 	// pinMode(4,1);
 	// digitalWrite(4,0);
-      };
-      cnt = cnt + 1;
-      // printf("opCode: %i ",opCode);
-      switch (opCode) {
-      case pushthis:
+  };
+  cnt = cnt + 1;
+  // printf("opCode: %i ",opCode);
+  switch (opCode) {
+     case pushthis:
 #ifdef TRACE
-	fprintf(trace,"pushthis\n");
-	dumpObj(trace,"pushThis",thisObj);
+	   fprintf(trace,"pushthis\n");
+	   dumpObj(trace,"pushThis",thisObj);
 #endif
 #ifdef __arm__
 #ifdef armtrace	
-	putstr("pushthis: ");
-	puthex((int)thisObj);
-	putch((int)10);
+	   putstr("pushthis: ");
+	   puthex((int)thisObj);
+	   putch((int)10);
 #endif
 #endif
-	checkInHeap(thisObj);
-	rPush(thisStack,thisObj);
-	break;
-      case pushValId:
+	   checkInHeap(thisObj);
+	   rPush(thisStack,thisObj);
+	   break;
+    case pushValId:
 #ifdef TRACE
-	fprintf(trace,"pushValId 1 %i\n",thisValObjDescInx);
+	   fprintf(trace,"pushValId 1 %i\n",thisValObjDescInx);
 #endif
-	vPush(thisStack,1);
-	vPush(thisStack,thisValObjDescInx);
-	break;
-      case pushC: 
-	arg1 = op1(bc,&glsc);
-	vPush(thisStack,arg1);
+	   vPush(thisStack,1);
+	   vPush(thisStack,thisValObjDescInx);
+	   break;
+    case pushC: 
+	   arg1 = op1(bc,&glsc);
+	   vPush(thisStack,arg1);
 #ifdef TRACE
-	fprintf(trace,"pushc %i\n", arg1);
+	   fprintf(trace,"pushc %i\n", arg1);
 #endif
 	break;
-      case saveAndSetThis:
+    case saveAndSetThis:
 	X = rPop(thisStack);
 	rPush(thisStack,thisObj);
 	thisObj = X;
@@ -2758,40 +2763,34 @@ bool traceThreads = true;
 	fprintf(trace,"saveAndSetThis %i\n", arg1);
 #endif
 	break;
-      case restoreThis:
+    case restoreThis:
 	thisObj = rPop(thisStack);
 #ifdef TRACE
 	fprintf(trace,"restoreThis %i\n", arg1);
 #endif
 	break;
-      case addOff:
-	arg1 = op2(bc,&glsc);
-	//X = rPop(thisStack);
+    case addOff:
+	   arg1 = op2(bc,&glsc);
+	   //X = rPop(thisStack);
 #ifdef TRACE
-	fprintf(trace, "addOff %i\n",arg1);
-	//fprintf(trace,"thisObj: %i \n",(int)thisObj);
-	//fprintf(trace,"addOff %s (%i) + %i, %i\n",nameOf(thisObj),(int)X,arg1 * 4
-	//, (int)X + arg1 *4);
-#endif
-	// if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
-	//arg2 = X->vfields[arg1 + X->valOff];
-	// rPush(thisStack,(int)X + arg1 * 4 );
-	vPush(thisStack,arg1);
-	break;
-      case push:
-	arg1 = op1(bc,&glsc);
+	   fprintf(trace, "addOff %i\n",arg1); 
+#endif 
+	   vPush(thisStack,arg1);
+	   break;
+    case push:
+	   arg1 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"push ");
+	   fprintf(trace,"push ");
 #endif
-	arg2 = thisObj->vfields[arg1 + thisObj->valOff];
-	vPush(thisStack,arg2);
+	   arg2 = thisObj->vfields[arg1 + thisObj->valOff];
+	   vPush(thisStack,arg2);
 #ifdef TRACE
-	fprintf(trace,"%s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
+	   fprintf(trace,"%s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
 #endif
-	break;
-      case rpush:
-	arg1 = op1(bc,&glsc);
-	X = getR(thisObj,arg1);
+	   break;
+    case rpush:
+	   arg1 = op1(bc,&glsc);
+	   X = getR(thisObj,arg1);
 #ifdef TRACE
 	fprintf(trace,"rpush %s[%i] = %s \n",nameOf(thisObj),arg1,nameOf(X));
 #endif
@@ -3464,10 +3463,10 @@ case rshiftup:
 	case 1: // arm:pinmode
 	  arg3 = vPop(thisStack); // mode
 	  arg2 = vPop(thisStack); // pinno
-	  Y = rPop(thisStack); // origin - not used
+	  //Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
 	  pinMode(arg2,arg3);
-	  rPush(thisStack,Y); // just a dummy
+	  //rPush(thisStack,Y); // just a dummy
 #endif
 #ifdef __ARDIUNO__
 	  printf("pinMode(%i,%i)\n",arg2,arg3);
@@ -3488,13 +3487,20 @@ case rshiftup:
 	case 2: // arm: digitalWrite
 	  arg3 = vPop(thisStack);
 	  arg2 = vPop(thisStack);
-	  Y = rPop(thisStack); // origin - not used
+	  //Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
-	  /* putstr("digitalWrite: ");
+	  putstr("digitalWrite: ");
 	  puthex(arg2);
 	  putstr(",");
 	  puthex(arg3);
-	  putstr("\n");*/
+	  putstr(" vtop:");
+	  putint(thisStack->vtop);
+	  putstr("\n");
+	  for ( i = 1; i <= 8; i++) {
+          putint(thisStack->vstack[i]);
+          putstr(" ");
+	  }
+	  putstr("\n");
 	  //dumpVstack(trace,thisStack);
 	  //arg3 = set_led();
 	  arg3 = digitalWrite(arg2,arg3);
@@ -3723,14 +3729,14 @@ case rshiftup:
 #endif
 	  break;
 	case 15:
-     arg1 = vPop(thisStack);
-	 Y = rPop(thisStack); // origin - not used
+       arg1 = vPop(thisStack);
+	   //Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
-	 sleep(arg1);
+	   sleep(arg1);
 #elif defined  __CYGWIN__
     //printf("\nSleep %i\n",arg1);
 #endif	
-    break;
+      break;
 	}
 	break;
       case doExit:
@@ -4005,6 +4011,9 @@ case rshiftup:
 	    arg1 = vPop(thisStack);
 #ifdef TRACE
 	    fprintf(trace,"sleep %i\n",arg1);
+#endif
+#ifdef __arm__
+        sleep(arg1);
 #endif
 #ifdef linux
 	    usleep(arg1); // apparently in micro seconds
