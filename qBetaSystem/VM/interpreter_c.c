@@ -1756,9 +1756,7 @@ void init_interpreter(ObjDesc descs_a, int imageS,int valProxDescNo)
   memcpy((void *)descs,descs_a,imageS); 
 
   newAllocOff = 1;
-  withValueProxy = true;
   valueProxyDescNo = valProxDescNo;
-  withNewProxy = true;
 } 
 #endif
 
@@ -2058,12 +2056,10 @@ void invokeWithArrayProxy(Block *ctx,int descInx,int isObj,int valueDescNo, int 
 }
 void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
   Btemplate *callee;
-  
 #ifdef TRACE
   fprintf(ctx->trace,"invokeVal %i %i %i\n",descNo,staticOff,isValueObj);
 #endif
-  //printf("invokeVal %i %i %i %i\n",descNo,staticOff,isValueObj,withValueProxy);
-  if (withValueProxy) {
+  //printf("invokeVal %i %i %i %i\n",descNo,staticOff,isValueObj,true);
     callee = allocValueProxyTemplate(ctx,newId(ctx),descNo,false,0,0);
     callee->vfields[1] = 0;
     //printf("invokeValObj:A\n");
@@ -2093,21 +2089,6 @@ void invokeValObj(Block *ctx,int descNo,int staticOff,int isValueObj){
     ctx->thisObj = callee;
     ctx->currentDescNo = descNo;
     //lscPush(ctx->thisObj,staticOff);
-  }else{
-    cSaveReturn(ctx->thisObj,ctx->currentDescNo,ctx->glsc);
-    lscPush(ctx->thisObj,staticOff);
-    ctx->currentDescNo = descNo;
-    ctx->thisObj->valOff = ctx->thisObj->valOff + staticOff;
-    //ctx->currentDescNo = descNo;
-    
-    ctx->bc = (ObjDesc) codeFromDescNo(descNo);
-    ctx->glsc = getAllocE(getDesc(descNo));
-    //ctx->bc = (ObjDesc) myCode(ctx->thisObj);
-    //ctx->glsc = getAllocE(ctx->thisObj->desc);
-    isValObj = true;
-    thisValObjDesc = getDesc(descNo);
-    thisValObjDescInx = descNo;
-  }
 }
 void mkValueProxyObj(Block *ctx,int descNo,int off
 		  ,int isValueObj,int originIsValueObj){
@@ -3043,13 +3024,8 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 	  D[i] = vPop(thisStack);
 	}
 	if (mode == 1) { // originIsValObj
-	  if (withValueProxy){	    
 	    arg2 = arg2 + Y->vfields[3];
 	    Y = (Btemplate *)Y->vfields[2];
-	  }else{ 
-	    arg3 = vPop(thisStack); //descInx of valObj,not used
-	    arg2 = arg2 + vPop(thisStack) - 1;
-	    }
 	}
         for (i = 1; i <= arg1; i++) {
 	  putV(Y,arg2 + arg1 - i,D[i]);
@@ -3060,7 +3036,7 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 	break;
     case vEq:
 	int operator = op1(bc,&glsc);
-	off = op2(bc,&glsc);    // off when withValueProxy
+	off = op2(bc,&glsc); 
 	arg1 = op1(bc,&glsc);   // size, mode?
 #ifdef TRACE
 	fprintf(trace,"vEq %i\n",arg1);
@@ -3076,7 +3052,7 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 	for (i = 1; i <= arg1; i++){
 	  R[arg1 - i + 1] = vPop(thisStack);
 	};
-	if (! withValueProxy) {	    
+	if (! true) {	    
 	    di = vPop(thisStack);
 	    off = vPop(thisStack);
 	}	 
@@ -3150,7 +3126,7 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
       case pushValue:
 	arg2 = op2(bc,&glsc);   // srcOff
 	arg1 = op1(bc,&glsc);   // size
-	if (! withValueProxy) {
+	if (! true) {
 	  arg3 = vPop(thisStack); //descInx of valObj, not used	
 	  V = vPop(thisStack);    // srcOff - not used
 	}	
@@ -3307,12 +3283,8 @@ case rshiftup:
 	fprintf(trace,"toSuper %i thisObj: %s",arg1,nameOf(thisObj));
 #endif
 	currentDescNo = arg1;
-	bc = codeFromDescNo(arg1);
-	if (true) {
-           glsc = getDoE(getDesc(arg1));
-	}else{
-           glsc = getAllocE(getDesc(arg1));
-	};
+	bc = codeFromDescNo(arg1); 
+    glsc = getDoE(getDesc(arg1)); 
 #ifdef TRACE  
 	fprintf(trace," bc: %i glsc: %i\n",(int)bc,glsc);
 #endif
@@ -4361,7 +4333,6 @@ case rshiftup:
 	inx = op1(bc,&glsc); // noOfRefArgs
 	recIsValObj = op1(bc,&glsc); // origin is value object
 #ifdef TRACE
-    //if (withNewProxy) printf("\n**** invokev:withNewProxy\n");
 	fprintf(trace,"invokev %i %i %i",dinx,inx,recIsValObj);
 #endif	
 	refArgsTop = 0;
@@ -4383,28 +4354,20 @@ case rshiftup:
 	    fprintf(trace,"\n**   invokev: isValObj\n");
 	    StacksToOut(trace,thisObj,thisStack);
 #endif
-        if (withNewProxy){
-           // (X.myObjDesc).vdtTable[dinx] -> descInx; 
-		   // dscNo = myObjDesc(X)->vdtTable[dinx];
-		   dscNo = vdtTable(trace,X,dinx);
-		}else{
-    	   dscNo = vdtTableOfDesc(trace,thisValObjDesc,dinx);
-		}
+        // (X.myObjDesc).vdtTable[dinx] -> descInx; 
+	    // dscNo = myObjDesc(X)->vdtTable[dinx];
+		dscNo = vdtTable(trace,X,dinx);
 	    break;
 	  default:
 	    if (recIsValObj == 1){
 #ifdef TRACE
-	    fprintf(trace,"\n**   invokev: origin:isValObj\n");
-#endif
-	       if (withValueProxy) {
-	          arg1 = X->vfields[4]; // descNo of valueObj
-	          dscNo = vdtTableOfDesc(trace,getDesc(arg1),dinx);
-	       }else{
-	          dscNo = vdtTableOfDesc(trace,getDesc(vTopElm(thisStack,0)),dinx);
-	       }
-	  }else
+	       fprintf(trace,"\n**   invokev: origin:isValObj\n");
+#endif 
+	       arg1 = X->vfields[4]; // descNo of valueObj
+	       dscNo = vdtTableOfDesc(trace,getDesc(arg1),dinx);
+	    }else
 	       dscNo  = vdtTable(trace,X,dinx); 
-	}
+	  }
 #ifdef TRACE
 	fprintf(trace,"\n**   Virtual:desc:binding: %i\n",dscNo);
 	StacksToOut(trace,thisObj,thisStack);//,thisBlock);
@@ -4412,7 +4375,7 @@ case rshiftup:
 	saveContext();
 	allocQObj(thisBlock,X,dscNo,false,0,0,recIsValObj);
 	restoreContext();
-	if (withNewProxy && (recIsValObj == 1)){
+	if (recIsValObj == 1){
 		for (i = 1; i <= 4; i++) {
 			callee->vfields[i] = X->vfields[i];
 		}
