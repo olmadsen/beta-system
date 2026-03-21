@@ -1738,8 +1738,7 @@ FILE *trace_t;
 #ifdef __arm__
 #else 
 // Only called from betaVM and runbeta.c
-void init_interpreter(ObjDesc descs_a, int imageS, bool withValProx
-		      ,int valProxDescNo, bool withNewProx)
+void init_interpreter(ObjDesc descs_a, int imageS,int valProxDescNo)
 {
   FILE *trace;
   trace = fopen("code.s","w");
@@ -1757,9 +1756,9 @@ void init_interpreter(ObjDesc descs_a, int imageS, bool withValProx
   memcpy((void *)descs,descs_a,imageS); 
 
   newAllocOff = 1;
-  withValueProxy = withValProx;
+  withValueProxy = true;
   valueProxyDescNo = valProxDescNo;
-  withNewProxy = withNewProx;
+  withNewProxy = true;
 } 
 #endif
 
