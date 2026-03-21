@@ -150,8 +150,8 @@ void *mkEvent(int type,Btemplate *caller,Btemplate *thisObj,Btemplate *org
 Btemplate *getR(Btemplate *obj,int inx);
 void putR(Btemplate *obj,int inx, Btemplate *X);
 
-int getV(Btemplate *obj,int inx){ return obj->vfields[obj->valOff + inx];};
-void putV(Btemplate *obj,int inx, int V){ obj->vfields[obj->valOff + inx] = V;};
+int getV(Btemplate *obj,int inx){ return obj->vfields[inx];};
+void putV(Btemplate *obj,int inx, int V){ obj->vfields[inx] = V;};
 
 // **************** Garbage collector ***********************
 //#define traceGC_0
@@ -1247,7 +1247,6 @@ Btemplate *allocTemplate(Block *ctx,int ID,int descNo,bool isObj, int vInxSize, 
   //fprintf(ctx->trace,"\ntemplate obj: %x: %i %i %i\n",(int)obj,descNo,vInxSize,size);
   obj->desc = getDesc(descNo);
   obj->id = ID; 
-  obj->valOff = 0;
   obj->isObj = isObj;
   obj->vtop = 0; 
   obj->rtop = 0;
@@ -1272,8 +1271,7 @@ Btemplate *allocValueProxyTemplate(Block *ctx,int ID,int descNo,bool isObj, int 
   Btemplate *obj = (Btemplate*)heapAlloc(ctx,size);
   //fprintf(ctx->trace,"\ntemplate obj: %x: %i %i %i\n",(int)obj,descNo,vInxSize,size);
   obj->desc = getDesc(descNo);
-  obj->id = ID; 
-  obj->valOff = 0;
+  obj->id = ID;
   obj->isObj = isObj;
   obj->vtop = 0; 
   obj->rtop = 0;
@@ -2774,7 +2772,7 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 #ifdef TRACE
 	   fprintf(trace,"push ");
 #endif
-	   arg2 = thisObj->vfields[arg1 + thisObj->valOff];
+	   arg2 = thisObj->vfields[arg1];
 	   vPush(thisStack,arg2);
 #ifdef TRACE
 	   fprintf(trace,"%s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
@@ -2817,9 +2815,9 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 #endif
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
-	arg2 =  X->vfields[arg1 + X->valOff];
+	arg2 =  X->vfields[arg1];
 #ifdef TRACE
-	fprintf(trace,"pushg %s[%i + %i] = %i\n",nameOf(X),arg1,X->valOff,arg2);
+	fprintf(trace,"pushg %s[%i] = %i\n",nameOf(X),arg1,arg2);
 #endif 
 	vPush(thisStack,arg2);
 	break;
@@ -2834,7 +2832,7 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 	arg3 = getV(X,off + inx - 1); 
         vPush(thisStack,arg3);
 #ifdef TRACE
-	fprintf(trace,"ovpushg %i descInx:%i originAdjust:%i valOff:%i ",off,dscNo,inx,X->valOff);
+	fprintf(trace,"ovpushg %i descInx:%i originAdjust:%i ",off,dscNo,inx);
 	fprintf(trace,"%s[%i+%i-1] = %i\n",nameOf(X),off,inx,arg3);
 	dumpObj(trace,"ovpushg:",X);	
 #endif
@@ -2938,7 +2936,7 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 #ifdef TRACE
 	fprintf(trace,"store %s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
 #endif
-	thisObj->vfields[arg1 + thisObj->valOff] = arg2; 
+	thisObj->vfields[arg1] = arg2; 
      	break;
       case rstore:
 	arg1 = op1(bc,&glsc);
@@ -2974,9 +2972,9 @@ void  *interpreter(void *B){; // musy be fixed for ESF32
 	if (X == 0) runTimeErrorX("Reference is none",thisObj,glsc);
 	arg2 = vPop(thisStack); // value
 #ifdef TRACE
-	fprintf(trace,"storeg %s[%i+%i] = %i \n",nameOf(X),arg1,X->valOff,arg2);
+	fprintf(trace,"storeg %s[%i] = %i \n",nameOf(X),arg1,arg2);
 #endif
-	X->vfields[arg1 + X->valOff] = arg2;
+	X->vfields[arg1] = arg2;
 	// event
 	break;
       case vstoreg:
@@ -3250,7 +3248,6 @@ case rshiftup:
 	glsc = cRestoreReturn(thisObj);
 	currentDescNo = cRestoreReturn(thisObj);        
 	bc = codeFromDescNo(currentDescNo);
-	thisObj->valOff = thisObj->valOff - arg1;
 	//fprintf(trace,"rtnV2: glsc:%i descNo: %i op: %i\n",glsc,currentDescNo,bc[glsc]);
 	break;
       case mvStack:
@@ -4752,8 +4749,8 @@ case rshiftup:
 	arg2 = vPop(thisStack);
 	arg1 = vPop(thisStack);
 	//printf("fstoreg: %i %x %x\n",off,arg1,arg2);
-	X->vfields[off + X->valOff] = arg1;
-	X->vfields[off + 1 + X->valOff] = arg2;
+	X->vfields[off] = arg1;
+	X->vfields[off + 1] = arg2;
 	break;
       case fvstoreg:
 	off = op1(bc,&glsc);	
@@ -4778,8 +4775,8 @@ case rshiftup:
 #endif
 	  runTimeErrorX("Reference is NONE",thisObj,glsc);
 	}
-	arg1 = X->vfields[off + X->valOff];
-	arg2 = X->vfields[off + 1 + X->valOff];
+	arg1 = X->vfields[off];
+	arg2 = X->vfields[off + 1];
 	//printf("fpushg %i %x %x\n",off,arg1,arg2);
 	vPush(thisStack,arg1);
 	vPush(thisStack,arg2);
