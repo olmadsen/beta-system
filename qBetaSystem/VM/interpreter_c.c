@@ -70,8 +70,11 @@ extern void sleep(int C);
 
 //#define TRACE
 //#define EVENT
-    
-#define useBetaHeap false
+#ifdef __arm__
+#define useBetaHeap true
+#else
+#define useBetaHeap true
+#endif
 //#define withGC 
 
 #include "interpreter_image.c"
@@ -1319,7 +1322,15 @@ void dumpObj(FILE *trace,char *name,Btemplate *X){
   fprintf(trace,"\n");
   for (i = 1; i < 5; i++ ) vdtTable(trace,X,i);
 }
+#endif
 
+#ifdef __arm__
+void dumpObj(FILE *trace,char *name,Btemplate *X){
+  int i;
+  putstr("Object: ");
+  putstr(name); 
+  if (X == NULL){ putstr(": NULL\n"); return;  }
+}
 #endif
 
 int threadStubDescNo; // perhaps a hack?
@@ -1408,8 +1419,9 @@ void vPush(Btemplate *thisStack,int V){
     //putstr(nameOf(thisStack));
     //dumpVstack(NULL,thisStack);
 #else
-    printf("\n\nvstack %s [",nameOf(thisStack)); // <<<<<<< OBS FIX
-    for (i=0; i < 16; i++) printf(" %i",thisStack->vfields[i]);
+    printf("\n\nvstack %i vtop: %i\n",V,thisStack->vtop);
+	printf("%s[",nameOf(thisStack)); // <<<<<<< OBS FIX
+    for (i=1; i <= 16; i++) printf(" %i",thisStack->vstack[i]);
     printf("]\n");
 #endif
     runTimeErrorX("vpush:vstack overflow(vPush)",thisStack,-1);
@@ -3456,6 +3468,7 @@ case rshiftup:
 	   break;
     case invokeExternal:
 	   arg1 = op1(bc,&glsc);
+	   Y = rPop(thisStack); // origin - not used
 #ifdef TRACE
         fprintf(trace,"invokeExternal: %i \n",arg1);
 #endif
@@ -3489,18 +3502,20 @@ case rshiftup:
 	  arg2 = vPop(thisStack);
 	  //Y = rPop(thisStack); // origin - not used
 #ifdef __arm__
-	  putstr("digitalWrite: ");
+	  /*putstr("digitalWrite: ");
 	  puthex(arg2);
 	  putstr(",");
 	  puthex(arg3);
 	  putstr(" vtop:");
 	  putint(thisStack->vtop);
+	  putstr(" rtop:");
+	  putint(thisStack->rtop);
 	  putstr("\n");
 	  for ( i = 1; i <= 8; i++) {
           putint(thisStack->vstack[i]);
           putstr(" ");
 	  }
-	  putstr("\n");
+	  putstr("\n");*/
 	  //dumpVstack(trace,thisStack);
 	  //arg3 = set_led();
 	  arg3 = digitalWrite(arg2,arg3);
@@ -3516,8 +3531,12 @@ case rshiftup:
 #elif defined  __CYGWIN__
 	  //printf("digitalWrite(%i,%i) not implemented for this platform\n",arg2,arg3);
 	  //rPush(thisStack,Y); // just a dummy
+	  printf("\ndigitalWrite: %i, %i, %i \n",arg2,arg3,thisStack->vtop);
+	  printf("%s[",nameOf(thisStack)); // <<<<<<< OBS FIX
+      for (i=1; i <= 16; i++) printf(" %i",thisStack->vstack[i]);
+      printf("]\n");
 #endif
-	    break;        
+      break;        
 	case 3:
 	  arg2 = vPop(thisStack);
 	  Y = rPop(thisStack); // origin - not used
@@ -3735,11 +3754,12 @@ case rshiftup:
 	   sleep(arg1);
 #elif defined  __CYGWIN__
     //printf("\nSleep %i\n",arg1);
+	printf("sleep: %i",thisStack->vtop);
 #endif	
       break;
 	}
 	break;
-      case doExit:
+    case doExit:
 #ifdef TRACE
 	fprintf(trace,"doExit\n");
 #endif
@@ -3820,6 +3840,7 @@ case rshiftup:
 	  case 13: // fork
 #ifdef TRACE
 	    fprintf(trace,"fork threadNo=%i ",threadNo);
+	    printf("fork threadNo=%i ",threadNo);
 #endif
 #ifdef __arm__
 	    putstr("forkA\n");
@@ -4128,8 +4149,17 @@ case rshiftup:
 #endif
 	  break;
 	  case 162: // markHeapTop
-           // only valid for BETAvm.bet - heapTop adr on stack - we just leave it
-	  break;
+	     arg1 = vPop(thisStack);
+#ifdef TRACE
+	     printf("\n**** markHeap_prim %i sizeOfDesc: %i heapTop: %i\n",arg1,sizeOfDesc(thisObj),heapTop);
+#endif
+		 if (useBetaHeap && (arg1 > 0)) {
+			//printf(".");
+			heapTop = arg1;
+		 }
+		 //vPush(thisStack,heapTop);
+		 vPush(thisStack,heapTop - sizeOfDesc(thisObj));
+	     break;
 	  default:
 	    RTE2("\n\n*** prim: missing case: ",arg1);
 	    runTimeError("prim: missing case");
@@ -4151,69 +4181,69 @@ case rshiftup:
 	//dumpVstack(trace,thisStack);
 #endif
 	if (arg2 == 0) glsc = arg1 - 1;
-	break;
-      case jmpGT:
-	arg1 = vPop(thisStack);
-	arg2 = vPop(thisStack);
-	arg3 = op2(bc,&glsc);
+	   break;
+    case jmpGT:
+	   arg1 = vPop(thisStack);
+	   arg2 = vPop(thisStack);
+	   arg3 = op2(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"jmpGT %i > %i -> %i \n",arg2,arg1,arg3 - 1);
+	   fprintf(trace,"jmpGT %i > %i -> %i \n",arg2,arg1,arg3 - 1);
 #endif
-	if (arg2 > arg1) glsc = arg3 - 1;
-	break;
-      case pushNone:
+	   if (arg2 > arg1) glsc = arg3 - 1;
+	   break;
+    case pushNone:
 #ifdef TRACE
-	fprintf(trace,"pushNone\n");
+	   fprintf(trace,"pushNone\n");
 #endif
-	rPush(thisStack,0);
-	break;
-      case allocEventQ:
-	arg1 = op1(bc,&glsc);
+	   rPush(thisStack,0);
+	   break;
+    case allocEventQ:
+	   arg1 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"allocEventQ %i\n",arg1);
+	   fprintf(trace,"allocEventQ %i\n",arg1);
 #endif
 #ifdef EVENT
-	mkAllocEvent(alloc_event,rTopElm(thisObj,1),thisObj,myCorigin(thisObj),false,currentDescNo,glsc,false);
+	  mkAllocEvent(alloc_event,rTopElm(thisObj,1),thisObj,myCorigin(thisObj),false,currentDescNo,glsc,false);
 #endif
-	break;
-      case rtnEvent:
-	arg1 = op1(bc,&glsc);
-	X = rPop(thisObj);
+	   break;
+    case rtnEvent:
+	   arg1 = op1(bc,&glsc);
+	   X = rPop(thisObj);
 #ifdef TRACE
-	fprintf(trace,"rtnEvent %i %s\n",arg1,nameOf(X));
+	   fprintf(trace,"rtnEvent %i %s\n",arg1,nameOf(X));
 #endif
 #ifdef EVENT
-	mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
+	   mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 #endif
-	break; 
-      case rtnEventQ:
-	//printf("rtnEventQ-A\n");
+	   break; 
+    case rtnEventQ:
+	    //printf("rtnEventQ-A\n");
         arg1 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"rtnEventQ %i %s\n",arg1,nameOf(thisObj));
+	   fprintf(trace,"rtnEventQ %i %s\n",arg1,nameOf(thisObj));
 #endif
 #ifdef EVENT
-	mkEvent(rtn_event,rTopElm(thisObj,0),thisObj,myCorigin(thisObj),false,currentDescNo,glsc);
+	   mkEvent(rtn_event,rTopElm(thisObj,0),thisObj,myCorigin(thisObj),false,currentDescNo,glsc);
 #endif        
-	//printf("rtnEventQ-B\n");
-        break;
-      case doEventQ:
+	   //printf("rtnEventQ-B\n");
+      break;
+    case doEventQ:
 #ifdef TRACE
-	fprintf(trace,"doEventQ %s\n",nameOf(thisObj));
+	    fprintf(trace,"doEventQ %s\n",nameOf(thisObj));
 #endif
 #ifdef EVENT
-	mkEvent(do_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
+	   mkEvent(do_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 #endif        
-        break;
-      case saveBETAworld:
-	arg1 = op2(bc,&glsc);
+       break;
+    case saveBETAworld:
+	   arg1 = op2(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"saveBETAworld %i\n",arg1); 
+	   fprintf(trace,"saveBETAworld %i\n",arg1); 
 #endif
-	X = rPop(thisStack); // should be assigned to eventprocessor.fields[1][]
-	thisBlock->world = X;
-	betaWorld = X;
-	break;
+	   X = rPop(thisStack); // should be assigned to eventprocessor.fields[1][]
+	   thisBlock->world = X;
+	   betaWorld = X;
+	   break;
 	case pushBetaenvObj:
 #ifdef __arm__
 #else

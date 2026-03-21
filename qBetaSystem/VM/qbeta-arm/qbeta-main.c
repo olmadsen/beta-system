@@ -8,11 +8,11 @@ extern char _estack;  // define this in linker script!
 
 extern unsigned char BC[];
 
-#include "../interpreter_c.c"
+#include "../interpreter_c.c" 
 
 void putint(int V ) // (ptrdiff_t V)
-{ int X;
-  char d[8];
+{ int X; 
+  char d[8]; 
   int i; 
   bool isNeg = V < 0;
   if (isNeg) V = -V;

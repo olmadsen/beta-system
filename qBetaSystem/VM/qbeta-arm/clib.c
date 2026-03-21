@@ -70,7 +70,32 @@ static void raw_putc(char c) {
     ;
   MU_IO = c;
 }
+static inline void dmb(void)
+{
+    asm volatile ("dmb ish" ::: "memory");
+}
 
+static void raw_putc_chatgpt(char c) {
+    while (1) {
+        dmb();   // SMP memory ordering
+        if (MU_LSR & 0x20)
+            break;
+    }
+    MU_IO = c;
+    dmb();       // Make write visible to hardware immediately
+}
+static void raw_putc_lechat(char c) {
+  uint32_t lsr;
+  int timeout = 1000000; // Arbitrary large number
+  while (--timeout && !(lsr = MU_LSR) & 0x20)
+    ;
+  if (timeout == 0) {
+    // Print debug info (if possible) or assert
+    //puthex(lsr); // If you can, print LSR value - NO, calls raw_putc
+    while (1);   // Hang with debug info
+  }
+  MU_IO = c;
+}
 static void _putch(char c) {
   if (c == '\n')
     raw_putc ('\r');
@@ -81,6 +106,12 @@ void putch(char c) {
   put_lock();
   _putch(c);
   put_unlock();
+  /* new:
+  dmb();
+  put_lock();
+  _putch(c);
+  dmb();
+  put_unlock();*/
 }
 
 static void _putstr(const char *s) {
@@ -89,8 +120,10 @@ static void _putstr(const char *s) {
 }
 
 void putstr(const char *s) {
+  //dmb(); // new
   put_lock();
   _putstr(s);
+  //dmb(); // new
   put_unlock();
 }
 
@@ -127,7 +160,7 @@ int digitalWrite(int pin, int value) {
 }
 
 void sleep(int C){
-  //putstr("sleep:");
+  putstr("sleep:\n");
   while (C > 0) C = C - 1;
   //putstr("end:sleep");
 }
