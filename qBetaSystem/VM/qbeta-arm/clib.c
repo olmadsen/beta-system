@@ -13,6 +13,8 @@
 
 #define AUX_ENB (*(volatile unsigned *)(MU_BASE + 0x04))
 #define MU_IO   (*(volatile unsigned *)(MU_BASE + 0x40))
+#define MU_IER  (*(volatile unsigned *)(MU_BASE + 0x44)) // AI-robot
+#define MU_IIR  (*(volatile unsigned *)(MU_BASE + 0x48)) // AI-robot
 #define MU_LCR  (*(volatile unsigned *)(MU_BASE + 0x4c))
 #define MU_LSR  (*(volatile unsigned *)(MU_BASE + 0x54))
 #define MU_CNTL (*(volatile unsigned *)(MU_BASE + 0x60))
@@ -23,7 +25,6 @@
 #define GPSET0  (*(volatile unsigned *)(GP_BASE + 0x1C))
 #define GPCLR0  (*(volatile unsigned *)(GP_BASE + 0x28))
 #define GPLEV0  (*(volatile unsigned *)(GP_BASE + 0x34))
-#define GPFSEL0 (*(volatile unsigned *)(GP_BASE + 0x00))
 #define GPPUD   (*(volatile unsigned *)(GP_BASE + 0x94))
 #define GPPUDCLK0   (*(volatile unsigned *)(GP_BASE + 0x98))
 
@@ -32,9 +33,14 @@
 void init_uart(void) {
   int i;
 
-  AUX_ENB |= 1;		/* Enable mini-uart */
+  AUX_ENB |= 1;	  /* Enable mini-uart */ 
+  MU_CNTL = 0;   // AI-robot MUST disable first
+  MU_IER  = 0;   // AI-robot disable interrupts
   MU_LCR = 3;		/* 8 bit.  */
   MU_BAUD = 270;	/* 115200 baud.  */
+  MU_IIR  = 0xC6;  // AI-robot clear FIFOs BEFORE enabling
+
+  // GPIO config
   GPFSEL1 &= ~((7 << 12) | (7 << 15));	/* GPIO14 & 15: alt5  */
   GPFSEL1 |= (2 << 12) | (2 << 15);
 
@@ -44,12 +50,15 @@ void init_uart(void) {
   for (i = 0; i < 150; i++)
     asm volatile ("nop");
 
-  GPPUDCLK0 = (2 << 14) | (2 << 15);
+  GPPUDCLK0 = (1 << 14) | (1 << 15); //AI-robot used to be (2 << 14) | (2 << 15); AI-robot
 
   for (i = 0; i < 150; i++)
     asm volatile ("nop");
 
   GPPUDCLK0 = 0;
+
+  for (i = 0; i < 150; i++)   // AI-robot
+    asm volatile ("nop");
 
   MU_CNTL = 3;		/* Enable Tx and Rx.  */
 }
@@ -75,27 +84,6 @@ static inline void dmb(void)
     asm volatile ("dmb ish" ::: "memory");
 }
 
-static void raw_putc_chatgpt(char c) {
-    while (1) {
-        dmb();   // SMP memory ordering
-        if (MU_LSR & 0x20)
-            break;
-    }
-    MU_IO = c;
-    dmb();       // Make write visible to hardware immediately
-}
-static void raw_putc_lechat(char c) {
-  uint32_t lsr;
-  int timeout = 1000000; // Arbitrary large number
-  while (--timeout && !(lsr = MU_LSR) & 0x20)
-    ;
-  if (timeout == 0) {
-    // Print debug info (if possible) or assert
-    //puthex(lsr); // If you can, print LSR value - NO, calls raw_putc
-    while (1);   // Hang with debug info
-  }
-  MU_IO = c;
-}
 static void _putch(char c) {
   if (c == '\n')
     raw_putc ('\r');
