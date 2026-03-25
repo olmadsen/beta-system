@@ -28,9 +28,9 @@ void putint(int V ) // (ptrdiff_t V)
 extern int cmpAndSwap(int adr, int old, int new);
 
 void Bfork(void * interpreter, void * B, int coreNo)
-{ putstr("Bfork: ");
+{ /*putstr("Bfork: ");
   putint(coreNo);
-  putch('\n');
+  putch('\n');*/
   if ((0 < coreNo) && (coreNo < 4)){
       if (start_core(interpreter, B, coreNo)) {
          putstr("Failed startcore ");
@@ -117,7 +117,7 @@ void main(void *ftbBlob, unsigned int machType) {
   set_descs(BC);  
   run_interpreter(1); // isXB = 1 
   getEvent(true); 
-  putstr("qbeta:main:end\n");
+  //putstr("qbeta:main:end\n");
   while (1) ;
 }
 

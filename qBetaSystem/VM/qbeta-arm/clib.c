@@ -148,7 +148,7 @@ int digitalWrite(int pin, int value) {
 }
 
 void sleep(int C){
-  putstr("sleep:\n");
+  //putstr("sleep:\n");
   while (C > 0) C = C - 1;
   //putstr("end:sleep");
 }

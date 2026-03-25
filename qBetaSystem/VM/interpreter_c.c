@@ -3914,22 +3914,9 @@ case rshiftup:
 	  case 14: // cmpAndSwap 
 	    arg1 = vPop(thisStack); // offset 
 	    arg2 = vPop(thisStack); // new value
-	    //printf("off: %i new: %i\n",arg1,arg2);
 	    X = rPop(thisStack);
-	    //printf("Obj: %s\n",nameOf(X));
 	    arg3 = X->vfields[arg1];
-	    //printf("cmpAndSwap %i %i %x\n",arg1,arg2,(int)X);
-	    // V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
-	    // V = cmpxchlg(&X->vfields[arg1],0,arg2);
-	    //printf("[");
-	    // if &X->vfields[arg1] = 0 then 
-            //    &X->vfields[arg1] := arg2 
-            //    return 1
-            // else
-            //    return 0
-            // for some reason, we have reversed the return value? 
-            // we return 1 if failure and 0 if succes?
-            // see if below!?
+	    //printf("Obj: %s off: %i old: %i new: %i\n",nameOf(X),arg1,arg3,arg2);
 #if defined  __CYGWIN__ || linux
 	    /* bool __sync_bool_compare_and_swap 
 	     *          (type *ptr, type oldval type newval, ...)
@@ -3947,8 +3934,8 @@ case rshiftup:
 #elif __arm__
 	    extern int cmpAndSwap(int adr, int old, int new); 
 	    V = cmpAndSwap((int)&X->vfields[arg1],0,arg2);
-            V = 0x8899;
-	    V = __sync_val_compare_and_swap(&X->vfields[arg1],0,arg2);
+        //V = 0x8899;
+	    //V = __sync_val_compare_and_swap(&X->vfields[arg1],0,arg2);
 	    if (V) {V = 0;} else {V = 1;};
 #elif __XTENSA__
 	    /* From: 
