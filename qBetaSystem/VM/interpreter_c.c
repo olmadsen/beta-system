@@ -4017,6 +4017,13 @@ case rshiftup:
 #endif
 #endif
 	    break;
+	  case 24:
+#ifdef __arm__
+#else
+	    printf("\nUART_isReady\n");
+#endif
+	    vPush(thisStack,0);
+	    break;
 	  case 118: // asString
 	    saveContext();
 	    ConvertIndexedAsString(thisBlock);

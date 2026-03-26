@@ -79,6 +79,14 @@ static void raw_putc(char c) {
     ;
   MU_IO = c;
 }
+
+static int UART_isReady(){
+  return (MU_LSR & 0x20);
+}
+
+static void raw_putcX(char c) {
+  MU_IO = c;
+}
 static inline void dmb(void)
 {
     asm volatile ("dmb ish" ::: "memory");
