@@ -71,7 +71,7 @@ extern void sleep(int C);
 //#define TRACE
 //#define EVENT
 #ifdef __arm__
-#define useBetaHeap true
+#define useBetaHeap false
 #else
 #define useBetaHeap true
 #endif
@@ -1091,12 +1091,15 @@ void doBGC(Block *ctx,Btemplate *root){
   //printf("end:GC>\n");
 }
 
+#ifdef __arm__
+static uint8_t memLock = 0;
+#endif
 int ZZ = 0;
 
 #define withTimeOut
 
 void *heapAlloc(Block *ctx,int size) {
-  void *obj;
+   void *obj;
 #ifdef linux
   int ret = pthread_mutex_lock( &mutex1 );
   if (ret > 0) RTE2("\n\n*** mutex_lock error: ",ret);
@@ -1117,7 +1120,9 @@ void *heapAlloc(Block *ctx,int size) {
       break; 
     }
   }
-
+#elif __arm__
+   //putstr("\ndoLock\n");
+   lock_mutex(&memLock);
 #elif defined __XTENSA__
  L:
   if( xSemaphoreTake( mutex1, ( TickType_t ) 10 ) == pdTRUE ){
@@ -1137,6 +1142,7 @@ void *heapAlloc(Block *ctx,int size) {
     if ((heapTop + size) > (heapMax - 8)) {
       // (heapTop - 8) since we need space for a free block at the end
 #ifdef __arm__
+      putstr("\n\n!!!! Heap overflow: doBGC\n");
 #else
       printf("\n\n!!!! Heap overflow: doBGC\n");
 #endif
@@ -1171,6 +1177,8 @@ void *heapAlloc(Block *ctx,int size) {
 #elif defined  __CYGWIN__
   if (!ReleaseSemaphore(allocMutex,1,NULL))
     runTimeError("ReleaseSemaphoreError: allocMutex");
+#elif __arm__
+   unlock_mutex(&memLock);
 #elif __XTENSA__
   xSemaphoreGive( mutex1 );
   //printf("realesed mutex1\n");
