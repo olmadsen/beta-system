@@ -1,26 +1,65 @@
 ArmIO: obj
-   printer.putItem("ArmIO\n")
-   printer.putItem("Hello world\n")
-   --printer.emit
-   "----\n".print
-   emitter: obj
+   Process: 
+      status: var integer
+      status := P_status.ACTIVE
+      SQS.insert(this(Process))
+      this(Process).suspend
+      inner(Process)
+      status := P_status.TERMINATED
+   Monitor: 
+      in id: var StringLib.String
+      entry:
+         mutex.get
+         inner(entry)
+         mutex.free
+      mutex: obj LockLib.Lock(id)
+   P_status: obj 
+      %globals
+      %Public	 
+      ACTIVE: val 1
+      WAITING: val 2
+      TERMINATED: val 3
+   SQS: obj Monitor("SQS")
+      Q: obj LIB.Collections.QueueLib.Queue
+      insert: entry
+         in P: ref Process
+         if (Q.has(P).not) :then
+            Q.insert(P)
+      removeNext: entry
+         out P: ref Process
+         P := Q.removeNext
+      isEmpty: entry
+         out B: var Boolean
+         B := Q.isEmpty
+   scheduler:
+      active: ref Process
+      "Scheduler\n".print
+      Loop: do
+         active := SQS.removeNext
+         if (active =/= none) :then
+            active.attach(50) -- just attach(50) gives segmentation fault
+            if (active.status = P_status.ACTIVE) :then
+               SQS.insert(active)
+            if (!SQS.isEmpty) :then
+               restart(Loop) -- restart loop gives compiler crash
+   emitter: obj Process
       msg: var String
       emitter.suspend
-      msg := printer.getItem
-      if (msg = "") :then
-         "emitter:none\n".print
-      :else
-         msg.scan
-            L: do
-               if (UART.isReady) :then
-                   UART.putCh(current)
-               :else
-                  put('?')
-                  this(emitter).suspend
-                  restart(L)
-         restart(emitter)
-   for (1):to(42):repeat
-      emitter.call
+      emitString: do
+         msg := printer.getItem
+         if (msg = "") :then
+            --"emitter:none\n".print
+            this(emitter).suspend
+         :else
+            msg.scan
+               emitChar: do
+                  if (UART.isReady) :then
+                      UART.putCh(current)
+                  :else
+                     put('?')
+                     this(emitter).suspend
+                     restart(emitChar)
+         restart(emitString)
    UART: obj
       isReady:
          out B: var Boolean
@@ -38,13 +77,7 @@ ArmIO: obj
    UART_isReady:
       %basic 24
       out B: var Boolean
-   Monitor:
-      entry:
-         mutex.get
-         inner(entry)
-         mutex.free
-      mutex: obj LockLib.Lock("Mutex")
-   printer: obj Monitor
+   printer: obj Monitor("printer")
       putItem: entry
          in msg: var String
          msgQ.insert(msg)
@@ -52,16 +85,12 @@ ArmIO: obj
          out msg: var String
          if (! msgQ.isEmpty):then
             msg := msgQ.extract
-      emit:
-         msg: var String
-         msgQ.scan 
-            current.print
-         msg := msgQ.extract
-         msg.print
-         msg := msgQ.extract
-         msg.print
-         msg := msgQ.extract
-         if (msg == none) :then
-            "empty\n".print
       msgQ: obj Collections.OrderedList.OrderedList(#String)
+   P1: obj Process
+      printer.putItem("ArmIO\n")
+      printer.putItem("Hello world\n")
+   P2: obj Process
+      printer.putItem("Merry Christmas\n")
+   scheduler
+        
      

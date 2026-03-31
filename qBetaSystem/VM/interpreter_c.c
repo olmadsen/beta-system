@@ -4028,7 +4028,7 @@ case rshiftup:
 	  case 24:
 #ifdef __arm__
 #else
-	    printf("\nUART_isReady\n");
+	    //printf("\nUART_isReady\n");
 #endif
 	    vPush(thisStack,0);
 	    break;
@@ -4036,7 +4036,7 @@ case rshiftup:
 	    saveContext();
 	    ConvertIndexedAsString(thisBlock);
 	    restoreContext();
-            break;
+        break;
 	  case 130: // file_open
 #ifdef TRACE
 	    printf("file_open:\n");
