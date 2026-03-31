@@ -25,6 +25,7 @@ typedef void *FILE;
 extern void putint(int V);
 extern void Bfork(void * interpreter, void * B, int coreNo);
 extern void sleep(int C);
+extern int UART_isReady();
 //extern int cmpAndSwap(int adr, int old, int new);
 
 #else
@@ -4027,10 +4028,11 @@ case rshiftup:
 	    break;
 	  case 24:
 #ifdef __arm__
+        arg1 = UART_isReady();
 #else
 	    //printf("\nUART_isReady\n");
 #endif
-	    vPush(thisStack,0);
+	    vPush(thisStack,arg1);
 	    break;
 	  case 118: // asString
 	    saveContext();

@@ -1,0 +1,75 @@
+SimpleIOLib: obj 
+   %visible StringLib
+   SimpleIOsystem:
+        Process: 
+            status: var integer
+            status := P_status.ACTIVE
+            SQS.insert(this(Process))
+            this(Process).suspend
+            inner(Process)
+            status := P_status.TERMINATED
+        P_status: obj 
+            %globals
+            %Public	 
+            ACTIVE: val 1
+            WAITING: val 2
+            TERMINATED: val 3
+        SQS: obj LockLib.LockMonitor("SQS")
+            Q: obj LIB.Collections.QueueLib.Queue
+            insert: entry
+                in P: ref Process
+                if (Q.has(P).not) :then
+                    Q.insert(P)
+            removeNext: entry
+                out P: ref Process
+                P := Q.removeNext
+            isEmpty: entry
+                out B: var Boolean
+                B := Q.isEmpty
+        scheduler:
+            active: ref Process
+            "Scheduler\n".print
+            Loop: do
+                active := SQS.removeNext
+                if (active =/= none) :then
+                    active.attach(50) -- just attach(50) gives segmentation fault
+                    if (active.status = P_status.ACTIVE) :then
+                       SQS.insert(active)
+                if (!SQS.isEmpty) :then
+                    restart(Loop) -- restart loop gives compiler crash
+        printer: obj LockLib.LockMonitor("printer")
+            putItem: entry
+                in msg: var String
+                msgQ.insert(msg)
+            getItem:
+                out msg: var String
+                if (! msgQ.isEmpty):then
+                    msg := msgQ.extract
+            msgQ: obj Collections.OrderedList.OrderedList(#String)
+        Emitter: Process
+            isReady:< 
+                out B: var Boolean
+                inner(isReady)
+            emit:<
+                in ch: var Char
+                inner(emit)
+            this(emitter).suspend -- emitter.suspend does not work!
+            emitString: do
+                msg: var String
+                msg := printer.getItem
+                if (msg = "") :then
+                    --"emitter:none\n".print
+                    this(emitter).suspend
+                :else
+                    msg.scan
+                       emitChar: do
+                          if (isReady) :then
+                              emit(current)
+                          :else
+                              put('?')
+                              this(emitter).suspend
+                              restart(emitChar)
+                restart(emitString)
+        "SimpleIOLib\n".print
+        inner(SimpleIOSystem)
+        scheduler

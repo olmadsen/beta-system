@@ -80,7 +80,7 @@ static void raw_putc(char c) {
   MU_IO = c;
 }
 
-static int UART_isReady(){
+int UART_isReady(){
   return (MU_LSR & 0x20);
 }
 
