@@ -26,6 +26,7 @@ extern void putint(int V);
 extern void Bfork(void * interpreter, void * B, int coreNo);
 extern void sleep(int C);
 extern int UART_isReady();
+extern char getch();
 //extern int cmpAndSwap(int adr, int old, int new);
 
 #else
@@ -3778,10 +3779,13 @@ case rshiftup:
 	    // fprintf(stdout,"Hello");
 #endif
 	    break;
-          case 23: // getch from  stdin
+        case 23: // getch from  stdin
 #ifdef __arm__
+           ch = getch();
 #else
-	    arg3 = scanf("%c",&ch);
+	       if (! scanf("%c",&ch)){
+              printf("\nError in reading from keyboard\n");
+		   };
 #endif
 #ifdef TRACE
             printf("get: %c\n",ch);
