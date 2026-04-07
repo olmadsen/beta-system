@@ -135,6 +135,10 @@ int UART_isReady(){
   return ! (UART0_FR & (1 << 5));
 }
 
+int UART_read_isReady(){
+  return ! (UART0_FR & (1 << 4)); // RXFE = not empty
+}
+
 char uart_getc() {
   while (UART0_FR & (1 << 4)); // RXFE = empty
   return UART0_DR & 0xFF;
@@ -163,6 +167,8 @@ static inline void dmb(void)
 static void _putch(char c) {
   if (c == '\n')
     raw_putc ('\r');
+  if (c == '\r')
+    raw_putc ('\n');
   raw_putc (c);
 }
 void putch(char c) {

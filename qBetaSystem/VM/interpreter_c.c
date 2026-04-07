@@ -26,6 +26,7 @@ extern void putint(int V);
 extern void Bfork(void * interpreter, void * B, int coreNo);
 extern void sleep(int C);
 extern int UART_isReady();
+extern int UART_read_isReady();
 extern char getch();
 //extern int cmpAndSwap(int adr, int old, int new);
 
@@ -4033,6 +4034,14 @@ case rshiftup:
 	  case 24:
 #ifdef __arm__
         arg1 = UART_isReady();
+#else
+	    //printf("\nUART_isReady\n");
+#endif
+	    vPush(thisStack,arg1);
+	    break;
+	  case 25:
+#ifdef __arm__
+        arg1 = UART_read_isReady();
 #else
 	    //printf("\nUART_isReady\n");
 #endif
