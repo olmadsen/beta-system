@@ -2,6 +2,7 @@ SimpleIOLib: obj
    %visible StringLib
    SimpleIOsystem:
         Process: 
+            in id: var String
             status: var integer
             status := P_status.ACTIVE
             SQS.insert(this(Process))
@@ -34,19 +35,19 @@ SimpleIOLib: obj
                 if (active =/= none) :then
                     active.attach(50) -- just attach(50) gives segmentation fault
                     if (active.status = P_status.ACTIVE) :then
-                       SQS.insert(active)
+                       SQS.insert(active) 
                 if (!SQS.isEmpty) :then
                     restart(Loop) -- restart loop gives compiler crash
         printer: obj LockLib.LockMonitor("printer")
             putItem: entry
                 in msg: var String
                 msgQ.insert(msg)
-            getItem:
+            getItem: entry
                 out msg: var String
                 if (! msgQ.isEmpty):then
                     msg := msgQ.extract
             msgQ: obj Collections.OrderedList.OrderedList(#String)
-        Emitter: Process
+        Emitter: Process("emitter")
             isReady:< 
                 out B: var Boolean
                 inner(isReady)
@@ -65,11 +66,63 @@ SimpleIOLib: obj
                        emitChar: do
                           if (isReady) :then
                               emit(current)
-                          :else
-                              put('?')
+                          :else 
+                              --put('?')
                               this(emitter).suspend
                               restart(emitChar)
                 restart(emitString)
+        keyboard: obj LockLib.LockMonitor("reader")
+           ...
+           read: ENTRY
+              out line: var String
+              if (! lineQ.isEmpty) :then
+                 --put('@')
+                 line := lineQ.extract
+           putItem: entry
+              in line: var String
+              lineQ.insert(line)
+           lineQ: obj Collections.OrderedList.OrderedList(#String)
+        reader: Process
+           readerReady:<
+              out B: var Boolean
+              inner(readerReady)
+           read:<
+              out ch: var char
+              inner(read)
+           this(reader).suspend
+           readString: do
+              C: obj Array(100,#Char)
+              top: var integer
+              ch: var char
+              readLine: do
+                 L: var String
+                 L := ""
+                 top := 0
+                 readNext: do
+                    --put('?')
+                    if (readerReady) :then
+                       top := top + 1
+                       --put('<')
+                       ch := read
+                       --put('>')
+                       C.put(ch):at[top]
+                       --put(ch)
+                       --put('!')
+                       if ((ch = 13) || (ch = 10)) :then
+                          --put('#')
+                          L := C.asString
+                          --putint(keyboard.mutex.free_M)
+                          --newline
+                          keyBoard.putItem(L)
+                          this(Reader).suspend
+                          restart(readLine)
+                       this(reader).suspend
+                       restart(readNext)
+                    :else
+                       --put('$')
+                       this(Reader).suspend
+                       restart(readNext)
+              
         "SimpleIOLib\n".print
         inner(SimpleIOSystem)
         scheduler

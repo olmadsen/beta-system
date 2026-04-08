@@ -11,7 +11,9 @@
    #endif
    #include <windows.h>
    //#include <ws2tcpip.h>
- 
+   // #include <conio.h>
+extern int _kbhit();
+extern char getch();
 #elif defined __arm__
 //#warning "__arm__ is defined!"
 //   #include "qb-arm/rpi-gpio.h"   
@@ -126,7 +128,7 @@ void RTE2(char *msg, int errNo){
 #ifdef arm
 #define heapMax 100000
 #else
-#define heapMax 100000000
+#define heapMax 500000000
 #endif
 #endif
 
@@ -3527,7 +3529,7 @@ case rshiftup:
 #ifdef usekbhit
 #ifdef linux
 #elif defined __CYGWIN__
-          arg1 = _getch();
+          //arg1 = _getch();
 #endif
 	  Y = rPop(thisStack); // origin - not used
 #ifdef TRACE
@@ -4044,6 +4046,21 @@ case rshiftup:
         arg1 = UART_read_isReady();
 #else
 	    //printf("\nUART_isReady\n");
+#endif
+	    vPush(thisStack,arg1);
+	    break;
+	  case 26:
+#ifdef __sync_val_compare_and_swap
+#else
+        arg1 = _kbhit();
+#endif
+	    vPush(thisStack,arg1);
+	    break;
+	  case 27:
+#ifdef __sync_val_compare_and_swap
+#else
+        arg1 = getch();
+		//printf("\n getch %i \n",arg1);
 #endif
 	    vPush(thisStack,arg1);
 	    break;
