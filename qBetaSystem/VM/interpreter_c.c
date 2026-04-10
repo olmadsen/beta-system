@@ -125,7 +125,7 @@ void RTE2(char *msg, int errNo){
 #ifdef withGC
 #define heapMax 80000000
 #else
-#ifdef arm
+#ifdef __arm__
 #define heapMax 100000
 #else
 #define heapMax 500000000
@@ -4050,7 +4050,7 @@ case rshiftup:
 	    vPush(thisStack,arg1);
 	    break;
 	  case 26:
-#ifdef __sync_val_compare_and_swap
+#ifdef __arm__
 #else
         arg1 = _kbhit();
 #endif
