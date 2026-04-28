@@ -45,8 +45,8 @@ event: data
   #);
 Sleep: external(# milliSec: @int64 enter milliSec do CallC #);
 init_interpreter: external
-  (# bc,imageS,valProxDescNo: @integer; withValProx,withNewProxy: @boolean; E: ^event
-  enter(bc,imageS,withValProx,valProxDescNo,withNewProxy)
+  (# bc,imageS,valProxDescNo: @integer; E: ^event
+  enter(bc,imageS,valProxDescNo)
   do callC
   exit E[]
   #);
@@ -66,8 +66,8 @@ close_interpreter: external(# do callC #);
 
 betaVM:
   (# ready: @boolean;
-     mkRunTrace: (#exit false #);
-     genEvents: (#exit false #);
+     mkRunTrace: (#exit true #);
+     genEvents: (#exit true #);
      withDumps: (#exit false #);
      testConc: (# exit false #);
      withNewProxy: @Boolean;
@@ -1494,6 +1494,37 @@ betaVM:
                    ' glsc: ' -> out.puttext; glsc->out.putint; out.newline
                if)
             #);
+          compare:
+             (# R: [10]@ integer; operator,size, mode, di,off:  @integer;
+                Lobj: ^ObjDesc.template; B: @integer
+             enter(operator,off,size)
+             do (if withDumps then  stacksToOut if);
+                thisStack.vPop -> mode; (* NO *)
+                (if mkRunTrace then  '\n**** values: ' -> out.puttext if);
+                (for i: size repeat 
+                     thisStack.vpop -> R[size - i + 1] ;
+                     (if mkRunTrace then R[size - i + 1] -> out.putint; ' ' -> out.put if);
+                for);
+                (if mkRunTrace then  
+                    'off/di: '->out.puttext; off->out.putint; ' '->out.put; di->out.putint;
+                if);
+                thisStack.rPop -> Lobj[];
+                (if withDumps then ('veq',true,out[]) -> Lobj.dump if);
+                1 -> B;
+                L: (if operator
+                    // prim.vEQ_prim  then
+                       (for i: size repeat
+                            (if Lobj.fields[off + (i - 1)] <> R[i] then
+                                0 -> B;
+                                leave L
+                       if)for)
+                   else
+                      '\n!!!! The relational operator '->puttext; operator -> putint; 
+                      ' is not implemented'->putline;
+                   if);
+                   B -> thisStack.vPush;
+                   (if genEvents and false then '\n!!!!! missing event for VEQ' -> putline if)
+             #);
           files: @
             (* handle external files *)
             (# F: [4] ^File; top: @integer;
@@ -1750,8 +1781,7 @@ betaVM:
                           *  newline; 
                           *)
                       #) -> BC;                                           
-                      (BC,imageSize,true,valueProxyDescno,withNewProxy)
-                        -> init_interpreter;
+                      (BC,imageSize,valueProxyDescno) -> init_interpreter;
                       true -> run_interpreter;
                       true -> first;
                       L: (if first -> getEvent -> decodeEvent then
@@ -1989,7 +2019,7 @@ betaVM:
                              ref.myName -> out.puttext
                          if)
                       #);
-                    descInx,size,isValueObj,originIsValueObj,isRindexed,dinx,rangee,inx,length,serverId,ix
+                    descInx,size,isValueObj,originIsValueObj,isRindexed,dinx,rangee,inx,length,serverId,ix,operator
                     ,handle,msgId,rtnVal,off,value,on,lab,pn,top1,top2,valueOff,valueDescNo,arrayObjSize:
                       @integer;
                     float1,float2: @real;
@@ -2325,31 +2355,8 @@ betaVM:
                            (if genEvents and false then '\n!!!!! missing event for vassign' -> putline if)
                         #)
                      // codes.vEq then
-                        (# R: [10]@ integer; size, mode, di,off:  @integer;
-                           Lobj: ^ObjDesc.template; B: @integer
-                        do 'veq' -> exe; op2 -> off; op1 -> size;
-                           (if withDumps then  stacksToOut if);
-                           thisStack.vPop -> mode; (* NO *)
-                           (if mkRunTrace then  '\n**** values: ' -> out.puttext if);
-                           (for i: size repeat 
-                                thisStack.vpop -> R[size - i + 1] ;
-                                (if mkRunTrace then R[size - i + 1] -> out.putint; ' ' -> out.put if);
-                           for);
-                           (if mkRunTrace then  
-                               'off/di: ' -> out.puttext; off -> out.putint; ' ' -> out.put; di -> out.putint;
-                           if);
-                           thisStack.rPop -> Lobj[];
-                           (if withDumps then ('veq',true,out[]) -> Lobj.dump if);
-                           1 -> B;
-                           L:
-                             (for i: size repeat
-                                  (if Lobj.fields[off + (i - 1)] <> R[i] then
-                                      0 -> B;
-                                      leave L
-                             if)for);
-                           B -> thisStack.vPush
-                        #);
-                        (if genEvents and false then '\n!!!!! missing event for VEQ' -> putline if)
+                        'veq' -> exe; op1 -> operator; op2 -> off; op1 -> size;
+                         (operator,off,size) -> compare
                      // codes.store  then
                         'store' -> exe;
                         (op1 -> off,thisStack.vpop -> value) -> thisObj.put;
@@ -2857,6 +2864,7 @@ betaVM:
                         'rpopThisObj' -> exe;
                         (*stacksToOut;*)
                         thisObj.rpop -> thisObj[];
+                        (if mkRunTrace then thisObj.myName -> out.putline if);
                         (*stacksToOut;*)
                      // codes.toSuper then
                         'toSuper' -> exe; op2 -> inx;
@@ -3042,7 +3050,7 @@ betaVM:
                         descs.OD[descInx].bc[] -> thisCode[];
                         X[] -> thisStack.rpush;
                         (*(thisObj[],X[],X.myOrigin,thisCode.descInx,glsc) -> rtnEvent;*)
-                     // codes.innerx then
+                     // codes.innerx then (* perhaps only used by innerBool *)
                         'inner' -> exel; op1 -> dinx;
                         (thisObj.myObjDesc).vdtTable[dinx] -> descInx;
                         (if mkRunTrace then 
@@ -3059,24 +3067,20 @@ betaVM:
                         if)
                      // codes.innerP then
                         'innerP' -> exel; op1 -> dinx; 
-                        (if mkRunTrace then ' exe: ' -> out.puttext if);
-                        thisStack.rpop -> X[];
-                        thisObj[] -> X.rpush;
-                        X[] -> thisObj[];
+                        thisStack.rpop -> X[]; (* callee *)
+                        thisObj[] -> X.rpush; (* save caller *)
+                        X[] -> thisObj[]; 
                         (thisObj.myObjDesc).vdtTable[dinx] -> descInx;
-                        (if mkRunTrace then descInx -> out.putint; out.newline if); 
+                        (if mkRunTrace then 
+                           ' callee: '-> out.puttext; X.myName->out.puttext; ' descInx: '->out.puttext; descInx -> out.putint; out.newline 
+                        if); 
                         (if withDumps then 'innerP:before:'->stacksToOut if);
                         (if descInx > 0 then
                             (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                            (if mkRunTrace then  
-                               '\n   innerP: ' -> out.puttext; 
-                               thisCode.descInx -> out.putint;
-                               ' ' -> out.put; glsc -> out.putint; out.newline;
-                           if);
                             descs.OD[descInx].BC[] -> thisCode[];
                             thisCode.doE -> glsc
                         if);
-                       // codes.innera then
+                       // codes.innera then (* apparently not used *)
                         'innerA' -> exe; op1 -> dinx; 
                         (thisObj.myObjDesc).vdtTable[dinx] -> descInx;
                         (if mkRunTrace then ' exe:' -> out.puttext; descInx -> out.putint;  if);
@@ -3288,6 +3292,9 @@ betaVM:
                             '\n!!!! Illegal argument for bytecode prim2: '->puttext;
                             newline
                         if);
+                     // codes.invokeExternal then 
+                        'invokeExternal' -> exe; 
+                        '\n!!!! betaVM: invokeExternal not implemented: '->puttext; op1 -> putint; newline
                      // codes.jmp then
                         'jmp' -> exe; op2 -> glsc
                      // codes.jmpFalse then

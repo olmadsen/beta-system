@@ -68,5 +68,7 @@ void pinMode(int pin, int mode);
 
 int digitalWrite(int pin, int value);
 
+void sleep(int C);
 
+int UART_isReady();
 

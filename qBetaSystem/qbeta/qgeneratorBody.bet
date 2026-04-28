@@ -3,36 +3,43 @@ ORIGIN 'qgenerator'
 do (# handlePrimitiveOp: BooleanValue
         (# exNo: @integer;
            selectPrimitiveOrCompoundEQ:
-             (# OGx: ^ObjectDescriptor; DI: ^DataItem
+             (# recDeclOG: ^ObjectDescriptor; DI: ^DataItem
              do (if rec[] = none then
-                    ctracer
+                    fctracer
                     (#do 'rec = none'->TT; dopt -> TL; 'E:'->TT; E.dopt -> TL #)
                 if);
-                (rec.ATd.asDecl).OG[] -> OGx[];
-                ctracer
+                (rec.ATd.asDecl).OG[] -> recDeclOG[];
+                fctracer
                 (#do ('rec:',rec[])->PT(#do rec.dopt ->TL #);
                    'E:'->TT; E.doPT -> TL;
-                   'OGx.label:'->TT; OGx.label -> TQ;
-                   'OGx:'->TT; OGx.dopt->TL; nl;
+                   'recDeclOG.label:'->TT; recDeclOG.label -> TQ;
+                   'recDeclOG:'->TT; recDeclOG.dopt->TL; nl;
                    ('rec.ATd:',rec.ATd[])->PT(#do rec.ATd.dopt -> TL #);
                 #);
-                (if (OGx.getReturnDecl -> DI[]) <> none then
-                    DI.OG[] -> OGx[]
+                (if (recDeclOG.getReturnDecl -> DI[]) <> none then
+                    DI.OG[] -> recDeclOG[]
                 if);
 
-                ctracer
-                (#do 'bobs:'->TT; OGx.primNo->II; 'OGx:'->TT; OGx.dopt->TL#);
+                fctracer
+                (#do 'bobs:'->TT; recDeclOG.primNo->II; 'recDeclOG:'->TT; recDeclOG.dopt->TL#);
                 (if DI[] <> none then
-                    ctracer(#do 'DI.OG:' -> TT; DI.OG.dopt -> TL #);
+                    fctracer(#do 'DI.OG:' -> TT; DI.OG.dopt -> TL #);
                 if);
-                (if OGx.primNo = 0 then
-                    ctracer
+                (if recDeclOG.primNo = 0 then
+                    (* receiver is a compound value obj *)
+                    fctracer
                     (#do 'GeneralPtn:veq:rec:'->TT; rec.dopt->TL;
-                       'rec.off:'->TT; rec.ATd.newOff->II; dopt -> TL
+                       'rec.off:'->TT; rec.ATd.newOff->II; dopt -> TL;
+                       'OG.primNo:'->TT; OG.primNo -> II; nl;
+                       'E:'->TT; E.dopt->TT; 
+                       (if E.args[] <> none then 'E.args:'->TT; E.args.dopt -> TL if)
                     #);
-                    (rec.ATd.newOff,(rec.ATd.asDecl).OG.objSize) -> cd.vEq
+                    (if OG.primNo <> vEq_prim then 
+                        E[] -> warning(#do 'Only equality is currently implemented for compound value objects' -> msg #)
+                    if);
+                    (OG.primNo,rec.ATd.newOff,(rec.ATd.asDecl).OG.objSize) -> cd.vEq
                  else
-                    (* we assume a primitive value *)
+                    (* we assume receiver a primitive value *)
                     OG.primNo -> cd.op
                 if)
              #);
@@ -138,7 +145,7 @@ do (# handlePrimitiveOp: BooleanValue
             else 
                (if withNewProxy and (origin[]->org[]).encOG.isValueObj then 
                    (* invocation of a virtual ptn in a value object; rec = none *)
-                   fctracer
+                   ctracer
                    (#do 'invokeVirtual:ValueLocal:'->TT; sig.dopt->TQ; 'descNo:'->TT; getDescNo->II;
                         'vOff:'->TT; valueOff->II;
                          ('rec:',rec[])->PT(#do rec.doPT-> TQ; 'rec.descNo:'->TT; rec.ATd.getDescNo->II #)#)
@@ -160,7 +167,7 @@ do (# handlePrimitiveOp: BooleanValue
                if); 
                (if valueOff <> 0 then
                    (* OBS! We are in PTN.newInvoke, where PTN.origin.encOG.isValueObj = true *)
-                   fctracer(#do 'invokeV:vOff<>0:'->TT; sig.dopt->TQ; 'descNo:'->TT; getDescNo->II;
+                   ctracer(#do 'invokeV:vOff<>0:'->TT; sig.dopt->TQ; 'descNo:'->TT; getDescNo->II;
                       'vOff:'->TT; valueOff->II; 'rec=none:'->TT; rec[]=none->BB; 
                       '(origin[]->org[]).encOG:isValueObj:'->TT; (origin[]->org[]).encOG.isValueObj -> BB; nl; 
                       (origin[]->org[]).encOG.dopt-> TL;
@@ -250,7 +257,7 @@ do (# handlePrimitiveOp: BooleanValue
                    ('stub',stubDescNo,4,0,false) ->  cd.invoke;
                 else 
                     (if withNewProxy and (valueOff > 0) then
-                        fctracer
+                        ctracer
                            (#do 'invoke:ValueLocal:'->TT; sig.dopt->TQ; 'descNo:'->TT; getDescNo->II;
                                 'E:'->TT; E.dopt->TT; (E.ATd.asDecl).origin.encOG.isValueObj  -> BB;
                                 ('rec:',rec[])->PT
@@ -260,13 +267,13 @@ do (# handlePrimitiveOp: BooleanValue
         if)if)#);
       invokeValueObj:
         (#
-        do ctracer
+        do fctracer
            (#do 'invoke:valueObj:'->TT; sig.dopt->TL; 
               'staticOff:'->TT; staticOff->II;
               'valueOff:'->TT; valueOff->II;
            #);
            (if (valueOff > 0) then
-               pctracer
+               fctracer
                (#do 'invoke:valueObj:OBS!'->TT; sig.dopt->TL; 
                   'staticOff:'->TT; staticOff->II;
                   'valueOff:'->TT; valueOff->II;
@@ -274,10 +281,11 @@ do (# handlePrimitiveOp: BooleanValue
            (if staticOff = 0 then
                (* could be
                 *    P1 := Point('t','u')
-                * where this(invokeValobj) is followed by a DI::newStore;
-                * seems ok, but perhaps a clean-up
+                * where this(invokeValobj) is followed by a DI::newStore; seems ok!?
+                * Could also be P = Point(...), which is not handled by '='
+                * MUST be cleaned-up
                 *)
-               ctracer(#do 'staticOff = 0'->TT #);
+               fctracer(#do 'staticOff = 0'->TT #);
             else
                (sig.id[],OG.is.newdescno,staticOff - 1,inValueObj)
                  -> cd.invokeVal (* inner only in LLVM-part *)
@@ -295,7 +303,7 @@ do (# handlePrimitiveOp: BooleanValue
         (#
         do ctracer(#do 'invoke:primitive:'->TT; sig.dopt->TL #);
            (if primno 
-            // this_prim then
+            // this_prim then '???'->dumptn;
             // string_prim then
                true -> useRtnVal
             // integer_prim then
@@ -314,6 +322,14 @@ do (# handlePrimitiveOp: BooleanValue
                ('cpuTime',primNo) -> cd.callPrim
             // markHeap_prim then
                ('markHeap',primNo) -> cd.callPrim
+            // UART_isReady_prim then
+               ('UART_isReady',primNo) -> cd.callPrim
+            // UART_read_isReady_prim then
+               ('UART_read_isReady',primNo) -> cd.callPrim
+            // kbhit_prim then
+               ('_kbhit',primNo) -> cd.callPrim
+            // getCh_prim then
+               ('getCh',primNo) -> cd.callPrim
             else
                E.dopt -> putline;
                E.label -> putline; primNo -> putint; ' ' ->put;
@@ -335,11 +351,19 @@ do (# handlePrimitiveOp: BooleanValue
       if);
       (if handlePrimitiveOp then
           (if ptnkind // virtualptn // furtherptn // finalptn then
-              fctracer(#do 'invokeVirtual:'->TT; sig.dopt -> TL; 'valueOff:'->TT; valueOff->II; ('rec:',rec[])->PT(#do rec.dopt -> TL #); #);
+              ctracer(#do 'invokeVirtual:'->TT; sig.dopt -> TL; 'valueOff:'->TT; valueOff->II; ('rec:',rec[])->PT(#do rec.dopt -> TL #); #);
               invokeVirtual
            else
-              invokeNonVirtual
-          if);
+              (if OG.primNo = this_prim then
+                  (* perhaps we should check/handle this in handlePrimitiveOp *)
+                  ctracer(#do 'this:'->TT; staticOff -> II; ' ' ->CC; E.dopt -> TT; dopt -> TL #);
+                  (if staticOff > 0 then
+                      ('this',staticOff) -> cd.rstore ;
+                      true -> useRtnVal
+                  if)
+              else
+                 invokeNonVirtual
+          if)if);
           (if not useRtnVal then popReturn if)
    if)#)
    
@@ -415,7 +439,7 @@ do ctracer(#do 'bPTN:newInvoke:'->TT; sig.dopt -> TL #);
            primNo,ON,ONs,descNoS,dn,noOfSuper: @integer; 
            org: ^Items; OI: ^ObjectInvocation
         enter primNo
-        do E.args.scanArgs(# do current[] -> Ex[]#);  
+        do E.args.scanArgs(# do current[] -> Ex[]#);
            Ex.super.on -> ON;
            Ex.origin[] -> IS[]; 
            ON - 1 -> (Ex.origin[] -> IS[]).toOrigin -> IS[];
@@ -445,11 +469,11 @@ do ctracer(#do 'bPTN:newInvoke:'->TT; sig.dopt -> TL #);
       if)
    #) 
 ---IndexPattern_newInvoke:doPart---
-do fctracer
+do ctracer
       (#do 'indexPTN:newInvoke:'->TT; sig.dopt -> TL; 'isAdr:'->TT; isAdr->BB; E.dopt -> TT; #);  
    (# getIndexedArgs:
         (# D: ^DataItem; isRef: @boolean; isValueObj,size: @integer
-        do fctracer(#do 'IndexedPTN:newInvoke:getIndexedArgs:'->TT; doPT->TL;
+        do ctracer(#do 'IndexedPTN:newInvoke:getIndexedArgs:'->TT; doPT->TL;
                        'E:'->TT; E.doPT->TL;
                        ('rec:',rec[])->PT(#do rec.dopt->TL #)#);
            (if (rec[] = none) then
@@ -487,7 +511,7 @@ do fctracer
                    // current.isValueObj then
                       1 -> isValueObj;
                       current.ObjSize -> size;
-                      fctracer(#do 'IndexedPTN:newInvoke:objVal:'->TT; D.dopt-> TQ; E.doPT->TQ; current.dopt->TT #)
+                      ctracer(#do 'IndexedPTN:newInvoke:objVal:'->TT; D.dopt-> TQ; E.doPT->TQ; current.dopt->TT #)
                    else 
                       true -> isRef;
                       1 -> size
@@ -624,7 +648,7 @@ do ctracer(#do 'oPTN:newInvoke:'->TT; sig.dopt -> TL; OG.primNo->II  #);
            #)
         else
            (* May happen for: innerBool: { out B: var Boolean ...} *)
-           (if 'inner' -> (E.doPT).equal then
+           (if 'inner' -> (E.doPT).equal then 'BUM:inner'->dumpTN;
                E.origin[] -> org[];
                org.innerInx -> cd.innerx; 
             else
@@ -660,7 +684,7 @@ do ctracer(#do 'oPTN:newInvoke:'->TT; sig.dopt -> TL; OG.primNo->II  #);
            (# vn,rn: @integer
            do (if (rec.ATd.asDecl).OG.primNo = this_prim then
                   (*'**** suspend:this: ' -> puttext; rec.dopt -> putline*)
-                  (* we should get the argument of @this foo
+                  (* we should get q of @this foo
                    * and scan the formal parameters of foo
                    *)
                else
@@ -749,7 +773,11 @@ do ctracer(#do 'oPTN:newInvoke:'->TT; sig.dopt -> TL; OG.primNo->II  #);
     // log_prim then
        ('log_prim',primNo) -> cd.callprim  
     // printf_prim then 
-       ('printf_prim',primNo) -> cd.callprim            
+       ('printf_prim',primNo) -> cd.callprim
+    // UART_isReady_prim then
+       ('UART_isReady',OG.primNo ) -> cd.callPrim; 
+    // UART_read_isReady_prim then
+       ('UART_read_isReady',OG.primNo ) -> cd.callPrim;       
    if)
 
  

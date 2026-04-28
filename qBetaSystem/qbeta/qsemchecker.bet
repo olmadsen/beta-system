@@ -596,9 +596,9 @@ semchecker: UnitHandler
                            srcOS[] -> Warning
                            (#
                            do 'Source is super of dest: ' -> msg;
-                              '\n     source: ' -> msg; srcOS.dopt -> msg;
-                              '\n     dest  : ' -> msg; dopt -> msg;
-                              '\n     ' -> msg;
+                              '\n**   source: ' -> msg; srcOS.dopt -> msg;
+                              '\n**   dest  : ' -> msg; dopt -> msg;
+                              '\n**   srcOS.father.father:\n' -> msg;
                               srcOS.father.father.father.dopt -> msg;
                            #);
                            (if false then
@@ -934,7 +934,7 @@ semchecker: UnitHandler
                     exit dstQual[]
                     #);
                org: ^Items; DI: ^DataItem
-            do <<SLOT sem_ptn_checkActualArgs:descriptor>>;
+            do <<SLOT sem_ptn_checkActualArgs:descriptor>>; 
                OG.IS.scanNonBoundItemArgs
                (#
                do (if (top + 1 -> top) > fArgs.range then 
@@ -989,6 +989,13 @@ semchecker: UnitHandler
                       if);
                       (theOI[],fArgs[inx][],current[],srcQual[],dstQual[]) 
                         -> (origin[]->org[]).checkForLocalsConflict;
+                      (if paramQual then
+                          '**** Parameter qualifications:\n**   dest:'->dumpT; 
+                          fArgs[inx].doPT -> dumpTN; '**   dstQual:'->dumpTN; dstQual.doPT -> putHeadN;
+                          '**   src:'->dumpTN; current.doPT->dumptN;  
+                          '**   srcQual:'->dumpTN; srcQual.dopt->putHeadN;
+                          (* srcQual does not seem to be correct; see GenericMethod.qbeta *)
+                      if);
                       (if fArgs[inx].isDesignator then
                           (if traceCheck then
                               '**** fArg:designator:'->dumpTN;
@@ -997,8 +1004,7 @@ semchecker: UnitHandler
                        else
                           (current[],srcQual[],dstQual[],false) 
                             -> fArgs[inx].checkQual;
-                  if)if);
-               #);
+                  if)if)#);
                L:
                  (if (inx < top)  then
                      (theOI.enclosingObjectDescriptor).IS.scanDecls
@@ -1031,6 +1037,7 @@ semchecker: UnitHandler
                                 '**   fArgs[inx]:'->dumpTN; 
                                 fArgs[inx].dopt -> putHeadN;
                             if);
+                            (*'**** BUM:'->dumptN; currentDcl.dopt->dumpTN;*)
                           (currentDcl.OG[],srcQual[],dstQual[],false) 
                             -> fArgs[inx].checkQual;
                             (if inx = top then
@@ -1050,8 +1057,7 @@ semchecker: UnitHandler
                             'actual parameters in the argument list "' ->msg;
                             actualArgs.doPT -> msg; '" of\n\n"' -> msg;
                             theOI.dopt -> msg; '"' -> msg;
-                 if)#)if)
-            #);
+            if)#)if)#);
           getVqual::
             (#
             do (if traceGetVqual then
@@ -1976,14 +1982,12 @@ semchecker: UnitHandler
                    if);
                    (none,origin[],none,true) -> check
                if);
-               (if traceGetVqual then
-                   '**** INV:getVqual:'->puttext; dopt -> dumpT;
-                   'in:'->dumpT; father.father.dopt->dumpT;
-                   'isChecked:'->dumpT; isChecked->putBoolean; newline;
-                   '**   OGs: ' -> puttext;
-                   (if OGs[] <> none then OGs.print else 'none'->putline if);
-                   last <> none -> putboolean; ','->put;
-                   ('last.ATd.OG:',((last).atd.asDecl).OG[])->putPT
+               (if traceGetVqualShort then
+                   '**** INV:getVqual:'->dumpT; dopt -> dumpT;
+                   'isChecked:'->dumpT; isChecked->dumpB; 
+                   (if isChecked then ('ATd',ATd.asDecl)->putPT if);
+                   'encOG:'->dumpT; encOG.dopt->putHeadN;
+                   (if OGs[] <> none then ('**   OGs:',0,0)->OGs.print else 'OGS=none'->dumpTN if);
                if);
                (if ((last).ATd.asDecl).OG.primNo = this_prim then
                    (if false then
@@ -2022,11 +2026,9 @@ semchecker: UnitHandler
                         org.origin[] -> org[];
                         (if false then
                             '**    org:B:'->putline; org.dopt -> putheadN;
-                            
-                   if)                   for);
+                   if)for);
                    (if false then  
-                       '**    org:C:'->putline;
-                       org.dopt -> putheadN; org.primNo -> putint; newline;
+                       '**    org:C:'->putline;org.dopt -> putheadN; org.primNo -> putint; newline;
                    if);
                    org.encOG[] -> qual[];
                    (if false then 
@@ -2037,13 +2039,11 @@ semchecker: UnitHandler
                encOG[] -> qual[];
                scanSons
                (#
-               do (qual[],not isFirst,OGS[]) 
-                    -> current.getVqual -> (OGS[],qual[]);
+               do (qual[],not isFirst,OGS[]) -> current.getVqual -> (OGS[],qual[]);
                #);
                (if traceGetVqual then
                    'INV:getVqual:end:'->dumpT;dopt -> dumpTN;
-                   ('qual',qual[])->putPT;
-                   OGS.print
+                   ('qual',qual[])->putPT; OGS.print
                if)
             #);
           getQual::
@@ -2065,25 +2065,40 @@ semchecker: UnitHandler
 
      ObjectInvocation::<
        (# semCheck::<
-            (# receiver: ^Exp; ptn: ^Pattern; org: ^Items; 
+            (# receiver,E: ^Exp; ptn: ^Pattern; org: ^Items; 
                srcQual, dstQual,qual: ^ObjectDescriptor; 
-               U: ^text;N: ^Node; OGS: ^OGsequence; (*P: ^OG path; *)
+               U: ^text; N: ^Node; OGS: ^OGsequence; (*P: ^OG path; *)
                MI: ^ModuleItem; singleUnitArgQual: ^ObjectDescriptor;
-               OI: ^ObjectInvocation
+               OI: ^ObjectInvocation; cnt: @integer 
             do (* rec = none if first OI in Invocation *) 
                <<SLOT sem_OI_semCheck_T1:descriptor>>;   
                (if ATd[] = none then
                    '**** ATd is none: '->puttext;  dopt -> putheadN;
                if);
-               (if (ATd.asDecl).primno
-                // inner_prim // restart_prim // leave_prim 
+               (if (ATd.asDecl).primno // inner_prim 
                (* // indexedPut_prim *) then
-                   true -> noArgsCheck
+                   true -> noArgsCheck;
                    (* This should be reconsidered. In MapLib we have
                     *   forAll: ... return := innerBool
                     * innerBool is sub of inner which has an argument
                     * that is not supplied here! Is this an error?
                     *)
+                // restart_prim // leave_prim then
+                    (if false then
+                        'Break:'->dumpT; (ATd.asDecl).OG.primNo->dumpI; args.doPT->dumpT; dopt->dumpTN;
+                    if);
+                    args.scanArgs(# do cnt + 1 -> cnt; current[] -> E[] #);
+                    (if cnt = 1 then 
+                        (* check that E is the name of an enclosing pattern *)
+                    else 
+                       this(ObjectInvocation)[] -> SemanticError
+                       (#
+                       do (if cnt = 0 then
+                              'Missing argument for leave or restart' -> msg
+                          else 
+                              'Too many arguments for leave or restart' -> msg
+                   if)#)if);
+                   true -> noArgsCheck;
                 // this_prim then
                    args.scanArgs
                    (#
@@ -2244,40 +2259,30 @@ semchecker: UnitHandler
                    (encOG[],this(ObjectInvocation)[],on,pn,OGS[]) 
                      -> viaInclude 
                      -> (encOG[],OGS[]);
-                   (*'**** after:viaInclude:'->dumpT;
-                   (ATd.asDecl).dopt -> putHeadN;*)
-                   (encOG[],true,OGS[]) 
-                     -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
+                   (encOG[],true,OGS[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
                 else
                    (if (OGS[] -> OGSx[]) = none then
                        (* Given INV = R.X.Y, first call of R.getVQual *)
                        encOG[] -> OGx[];
-                       (for on repeat 
-                            (if false and (OGx.origin.father[] <> OGx.origin.encOG[]) then
-                                '**** Differs:'->dumpTN; dopt->dumptn;
-                                '**   father:'->dumptn;
-                                 OGx.origin.father.dopt->dumptn;
-                                 '**   origin:'->dumptn;
-                                OGx.origin.encOG.dopt -> dumptn;
-                                '---'->dumptn;
-                            if);
-                            OGx.origin.encOG[] -> OGx[]
-                       for);
+                       (for on repeat OGx.origin.encOG[] -> OGx[] for);
                        (OGx[],false,none) -> OGsequence -> OGSx[];
                        (for pn repeat OGSx.PRE -> OGSx[] for);
                        <<SLOT sem_OI_getVq_initial:descriptor>>;
-                       (encOG[],false,OGSx[]) 
-                         -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
+                       (encOG[],false,OGSx[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
                        <<SLOT sem_OI_getVq_afterATd:descriptor>>;
                     else
                        (if isNest then
                            (* Given INV = R.X.Y, 2nd or 3rd call of R.getVQual*)
                            (# OGSz: ^OGsequence; i: @integer
                            do OGSx[] -> OGSz[];
+                              (if traceGetVqual then
+                                  '**** OI:getVqual:isNest'->dumpT; dopt -> dumptN;
+                                  '**   encOG:'->dumpT; encOG.dopt->putHeadN;
+                                  ('**  OGSx/z:',0,0) -> OGSz.print
+                              if);
                               loop:
-                                (* encOG is a binding in one of the DOGs 
-                                 * in OGSx. We search backward for the 
-                                 * DOG having the binding.
+                                (* encOG is a binding in one of the DOGs in OGSx. 
+                                 * We search backward for the DOG having the binding.
                                  * NB! It seems that encOG is not always a 
                                  * binding, so what is going on here?
                                  *)
@@ -2303,50 +2308,33 @@ semchecker: UnitHandler
                        (* isNest ==> on = 0, 
                         * otherwise on >= 0, we may come from DataItem:getVqual 
                         *)
-                       (if traceGetVqual then
-                           '**** OI:getVqual:XX:'->dumpt; dopt -> dumpT;
-                           'on:'->dumpT; on -> dumpI; 
-                           origin.label -> dumpT;
-                           newline;
-                           '**   father:'->dumpt; father.dopt->dumpTN;
-                           '**   father.f.f.f.f:'->dumpTN; 
-                           father.father.father.father.father.dopt->putHeadN;
-                       if);
+                       <<SLOT sem_OI_getVq_before_ENC:descriptor>>;
                        (for i: on repeat
                             ('OI.getVqual:',i) -> OGSx.ENC -> OGSx[]; 
                             i -> markENC;
                        for);
                        (for i: pn repeat OGSx.PRE -> OGSx[]; i -> markPRE for);
                        <<SLOT sem_OI_getVq_B2:descriptor>>;
-                       (encOG[],false,OGSx[]) 
-                         -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
+                       (encOG[],false,OGSx[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
                        <<SLOT sem_OI_getVq_cont_afterATd:descriptor>>;
                if)if);
                (# IT: ^node; wasSaved,B: @boolean
-               do father.father.father[] -> IT[];
-                  (*'**** father:'->dumpT; father.label->dumpT;
-                  father.father.label->dumpT;
-                  father.father.father.label->dumpTN;*)
+               do father.father.father[] -> IT[]; 
                   (if (savedOGS[] <> none) and not IT.isDecl then
                       (if traceGetVqual then
-                          '**** savedOGS:save:was:'->puttext; 
-                          savedOgs.print; 
-                          '**   OI: '->puttext; 
-                          this(ObjectInvocation).dopt->putline;
+                          '**** savedOGS:save:was:'->puttext; savedOgs.print; 
+                          '**   OI: '->puttext; this(ObjectInvocation).dopt->putline;
                       if);
                       true -> wasSaved; (* ??? - local here? *)
                    else 
-                      (* savedOGS is used atcheckActualArgs as 
-                       * argument to getOGsequenceOfArg
+                      (* savedOGS is used at checkActualArgs as argument to getOGsequenceOfArg;
                        * savedOI is not used
                        *)
                       OGSx[] -> OGS[] -> savedOGS[];
                       this(ObjectInvocation)[] -> savedOI[];
                       (if traceGetVqual then
-                          '**** savedOGS:save:'->puttext; B -> putboolean;
-                          savedOgs.print;
-                          '**   OI: '->puttext; 
-                          this(ObjectInvocation).dopt->putline;
+                          '**** savedOGS:save:'->puttext; B -> putboolean; savedOgs.print;
+                          '**   OI: '->puttext; this(ObjectInvocation).dopt->putline;
                       if)
                   if);
                   <<SLOT sem_OI_getVq_savedOGS:descriptor>>;

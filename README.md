@@ -4,26 +4,28 @@ In addition, it contains **The qBeta System,** which consists of a compiler for 
 
 **Beta** was developed by Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Møller-Pedersen and Kristen Nygaard. Here are some references:
 1. B.B. Kristensen, O.L Madsen, B. Møller-Pedersen, K. Nygaard: _Abstraction Mechanisms in the Beta Programming Language_, POPL 1983, [DOI](https://dl.acm.org/doi/10.1145/567067.567094)
-2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, _Object-Oriented Programming in the Beta Programming Language_, ACM, Addison Wesley, 1993, [DOI](https://dl.acm.org/doi/book/10.5555/221048). Out of print, but a PDF-file is available in this repository.
+2. O.L Madsen, B. Møller-Pedersen, K. Nygaard, _Object-Oriented Programming in the Beta Programming Language_, ACM, Addison Wesley, 1993, [DOI](https://dl.acm.org/doi/book/10.5555/221048). Out of print, but a PDF-file is available in this repository. 
+**You may find this book in the directory `TheBetaBook`**.
 3. B. B. Kristensen, O.L Madsen, B. Møller-Pedersen: _The When, Why and Why not of the Beta Programming Language_, ACM SIGPLAN conference on History of Programming Languages (HOPL 2007) - San Diego, USA, [DOI](https://dl.acm.org/doi/10.1145/1238844.1238854)
 
 The first Beta compiler was developed at Aarhus University, Aarhus, Denmark. 
 This was followed the Nordic Mjølner Project where the SDE was developed and the compiler was further developed.
-After completion of The Mjølner Project the development was continued at [Mjølner Informatics LtD](https://mjolner.com) and Aarhus University. 
-As of today the ownership of MBS is at Aarhus University, but only minor changes have been made for some time.
 The results of the Mjølner Project are documented in:
 
 1. Jørgen Lindskov Knudsen, Mads Løfgren, Boris Magnussen, Ole Lehrmann Madsen (eds.): _Object-oriented Environments: The Mjølner Approach_,  Prentice Hall, 1994.
 
-The following people have made significant contributions to MBS: Peter Andersen, Lars Bak, Flemming Gram Kristensen, Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth.
+After completion of The Mjølner Project, the development was continued at [Mjølner Informatics LtD](https://mjolner.com) and Aarhus University. 
+As of today the ownership of MBS is at Aarhus University, but only minor changes have been made for some time.
+
+The following people have made significant contributions to MBS: Peter Andersen, Lars Bak, Flemming Gram Kristensen, Michael Christensen, Eric Corry, Mads Brøgger Enevoldsen, Kim Falk, Morten Grouleff, Jørgen Lindskov Knudsen, Stephan Erbs Korsholm, Michael Lassen, Ole Lehrmann Madsen, Claus Nørgard, Elmer Sandvad, Lennert Sloth. We may have missed some people here. If you think you have made significant contributions, please contact Ole Lehrmann Madsen (`olm@cs.au.dk`).
 
 For a complete list of contributors to the code base, execute `git shortlog -s -n` in your clone of the repository.
 
-**qBeta** is a relatively new language derived from Beta and developed by Ole Lehrmann Madsen. Birger Møller-Pedersen has (and is) an importat contributor and Henry Michael Lassen is a key person in the development of the SDE called **qEnv**.
+**qBeta** is a relatively new language derived from Beta and developed by Ole Lehrmann Madsen. Birger Møller-Pedersen was (and is) an important contributor and Henry Michael Lassen is a key person in the development of the SDE called **qEnv**.
 The web-site https://qbeta.dev has a very preliminary and incomplete description of qBeta. 
 qBeta is used in the book _An Introduction to Programming as Modeling_ by Ole Lehrmann Madsen and Birger Møller-Pedersen and is published on the web-site [https://oopm.org](https://oopm.org).
 
-qBeta has so far primerily been used to experiment with new language mechanisms. The implementation is thus not suitable for prodcution code.
+qBeta has so far primarily been used to experiment with new language mechanisms. The implementation is thus not suitable for prodcution code.
 The same is the case for qEnv.
 You are welcome to try out qBeta and qEnv, but both the qBeta compiler and qEnv are very unstable. 
 
@@ -32,9 +34,6 @@ In this Section, we describe how to install MBS from GitHub.
 MBS used to run on a number of platforms, including Linux, Mac, Windows, SUN, and others. 
 MBS is currently only running on Windows 11 and Ubuntu-32.
 Attempts have been made to make Beta run on Ubuntu-64 and MacOs, but so far this has not succeeded.
-
-To gain access to the GitHub repository, mail to `olm@cs.au.dk` to be added as a collaborator.
-We plan to make the repository public.
 
 R5.5 is the newest version of MBS.
 
@@ -49,7 +48,7 @@ cd beta
 To checkout the system do this:
 
 ```
-git clone git@github.com:olmadsen/beta-system.git r5.5
+git clone https://github.com/olmadsen/beta-system.git r5.5
 ```
 
 This will create a local copy of the repository (called `r5.5`) on your machine.
@@ -63,7 +62,7 @@ The `postwimp` library is currently a separate repository on github.
 To check it out separately use:
 
 ```
-git clone git@github.com:olmadsen/beta-postwimp.git postwimp
+git clone https://github.com/olmadsen/beta-postwimp.git postwimp
 ```
 
 You will most likely want to use it inside a beta-system clone (e.g. `r5.5` (as above). 
@@ -80,7 +79,7 @@ You will then get the `postwimp` directory populated with the files, with change
 If you are checking out the entire beta system, and would like to check out postwimp together with the rest, you can do it as such:
 
 ```
-git clone --recurse-submodules git@github.com:olmadsen/beta-system.git r5.5
+git clone --recurse-submodules https://github.com/olmadsen/beta-system.git r5.5
 ```
 
 ## MBS on Windows
@@ -91,7 +90,7 @@ It is recommended to to place the `beta` directory in `c:`:
 cd c:
 mkdir beta
 cd beta
-git clone git@github.com:olmadsen/beta-system.git r5.5
+git clone https://github.com/olmadsen/beta-system.git r5.5
 ```
 
 ### Required Software
@@ -115,6 +114,10 @@ The Beta compiler uses the linker from VS2003.
 So rename ```/usr/bin/link.exe``` to ensure that the linker from VS2003 is used.
 
 The VS2003 linker named ```link.exe``` is located in the folder ```$VS2003/Vc7/bin```.
+
+If you have problems with invoking the VS2003 linker, you may want to inspect the `bat`-file invoking the linker. The `bat`-file and the accompanying `rsp`-file is placed in the `nti_ms` directory. By default these files are deleted by the compiler after linking has taken place. You may use the `'-p'` switch to keep these files.
+
+`beta -q hello`
 
 ### Cygwin
 
@@ -174,6 +177,15 @@ A Beta program in the file ```foo.bet``` may be compiled by executing
 
 ```beta foo```
 
+You mau use the `'-q'` switch to suppress some of the warnings issued by the compiler.
+
+### Support
+There is no official support of MBS, but the compiler may in case of system errors recommend you to contact Mjølner Informatics. However, as mentioned above, Mjølner Informatics is no longer maintaining MBS.
+You should thus not contact Mjølner Informatics.
+You may perhaps raise an issue at GitHub.
+You may also contact Ole Lehrmann Madsen at `olm@cs.au.dk`, but there is no guarantee for an answer.
+We are working on eliminating messages referring to Mjølner Informatics.
+
 # Installing The qBeta System
 
 The text here is currently only an itemized draft and will be expanded.
@@ -189,8 +201,7 @@ The text here is currently only an itemized draft and will be expanded.
 * The best available documentation fo qBeta is the book https://oopm.org.
 * The qBeta library is in the directory `qBetaSystem/qBeta/BETAworld`.
 * The organization of `BETAworld`is described in https://oopm.org in the Section about [Modules](https://oopm.org/?page_id=3032).
-
-
+* See also [`qBetaSystem/VM/qbeta-arm/qBeta-RPI-Arm.md`](./qBetaSystem/VM/qbeta-arm/qBeta-RPI-Arm.md).
 
 # Further notes on The Mjølner Beta System
 In this Section, we mention further issues regarding MBS.

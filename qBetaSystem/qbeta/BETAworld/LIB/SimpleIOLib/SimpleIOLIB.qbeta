@@ -1,0 +1,120 @@
+SimpleIOLib: obj 
+   %visible StringLib
+   SimpleIOsystem:
+        Process: 
+            in id: var String
+            status: var integer
+            status := P_status.ACTIVE
+            SQS.insert(this(Process))
+            this(Process).suspend
+            inner(Process)
+            status := P_status.TERMINATED
+        P_status: obj 
+            %globals
+            %Public	 
+            ACTIVE: val 1
+            WAITING: val 2
+            TERMINATED: val 3
+        SQS: obj LockLib.LockMonitor("SQS")
+            Q: obj LIB.Collections.QueueLib.Queue
+            insert: entry
+                in P: ref Process
+                if (Q.has(P).not) :then
+                    Q.insert(P)
+            removeNext: entry
+                out P: ref Process
+                P := Q.removeNext
+            isEmpty: entry
+                out B: var Boolean
+                B := Q.isEmpty
+        scheduler:
+            active: ref Process
+            "Scheduler\n".print
+            Loop: do
+                active := SQS.removeNext
+                if (active =/= none) :then
+                    active.attach(50) -- just attach(50) gives segmentation fault
+                    if (active.status = P_status.ACTIVE) :then
+                       SQS.insert(active) 
+                if (!SQS.isEmpty) :then
+                    restart(Loop) -- restart loop gives compiler crash
+        screen: obj LockLib.LockMonitor("screen")
+            putItem: entry
+                in msg: var String
+                msgQ.insert(msg)
+            getItem: entry
+                out msg: var String
+                if (! msgQ.isEmpty):then
+                    msg := msgQ.extract
+            msgQ: obj Collections.OrderedList.OrderedList(#String)
+        Writer: Process("Writer")
+            writerReady:< 
+                out B: var Boolean
+                inner(writerReady)
+            write:<
+                in ch: var Char
+                inner(write)
+            this(Writer).suspend -- Writer.suspend does not work! Done in Process
+            writeString: do
+                msg: var String
+                msg := screen.getItem
+                if (msg = "") :then
+                    --"Writer:none\n".print
+                    this(Writer).suspend
+                :else
+                    msg.scan
+                       writeChar: do
+                          if (writerReady) :then
+                              write(current)
+                          :else 
+                              this(Writer).suspend
+                              restart(writeChar)
+                restart(writeString)
+            inner(Writer)
+        keyboard: obj LockLib.LockMonitor("reader")
+           ...
+           read: ENTRY
+              out line: var String
+              if (! lineQ.isEmpty) :then
+                 --put('@')
+                 line := lineQ.extract
+           putItem: entry
+              in line: var String
+              lineQ.insert(line)
+           lineQ: obj Collections.OrderedList.OrderedList(#String)
+        reader: Process
+           readerReady:<
+              out B: var Boolean
+              inner(readerReady)
+           read:<
+              out ch: var char
+              inner(read)
+           this(reader).suspend
+           readString: do
+              C: ref Array(100,#Char)
+              top: var integer
+              ch: var char
+              readLine: do
+                 L: var String
+                 top := 0
+                 C := Array(100,#Char)
+                 readNext: do
+                    --put('?')
+                    if (readerReady) :then
+                       top := top + 1
+                       ch := read
+                       C.put(ch):at[top]
+                       if ((ch = 13) || (ch = 10)) :then
+                          L := C.asString
+                          keyBoard.putItem(L)
+                          this(Reader).suspend
+                          restart(readLine)
+                       this(reader).suspend
+                       restart(readNext)
+                    :else
+                       this(Reader).suspend
+                       restart(readNext)
+              
+        "SimpleIOLib\n".print
+        inner(SimpleIOSystem)
+        scheduler

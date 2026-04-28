@@ -60,7 +60,6 @@ typedef unsigned char byte;
 typedef struct Btemplate {
   ObjDesc desc;
   int id;
-  int valOff;
   bool isObj; 
   int vstack[32];  
   struct Btemplate *rstack[16];

@@ -1,7 +1,7 @@
 ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'qrestrictions';
 ---lib:attributes---
-variants: restrictions
+StorageAllocator: restrictions
   (# traceEmbedding: @boolean; 
      Module::<
        (# vdtAlloc:: (# do OG.vdtAlloc #);
@@ -13,12 +13,12 @@ variants: restrictions
                if);
                (if IT[] <> none then (* IT is none if top module *)
                    (if not nameListInDcl then
-                       IT.qsize[1] + 1 -> IT.qsize[1] -> qoff[1];
+                       IT.qsize + 1 -> IT.qsize -> off;
                    if);
-                   cTracer(#do 'Module:alloc:off:'->TT; qOff[1]->II; dopt->TL#)
+                   cTracer(#do 'Module:alloc:off:'->TT; off->II; dopt->TL#)
                if);
-               (1,IT[]) -> sig.Qalloc;
-               (* OG.Qalloc is called from generator *)
+               IT[] -> sig.Qalloc;
+               IT[] -> OG.Qalloc
        #)#);
      ModuleItem::<
        (# vdtAlloc:: (#do (if isChecked then MD.vdtAlloc if)#);
@@ -29,15 +29,19 @@ variants: restrictions
                    (if traceAlloc then
                        'ModuleItem:QALLOC: ' -> puttext; sig.dopt -> putline;
                    if);
-                   (1,IT[]) -> MD.Qalloc;
-                   (*MD.qOff[1] -> qOff[1]*)
+                   IT[] -> MD.Qalloc;
        if)#)#);
      DataItem::<
        (# vdtAlloc:: (#do OG.vdtAlloc #);
           Qalloc:: 
             (# diSize: @integer
             do (if traceAlloc then
-                   '**** DataItem:qalloc: ' -> puttext; dopt -> putheadN
+                   '**** DataItem:qalloc: ' -> puttext; dopt -> putheadN;
+                  'isValue:'->dumpt;  isValue -> putboolean;
+                  ' isPrimitive:' -> dumpt; OG.isPrimitive -> putboolean;
+                  ' isValObj: ' -> dumpt; OG.isValueObj -> putboolean;
+                  ' isBasicValue:' -> dumpt; isBasicValue -> putboolean; 
+                  ' freeDiKind:'->dumpT; freeDiKind->putboolean; newline
                if);
                cTracer
                (#
@@ -73,7 +77,7 @@ variants: restrictions
                            1 -> diSize
                        if)
                     // not OG.IS.isEmpty then
-                       OG.IS.qsize[1] -> diSize;
+                       OG.IS.qsize -> diSize;
                        cTracer(#do 'A:'->TT; diSize->II#);
                     else
                        (# ptn: ^pattern
@@ -82,8 +86,11 @@ variants: restrictions
                               '**** indexed: ' -> puttext; dopt -> putline;
                               ptn.dopt -> puthead
                           if);
-                          (if ptn.OG.IS.newDescNo = 0 then
-                              (1,ptn.origin[]) -> ptn.OG.qAlloc;
+                          (if (ptn.OG.IS.newDescNo = 0) and not ptn.OG.IS.isEmpty then
+                              (if false then
+                                   '**** DI:Qalloc:allocSuper.ATd.origin:'->dumpTN; ptn.dopt->putHeadN;
+                              if);
+                              ptn.origin[] -> ptn.OG.qAlloc;
                           if);
                           (if traceAlloc then
                               dopt -> putline; ptn.dopt -> putline
@@ -91,36 +98,37 @@ variants: restrictions
                           ptn.new_size -> diSize;
                           cTracer
                           (#do 'B:'->TT; diSize->II; 'ptn:'->TT;ptn.dopt->TL #);
-                          cTracer(#do'newDescNo:'->TT; ptn.OG.IS.newDescNo->II#)
+                          ctracer(#do'newDescNo:'->TT; ptn.OG.IS.newDescNo->II#)
                    #)if);
 
                    (if not nameListInDcL then
-                       IT.qsize[1] + 1 -> qoff[1];
-                       IT.qsize[1] + diSize -> IT.qsize[1];
+                       IT.qsize + 1 -> off;
+                       IT.qsize + diSize -> IT.qsize;
                    if);
                    cTracer
                    (#do 'diSize:'->TT; diSize->II; 'IT.qSize:'->TT; 
-                      IT.qsize[1]->II 
+                      IT.qsize->II 
                    #);
                    (if traceEmbedding then
                        '*** DI:alloc:value:size:' -> puttext; diSize ->putint; 
-                       ':off:'->puttext; qoff[1]->putint;' '->put;dopt->putline;
+                       ':off:'->puttext; off->putint;' '->put;dopt->putline;
                    if)
                 else
                    1 -> diSize;
                    (if not nameListInDcL then                   
-                       IT.qsize[1] + diSize -> IT.qsize[1] -> qoff[1];
+                       IT.qsize + diSize -> IT.qsize -> off;
                    if);
-                   cTracer(#do 'DI:Qalloc:off:'->TT; qOff[1]->II; dopt->TL#);
+                   cTracer(#do 'DI:Qalloc:off:'->TT; off->II; dopt->TL; 'isConst:'->TT; isConst->BB #);
                    (if isConst then
-                       (* For R: ref T, dont call T.Qalloc *)
-                       (1,IT[]) -> OG.Qalloc
+                       (* For R: ref T, dont call T.Qalloc! OBS!
+                        * R.size = 1, T.size is thus not needed
+                        *)
+                       IT[] -> OG.Qalloc
                if)if);
                diSize -> diXsize;
-               (1,IT[]) -> sig.Qalloc;
-               (* OG.Qalloc is called from qgenerator *)
+               IT[] -> sig.Qalloc;
             #);
-          diXsize: @integer;
+          diXsize: @integer; (* what is the purpose ? *)
           objSize:: (#do OG.objSize -> value  #)
        #);
      NameDecl::<
@@ -128,40 +136,17 @@ variants: restrictions
             (# DI: ^DataItem;; diSize: @integer;
             do L:
                  (if (ATd[] <> none) then
-                   (if (ATd.asDecl).isSuperDataItem then
-                       (if (ATd.asDecl).isDataItem then
-                           (ATd[]->DI[]).dixSize -> diSize
-                        else
-                           1 -> diSize
-                       if);
-                       (if false and ('BETA' -> T.equal) then
-                           '**** NameDecl:Qalloc:A:'->dumpT; dopt->dumpT;
-                           IT.qsize[1]->dumpI; 
-                           off -> dumpI; dumpNL;
-                       if);
-                       IT.qsize[1] + 1 -> off;
-                       IT.qsize[1] + diSize -> IT.qsize[1];
-                       (if false and
-                           (('BETA' -> T.equal)  or ('Beq' -> T.equal)) then
-                           '**** NameDecl:Qalloc:B:'->dumpT;; 
-                           dopt -> puthead; ' ' -> put;
-                           IT.encOG.OGid -> dumpT; 
-                           'off:' -> dumpT;
-                           off -> dumpI; 'diSize:' -> dumpT;
-                           diSize -> dumpI; 'IT.qSize:'->dumpT; 
-                           IT.qsize[1] -> dumpI; IT.objSize -> dumpI;
-                           IT.encOG.objSize -> dumpI;
-                           'IT:'->dumpT; IT.encOG.OGid -> dumpTN;
-                   if)if)
+                     (if (ATd.asDecl).isSuperDataItem then
+                         (if (ATd.asDecl).isDataItem then
+                             (ATd[]->DI[]).dixSize -> diSize
+                          else
+                             1 -> diSize
+                         if);
+                         IT.qsize + 1 -> off;
+                         IT.qsize + diSize -> IT.qsize;
+                     if)
                   else
-                     (if false then
-                         '!!!! NameDecl:Qalloc:ATd is none: '->puttext;
-                         dopt -> putline;
-                         father.label -> puttext; ' '-> put;
-                         father.father.father.label -> putline;
-                         (* shall be done in AST after parsing *)
-                     if);
-                     father.father.father[] -> ATd[];
+                     father.father.father[] -> ATd[]; (* what is this ? *)
                      restart L
        if)#)#);
      NameList::<
@@ -170,7 +155,7 @@ variants: restrictions
             do (if traceAlloc then
                    '**** NameList:Qalloc:'->puttext; dopt -> putline;
                if);
-               scan(#do (1,IT[]) -> current.Qalloc #)
+               scan(#do IT[] -> current.Qalloc #)
        #)#);
      Signature::< 
        (# vdtAlloc:: 
@@ -183,9 +168,12 @@ variants: restrictions
                    (if traceAlloc then
                        '**** Signature:Qalloc:'->puttext; dopt -> dumpTN
                    if);
-                   IT.qsize[1] -> paramItems.qsize[1];
-                   (1,IT[]) -> paramItems.Qalloc;
-                   paramItems.qsize[1] -> IT.qsize[1];
+                   (if (IT[] <> none) then
+                       (* The case if initial call of rootModule.Qalloc *)
+                       IT.qsize -> paramItems.qsize;
+                       IT[] -> paramItems.Qalloc;
+                       paramItems.qsize -> IT.qsize;
+                   if);
                    true -> isAllocated;
             if)#);
           clear::< (# do false -> isAllocated #);
@@ -194,7 +182,7 @@ variants: restrictions
       Arguments::<
        (# vdtAlloc:: 
            (#
-           do (if traceVDTalloc then 'Arguments:vdtAlloc:'->dumpT; dopt -> dumpTN if)
+           do (if traceVDTalloc then 'Arguments:vdtAlloc:'->dumpT; dopt->dumpTN if)
            #);
           Qalloc:: 
             (# 
@@ -212,10 +200,10 @@ variants: restrictions
                        *    + V: var Integer: { ... }
                        * Fix the parser!
                        *)
-                      (1,IT[]) -> current.Qalloc
+                      IT[] -> current.Qalloc
                    // ObjectDescriptor## then
                       (*'!!!! Arg:ptn:qalloc:'->dumpT; current.dopt->putline;*)
-                      (1,IT[]) -> current.Qalloc
+                      IT[] -> current.Qalloc
        if)#)#)#);
       AssignmentStatement::<
        (# Qalloc::
@@ -223,8 +211,8 @@ variants: restrictions
             do (if traceAlloc then
                    '**** AssignmentStatement:alloc:'->puttext; dopt -> putline
                if);
-               (1,IT[]) -> left.Qalloc;
-               (1,IT[]) -> right.Qalloc
+               IT[] -> left.Qalloc;
+               IT[] -> right.Qalloc
             #);
        #);
      ObjectCall::<
@@ -235,7 +223,7 @@ variants: restrictions
                    '**** ObjectCall:Qalloc:'->puttext; dopt -> puthead
                if);
                cTracer(#do 'OC:Qalloc:'->TT; dopt -> TQ; #);
-               (1,none) -> super.Qalloc;
+               none -> super.Qalloc;
                 '**** Qalloc:OC: ' -> puttext; OGid -> puttext; ' '-> put;
                marked -> putBoolean; newline;
                father.dopt -> puthead;               
@@ -267,17 +255,17 @@ variants: restrictions
                    dumpNL
                if);
                cTracer(#do 'OG:Qalloc:' -> TT;  dopt ->TL; 
-                        'qDescno: ' -> TT; IS.QdescNo[1] -> II
+                        'qDescno: ' -> TT; IS.QdescNo -> II
                      #);
 
-               (if IS.QdescNo[1] > 0 then
+               (if IS.QdescNo > 0 then
                    (* Must find out why Qalloc is called a second time
-                    * Perhaps because we for R: ref T used to call T.Qalloc;
+                    * Perhaps because we for R: ref T used to call T.Qalloc; OBS!
                     * For R: obj T, we still call T.Qalloc for all such R!
                     *)
                    (if false then
-                       '!!!! Qalloc: IS.QdescNo[1] > 0 : ' -> puttext;
-                       IS.QdescNo[1] -> putint; newline;
+                       '!!!! Qalloc: IS.QdescNo > 0 : ' -> puttext;
+                       IS.QdescNo -> putint; newline;
                        dopt -> putline;
                    if);
                    leave Qalloc
@@ -288,7 +276,7 @@ variants: restrictions
                         father.dopt -> TL; 
                         'super: ' -> TT; super.doPT -> TL
                      #);
-               (1,none) -> super.Qalloc;
+               none -> super.Qalloc;
                (* super.Qalloc above may make the if below superflous?*)
                cTracer(#do 'IS.superDesc<>none: ' -> TT;
                         IS.superDesc[] <> none -> BB;
@@ -307,7 +295,7 @@ variants: restrictions
                    cTracer(#do'OG:Qalloc:SuperAlloc:'->TT;ptn.dopt->TL#);
                    
                    (if ptn[] <> objectDecl[] then
-                       (1,none) -> ptn.OG.Qalloc;
+                       none -> ptn.OG.Qalloc;
                if)if);
                (* some addBinding in checker:OG:alloc *)
                (if (super.last -> E[]) <> none then
@@ -319,38 +307,29 @@ variants: restrictions
                            (* !!! Imply call of old newDesc below!? *)
                if)if)if);
                
-               cTracer(#do 'OG:Qalloc:isObjectDesc: ' -> TT; 
-                        isObjectDesc->BB;
-                        ' isObjectDesc: ' -> TT; isObjectDesc->BB;
+               cTracer(#do 'OG:Qalloc:isObjectDesc:' -> TT; isObjectDesc->BB;
                         ' hasItems: ' -> TT; hasItems -> BB;
-                     #);
-               cTracer(#do
-                        'super.hasVirtualArgs: ' -> TT;
+                        'super.hasVirtualArgs:' -> TT;
                         super.hasVirtualArgs -> BB;
-                        ' not super.isPrimitive: ' -> TT;
-                        not super.hasVirtualArgs -> BB
-                     #);
-               cTracer
-               (#do dopt -> TL; nl; 'super: ' -> TT; super.dopt -> TL; nl;
-                  (if E[] <> none then 'E: ' -> TT; E.dopt -> TQ
+                        ' not super.isPrimitive:' -> TT;
+                        not super.isPrimitive -> BB;
+                        dopt -> TL; nl; 'super: ' -> TT; super.dopt -> TL; nl;
+                        (if E[] <> none then 'E: ' -> TT; E.dopt -> TQ
                if)#);
                (if isObjectDesc then 
                    cTracer(#do 'OG:Qalloc:B:'->TT;  OGid->TQ;
                             'newDescNo:' -> TT; IS.newDescNo -> II;
                             'objSize:' -> TT; objSize -> II #);
-                   
                    this(ObjectDescriptor)[] 
-                     -> QnewDesc -> IS.QdescNo[1];
-                   
+                     -> QnewDesc -> IS.QdescNo;
                    cTracer(#do 'OG:isObjectDesc:NewDescNo:' ->TT; 
-                            IS.QdescNo[1] -> II;
+                            IS.QdescNo -> II;
                             'IS.newDescNo:'->TT; IS.newDescNo -> II;
                             'objSize:' -> TT; objSize -> II;
                             '1:' ->TT; 1 -> II; IS.dopt ->TL #);
-                   (1,IT[]) -> IS.Qalloc ;
+                   IT[] -> IS.Qalloc ;
                    cTracer(#do 'IS.newDescNo:'->TT; IS.newDescNo -> II; 
-                            'IS.objSize:' -> TT; objSize -> II; 
-                            IS.dopt ->TL #);
+                            'IS.objSize:' -> TT; objSize -> II; IS.dopt ->TL #);
                if);
                cTracer(#do 'OG:Qalloc:end: IS.newDescNo: ' -> TT;
                         IS.newDescNo -> II; doPT -> TL #);
@@ -361,22 +340,26 @@ variants: restrictions
                (#do 'OG:reAlloc:'->TT; 'descNo:'->TT; IS.descNo -> II;
                   (origin[]->org[]).encOG.primno -> II; doPT -> TL
                #);
+               (if traceAlloc then
+                   '**** OD:reAlloc:'->dumpT; doPT->putHeadN;
+               if);
                (if ((origin[]->org[]).encOG.primNo = String_prim) then
                    cTracer(#do 'OG:reAlloc:String:'->TT; #);
-                   IS.scanAllDecls(#do 0 -> currentDcl.qOff[1] #);
-                   1 -> IS.qSize[1]; (* origin *)
+                   (if traceAlloc then '**   OD:reAlloc:String:'->dumptn if);
+                   IS.scanAllDecls(#do 0 -> currentDcl.off #);
+                   1 -> IS.qsize; (* origin *)
                    IS.scanAllDecls
                    (#
                    do (if currentDcl.OG.primNo = this_prim then
                           cTracer(#do   'currentDcl:this:' -> TT#);
-                          IS.qsize[1] + 1 -> currentDcl.qoff[1];
-                          IS.qsize[1] + 1 -> IS.qsize[1];
-                       else
-                          (1,IS[]) -> currentDcl.Qalloc;
+                          IS.qsize + 1 -> currentDcl.off;
+                          IS.qsize + 1 -> IS.qsize;
+                       else false -> currentDcl.allocDone;
+                          IS[] -> currentDcl.Qalloc;
                       if);
                       cTracer
                       (#do 'reAllocatedOff:'->TT; currentDcl.sig.dopt->TQ; 
-                         currentDcl.qoff[1]->II
+                         currentDcl.off->II
                    #)#)
                 else
                    (if IS.superDesc[] = none then
@@ -384,42 +367,42 @@ variants: restrictions
                            (* remove - is handled in then-part *)
                            (* String is a value obj, but treated as a reference
                             * The size of origin is thus 1 *)
-                           1 -> IS.qSize[1];
+                           1 -> IS.qsize;
                            '!! GotString'->putline;
                         else
                            (* Other value objects: size of origin = 3 *)
-                           3 -> IS.qSize[1]; 
+                           3 -> IS.qsize; 
                            (if false then
-                               '**   setqSize ='->dumpT; IS.qSize[1]->dumpI;
+                               '**   setqSize ='->dumpT; IS.qsize->dumpI;
                                dopt -> putheadN;
                                '**   IS:'-> dumpT; IS.dopt -> putHeadN
                        if)if)
                     else
                        IS.superDesc.encOG.reAlloc;
-                       IS.superDesc.qSize[1] -> IS.qSize[1];
+                       IS.superDesc.qsize -> IS.qsize;
                        (if (origin[]->org[]).encOG.primno = String_prim then
-                           1 -> IS.qSize[1];
+                           1 -> IS.qsize;
                        if);
                        (if false then
-                           '**   withSuper:qSize:'->dumpT; IS.qsize[1]->dumpI;
+                           '**   withSuper:qSize:'->dumpT; IS.qsize->dumpI;
                            dumpNL
                    if)if);
                    IS.scanDecls
                    (#
                    do (*'**   clear:'->dumpT; currentDcl.dopt -> dumpTN*)
-                      0 -> (currentDcl.asDecl).qOff[1];
+                      0 -> (currentDcl.asDecl).off;
                       false -> currentDcl.sig.isAllocated
                    #);
                    IS.scanDecls
                    (#
                    do (if nameListInDcl then 
-                          (1,IS[]) -> (currentDcl.asDecl).Qalloc;
+                          IS[] -> (currentDcl.asDecl).Qalloc;
                        else                          
-                          (1,IS[]) -> currentDcl.Qalloc;
+                          IS[] -> currentDcl.Qalloc;
                if)#)if);
                (if false then
                    '**** newSize: '->puttext; IS.encOG.OGid -> dumpT;
-                   IS.qSize[1]->dumpI;
+                   IS.qsize->dumpI;
                    IS.dopt -> putheadN;
                    IS.scanAllDecls
                    (#
@@ -428,7 +411,7 @@ variants: restrictions
                           currentDcl.sig.names.scan(#do current.off -> dumpI #);
                           dumpTN
                        else
-                          currentDcl.qOff[1]  -> putint; newline
+                          currentDcl.off  -> putint; newline
             if)#)if)#);          
           clear::<
             (#
@@ -456,7 +439,7 @@ variants: restrictions
                    '**** Items:IS.isEmpty:' -> puttext;
                    encOG.doPT -> putline;
                if);
-               QdescNo[1] -> dNo
+               QdescNo -> dNo
             exit dNo 
             #);   
           OriginIsValue: BooleanValue
@@ -484,32 +467,24 @@ variants: restrictions
                 (if traceVDTalloc then '**** Items:vdtAlloc:'->dumpT;encOG.ogID->dumpTN if);
                 (if superDesc[] <> none then
                     (if traceVDTalloc then '**   hasSuper:'->dumpT; super.dopt->dumpTN if);
-                    superDesc.dSize -> dSize;
+                    superDesc.vdtSize -> vdtSize;
                  else
                     (if objectDecl.OG.IS[] <> this(Items)[] then
-                        1 -> dsize;
+                        1 -> vdtSize;
                      else
-                        0 -> dSize; (* JUST for testing *)
+                        0 -> vdtSize; (* JUST for testing *)
                 if)if);
-                (if hasInn then 
-                    dSize + 1 -> dSize -> innerInx;
+                (if hasInner then 
+                    vdtSize + 1 -> vdtSize -> innerInx;
                     (if traceVDTalloc then 
                         '**   innerMarked:'->dumpT; innerInx->putint; newline if)
                 if);
                 (if (sig[] <> none) and (sig.paramItems[] <> none) then 
-                    sig.paramItems.scanSons(#do dSize -> current.allocVirtual -> dSize #)
+                    sig.paramItems.scanSons(#do vdtSize -> current.allocVirtual -> vdtSize #)
                 if);
-                scanSons(#do dSize -> current.allocVirtual -> dSize #);
-                (*checkInner:
-                   IS.scanSons
-                   (#
-                   do (if this(ObjectDescriptor)[] -> current.hasInner then
-                          IS.dSize + 1 -> IS.dSize -> IS.innerInx;
-                          leave checkInner
-                      if)
-                   #);*)
-                (if traceVDTalloc and (dsize > 0) then 
-                    '**   '->dumpT; encOG.OGid->dumpT; 'dSize:'->dumpt; dSize->putint; newline
+                scanSons(#do vdtSize -> current.allocVirtual -> vdtSize #);
+                (if traceVDTalloc and (vdtSize > 0) then 
+                    '**   '->dumpT; encOG.OGid->dumpT; 'vdtSize:'->dumpt; vdtSize->putint; newline
                 if);
                 true -> vdtAllocDone;
                 (* must set vdtAlloc = true before calling vdtAlloc recursively
@@ -530,10 +505,10 @@ variants: restrictions
                             encOG.dopt  -> putheadN;
                         if)
                      else
-                        qsize[1] + 1 -> qsize[1] -> qOriginOff[1];
+                        qsize + 1 -> qsize -> qOriginOff;
                         origin[] -> org[]; 
                         (if withNewProxy and (origin[] -> originIsValue) then
-                            qsize[1] + 3 -> qsize[1];
+                            qsize + 3 -> qsize;
                         if);
                  if)#);
                isVirtualObject: booleanValue
@@ -554,9 +529,10 @@ variants: restrictions
                #);
                (if isArgs then
                   (* '**** isArgs:'->dumpT; dopt -> dumpTN;*)
-               if);
-               (if not isArgs then
-                   (if (super.ATd[] <> none) then
+               if); 
+               (if not isArgs (* this(IT) does not represent parameters *) then
+                   (if (super.ATd[] <> none) then 
+                       none ->super.ATd.qalloc;
                        (* We have
                         *    OG = Super { ... }
                         * (1) super is a Name: normal case
@@ -570,9 +546,8 @@ variants: restrictions
                         * 
                         *)
                        cTracer(#do 'Items:Qalloc:super:' -> TT; super.dopt ->TL;
-                                'size:' -> TT; superDesc.qsize[1] -> II;
-                                encOG.OGid -> TQ; #);
-                       superDesc.qsize[1] -> qsize[1];
+                                'size:' -> TT; superDesc.qsize -> II; encOG.OGid -> TQ; #);
+                       superDesc.qsize -> qsize;
                        (if super.isImplSuper then
                            super.isSingularImplSuper 
                              -> superNotImplOrSingularImpl
@@ -595,9 +570,9 @@ variants: restrictions
                                 * Old comment below: *)
                                (* this looks wrong! 
                                 * Only if globalRestrictionsMain = false ? *)
-                               qsize[1] + 1 -> qsize[1] -> qOriginOff[1]
+                               qsize + 1 -> qsize -> qOriginOff
                             else
-                               superDesc.qOriginOff[1] -> qOriginOff[1]
+                               superDesc.qOriginOff -> qOriginOff
                            if)
                         else
                            (if isVirtualObject then
@@ -607,11 +582,11 @@ variants: restrictions
                                    encOG.father.dopt -> putline; '---'->putline;
                                    super.atd.dopt -> puthead;
                                if);
-                               superDesc.qOriginOff[1] -> qOriginOff[1];
+                               superDesc.qOriginOff -> qOriginOff;
                                (if false then
                                    'newOriginOff: ' -> puttext; 
                                    newOriginOff -> putint; ' ' -> put;
-                                   qOriginOff[1] -> putint; ' ' -> put; 
+                                   qOriginOff -> putint; ' ' -> put; 
                                    1 -> putint; newline
                                if)
                             else
@@ -619,34 +594,20 @@ variants: restrictions
                        if)if);
                        cTracer
                        (# do 'Items:Qalloc:super:B:objSize:'->TT;  objSize ->II;
-                          'originOff:'->TT; qOriginOff[1] -> II;
+                          'originOff:'->TT; qOriginOff -> II;
                        #)
                     else
                        allocOrigin;
                        cTracer
                        (# do 'Items:Qalloc:Super:C:objSize:'->TT;  objSize ->II;
-                          'originOff:'->TT; qOriginOff[1] -> II;
+                          'originOff:'->TT; qOriginOff -> II;
                #)if)if);
-               (if false and encOG.isBasicValue and isPrimitive
-                   and (primNo <> value_prim)
-                   then
-                   cTracer
-                   (#
-                   do 'Items:Alloc:isBasicValue:' -> TT;
-                      (if sig[] <> none then sig.dopt -> TQ if);
-                      ':qsize:'->TT; qsize[1] -> II; 
-                      qsize[1] + 1 -> qsize[1]; (* !!! ??? *)
-                      ':size:' -> TT; objSize -> II;
-                      ':qsize:'->TT; qsize[1] -> II; 
-                   #)
-               if);
                (if not isArgs then
                    labelHandler.init; 
                    restartLab.new;
                    leaveLab.new;
                if);
-               (if true or not nameListInDcl then
-                   (if sig[] <> none then
+               (if sig[] <> none then
                        (* why here?
                         * We dont allocate a pattern 
                         * its OG is allocated if used!
@@ -659,33 +620,55 @@ variants: restrictions
                             * allocate address for BETAworld!
                             *)
                            (if 'Pattern' -> (sig.father.label).equalNCS then
-                               (1,this(items)[]) -> sig.Qalloc
+                               this(items)[] -> sig.Qalloc
                             else
-                               (1,this(Items).origin[]) -> sig.Qalloc;
-                           if);
-                        else
-                           (if false then
-                               '**** OG:sig:IT=none:'->dumpT;
-                               sig.dopt -> putheadN;
-                               '**   items:'->dumpT; 
-                               this(Items).dopt -> putheadN;
-                               '**   items:origin:'->dumpT; 
-                               (if this(Items).origin[] <> none then
-                                   this(Items).origin.dopt -> putheadN
-                       if)if)if);
-                       (*(1,this(items)[]) -> sig.Qalloc*)
-               if)if);
-               scanSons (#do (1,this(items)[]) -> current.Qalloc #);
-               cTracer(#do 'Items:Qalloc:END:objSize:'->TT; qsize[1] -> II;
+                               this(Items).origin[] -> sig.Qalloc;
+               if)if)if);
+               scanSons 
+                   (# Ix: ^Item; D: ^Decl
+                   do (if (current[]-> Ix[]).isDataItem then
+                          this(Items)[] -> Ix.Qalloc;
+                   if)#);
+                   true -> allocDone; 
+                   (if encOG[] <> none then true -> encOG.allocDone; if);
+                   (if false then
+                       scanAllItemDecls
+                       (# n: @integer;
+                          doPut: 
+                          (#
+                          do '**** layout:'->dumpt; 
+                              (if sig[]<> none then sig.dopt->dumptN; if);
+                          #);
+                       do (if currentDcl.isDataitem then
+                              (if (n + 1 -> n) = 1 then doPut if);
+                              currentDcl.sig.dopt->dumpT; 
+                              currentDcl.newoff -> putint; 
+                              newline;
+               if)#)if);
+               true -> allocDone; 
+               (if encOG[] <> none then true -> encOG.allocDone; if);
+               scanSons (#do this(items)[] -> current.Qalloc #);
+               
+               cTracer(#do 'Items:Qalloc:END:objSize:'->TT; qsize -> II;
                         ' newDescNo:'->TT; newDescNo -> II;  dopt->TL #);
             #);
           newOriginOff:: 
             (# 
-            do qOriginOff[1] -> value
+            do qOriginOff -> value
             #);
-          qOriginOff: [1] @integer;
+          (* qsize is currently declared in abstractSyntaxTree, but should be here;
+           * It is used in objSize, which is called in false-branch for StdBeta;
+           * We may move objSize to this fragment?
+           *)
+          vdtSize,originOff,innerInx: @integer;
+          qOriginOff: @integer;
           restartLab,leaveLab: @LabelHandler.label;  
-          clear::< (# do 0 -> qsize[1]; inner #);
+          clear::< 
+             (# 
+             do 0 -> qsize -> vdtSize -> originOff -> innerInx;
+                false -> vdtAllocDone; 
+                inner
+             #);
        #);
      Pattern::<
        (# vdtAlloc:: 
@@ -693,9 +676,7 @@ variants: restrictions
              do (if OG.IS.vdtAllocDone then leave VDTalloc if);
                 (if traceVDTalloc then 
                     '**** PTN:vdtAlloc:'->dumpT; sig.dopt->dumpTN;
-                                 '------'->dumptn;(origin[]->org[]).dopt->putheadN;;
-                                  '------'->dumptn;(origin[]->org[]).dopt->putheadN;
-                                   '------'->dumptn;(origin[]->org[]).dopt->putheadN;
+                    '------'->dumptn;(origin[]->org[]).dopt->putheadN;
                 if); 
                 OG.vdtAlloc 
              #);
@@ -741,37 +722,61 @@ variants: restrictions
                     P.OG[] -> OGs[]; 
                     P.setUpOrigin;
                     P.check;
-                    OGs[] -> QnewDesc -> dNo -> OGs.IS.QdescNo[1];
+                    OGs[] -> QnewDesc -> dNo -> OGs.IS.QdescNo;
                     '$' -> OGs.sig.id.put;
                     dNo -> OGs.sig.id.putint;
                     dNo  -> OG.vDescNo;
-                    (1,none) -> P.Qalloc;
+                    none -> P.Qalloc;
                  #)
             do cTracer(#do 'Pattern:Qalloc:'->TT; sig.id[] ->TT #);
+               (if OG.allocDone then 
+                   (if false then
+                       '!!!! ptn:Alloc:AllocDone:'->dumpt; sig.id[]->dumptN; 
+                       leave Qalloc 
+               if)if);
                (if traceAlloc then
                    '**** ptn:qalloc: ' -> puttext; sig.dopt -> puttext;
                    ' ' -> put; ptnKind -> putint;  ' ' -> put;
                    isprimitive -> putBoolean;  ' ' -> put;
-                   OG.isBasicValue -> putboolean; newline;
+                   OG.isBasicValue -> putboolean; 
+                   ' ptnKind:'->dumpT; ptnKind -> putint;
+                   newline;
+               if);
+               (if OG.isChecked then 
+                   (if traceAlloc then '**** PTN:new_Qalloc:'->dumpT; sig.dopt->dumptN if);
+                   IT[]->OG.Qalloc;
+                   (if ptnKind
+                    // plainPtn then
+                    // virtualPtn then
+                       (if not OG.hasItems then
+                           (* see more below *)
+                           allocStub
+                       if)
+                    // furtherPtn // finalPtn then 
+                       (if not OG.hasItems then allocStub if)
+                   if);
+                   leave Qalloc
                if);
                (if true 
                 // isPrimitive then
-                   (if OG.IS.newDescNo = 0 then
-                       (*(1,IT[]) -> OG.Qalloc;*)
-                       (* more stuff in checker:ptn:alloc *)
+                   (if OG.IS.newDescNo = 0 then 
+                       (if false then '**** ptn:qalloc:newDescNo=0:' -> puttext; sig.dopt -> putline;if);
+                       IT[] -> OG.Qalloc;
+                       (* more stuff in checker:ptn:alloc - alloc is aliminated *)
                    if);
                 // OG.isBasicValue and not isVirtual then   
                    (if false then 
                        '\n*** pattern:qalloc:SimpleValue: ' -> putline;
                        doPT -> printHead;
                    if);
-                   (if OG.IS.newDescNo = 0 then
-                      (* (1,IT[]) -> OG.Qalloc*)
+                   (if OG.IS.newDescNo = 0 then 
+                       (if false then '**** ptn:qalloc:newDescNo=0:X:' -> puttext; sig.dopt -> putline; if);
+                       IT[] -> OG.Qalloc
                    if); 
                 else
                    cTracer(#do 'Pattern:Qalloc:B:'->TT; sig.id[] ->TT #);
                    (if ptnKind
-                    // plainPtn then                 
+                    // plainPtn then
                     // virtualPtn then
                        (* Is there a more general way to handle this *)
                        (if not OG.hasItems then
@@ -780,7 +785,7 @@ variants: restrictions
                                cTracer(#do '(OG.super.theDesc).newDescNo = 0'->TT#);
                                (# ptn: ^Pattern
                                do OG.super.ATd.asDecl -> ptn[];
-                                  (1,none) -> ptn.OG.Qalloc;
+                                  none -> ptn.OG.Qalloc;
                                   cTracer
                                   (#do 'Pattern:qalloc:super:descNo:'->TT;
                                      (OG.super.theDesc).newDescNo->II; doPt->TT
@@ -811,10 +816,10 @@ variants: restrictions
                           ' newDescNo: '->TT; ptn.OG.IS.newDescNo->II #);
                    if)
                 else
-                   OG.IS.qsize[1] -> value;
+                   OG.IS.qsize -> value;
                    cTracer
                    (#do 'new_size:C:'->TT; value->II; 
-                      ' qSize:' -> TT; OG.IS.qsize[1] -> II; 
+                      ' qSize:' -> TT; OG.IS.qsize -> II; 
        #)if)#)#);
      Invocation::<
        (# Qalloc:: 
@@ -823,29 +828,10 @@ variants: restrictions
                scanSons
                (# E: ^Exp
                do current[] -> E[];
-                  (1,IT[]) -> current.Qalloc;
+                  IT[] -> current.Qalloc;
        #)#)#);
      ObjectInvocation::<
-       (# hasInner::
-             (# org: ^Items
-             do (if traceVDTalloc then 
-                    '**** OI:hasInner:'->dumpT; dopt->dumpTN
-                if);
-                (if (ATd.asDecl).OG.primno = inner_prim then 
-                args.scanArgs
-                (# A: ^ObjectSpecification
-                do current[] -> A[];
-                    A.super.on - 1 
-                        -> (args.origin[]->org[]).toOrigin -> org[]; 
-                    'theOD:' ->dumpTN; theOD.dopt->dumpTN;
-                    'org:'->dumpTN; org.dopt->dumpTN; 
-                    (if org[] = theOD.IS[] then 
-                        '**    found inner:'->dumpT; dopt->dumptN;
-                        true -> value;
-                    if)
-                #)if)
-             #);
-          Qalloc:: 
+       (# Qalloc:: 
             (# ptn: ^Pattern
             do (if traceAlloc then
                    '**** OI:Qalloc:'->dumpT; doPT->putheadN;
@@ -853,21 +839,21 @@ variants: restrictions
                cTracer(#do 'ObjectInvocation:Qalloc:' ->TT; dopt ->TQ; #);
                scanSons
                (#do cTracer(#do current.label -> TT; current.dopt -> TQ  #);
-                  (1,IT[]) -> current.Qalloc 
+                  IT[] -> current.Qalloc 
                #);
                (if hasVirtualArgs then     
-                   (if false then
-                       'false OI:Qalloc:hasVirtualArgs:\n' -> puttext; 
-                       dopt -> putline;
+                   (if traceAlloc then
+                       '**   OI:Qalloc:hasVirtualArgs:' -> dumpT; 
+                       dopt -> dumpTN;
                    if);
                    ATd.asDecl -> ptn[];
                    ptn.scanArgs
                    (# OGx: ^ObjectDescriptor; argInx: @integer
                    do argInx + 1 -> argInx;
                       (if currentArg.isVirtual then
-                          (if false then
-                              '**   OI:Qalloc:got: ' -> puttext; 
-                              currentArg.dopt -> putline;
+                          (if traceAlloc then
+                              '**   OI:Qalloc:virtualArg: ' -> dumpT; 
+                              currentArg.dopt -> dumptN;
                           if);
                           (*QnewDesc -> currentArg.OG.vDescNo*)
                           (*  it is actualArg that must be assigned vDescNo  *)
@@ -891,14 +877,22 @@ variants: restrictions
                                          '**   setvDescNo: '->puttext;
                                          OGx.vDescNo -> putint; newline
        if)if)if)#)if)#)if)#)#);
+     LabelDecl::<
+        (# Qalloc::
+              (#
+              do (if OG.isChecked then
+                     (if traceAlloc then '**** LabelDecl:Qalloc:'->dumpT; sig.dopt->dumpTN if);
+                     IT[] -> OG.Qalloc
+              if)#)
+        #); 
      IfThen::<
        (# Qalloc::
             (#
             do (if false then
                    '**** IfThen:Qalloc: ' -> puttext; dopt -> putline;
                if);
-               (1,IT[]) -> cond.Qalloc;
-               (1,IT[]) -> thenPart.Qalloc  
+               IT[] -> cond.Qalloc;
+               IT[] -> thenPart.Qalloc  
        #)#);
      IfThenElse::<
        (# Qalloc::
@@ -906,9 +900,9 @@ variants: restrictions
             do (if false then
                    '**** IfThenElse:Qalloc: ' -> puttext; dopt->putline;
                if);
-               (1,IT[]) -> cond.Qalloc;
-               (1,IT[]) -> thenPart.Qalloc;
-               (1,IT[]) -> ElsePart.Qalloc;  
+               IT[] -> cond.Qalloc;
+               IT[] -> thenPart.Qalloc;
+               IT[] -> ElsePart.Qalloc;  
        #)#);
      BinaryExp::<
        (# Qalloc:: 
@@ -917,20 +911,20 @@ variants: restrictions
                scanSons
                (# E: ^Node(*Exp*)
                do current[] -> E[];
-                  (1,IT[]) -> current.Qalloc;
+                  IT[] -> current.Qalloc;
        #)#)#);
      UnaryExp::<
-       (# Qalloc:: (# do (1,IT[]) -> trm.Qalloc #);
+       (# Qalloc:: (# do IT[] -> trm.Qalloc #);
        #);
      BracketedExp::<
-       (# Qalloc:: (# do (1,IT[]) -> IV.Qalloc #);
+       (# Qalloc:: (# do IT[] -> IV.Qalloc #);
        #);
      Const::< (# #);
      CharObj::< (# #);
      StringObj::< 
        (# Qalloc:: 
             (# 
-            do scanSons(# do (1,IT[]) -> current.Qalloc #) 
+            do scanSons(# do IT[] -> current.Qalloc #) 
        #)#);
      Slot::<
        (# Qalloc::
@@ -938,7 +932,7 @@ variants: restrictions
             do (if traceSlots then
                    '**** Slot:Qalloc: ' -> puttext; id[] -> putline;
                if);
-               slotItems.scanSons(#do (1,IT[]) -> current.Qalloc #);
+               slotItems.scanSons(#do IT[] -> current.Qalloc #);
        #)#);
      getObjectDesc:: 
        (# OG: ^ObjectDescriptor
@@ -990,10 +984,24 @@ variants: restrictions
             #);
           init: (# do 0 -> labCount #);
        #);
+     BC,BCllvm: @File; ch: @integer;
+     emitLLVM,traceLLVMcalls,dumpLLVMobjs: @boolean;
   do QNewDesc.init;
-     (if useVDTalloc then
-         '**** VDTALLOC ****' -> putline;
-          rootModule.vdtAlloc;
+     true -> cd.notLLVM;
+     (if emitLLVM then
+         newFeature -> cd.newFeature;     
+         (FN[],'.ll') -> mkAuxName -> BC.name;
+         ('tmp.xbeta','.ll') -> mkAuxName -> BCllvm.name;
+         BCllvm.openWrite;
+         (BCllvm[],emitLLVM,emitCom,traceLLVMcalls,dumpLLVMobjs) -> cd.init;
+      else
+         (FN[],'..s') -> mkAuxName -> BC.name;
+         (BC[],emitLLVM,emitCom,traceLLVMcalls,dumpLLVMobjs) -> cd.init;
      if);
+     BC.openWrite;
+     (if verbose then '**** VDT ALLOC ****' -> putline if);
+     rootModule.vdtAlloc;
+     (if verbose then '**** QALLOC ****' -> putline if);
+     rootModule.qAlloc;
      inner
   #)

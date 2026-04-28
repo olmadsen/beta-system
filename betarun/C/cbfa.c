@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) Aarhus University
  * cbfa.c
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
@@ -32,10 +32,10 @@ GLOBAL(static CallBackArea * lastCBFA = 0);
  *   |  ._________.         ._________.          |  ._________.      
  *   `->|  next   |-------->|  next   |---- ...--`->|  next   |---// 
  *      | entries |--.      | entries |--.          | entries |--.   
- *      `---------´  |      `---------´  |          `---------´  |   
+ *      `---------ï¿½  |      `---------ï¿½  |          `---------ï¿½  |   
  *                   |                   |                  |   
  *      ._________.  |      ._________.  |          ._________.  |           _.
- *      |theStruct|<-´      |theStruct|<-´          |theStruct|<-´            |
+ *      |theStruct|<-ï¿½      |theStruct|<-ï¿½          |theStruct|<-ï¿½            |
  *      | code[0] |         | code[0] |             | code[0] |               |
  *      | ....... |         | ....... |             | ....... |               |
  *      |---------|         |---------|             |---------|      CBFABlock|

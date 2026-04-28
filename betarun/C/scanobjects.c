@@ -3,7 +3,7 @@
  * different kinds of heaps. Used by ~beta/sysutils/scanobjects.bet.
  *
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1994
+ *       Copyright (C) Aarhus University
  *       All rights reserved.
  */
 

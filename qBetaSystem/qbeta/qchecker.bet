@@ -55,7 +55,6 @@ checker: Parser
                integerDecl.OG[] -> qual[]
             #);
           stdBetaATd: ^stdBetaCompiler.BetaNameDecl;
-          alloc:: (# do '!!!! leave alloc'->dumpT; dopt->dumpTN; leave alloc#);
           pushThis:: (#do cd.pushBetaenvObj #);
           (*goOrigin:: -- no goOrigin in decl *)
           newInvoke::
@@ -104,55 +103,7 @@ checker: Parser
                markInModuleProp;
                this(Module)[] -> imports.addM;
             #);
-          moduleAllocDone: @Boolean;
-          alloc:: 
-            (# 
-            do (if traceAlloc then
-                   '**** Module:alloc: ' -> puttext; moduleName->putline; 
-               if);
-               (if moduleAllocDone then
-                   (*'**** moduleAllocDone: '->puttext; moduleName->putline;*)
-                   leave alloc
-               if);
-               true -> moduleAllocDone;
-               (if enclIT[] <> none then (* IT is none if top module *)
-                   (if OG.isBasicValue then
-                       enclIT.vsize + 1 -> enclIT.vsize -> off
-                    else
-                       enclIT.rsize + 1 -> enclIT.rsize -> off
-               if)if);
-               (* For modules of the form
-                *    AST: obj compiler_IF.Tree {...}
-                * we must ensure that alloc has been called for 
-                * compiler_IF and thus also Tree
-                * For modules like
-                *    SCPex: obj LIB.SimpleConcurrentProcesses.System
-                * alloc must have been called for LIB and 
-                *    SimpleConcurrentProcesses
-                * We also need to ensure that alloc is called at most once
-                * The boolean moduleAllocDone takes care of this
-                *)
-               OG.super.scanSons
-               (# N: ^ objectInvocation; M: ^ModuleItem; ATdx: ^Decl
-               do (*current.dopt -> putline;*)
-                  (if current## = ObjectInvocation## then
-                      current[] -> N[];
-                      N.ATd.asDecl -> ATdx[];
-                      (if ATdx##
-                       // Module## // ModuleItem## then 
-                          ATdx[] -> M[];
-                          (if false then
-                              ' isModule'->putline;
-                              '** encModule: ' -> putline;
-                              (encModule).OG.IS.dopt -> putline;
-                          if);
-                          (if not M.MD.moduleAllocDone then
-                              (encModule).OG.IS[] -> (N.ATd.asDecl).alloc;
-                              true -> M.MD.moduleAllocDone
-               if)if)if)#);
-               enclIT[] -> sig.alloc;
-               enclIT[] -> OG.alloc
-            #);
+
           theDesc:: 
             (#
             do (if false then
@@ -169,7 +120,7 @@ checker: Parser
           clear::<
             (#
             do (*'Clear: '->puttext; sig.doPT -> putline;*)
-               false -> isAdded -> isIncluded -> inMainPath ->moduleAllocDone;
+               false -> isAdded -> isIncluded -> inMainPath;
                inner
             #)
        #);
@@ -201,31 +152,14 @@ checker: Parser
                    if);
                    MD.requires.import
             if)#);
-          alloc:: 
-            (# 
-            do (if traceAlloc then
-                   '**** Moduletem:alloc:' -> puttext; sig.dopt -> puthead;
-                   ' ' -> put; isChecked -> putBoolean; newline
-               if);
-               (if isChecked then enclIT[] -> MD.alloc if)
-            #);
-          setVirtualBindings::
-            (#
-            do not isChecked -> done;
-            #);
        #);
      Items::<
        (# PT::
             (#
             do (if false then
-                   '(' -> lx.put;
-                   originOff -> lx.putint; ',' -> lx.put;
-                   vsize -> lx.putint; ',' -> lx.put;
-                   rsize -> lx.putint; ',' -> lx.put;
-                   dsize -> lx.putint; ',' -> lx.put;
+                   (*'(' -> lx.put;
                    noOfInner -> lx.putint; ',' -> lx.put;
-                   innerInx -> lx.putint;
-                   ')' -> lx.put;
+                   ')' -> lx.put;*)
                    (pos,break) -> mkbreak
             if)#);
           setUpOrigin::
@@ -233,14 +167,9 @@ checker: Parser
             do (if false then
                    '**** OD:setUpOrigin:'->dumpT; dopt->putheadN
                if);
-               false -> isChecked -> beingChecked 
-               (*-> isVinxd -> isRinxd*) -> done ;
-               0 -> descNo -> vsize -> rsize -> originOff -> noOfInner 
-                 -> dsize -> innerInx;
-               0 -> QDNtop;
+               false -> isChecked -> beingChecked -> done;
                scanSons(# do this(Items)[] -> current.setupOrigin #);
                setAccessLevels;
-               (*checkInterfaceRestrictions*)
             #);
           checkInterfaceRestrictions:< (# do inner #);
           setAccessLevels:
@@ -401,16 +330,16 @@ checker: Parser
                          do (if nameListInDcl then
                                 L:
                                   thisDcl.scanNames
-                                  (# cD: ^NameDecl
-                                  do current[] -> cD[];
+                                  (# cDcl: ^NameDecl
+                                  do current[] -> cDcl[];
                                      A: 
                                        aDecl.scanNames
                                        (#
-                                       do (if cD[] = current[] then leave A if);
+                                       do (if cDcl[] = current[] then leave A if);
                                           (*'**   with: ' -> puttext;
                                           current.T[] -> dumpT;
                                           current.dopt -> putline;*)
-                                          (if cD.T[] 
+                                          (if cDcl.T[] 
                                                 -> current.T.equalNCS 
                                                 -> value then
                                               leave L
@@ -528,53 +457,7 @@ checker: Parser
           globalRestrictionsInSuper,         (* restricts on globals in super *)
           globalRestrictionsInMain,          (* restricts on globals in main *)
           globalRestrictionsInSub: @boolean; (* restricts on globals main.sub *)
-          alloc::
-            (# allocOrigin:
-                 (# 
-                 do (if globalRestrictionsInMain then
-                     else
-                        rsize + 1 -> rsize -> originOff
-                 if)#);
-            do (if traceAlloc then
-                   '**** items:alloc:'->puttext; (if true then encOG.ogID-> putline else dopt -> putheadN if);
-               if);
-               (if traceNoGlobals then
-                   (if globalRestrictionsInMain then
-                       '*** thisOG does not acces global attributes:\n ' -> puttext;
-                       father.father.doPT -> puthead
-               if)if);
-               (if super.ATd[] <> none then (* OBS!we should test if alloc has been made for super *)
-                   (if superDesc[] = none then
-                       ('Items:alloc:superDesc=none',this(Items)[])->putPT;
-                       super.doPT -> dumptn;
-                       doPT->dumptn;
-                       ('encOG',encOG[])->putPT;
-                       ('super.ATd',super.ATd[])->putPT
-                   if);
-                   superDesc.vsize -> vsize;
-                   superDesc.rsize -> rsize;
-                   superDesc.dsize -> dsize;
-                   (if super.isThisBlockLevel and (not super.isImplSuper) 
-                       and (not super.isSingularImplSuper)
-                       then
-                       (if globalRestrictionsInSuper then
-                           rsize + 1 -> rsize -> originOff
-                        else
-                           superDesc.originOff -> originOff
-                       if)
-                    else
-                      allocOrigin  
-                   if)
-                else
-                   allocOrigin;
-                   (if objectDecl.OG.IS[] <> this(Items)[] then
-                       1 -> dsize;
-               if)if);
-               (if sig[] <> none then
-                   this(items)[] -> sig.alloc
-               if);
-               scanSons(# do this(items)[] -> current.alloc #);
-            #);
+          
           topSuper:
             (* This function also returns a primitive top pattern like value *) 
             (# topDesc: ^Items
@@ -716,28 +599,28 @@ checker: Parser
                if)if)
             exit ATd[]
             #);
-          
           searchContext:
-             (# NA: ^Name; CS: ^ Text; ATd: ^Decl; on: @integer; org: ^Items
+             (# NA: ^Name; CS: ^ Text; ATd: ^Decl; on: @integer; org: ^Items; N: ^Node;
+                OD: ^ObjectDescriptor
              enter NA[]
              do NA.rmHash -> CS[];
-                scanSons
-                (# D: ^Decl
-                do (if current.isDecl then
-                       current[] -> D[];
-                       (if nameListInDcl then
-                           '!!!! searchContext:nameListInDecl missing!'->dumptn;
-                       else
-                            (if CS[] ->D.sig.id.equalNCS then
-                                D[] -> ATd[];
-                                1 -> on
-                if)if)if)#);
-                (if ATd[]= none then
-                    NA[] -> (origin[]->org[]).searchContext -> (ATd[],on);
-                    (if ATd[] <> none then on + 1 -> on if)
-                if)
+                encOG[] -> OD[];
+                (if traceSearch then
+                    '**** Items:searchContext:'->dumpT; NA.dopt->dumpT; 
+                    OD.father.label -> dumpTN;
+                    dopt -> putheadN; 
+                if);
+                (if (CS[] -> (OD.father[]->N[]).inDecl -> ATd[]) <> none then
+                    (if traceSearch then '**   found:'->dumpt; ATd.dopt -> putheadN if);
+                    1 -> on;
+                 else
+                    (if (origin[]->org[]) <> none then
+                        NA[] -> org.searchContext -> (ATd[],on);
+                        (if ATd[] <> none then on + 1 -> on if)
+                if)if)
              exit(ATd[],on)
              #);
+          
           localSearch:            
             (# NA: ^Name; CS: ^ Text; ATd: ^Decl; pn: @integer
             enter NA[]
@@ -1188,13 +1071,12 @@ checker: Parser
                             leave L
                  if)if)#)
             #);          
-          getDescNo:: (# do QdescNo[1] -> dNo #);
+          getDescNo:: (# do QdescNo -> dNo #);
           objDescEq::< 
             (# 
             do (if trace then
                    'Items: '->puttext; getDescNo -> putint; 
                    inner;
-                   ' QDNtop: ' -> puttext; QDNtop -> putint;
                    ' descNo: ' -> puttext; descNo -> putint;
                    newline;  
                if);
@@ -1206,14 +1088,14 @@ checker: Parser
             #);
           clear::<
             (#
-            do 0 -> vsize -> rsize -> dsize -> originOff -> noOfInner -> innerInx;
-               false -> done -> hasInn;
+            do 0 -> noOfInner;
+               false -> done -> hasInner -> hasExpInner -> isStringModule;
                inner
             #);
-          newInnerX: ^Pattern;
           newOriginOff:< IntegerValue;
-          vsize,rsize,dsize,originOff,noOfInner,innerInx: @integer;
-          hasInn,
+          noOfInner: @integer;
+          hasInner,
+          hasExpInner, (* inner has an out value *)
           isStringModule,
           done: @boolean (* codegen done*)
        #);
@@ -1464,6 +1346,7 @@ checker: Parser
                                    leave L
                         if)if)#);
                      // '%doc' -> propID.T.equalNCS then
+                     // '%inner' -> propId.T.equalNCS then
                      // '%BetaModule' -> propID.T.equalNCS then
                         (*newline;*)
                         (if handleStdBetaModules then
@@ -1569,13 +1452,6 @@ checker: Parser
                 if)
             exit(ATd[],pn)
             #);
-          alloc:: 
-            (# 
-            do scanSons
-               (#do 
-                  (if encOG[] <> none then
-                      encOG.IS[] -> current.alloc
-            if)#)#);
        #);
      Arguments::<
        (* (Arguments (name: ...) (name: ...) (OG ...) (name ...) (OG ...) ... )
@@ -1769,7 +1645,6 @@ checker: Parser
                       (none,basicScope[],none,true) -> current.check
                if)#);
             #);
-          alloc:: (# do scanSons(#do enclIT[] -> current.alloc #)#);
        #);
      NameDecl::<
        (# setUpOrigin::
@@ -1823,14 +1698,14 @@ checker: Parser
                true -> OG.isObj; (* perhaps only for part-objects! *)
             #);
           check::
-            (# elm::Items
+            (# elm::Items;
             do (if traceCheck then
                    '**** DataItem:check: ' -> puttext; sig.id[] -> putline;
                    (*'**   basicScope:'->dumpTN; basicScope.dopt -> putHeadN*)
                if);
                (none,basicScope[],none,true) -> sig.check;
                (none,basicScope[],none,true) -> OG.check; 
-               (If false then OG.super.clearQual; if);
+               OG.markAsData; (* instances of OG may be data-items *)
                (if isVirtualDataItem then
                    (if traceInvAsDerived then
                        '**** DI:check:isVirtualDataItem:'->dumpT; dopt->dumpTN;
@@ -1888,17 +1763,7 @@ checker: Parser
             do (OG.super.ATd[] <> none) 
                and ((OG.super.ATd.asDecl).isVirtualObject) 
                  -> value
-            #);
-          alloc::
-            (# fOG: ^ObjectDescriptor
-            do (if OG.isBasicValue then
-                   enclIT.vsize + 1 -> enclIT.vsize -> off
-                else
-                   enclIT.rsize + 1 -> enclIT.rsize -> off
-               if);
-               enclIT[] -> sig.alloc;
-               enclIT[] -> OG.alloc
-            #);          
+            #);      
           theDesc::
             (# elm:: scope
             do (*'**** DataItem:theDesc:'->puttext; sig.dopt -> putline;*)
@@ -1943,15 +1808,6 @@ checker: Parser
                if);
                (none,basicScope[],none,true) -> sig.check;
                (none,basicScope[],none,true) -> OG.check;                
-            #);
-          alloc::
-            (#
-            do (if traceAlloc then
-                   '**** LabelDecl:alloc: ' -> putline;
-                   enclIT.dopt -> putHeadN
-               if);
-               enclIT[] -> sig.alloc;
-               enclIT[] -> OG.alloc
             #);
           theDesc::
             (# elm:: scope
@@ -2193,115 +2049,6 @@ checker: Parser
                if)#)if);
                inner;
             #);
-          isInner::<
-            (* Perhaps ad hoc!? -- from old code: inner
-             * check BKWptn: %inner P
-             *)
-            (# org: ^Items
-            do (if (OG.primNo = inner_prim) -> value then
-                   (if false then
-                       '**** got inner:\n' -> puttext; dopt -> putline
-                   if);
-                   basicScope[] -> org[];
-                   args.scanArgs
-                   (# A: ^ObjectSpecification
-                   do current[] -> A[];
-                      A.super.on - 1 
-                        -> (args.origin[]->org[]).toOrigin -> org[]; 
-                   #);
-                   org.noOfInner + 1 -> org.noOfinner;
-                   (if false then '**   noOfInner:'->dumpt; org.noOfInner->putint; newline; if);
-                   (if false then
-                       '**   org:'->putline; org.dopt -> puthead
-                   if);
-                   (if org.noOfInner = 1 then 
-                       org.dsize + 1 
-                         -> org.dsize 
-                         -> org.innerInx;
-                       (if false then 'org.innerInx:'->dumpT; org.innerInx-> putint; ' '->put; org.encOG.OGid-> putline; if)
-               if)if);
-            #);     
-          alloc::< 
-            (# add:
-                 (* We have a ptn: V:< OGv1, V::< OGv2
-                  * OGv1 or OGv2 are bindings of V
-                  * For OG2, we should perhaps have the initial V:< OG?
-                  *)
-                 (# enclosingOG: ^ObjectDescriptor; F: ^Node
-                 do father.father[] -> F[];
-                    (if F##
-                     // ObjectDescriptor## then
-                        (* 'ObjectDescriptor: ' -> putline; F.dopt->putline;*)
-                     else                           
-                        '!!!! Koks:A:'->putline;
-                        father.father.label -> putline
-                    if)
-                 #);
-            do (if traceAlloc then
-                   '**** Ptn:alloc: ' -> puttext; sig.doPT -> putline; 
-               if);
-               enclIT[] -> OG.alloc;
-               (if ptnKind 
-                // virtualPtn then 
-                   enclIT.dsize + 1 -> enclIT.dsize -> off;
-                   (if false then
-                       '**** alloc:virtual ptn: ' -> puttext; sig.doPT -> puthead; ' off: '->puttext;
-                       off -> putint; ' in:'->puttext; enclIT.encOG.ogID->putline
-                   if);
-                   (*add*)
-                // furtherPtn // finalPtn then
-                   (if false then
-                       '**** alloc:Virtual bind: ' -> puttext; 
-                       vDcl.off -> putint;
-                       ' ' -> put;
-                       sig.doPT -> puthead;                   
-                   if);
-                   (if vDiDcl[] <> none (*vDcl[] = none*) then
-                       (if traceInvAsDerived then
-                           '**** Binding of a virtual data-item:' -> dumpT;
-                           dopt -> dumpTN
-                       if);
-                    else
-                       vDcl.off -> off;
-                   if)
-               if);
-               sig.names.scanSons
-               (# i: @integer
-               do (if (i + 1) > 0 then
-                      (*'**** pattern:names > 1: ' ->puttext; sig.dopt->putline;
-                      off -> current.off *)
-                  if)
-               #);
-            #);
-          setVirtualBindings::
-            (# add:
-                 (* We have a ptn: V:< OGv1, V::< OGv2
-                  * OGv1 or OGv2 are bindings of V
-                  * For OG2, we should perhaps have the initial V:< OG?
-                  *)
-                 (# enclosingOG: ^ObjectDescriptor; F: ^Node
-                 do father.father[] -> F[];
-                    (if F##
-                     // ObjectDescriptor## then
-                        (if false then
-                            '**** SVB:ObjectDescriptor: ' -> putline; 
-                            F.dopt->putline;
-                        if);
-                     else                           
-                        '!!!! Koks:B:'->putline;
-                        father.father.label -> putline
-                    if)
-                 #);
-            do  (if ptnKind 
-                // virtualPtn then 
-                   (*'**** Virtual ptn: ' -> putline; sig.doPT -> putline;*)
-                   add
-                // furtherPtn // finalPtn then
-                    (*'**** Virtual bind: ' -> putline; sig.doPT -> putline;*)
-                    OG.super.ATd.off -> off;
-                    add;
-               if);
-            #);
           handleArgs::
             (# args: [6]^ObjectSpecification; top: @integer;
                enclosingOG: ^ObjectSpecification (*ObjectDescriptor*)
@@ -2470,11 +2217,6 @@ checker: Parser
                (none,basicScope[],none,true) -> sig.check;
                (none,basicScope[],none,true) -> OG.check;
             #);
-          alloc::
-            (#
-            do enclIT[] -> sig.alloc;
-               enclIT[] -> OG.alloc
-            #);
           theDesc::
             (#
             do (if not OG.hasItems then 
@@ -2572,19 +2314,6 @@ checker: Parser
                               leave L
                  if)#)if)
             #);
-          alloc::
-            (# E: ^Exp
-            do (if traceAlloc then
-                   '**** ObjectCall:alloc: ' -> puttext; dopt -> putline
-               if);
-               enclIT[] -> super.alloc;
-            #);
-          setVirtualBindings::
-            (# E: ^Exp
-            do (if ((super.last -> E[]) <> none) and (E.ATd[] <> none) then 
-                   E[] -> (E.ATd.asDecl).handleArgs 
-               if);
-            #);
           getDescNo:: (# do ((super.last).ATd.asDecl).OG.getDescNo -> dNo #)
        #);
      ObjectDescriptor::<
@@ -2639,7 +2368,7 @@ checker: Parser
                   *          (name:XXX)
                   *)
                  (# ND: ^NameDecl; ATdx: ^Decl
-                 do super.ATd[] -> ND2D -> ATdx[];
+                 do super.ATd[] -> ND2D -> ATdx[]; (* super.ATd may be none *)
                     (if (ATdx[] <> none) and 
                         (not ATdx.isPatternDecl and not IS.isEmpty) then
                         this(TopNode)[] -> SemanticError
@@ -2795,32 +2524,14 @@ checker: Parser
             (#
             do hasItems or (super.hasVirtualArgs and not super.isPrimitive)
                  -> value;
-            #);
-          alloc::
-            (# E: ^Exp
-            do (if traceAlloc then
-                   '**** OG:alloc:' -> puttext; dopt -> putHeadN
-               if);
-               enclIT[] -> super.alloc;
-               (if (super.ATd[] <> none) and super.ATd.isStdBetaDecl then
-                   (*'!!!! OD:alloc:stdBetaDecl:leave'->dumpTN;*)
-                   leave alloc
-               if);
-               enclIT[] -> IS.alloc 
-            #);
-          setVirtualBindings::
-            (# E: ^Exp
-            do (if ((super.last -> E[]) <> none) and (E.ATd[] <> none) then 
-                   E[] -> (E.ATd.asDecl).handleArgs 
-               if);
-            #);         
+            #);     
           hasCode:: (# do true -> value #);
           hasVirtualObject: @boolean;
           getNameForOff::
             (#do (attOff,descNo,isRef,isIndexed) -> IS.getNameForOff -> NM[] #);
           getDescNo:: 
             (# ptn: ^Pattern
-            do (if (IS.QdescNo[1] -> dNo) = 0 then
+            do (if (IS.QdescNo -> dNo) = 0 then
                     (* Virtual bindings like DD in V ::< DD *)
                     (if (superPtn -> ptn[]) <> none then
                         ptn.OG.getDescNo -> dNo
@@ -2889,7 +2600,7 @@ checker: Parser
                         ' ' ->put; E.dopt -> puttext;
                         ' unit:'->puttext; U[] -> putline;
                  if)#)
-            do (if traceCheck then
+            do (if traceCheck or traceGetVqualShort then
                    '**** Invocation:check: ' -> puttext; doPT -> putheadn;
                if);
                scanSons
@@ -2962,13 +2673,6 @@ checker: Parser
                   current[] -> rec[];
                   false -> isFirst
             #)#);
-          alloc:: 
-            (# 
-            do (if traceAlloc then
-                   '**** INV:alloc: ' -> puttext; doPT -> putHeadN;
-               if);
-               scanSons(# do enclIT[] -> current.alloc #);
-            #);
        #);
      ObjectInvocation::<
        (# setUpOrigin:: 
@@ -3023,19 +2727,20 @@ checker: Parser
                           '**** OI:markInner:'->dumpT; args.noOfArgs->putint; 
                           ' '->put; dopt->dumptn;
                       if);
-                      (if this(ObjectInvocation).ATd[] = none then (* inner(xxx) where xxx is undeclared*) 
+                      (if this(ObjectInvocation).ATd[] = none then (*inner(xxx), xxx  undeclared*) 
                           '**** leave MarkInner:'->dumpt; dopt -> dumptn;
-                      leave markInner if);
+                          leave markInner 
+                      if);
                       (if args.noOfSons <> 1 then 
-                          (* In general inner must have the form inner(ptn) where ptn is an enclosig pattern
+                          (* In general inner must have the form inner(ptn) where ptn is an enclosing pattern
                            * We must handle the following situations in a special way:
                            *  innerBool: inner { ... }
                            *     here inner appears as a superpattern with no argument
                            *  BB := innerBool
                            *    here we call a subptn of inner
                            *  Both forms are ok and tested for below
-                           *  For both we must se hasInn and noOfInner
-                           *  Note, we should be able to only have hasInn
+                           *  For both we must se hasInner and noOfInner
+                           *  Note, we should be able to only have hasInner
                            *)
                           (if not ((father[]->INV[]).isSuper or isSubOfInner) then 
                               this(ObjectInvocation)[] -> semanticError
@@ -3055,12 +2760,10 @@ checker: Parser
                                      '**   IS:Items:'->dumpt; dopt->dumpTN;
                                      '**   origin:'->dumpTN; (origin[]->org[]).dopt->dumpTN;
                                  if);
-                                 true -> (origin[]->org[]).hasInn;
+                                 true -> (origin[]->org[]).hasInner;
                                  1 -> (origin[]->org[]).noOfInner;
                                  (if traceVDTalloc then
                                      '-------A:'->dumptn;(origin[]->org[]).dopt->dumpTN;
-                                     '-------B:'->dumptn;(origin[]->org[]).dopt->dumpTN;
-                                      '------C:'->dumptn;(origin[]->org[]).dopt->dumpTN;
                                  if)
                              else
                                  '\n!!!!markInner: not:Items:'->dumpt; origin.label->dumpT; 
@@ -3077,8 +2780,12 @@ checker: Parser
                                      '!!!! markInner:super.noOfSons<>1:'->dumpT; dopt ->putline
                                   else
                                     A.super.last-> OI[]; 
-                                    OI.ptnID[] -> (origin.origin[]->org[]).searchContext -> (ATd[],on);
-                                   (if ATd[] <> none then
+                                    (if true then
+                                        OI.ptnID[] -> (origin[]->org[]).searchContext -> (ATd[],on);
+                                    else
+                                        OI.ptnID[] -> (origin.origin[]->org[]).searchContext -> (ATd[],on);
+                                    if);
+                                   (if (ATd[] <> none) and ATd.isPattern then
                                        (if traceVDTalloc then
                                            '** found:'->dumpT; on -> putint; newline; ATd.dopt->putHeadN
                                        if);
@@ -3087,15 +2794,36 @@ checker: Parser
                                     else
                                        this(objectInvocation)[] -> semanticError
                                          (#
-                                         do 'Did not find enclosing pattern: '->msg;
-                                            dopt -> msg
-                                         #)
+                                         do 'The name "'->msg; OI.ptnID.dopt->msg;
+                                            '" in "' ->msg; dopt -> msg;
+                                            '" is not an enclosing pattern '->msg;
+                                            (if ATd[] <> none then 
+                                                (if ATd.isDataItem then
+                                                     '\n     "'-> msg; OI.ptnID.dopt->msg;
+                                                     '" is an enclosing data-item' -> msg
+                                                if)
+                                            if)
+                                         #);
+                                         none -> ATd[]; (* to avoid none error below *)
                              if)if)if)
                          else
                             (none,basicScope[],none(*basicScope[]*),true) -> A.check;
                          if);
-                         true -> (A.super.last).ATd.OG.IS.hasInn;
-                         1 -> (A.super.last).ATd.OG.IS.noOfInner;
+                         (if ATd[] <> none then
+                                 (if this(ObjectInvocation).ATd.OG.getReturnDecl <> none then
+                                     (if false then
+                                         '**** inner:return: '->dumpT; dopt->dumpTN;
+                                         '**   return: '->dumPT;
+                                         (this(ObjectInvocation).ATd.OG.getReturnDecl).dopt->dumptn;
+                                     if);
+                                     true -> (A.super.last).ATd.OG.IS.hasExpInner;
+                                     (if false then
+                                         '**   theinnerDecl:'->dumptN; 
+                                         this(ObjectInvocation).ATd.dopt->dumpTN;
+                                 if)if);
+                             true -> (A.super.last).ATd.OG.IS.hasInner;
+                             1 -> (A.super.last).ATd.OG.IS.noOfInner;
+                         if);
                          (if traceVDTalloc and (ATd[] <> none)  then
                              '(A.super.last).ATd:'->dumpT; (A.super.last).ATd.dopt->putheadN;
                              origin[]->org[];
@@ -3139,18 +2867,48 @@ checker: Parser
                (if (ATd.asDecl).primNo  -> pNo
                 // this_prim then
                    (* ad hoc - must be fixed *)
-                   (# A: ^Item; OD: ^ObjectDescriptor
+                   (# A: ^Item; OD: ^ObjectDescriptor; OI: ^ObjectInvocation; org: ^Items; 
+                      ATdx: ^Decl; on: @integer;
+                      thisError:
+                         (# 
+                         do this(ObjectInvocation)[] -> semanticError
+                             (#
+                             do 'The argument: "'->msg; A.dopt->msg; 
+                                '" in "'->msg; dopt->msg; '" is not an enclosing declaration'->msg
+                             #)
+                         #)
                    do args.scanArgs(# do current[] -> A[] #);
+                      (if traceSearch then
+                          '**** this: ' -> dumpt; A.label -> dumpT; A[]-> OD[]; OD.super.dopt -> dumpT; 
+                          OD.super.noOfSons -> putint; ' ' -> put; OD.doPT -> dumpTN;
+                      if);
+                      (if A.isObjectDescriptor 
+                          and (A[]->OD[]).IS.isEmpty 
+                          and (OD.super.noOfSons = 1) then
+                          (OD.super.last->OI[]).ptnId[] -> (origin[]->org[]).searchContext -> (ATdx[],on);
+                          (if ATdx[] <> none then
+                              (if traceSearch then '**** found: '->dumpt; ATDx.dopt -> putheadN if);
+                              ATDx[] -> OI.ATd[] -> OD.super.ATd[];
+                              on -> OI.on -> OD.super.on;
+                              A.theDesc -> basicScope[];
+                          else
+                              thisError
+                          if)
+                      else
+                          thisError
+                      if);
+                      (if false then
                       (none,basicScope[],none(*basicScope[]*),true) -> A.check;
                       A.theDesc -> basicScope[];
                       (if traceCheck then
                           '**** OI:checkOI:this_prim: '->puttext;
                           A.label -> putline; A.dopt -> putheadN;
                           'basicScope_none:'->puttext;
-                          basicScope[] = none ->putboolean; newline;
+                          basicScope[] = none ->putboolean; 
+                          ' A.on:'->dumpt; (A[]->OD[]).super.on->putint; newline;
                           'A.super.ATd:'->dumpt; 
                           (A[]->OD[]).super.ATD.dopt -> putheadN;
-                      if);
+                      if);if)
                    #)
                 // indexedGet_prim then
                    (* this(OI)      = get[exp]
@@ -3226,7 +2984,7 @@ checker: Parser
                    #);
                 else
                    handleArgs;
-                   (if useVDTalloc and (pNo = inner_prim) then 
+                   (if pNo = inner_prim then 
                        markInner
                    if);
                    (* ok if static/dynamicObject - what does
@@ -3239,23 +2997,7 @@ checker: Parser
                    basicScope[] -> BS[];
                    (# encOG,qual: ^ObjectDescriptor; org: ^Scope; 
                       ptn: ^Decl; isArgToSuper: @Boolean
-                   do (if false then
-                          '**   checkOI:'->Puttext;
-                          this(ObjectInvocation).dopt -> putline;
-                          '**   thisOI.father:'->putline;
-                          origin.dopt -> putheadN;
-                          '**   BS:' -> puttext; BS.label -> puttext;
-                          ' origin: ' ->puttext; origin.label->puttext;
-                          ' origin.father: ' -> puttext; 
-                          origin.father.label -> putline; 
-                          '**   ATd: ' -> puttext; ATd.dopt ->putheadN;
-                          '**   ATd.origin: ' -> puttext; 
-                          ATd.origin.label -> putline;
-                          ATD.origin.dopt -> putheadN;
-                          '**   father:'->putline;
-                          ATD.origin.father.dopt -> putheadN;;
-                      if);
-                      (if 'Signature' -> ((ATd.asDecl).origin.label).equalNCS
+                   do (if 'Signature' -> ((ATd.asDecl).origin.label).equalNCS
                           then
                           (* Here we check for the situation where 
                            * thisOI = Xa in foo(Xa) and declared as Xd
@@ -3279,62 +3021,51 @@ checker: Parser
                              (if E.args[] <> none then 
                                  E.args.scanArgs
                                  (#
-                                 do (if current[] 
-                                        = this(ObjectInvocation).father.father[]
+                                 do (if current[] = this(ObjectInvocation).father.father[]
                                         then
                                         true -> isArgToSuper;
                       if)#)if)#)if);   
                       (if isFirst then
                           (if isArgToSuper then
-                              (* ptn is defined only of 
-                               * argToSuper = true *)
+                              (* ptn is defined only of argToSuper = true *)
                               ptn.OG[] -> encOG[]
                            else
                               (origin[]->org[]).encOG[] -> encOG[];
                           if);
                        else
                           (if traceGetVqual then
-                              '**** computing:encOG:BS.father=encOG:'
-                                -> puttext; 
+                              '**** computing:encOG:BS.father=encOG:' -> puttext; 
                               BS.father.dopt -> putheadN;
                           if);
                           (* BS = BasicScope
-                           * For INV = R.X.Y, 
-                           * R = BS for X, since  X is defined in R
+                           * For INV = R.X.Y, R = BS for X, since  X is defined in R
                            *)
                           BS.father[] -> encOG[]
                       if);
                       (if traceGetVqual then
-                          '**** encOG:isFirst:' -> puttext; 
-                          isFirst -> putboolean;
+                          '**** encOG:isFirst:' -> dumpT; isFirst -> dumpB;
                           encOG.dopt -> putheadn;
-                          '**   OGS:'->dumpT; 
                           (if OGs[] <> none then
-                              OGS.print
+                              ('**   OGS:',0,0) -> OGS.print
                            else
-                              'none'->dumpTN
-                          if);
-                      if);
+                              'OGS  = none'->dumpTN
+                      if)if);
                       (encOG[],not isFirst,OGS[]) 
                         -> getVqual 
                         -> (OGS[],qual[]);
-                      (if traceGetVqual then
-                          '**** checkOI:checkOI:after:getVqual: ' -> puttext;
-                          ptnID.dopt ->putline;
-                          '**** qual:'->putline; qual.dopt -> putheadN;
-                          '**** OGS:'->putline; OGS.print
-                      if);
                       qual.IS[] -> basicScope[];
-                      (if traceGetVqual then
-                          '**** checkOI:after:getVqual:OF: ' ->puttext;
-                          ptnID.dopt -> puttext; ' qual:'->puttext;
-                          qual.dopt -> putheadN;
-                          '**   basicScope:'->dumpT; basicScope.dopt->putheadN;
-                          '**** OGS:'->putline; OGS.print;
-               if)#)if);
+               #)if);
+               (if (ATd.asDecl).OG.primNo = suspend_prim then
+                   (if false then
+                       '**** OI:suspend:'-> dumpT; ('rec',rec[])->putPT;
+                       (if rec[] <> none then
+                           (rec.getQual).label -> dumpT; (rec.getQual).doPT -> putHeadN
+                   if)if);
+                   (if rec[] <> none then
+                       (rec.getQual).markAsCoroutine
+               if)if);
                (if traceGetVqual then 
-                   '**** next:basicScope:from:' -> puttext;
-                   ptnID.T[] -> putline; 
+                   '**** checkOI:getVqual:END:' -> puttext; ptnID.T[] -> putline; 
                    '**   basicScope: '->puttext; basicScope.dopt -> putheadN;
                if)
             #);
@@ -3411,7 +3142,7 @@ checker: Parser
                org: ^Scope; OGq: ^ObjectDescriptor; done: @boolean;
                MD: ^Module; MI: ^ModuleItem; ATdx: ^Decl;
                OS: ^objectSpecification;
-            do (if traceCheck then
+            do (if traceCheck or traceSearchShort then
                    '**** ObjectInvocation:check: '->puttext; dopt->putline;
                if);
                (if basicScope[] <> none then (* ad hoc *)
@@ -3628,46 +3359,7 @@ checker: Parser
                    newline;
                if);
             #);
-          alloc:: 
-            (# org: ^Items
-            do (if traceAlloc then
-                   '**** OI:alloc:'->dumpT; dopt -> dumpTN;
-                   ATd.dopt -> putheadN;
-                   ATD.isStdBetaDecl -> putBoolean; newline;
-               if);
-               (if ATd[] = none then 
-                   '!!!! alloc:ATd is none:'->puttext; label->puttext; ' '->put;
-                   father.label -> puttext; ' ' -> put;
-                   father.father.label -> puttext; ' ' -> put;
-                   ' Father.father: ' -> putline;
-                   father.father.doPT-> putline; 
-               if);
-               (if ATd.isStdBetaDecl then leave alloc if);
-               (*'\nalloc:ATd.isinner: ' -> puttext; label -> putline;
-               dopt -> putline;*)
-               
-               (if (enclIT[],args[]) -> (ATd.asDecl).isInner then
-                   (if false then
-                       '**   inner:'->puttext; on -> putint; ' ' -> put;
-                       label -> puttext; ' ' -> put; dopt -> putline;
-                       'father: ' -> puttext; father.label -> puttext; 
-                       ' father.father: ' -> puttext;
-                       father.father.label -> putline;
-                       origin[] -> org[];
-                       (for i: on repeat
-                            org.origin[] -> org[];
-                            '**   origin: ' ->putline;
-                            org.doPT -> puthead;
-               for)if)if);
-               (if (ATd[] <> none) and ((ATd.asDecl).isPattern) 
-                   and ((ATd.asDecl).OG.primNo = inner_prim) then
-                   (*'**** OI:alloc: ' -> puttext; dopt -> putline*)
-                else                   
-                   scanSons(#do enclIT[] -> current.alloc #);
-               if);
-               (*'handleArgs'->puttext; dopt->putline;*)
-               (* this(Exp)[] -> ATd.handleArgs *)
-            #);
+            
           hasVirtualObjectQual: @boolean;
        #);
      IfThen::<
@@ -3676,7 +3368,6 @@ checker: Parser
             do origin[] -> cond.setUpOrigin;
                origin[] -> thenPart.setUpOrigin;
             #);
-          alloc:: (#do scanSons(#do enclIT[] -> current.alloc #)#);
           check::
             (#
             do (if traceCheck then
@@ -3738,7 +3429,7 @@ checker: Parser
                ifThenDecl[] -> theDcl[];
                objectDecl.OG.IS[] -> theScope[]
             #);
-          alloc:: (#do scanSons(#do enclIT[] -> current.alloc #)#);
+
        #);
      BinaryExp::<
        (* B = (BinaryExp
@@ -3958,7 +3649,6 @@ checker: Parser
                (rec[],theScope[],isFirst,encOD[]) 
                  -> IV.setUpDecl -> (ATd[]->theDcl[],theScope[])
             #);
-          alloc:: (# do enclIT[] -> IV.alloc #)
        #);
      const::<
        (# checkOI:: 
@@ -4238,7 +3928,7 @@ checker: Parser
               if)
           if);
 
-          (if traceSearch then
+          (if traceSearchShort then
               '**** Found: "' -> puttext; ptnId.T[] -> puttext; 
               '" on=' -> puttext; on -> putint;
               ' pn=' -> puttext; pn -> putint;
@@ -4413,7 +4103,7 @@ checker: Parser
             do 'Semantic error' -> puttext;
             #);
        do INNER;
-          true -> semanticErrors
+          true -> semanticErrors; noOfSemanticErrors + 1 -> noOfSemanticErrors;
        #);
      QuaCheck: Notification
        (# report:: (# do reportQuaCheck -> value #);
@@ -4428,7 +4118,7 @@ checker: Parser
           printHeading::(#do 'WARNING' -> puttext #);
        do inner
        #);
-     semanticErrors: @boolean;
+     semanticErrors: @boolean; noOfSemanticErrors: @integer;
      emitCom_before: @Boolean
   do (if verbose then '**** CHECKER  ****' -> putline if);
      0 -> newDesc.noOfDescs; (* needed when exe from minienv
@@ -4479,15 +4169,11 @@ checker: Parser
          false -> ppInvAsDerived;
      if);
      (if semanticErrors then
-         '\n***** Semantic errors: compilation stops' -> putline;
-         lex.errorStream[] -> error_stream[]
+         '\n***** The module has ' -> puttext; noOfSemanticErrors -> putint; 
+         ' semantic errors - compilation stops' -> putline;
+         lex.errorStream[] -> error_stream[];
       else
-         (if not useVDTalloc then
-             (if verbose then '**** ALLOC    ****'->putline if);
-             rootModule.alloc 
-         if);
          (if verbose then '**** SET VIRTUAL BINDINGS ****' -> putline if);
-         rootModule.setVirtualBindings;
          (*main.doPP -> putline;*)
          inner
      if);

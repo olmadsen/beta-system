@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) Aarhus University
  * aoa.h
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */

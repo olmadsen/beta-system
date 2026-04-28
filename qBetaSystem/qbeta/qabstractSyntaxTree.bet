@@ -13,9 +13,8 @@ traceUE: (# exit false #); (* trace Unit Exp *)
 traceSlots: (# exit false #);
 unitIssue: (# exit false #);
 traceSetupOrigin: (# exit false #);
-nameListInDcL: (#exit false #); (* Obs; for collectSimple and getEntries below
-                                 * the argument passed to qenv is a Decl;
-                                 * should be NameDecl
+nameListInDcL: (#exit false #); (* Obs; for collectSimple and getEntries below the
+                                 * argument passed to qenv is a Decl; should be NameDecl
                                  *)
 coArg: (#exit false #);
 
@@ -67,6 +66,7 @@ AbstractSyntaxTree: Tree
      doPPasDerived, (* -i sets this boolean; checker uses it set ppAsDerivedd;
                      * see end of checker
                      *)
+     paramQual, (* print qualifications of actual andformal parameters *)
      handleStdBetaModules,
      parseMain, (* only parse main and then exit *)
      emitCom,
@@ -78,12 +78,14 @@ AbstractSyntaxTree: Tree
      traceWithNewProxy, 
      traceInvAsDerived, (* trace inv as derived object, virtual data-items *)
      traceParse,
-     traceSearch,    
+     traceSearch,
+     traceSearchShort,      
      traceCheck,
      traceGetVqual,
+     traceGetVqualShort,
      traceUnit,
      traceGen,
-     traceAlloc,traceVDTalloc,useVDTalloc: @boolean;
+     traceAlloc,traceVDTalloc: @boolean;
      printOffOn: (# exit true #);
      traceProps: (# exit false #);
      traceGetQual: (# exit false #);
@@ -424,7 +426,7 @@ AbstractSyntaxTree: Tree
             #);
           clear::<
             (#
-            do false -> isChecked -> noArgsCheck -> genIsDone -> markedForCG;
+            do false -> isChecked -> noArgsCheck -> allocDone -> genIsDone -> markedForCG;
                inner;
             #);
           setUpOrigin::<
@@ -479,6 +481,12 @@ AbstractSyntaxTree: Tree
                inner
             exit D[]
             #);
+          inDecl:<
+             (# CS: ^Text; D: ^Decl
+             enter CS[]
+             do inner
+             exit D[]
+             #);
           checkRequires:<
             (# done: @boolean
             do inner;
@@ -555,19 +563,6 @@ AbstractSyntaxTree: Tree
             do this(node)[] -> rec[];
                inner
             exit rec[]
-            #);
-          alloc:<
-            (# enclIT: ^items
-            enter enclIT[]
-            do (if traceAlloc then doPT -> putline if); 
-               inner
-            #);
-          setVirtualBindings:<
-            (# done: @Boolean
-            do inner;
-               (if done then
-                   scanSons(#do current.setVirtualBindings #)
-               if)
             #);
           semCheckDone: @boolean;
           semCheck:<
@@ -655,37 +650,43 @@ AbstractSyntaxTree: Tree
             #);
           vdtAlloc:< (#do inner #);
           allocVirtual:< (# inx: @integer enter inx do inner exit inx #);
-          hasInner:< BooleanValue
-             (# theOD: ^ObjectDescriptor
-             enter theOD[]
-             do inner;
-                L:
-                  scanSons
-                  (# 
-                  do (if theOD[] -> current.hasInner then
-                         true -> value;
-                         leave L
-                     if)
-             #)#);
           allocInProgress,allocDone: @boolean;
           Qalloc:<
-            (# varNoX: @integer; IT: ^Items
-            enter(varNoX,IT[])
-            do (if allocInProgress then
-                   '!!!! allocInProgress:'->putline; dopt -> putHeadN;
-                   '!!   father:' -> putline; 
-                   father.dopt -> putheadN;
-                   '!!   IT:' -> putline; 
-                   (if IT[] <> none then
-                       IT.doPT -> putHeadN
-                    else
-                       'IT is none'->putline
-                   if)
-               if);
-               true -> allocInProgress;
-               inner;
-               false -> allocInProgress;               
-            #);
+            (# IT: ^Items;
+               allocMsg:
+                  (# 
+                  do  '!!!! allocInProgress:'->putline; dopt -> putHeadN;
+                      '!!   father:' -> putline; 
+                      father.dopt -> putheadN;
+                      '!!   IT:' -> putline; 
+                      (if IT[] <> none then
+                          IT.doPT -> putHeadN
+                       else
+                          'IT is none'->putline
+                  if)#);
+               inAlloc: BooleanValue
+                  (# ptn: ^Pattern
+                  do (if allocInProgress then
+                         (if isPattern then
+                             (* for a pattern P, P.Qalloc imply P.OG.Qalloc 
+                              * and P.OG.IS.Qalloc; the latter set 
+                              * true -> P.OG.IS.allocDone -> P.OG.allocDone;
+                              * we may recursively still call P.Qalloc.
+                              * Here we test if P.Qalloc.OG.allocDone
+                              *)
+                             this(Node)[] -> ptn[];
+                             not ptn.OG.allocDone -> value
+                         else
+                             true -> value
+                  if)if)#)
+            enter IT[]
+            do (if not allocDone then 
+                   (if inAlloc then allocMsg if);
+                   true -> allocInProgress;
+                   inner; 
+                   true -> allocDone;
+                   false -> allocInProgress;
+            if)#);
           classDef:<
             (#
             do inner;
@@ -867,18 +868,9 @@ AbstractSyntaxTree: Tree
                    T[] -> comment[]
                if)
             #);
-          clearQual:
-            (#
-            do (if false and (savedQual[] <> none) then
-                   '**** clearQual: '->puttext; label->puttext; 
-                   ' ' -> put; dopt -> puthead
-               if);
-               none -> savedQual[];
-               scanSons(#do current.clearQual #)
-            #);
+
           savedQual: ^ObjectDescriptor;
           noArgsCheck,genIsDone: @boolean; 
-
        do inner;
           lex.getComment -> comment[];
        #);     
@@ -887,7 +879,7 @@ AbstractSyntaxTree: Tree
           isConst: @boolean;
           NewOff::
             (#
-            do qoff[1] -> V
+            do off -> V
             #);
        do inner
        #);
@@ -1636,7 +1628,7 @@ AbstractSyntaxTree: Tree
                       #)
                    else
                       currentDcl.sig.ID[] -> name[];
-                      currentDcl.qoff[1] -> off -> getKind -> kind;
+                      currentDcl.off -> off -> getKind -> kind;
                       (name[],off,kind,currentDcl[]) -> addSimple
                   if);
                   (if false then
@@ -1761,6 +1753,8 @@ AbstractSyntaxTree: Tree
                        // '%OSDvisibility' -> N.propID.T.equalNCS then
                        // '%ID' -> N.propID.T.equalNCS then
                        // '%doc' -> N.propID.T.equalNCS then
+                       // '%inner' -> N.propID.T.equalNCS then
+                          inner_prim -> newBasicProp.primNo
                        // '%BetaModule' -> N.propID.T.equalNCS then
                           (*'**** Got %BetaModule: ' -> putline*)
                           true -> newBasicProp.hasStdBetaModule;
@@ -1929,23 +1923,23 @@ AbstractSyntaxTree: Tree
            * are appended
            *)
           isEmpty,isArgs: @boolean;
-          objSize: IntegerValue (# do qsize[1] -> value #); 
+          objSize: IntegerValue (# do qsize -> value #); 
           (* why not binding of objSize? *)
           
           clear::< 
             (# 
-            do 0 -> QDNtop -> descNo;
+            do 0 -> descNo;
                none -> superDesc[];
                false -> isInlined;
-               (for i: QdescNo.range repeat 0 -> QdescNo[i] for);
+               0 -> QdescNo;
                inner 
             #);          
           descNo: @integer; (* Why is descNo in Items and not in OG?
                              * Perhaps to avoid a descNo for a 
                              * non-singular invocation!?
                              *)
-          QdescNo: [1] @integer; QDNtop: @integer;
-          qsize: [1] @integer; 
+          QdescNo: @integer; (* must unify descNo and QdescNo *)
+          qsize: @integer; 
        #);
      Item: Node 
        (# isNameDecl:< BooleanValue;
@@ -2126,7 +2120,6 @@ AbstractSyntaxTree: Tree
           sig: ^Signature;
           OG: ^(*ObjectDescriptor*)ObjectSpecification;
           off: @integer;
-          qoff: [1] @integer;
           inSig,isInArg,isOutArg,isDesignator: @boolean;
           setNewId:< (#do inner #);
           objSize:< IntegerValue;
@@ -2171,13 +2164,7 @@ AbstractSyntaxTree: Tree
             #);
           isStdBetaDecl: @boolean; (* a standard Beta declaration *)
           accessLevel: @integer;
-          changeAttName:: 
-            (# do '!!!! Decl:changeAttName: no binding' -> putline #);
-          isInner:< BooleanValue
-            (# basicScope: ^items; args: ^Arguments 
-            enter(basicScope[],args[]) 
-            do inner 
-            #);
+          changeAttName:: (# do '!!!! Decl:changeAttName: no binding' -> putline #);
           simpleQual:
             (* Given 
              *    X: var/val/obj/ref T      return T.ATd.OG
@@ -2218,6 +2205,14 @@ AbstractSyntaxTree: Tree
                       inner scanNames 
                #)if)
             #);
+          inDecl::
+             (#
+             do (if traceSearch then
+                    '**** Decl:inDecl:'->dumpT; CS[] -> dumpt;
+                    'sig:'->dumpT; sig.dopt -> dumptn; dopt -> putheadN;
+                 if);
+                (if CS[] -> sig.id.equalNCS then this(Decl)[] -> D[] if)
+             #);
           checkVirtualArgs:<
             (# E: ^Exp; hasVirtualArgs: @boolean
             enter E[]
@@ -2265,7 +2260,7 @@ AbstractSyntaxTree: Tree
             do (if OG.IS.isEmpty then
                    (OG.super.last).Atd.getDescNo -> dNo
                 else
-                    OG.IS.qDescNo[1] -> dNo; 
+                    OG.IS.qDescNo -> dNo; 
                 if);
                 inner
             exit dNo
@@ -2303,8 +2298,7 @@ AbstractSyntaxTree: Tree
             do gdb; inner exit(loadRec)
             #);
           getNewOff:< (# off: @integer do inner exit off #);
-          load:< 
-            (# rec: ^Exp; A: ^SuperAdr enter(rec[],A[]) do inner #);
+          load:< (# rec: ^Exp; A: ^SuperAdr enter(rec[],A[]) do inner #);
           loadAccessor:<
             (# valueOff: @integer; rec,next: ^Exp;
             enter(rec[],valueOff,next[])
@@ -2644,7 +2638,7 @@ AbstractSyntaxTree: Tree
                                (if go then inner if)
                             #);
                           ix: @integer
-                            do (* if (E) :then { S1 } :else { S2} *)
+                       do (* if (E) :then { S1 } :else { S2} *)
                           (if not doBreak then
                               pos > lineWidth -> doBreak
                           if);
@@ -3346,21 +3340,15 @@ AbstractSyntaxTree: Tree
                               (if false and 
                                   ('ObjectCall'
                                     -> (Ex.father.father.label).equalNCS) then
-                                  '**** FormalArg: ' -> puttext; 
-                                  currentArg.doPT -> putline;
-                                  '**   ActualArg: ' -> puttext; 
-                                  aArgs[i].doPT -> putline; 
-                                  '**   Ex.label: ' -> puttext;
-                                  Ex.label -> putline;
-                                  Ex.father.label -> putline;
-                                  Ex.father.father.label -> putline;
+                                  '**** FormalArg: ' -> puttext;  currentArg.doPT -> putline;
+                                  '**   ActualArg: ' -> puttext; aArgs[i].doPT -> putline; 
+                                  '**   Ex.label: ' -> puttext; Ex.label -> putline;
+                                  Ex.father.label -> putline; Ex.father.father.label -> putline;
                                   '**   Ex: ' -> puttext; Ex.doPT -> putline;
-                                  (*Ex.doPP -> putline;*)
                               if);
-                              (if true
+                              (if true (* can be removed *)
                                // '#Recordx' -> (aArgs[i].dopt).equalNcS
-                               // '#Road:to:distx' -> (aArgs[i].dopt).equalNcS
-                                  then
+                               // '#Road:to:distx' -> (aArgs[i].dopt).equalNcS then
                                   '**** vArg: ' -> puttext;
                                   aArgs[i].dopt -> putline;
                                   aArgs[i].doPP -> putline;
@@ -3487,7 +3475,7 @@ AbstractSyntaxTree: Tree
        (* should be Exp, but currently the virtual desc is in
         * conflict with the non-virtual desc in Exp
         *)
-     (# theDesc::<
+       (# theDesc::<
           (#
           do (if false then
                  '**** Statement:theDesc:'->dumpt; dopt -> dumptn;
@@ -4123,7 +4111,21 @@ AbstractSyntaxTree: Tree
           isObject: booleanValue(# do primNo = object_prim -> value #);
           collectSimple:: (# do addSimple## -> IS.collectSimple #);
           objSize:< IntegerValue;
-
+          markAsData: 
+             (#
+             do (if not isData then 
+                    true -> isData;
+                    (if (IS.superDesc[] <> none) and (IS.superDesc[] <> ObjectDecl.OG.IS[]) then 
+                     IS.superDesc.encOG.markAsData if)
+             if)#);
+          markAsCoroutine: 
+             (#
+             do (if not isCoroutine then
+                    true -> isCoroutine;
+                    (if (IS.superDesc[] <> none)  and (IS.superDesc[] <> ObjectDecl.OG.IS[]) then 
+                        IS.superDesc.encOG.markAsCoroutine if)
+             if)#);
+          isData,isCoroutine: @Boolean;
           getReturnDecl:
             (# ptn: ^Pattern; DI: ^DataItem
             do L:
@@ -4164,7 +4166,30 @@ AbstractSyntaxTree: Tree
             #);
           hasItems: BooleanValue(#do not IS.isEmpty -> value #);
           traceId: (# exit false #);
+          OGidPath:
+             (# T: ^Text
+             do ''->T[];
+                (if sig[] <> none then
+                    sig.dopt -> T.append
+                else
+                    (if origin.encOG[] <> none then 
+                        origin.encOG.OGidPath -> T.append; 
+                        '::'->T.append;
+                        (if super.noOfSons = 1 then 
+                            '{'->T.put; (1,10) -> (dopt).sub ->T.append; '...}'->T.append
+                        else
+                            super.dopt -> T.append;
+                        if)
+                     else (1,10) -> (dopt).sub -> T.append
+                if)if)
+             exit T[]
+             #);
           OGid:
+             (# T: ^Text
+             do OGidPath  -> T[]; '$' -> T.put; IS.qDescNo -> T.putInt
+             exit T[]
+             #);
+          OGidX:
             (# T: ^text
             do (if traceId then
                    '**** OGid: ' -> puttext;
@@ -4201,12 +4226,12 @@ AbstractSyntaxTree: Tree
                    (if sig[] <> none then
                        sig.ID.copy -> T[]
                     else
-                    (if origin.encOG[] <> none then origin.encOG.OGid -> T[]; '>'->T.put else '' -> T[] if);
+                    (if origin.encOG[] <> none then origin.encOG.OGid -> T[]; '.'->T.put else '' -> T[] if);
                        (if super.ATd[] <> none then
                            (Super.ATd.asDecl).sig.id.copy -> T.append
                        if);
                        '$' -> T.put;
-                       IS.qDescNo[1](*descNo*) -> T.putint
+                       IS.qDescNo -> T.putint
                if)if);
                (if traceId then T[] -> putline if)
             exit T[]
@@ -4222,13 +4247,13 @@ AbstractSyntaxTree: Tree
                OGid -> T[]; '%'->T.put;
                (if IS.isEmpty and not super.hasVirtualArgs then
                    (if super.ATd[] <> objectDecl[] then
-                       (super.ATd.asDecl).OG.IS.qDescNo[1] -> dn;
+                       (super.ATd.asDecl).OG.IS.qDescNo -> dn;
                     else
                        'Object' -> T[];
-                       (super.ATd.asDecl).OG.IS.qDescNo[1] -> dn
+                       (super.ATd.asDecl).OG.IS.qDescNo -> dn
                    if)
                 else
-                   IS.qDescNo[1] -> dn;
+                   IS.qDescNo -> dn;
                if);
                '$' -> T.put; dn -> T.putint;
             exit T[]
@@ -4549,16 +4574,20 @@ AbstractSyntaxTree: Tree
             #);
           bracketedListElement:: 
             (# do 1 -> value; super.bracketedListElement -> value #);
-            
+          getKind:
+             (# isD,isC: @Boolean
+             do (if IS.superDesc[] <> none then IS.superDesc.encOG.getKind -> (isD,isC) if);
+                isData or isD -> isD;
+                isCoroutine or isC -> isC
+             exit(isD,isC)
+             #);
           isCartesianValueObj:: 
              (#do (if false then '**** ObjDesc:'->dumpt; dopt -> putHeadN if); 
                   (if primNo = value_prim  -> value then
                    else
                       (if IS.isEmpty then (super.last).isCartesianValueObj -> value if)
                   if)#);
-
           hasVirtualDataItems: @boolean; (* has a DI: X:< var T *)
-          
        enter(super[] -> append,IS[] -> append)
        #);
      ObjectCall:< ObjectSpecification
@@ -4638,7 +4667,7 @@ AbstractSyntaxTree: Tree
           isPrimitivIntWithFloatArg:< BooleanValue(# do inner #);            
           getExps::
             (# Ex: [0] ^Exp
-            do (if traceGetVqual then
+            do (if false then
                    '**** invocation:getExps:'->dumpT; noOfSons->putint; 
                    ' ' ->put; dopt -> dumpTN;
                if);
@@ -4669,8 +4698,8 @@ AbstractSyntaxTree: Tree
                       (for j: ex.range repeat
                            ex[j][] -> exps[i + 1 -> i][]
                for)if)#);
-               (if traceGetVqual then
-                   '/'->dumpT;
+               (if false and traceGetVqual and (exps.range > 0) then
+                   'exps:'->dumpT;
                    (for i: exps.range repeat exps[i].dopt->dumpT; ','->put for);
                    newline;                   
             if)#);
@@ -4733,6 +4762,11 @@ AbstractSyntaxTree: Tree
             (#
             do inner scanInvExps
             #);
+          getATd:
+             (# theATd: ^Decl
+             do (last).getATd -> theATd[]
+             exit theATd[]
+             #);
           theDesc::<
             (# (*D: ^Items*)
             do (if traceCheck then
@@ -4826,6 +4860,15 @@ AbstractSyntaxTree: Tree
             #);
           isCartesianValueobj:< BooleanValue;
           inLocalValueObj:< BooleanValue;
+          getATd:
+             (# theATd: ^Decl; MI: ^ModuleItem; 
+             do (if (ATd[] <> none) and ATd.isModuleItem then
+                    (ATd[]->MI[]).MD[] -> theATd[] 
+                 else
+                    ATd[] -> theATd[]
+                if)
+             exit theATd[]
+             #);
           getQual::<
             (* perhpas move to sons *)
              (# 
@@ -5205,9 +5248,9 @@ AbstractSyntaxTree: Tree
           length:: (# do 4 + 7 + cond.length + thenPart.length -> value #);
           PT::
             (#
-            do 'if ' -> lx.puttext; 
+            do 'if (' -> lx.puttext; 
                (pos,break) -> cond.PT;
-               ' :then ' -> lx.puttext;
+               ') :then ' -> lx.puttext;
                (pos,break) -> thenPart.PT;               
             #);
           isIfThen:: TrueValue;
@@ -5224,9 +5267,9 @@ AbstractSyntaxTree: Tree
             #);
           PT::
             (#
-            do 'if ' -> lx.puttext; 
+            do 'if (' -> lx.puttext; 
                (pos,break) -> cond.PT;
-               ' :then ' -> lx.puttext;
+               ') :then ' -> lx.puttext;
                (pos,break) -> thenPart.PT; 
                (pos,true) -> mkBreak;
                ':else ' -> lx.puttext;
@@ -5830,7 +5873,7 @@ AbstractSyntaxTree: Tree
        exit OG[]
        #);
 
-     mkOGforOI:
+     mkOGforOIX: (* not in use *)
        (# OI: ^ObjectInvocation; OG: ^ObjectDescriptor; 
           super: ^Invocation; IS: ^Items;
           ocFather: ^Node; sons: ^node; N: @Node
