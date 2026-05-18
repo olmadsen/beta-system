@@ -1,0 +1,56 @@
+ChannelSystemLib: obj
+   class ChannelSystem:
+      class SimpleGoroutine:
+         status: var integer
+         status := P_status.ACTIVE
+         SQS.insert(this(SimpleGoroutine))
+         this(SimpleGoroutine).suspend
+         inner(SimpleGoroutine)
+         status := P_status.TERMINATED
+      class Channel:
+         ch: var Char
+         write:
+            in c: var Char
+            if (ch <> 0) :then
+               scheduler.active.suspend
+               restart(write) 
+            :else
+               ch := C
+         read :
+            out c: var Char
+            if (ch = 0) :then
+               scheduler.active.suspend
+               restart(read)
+            :else
+               c := ch
+               ch := 0
+      P_status: obj 
+         %globals
+         %Public	 
+         ACTIVE: val 1
+         WAITING: val 2
+         TERMINATED: val 3
+      SQS: obj LockLib.LockMonitor("SQS")
+         Q: obj LIB.Collections.QueueLib.Queue
+         insert: entry
+            in P: ref SimpleGoroutine
+            if (Q.has(P).not) :then
+               Q.insert(P)
+         removeNext: entry
+            out P: ref SimpleGoroutine
+            P := Q.removeNext
+         isEmpty: entry
+            out B: var Boolean
+            B := Q.isEmpty
+      scheduler: obj
+         active: ref SimpleGoroutine
+         scheduler.suspend
+         loop: do
+            active := SQS.removeNext
+            if (active =/= none) :then
+               active.call
+               if (active.status = P_status.ACTIVE) :then
+                  SQS.insert(active)
+                  restart(loop)
+      inner(ChannelSystem)
+      scheduler.call
