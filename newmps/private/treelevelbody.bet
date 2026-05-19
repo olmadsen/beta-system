@@ -501,26 +501,44 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
         newAstForParser: @symbolToAst;
         newUnExpandedForParser: @newUnExpanded;
         
-        appendComment: @
-          (# lst1: ^Comment;
-             lst2: ^Comment;
-             dst: ^Comment;
-          enter (lst1[], lst2[])
-          do (if lst1[] <> NONE then
-                (if lst2[] <> NONE then
-                   lst2[] -> lst1.son.brother[];
-                   lst2.son[] -> lst1.son[];
-                   NONE -> lst2.son[];
-                if);
+        printComment: @
+          (# com: ^Comment;
+             value: ^Text;
+          enter com[]
+          do '(*' -> putText;
+             com.getText -> value[];
+             value.reset;
+             value.getLine -> value[];
+             (1, 40) -> value.sub -> putText;
+             '...*)' -> putText;
+             ' [' -> putText;
+             com.position -> putInt;
+             ']' -> putText; 
+          #);
+        insertComment: @
+          (# father: ^AST;
+             com: ^Comment;
+             previous: ^Comment;
+             current: ^Comment;
+          enter (father[], com[])
+          do NONE -> previous[];
+             father.com[] -> current[];
+             loop: (if current[] <> NONE then
+                      (if current.position < com.position then
+                         current[] -> previous[];
+                         current.brother[] -> current[];
+                         restart loop;
+                      if);
+                   if);
+             current[] -> com.brother[];
+             (if previous[] = NONE then
+                com[] -> father.com[];
              else
-                lst2[] -> lst1[];
+                com[] -> previous.brother[];
              if);
-          exit lst1[]
           #);
         
-        
-        
-        addComment: @
+        pushComment: @
           (# value: ^text;
              new: ^Comment;
              lineCount: @integer;
@@ -544,47 +562,68 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
              if);
              lexlineno - lineno - lineCount -> new.breaks;
              lexlineno -> lineno;
-               (*** (currentComment[], new[]) -> appendComment -> currentComment[]; ***)
-          #);
-        pushComment: @
-          (#
-          do (if currentComment[] <> NONE then
-                stacktop -> currentComment.position;
-                commentStackTop + 1 -> commentStackTop;
-                currentComment[] -> commentStack[commentStackTop][];
-                NONE -> currentComment[];
+             stacktop -> new.position;
+             commentStackTop + 1 -> commentStackTop;
+             new[] -> commentStack[commentStackTop][];
+             
+             (if trace  then
+                ' push-comment: ' -> putText;
+                new[] -> printComment;
+                newLine;
              if);
+             
           #);
-        
-        
         fetchComments: @
           (# father: ^AST;
              oldTop, newTop: @integer;
              adjust: @integer;
              current: ^Comment;
-             com: ^Comment;
-             position: @integer;
-             
           enter (father[], oldTop, newTop, adjust)
-          do    NONE -> com[];
-             loop1:
-             (if commentStackTop > 0 then
-                (if (newTop < commentStack[commentStackTop].position) then
-                   commentStack[commentStackTop][] -> current[];
-                   current.position - newTop + adjust -> position;
-                   loop2:
-                   (if current[] <> NONE then
-                      position -> current.position;
-                      current.brother[] -> current[];
-                      restart loop2;
-                   if);
-                   (commentStack[commentStackTop][], com[]) -> appendComment -> com[];
-                   NONE -> commentStack[commentStackTop][];
-                   commentStackTop - 1 -> commentStackTop;
-                   restart loop1;
-                if);
+          do (if oldTop <> newTop then
+                loop: (if commentStackTop > 0 then
+                         commentStack[commentStackTop][] -> current[];
+                         (if newTop <= current.position then
+                            (if trace then
+                               'fetch-comment: ' -> putText;
+                               current[] -> printComment;
+                               ' | ' -> putText;
+                               oldTop -> putInt;
+                               ' => ' -> putText;
+                               newTop -> putInt;
+                               ' adjust: ' -> putText;
+                               adjust -> putInt;
+                               newLine;
+                            if);
+                            current.position - (newTop - 1) + adjust -> current.position;
+                            (father[], current[]) -> insertComment;
+                            NONE -> commentStack[commentStackTop][];
+                            commentStackTop - 1 -> commentStackTop;
+                            restart loop;
+                         if);
+                      if);
              if);
-               (*** (father.com[], com[]) -> appendComment -> father.com[]; ***)
+          #);
+        fetchRemainingComments: @
+          (# father: ^AST;
+             newTop: @integer;
+             current: ^Comment;
+          enter (father[], newTop)
+          do loop: (if commentStackTop > 0 then
+                      commentStack[commentStackTop][] -> current[];
+                      (if trace then
+                        'fetch-comment: ' -> putText;
+                        current[] -> printComment;
+                        ' | ' -> putText;
+                        newTop -> putInt;
+                        newLine;
+                      if);
+                      current.position - (newTop - 1) -> current.position;
+                      (father[], current[]) -> insertComment;
+                      NONE -> commentStack[commentStackTop][];
+                      commentStackTop - 1 -> commentStackTop;
+                      restart loop;
+                   if);
+             
           #);
         goal: @integer;
         input: ^Stream;
@@ -686,12 +725,6 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
                      scan(#do ch->put #); newline 
                   if);
                   
-                  (if lexlineno <> lineno then
-                     NONE -> addComment;
-                  if);
-                  
-                  pushComment;
-                  
                   (if isTerminal then
                      (if symb
                       //nameVal//stringVal//constVal then
@@ -737,7 +770,9 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
                           father[] -> previous.brother[];
                           1 -> previous.status;
                        if);
-                       (father[], oldTop, newTop, 0) -> fetchComments;
+                       (if includeComments then
+                          (father[], oldTop, newTop, 0) -> fetchComments;
+                       if);
                        initialPos + startPos -> father.start;
                        initialPos + endPos -> father.end;
                        
@@ -764,7 +799,9 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
                        1 -> son.status;
                        NONE -> stack[oldtop][];
                        0 -> positions[oldtop];
-                       (father[], oldTop, newTop, positions[newTop]) -> fetchComments;
+                       (if includeComments then
+                          (father[], oldTop, newTop, positions[newTop]) -> fetchComments;
+                       if);
                        positions[newTop] + (oldTop - newTop) -> positions[newTop];
                        newTop -> stackTop;
                     #);
@@ -807,7 +844,6 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
                        frag[] -> stack[newtop].frag[];
                        THIS(astInterface).prodno.optional -> stack[newtop].symbol;
                        newTop -> stacktop;
-                       pushComment;
                     #);
                   symbol: @integer;
                do (if trace then
@@ -842,15 +878,14 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
                #);
              comment::
                (# value: ^text;
-               do (if trace then
-                     'comment:'->puttext; scan(#do ch->put #); newline
-                  if);
-                  &text[] -> value[];
+               do &text[] -> value[];
                   scan
                     (#
                     do ch -> value.put;
                     #);
-                  value[] -> addComment;
+                  (if includeComments then
+                     value[] -> pushComment;
+                  if);
                #);
              markError::
                (# B: @boolean
