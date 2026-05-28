@@ -1,0 +1,228 @@
+ORIGIN '../astviewer';
+INCLUDE '~beta/newmps/metagramsematt'
+-- ASTViewerLib: attributes --
+
+openGrammar:
+  (# name: ^Text;
+     grammar: ^meta.AGrammar;
+  enter name[]
+  do (# grammarGroup: ^FragmentGroup;
+        grammarFragment: ^FragmentForm;
+     do ('-meta' -> (name.copy).append, screen[]) -> top.open -> grammarGroup[];
+        grammarGroup.scan
+          (#
+          do current[] -> grammarFragment[];
+          #);
+        grammarFragment.root[] -> grammar[];
+     #);
+  exit grammar[]  
+  #);
+
+processGrammar:
+  (# grammar: ^meta.AGrammar;
+     grammarName: ^meta.GrammarName;
+     grammarNameDecl: ^NameDecl;
+     productions: ^meta.ProductionList;
+  enter grammar[]   
+  do grammar.getGrammarName -> grammarName[];
+     grammarName.getNameDecl -> grammarNameDecl[];
+     grammarNameDecl.getText -> putline;
+     grammar.getProductionList -> productions[];
+     productions.newScan
+     (# symbol: @integer;
+        theRule: ^Rule;
+    do symbol + 1 -> symbol;
+       current[] -> processProduction -> theRule[];
+        symbol -> putInt;
+        ': ' -> putText;
+        theRule.description -> putLine;
+    #);
+  #);
+
+processProduction:
+  (# production: ^meta.Prod;
+     theRule: ^Rule;
+  enter production[]
+  do (if production.symbol
+        //meta.Alternation then
+            production[] -> processAlternation -> theRule[];
+        //meta.ListOne then
+            production[] -> processListOne -> theRule[];
+        //meta.ListZero then
+            production[] -> processListZero -> theRule[];
+        //meta.Constructor then
+            production[] -> processConstructor -> theRule[];
+        //meta.Opt then
+            production[] -> processOpt -> theRule[];
+        if);
+  exit theRule[]
+  #);
+processAlternation:
+  (# alternation: ^meta.Alternation;
+     theRule: ^Rule;
+  enter alternation[]
+  do &Rule[] -> theRule[];
+     alternation.getLeftSide -> getLeftSideName -> theRule.name[];
+     kinds.unExpanded -> theRule.kind;
+  exit theRule[]
+  #);
+processListOne:
+  (# listOne: ^meta.ListOne;
+     theRule: ^Rule;
+  enter listOne[]
+  do &Rule[] -> theRule[];
+     listOne.getLeftSide -> getLeftSideName -> theRule.name[];
+     kinds.list -> theRule.kind;
+  exit theRule[]
+  #);
+processListZero:
+  (# listZero: ^meta.ListZero;
+     theRule: ^Rule;
+  enter listZero[]
+  do &Rule[] -> theRule[];
+     listZero.getLeftSide -> getLeftSideName -> theRule.name[];
+     kinds.list -> theRule.kind;
+  exit theRule[]
+  #);
+processConstructor:
+  (# constructor: ^meta.Constructor;
+     theRule: ^Rule;
+  enter constructor[]
+  do &Rule[] -> theRule[];
+     constructor.getLeftSide -> getLeftSideName -> theRule.name[];
+     kinds.cons -> theRule.kind;
+     constructor.getConsElemList -> processConsElemList -> theRule.first[];
+  exit theRule[]
+  #);
+processConsElemList:
+  (# consElemList: ^meta.ConsElemList;
+     firstItem: ^Item;
+     currentItem: ^Item;
+     nextItem: ^Item;
+  enter consElemList[]
+  do loop: consElemList.newScan
+       (# position: @integer;
+       do position + 1 -> position;
+          current[] -> processConsElem -> nextItem[];
+          (if nextItem[] = NONE then
+             leave loop;
+          if);
+          position -> nextItem.position;
+          (if firstItem[] = NONE then
+            nextItem[] -> firstItem[];
+          else
+            nextItem[] -> currentItem.next[];  
+          if);
+          nextItem[] -> currentItem[];
+       #);
+  exit firstItem[]
+  #);
+processConsElem:
+  (# consElem: ^meta.ConsElem;
+     theItem: ^Item;
+  enter consElem[]
+  do (if consElem.symbol
+        //meta.Term then 
+            consElem[] -> processTerm -> theItem[];
+        //meta.SynCat then
+            consElem[] -> processSynCat -> theItem[];
+        //meta.TaggedSyn then
+            consElem[] -> processTaggedSyn -> theItem[];
+     if)
+  exit theItem[]
+  #);
+processTerm:
+  (# term: ^meta.Term;
+     theItem: ^Item;
+     theString: ^String;
+  enter term[]
+  do &Item[] -> theItem[];
+     &String[] -> theString[];
+     term.getText -> theString.value[];
+     theString[] -> theItem.produces[];
+     theString.value[] -> theItem.name[];
+     itemTypes.terminal -> theItem.type;
+  exit theItem[]
+  #);
+processSynCat:
+  (# synCat: ^meta.SynCat;
+     theItem: ^Item;
+  enter synCat[]
+  do &Item[] -> theItem[];
+     synCat.getSynText -> theItem.name[];
+     itemTypes.nonterminal -> theItem.type;
+  exit theItem[]
+  #);
+processTaggedSyn:
+  (# taggedSyn: ^meta.TaggedSyn;
+     theItem: ^Item;
+  enter taggedSyn[]
+  do &Item[] -> theItem[];
+     taggedSyn.getSynText -> theItem.name[];
+     itemTypes.nonterminal -> theItem.type;
+  exit theItem[]
+  #);
+
+processOpt:
+  (# opt: ^meta.Opt;
+     theRule: ^Rule;
+  enter opt[]
+  do &Rule[] -> theRule[];
+     opt.getLeftSide -> getLeftSideName -> theRule.name[];
+     kinds.optional -> theRule.kind;
+  exit theRule[]
+  #);
+getLeftSideName:
+  (# leftSide: ^meta.LeftSide;
+     synDeclName: ^meta.SynDeclName;
+     decl: ^NameDecl;
+     name: ^Text;
+  enter leftSide[]
+  do leftSide.getSynDeclName -> synDeclName[];
+     synDeclName.getNameDecl -> decl[];
+     decl.getText -> name[];
+  exit name[]
+  #);
+-- ASTViewerInit: doPart --
+do (# 
+    do &MetaGrammar[] -> meta[];
+        meta.init;
+        meta[] -> grammarTable.meta[];
+        'process ' -> putText;
+        name[] -> putLine;
+        name[] -> openGrammar -> processGrammar;
+    #);
+
+-- RuleDescription: doPart --
+do &Text[] -> value[];
+    '<' -> value.put;
+    name[] -> value.putText;
+    '>' -> value.put;
+    ' => ' -> value.putText;
+    (if kind
+        //kinds.optional then 'optional' -> value.putText;
+        //kinds.list then 'list' -> value.putText;
+        //kinds.cons then
+          (# current: ^Item;
+          do first[] -> current[];
+             loop:
+               (if current[] <> NONE then
+                  current.description -> value.putText;
+                  ' ' -> value.putText;
+                  current.next[] -> current[];
+                  restart loop;
+               if);
+          #);
+        //kinds.unExpanded then 'unExpanded' -> value.putText;
+    if);
+
+-- ItemDescription: doPart --
+do &Text[] -> value[];
+   (if type
+     //itemTypes.terminal then
+        name[] -> value.putText;
+     //itemTypes.nonterminal then
+       '<' -> value.put;
+       name[] -> value.putText;
+       '>' -> value.put;
+   if);
