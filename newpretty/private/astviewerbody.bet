@@ -1,6 +1,19 @@
 ORIGIN '../astviewer';
-INCLUDE '~beta/newmps/metagramsematt'
+INCLUDE '~beta/newmps/metagramsematt';
+INCLUDE '~beta/postwimp/collections/map';
+INCLUDE '~beta/containers/seqContainers';
+
 -- ASTViewerLib: attributes --
+ProductionMap: TextHashMap
+  (# element:: pretty.Production;
+  #);
+ItemDeque: Deque
+  (# element:: Item;
+  #);
+GrammarItems:
+  (# T: [10] ^Item;
+     N: [10] ^Item;
+  #);
 
 openGrammar:
   (# name: ^Text;
@@ -17,41 +30,95 @@ openGrammar:
      #);
   exit grammar[]  
   #);
+openPrettySpecification:
+  (# name: ^Text;
+     specification: ^pretty.PrettyPrint;
+  enter name[]
+  do (# group: ^FragmentGroup;
+        frag: ^FragmentForm;
+     do ('-pretty' -> (name.copy).append, screen[]) -> top.open -> group[];
+        group.scan
+          (#
+          do current[] -> frag[];
+          #);
+        frag.root[] -> specification[];
+     #);
+  exit specification[]
+  #);
+
+
+buildProductionMap:
+  (# specification: ^pretty.PrettyPrint;
+     map: ^ProductionMap;
+  enter specification[]
+  do &ProductionMap[] -> map[];
+     map.init;
+     (# productionList: ^pretty.ProductionList;
+     do specification.getProductionList -> productionList[];
+        productionList.newScan
+        (# constructor: ^pretty.Constructor;
+           listProd: ^pretty.ListProd;
+           productionName: ^NameAppl;
+           name: ^Text;
+        do (if current.symbol
+             //pretty.Constructor then
+                current[] -> constructor[];
+                constructor.getProductionName -> productionName[];
+                productionName.getText -> name[];
+                (name[], constructor[]) -> map.associate;
+             //pretty.ListProd then
+                current[] -> listProd[];
+                listProd.getProductionName -> productionName[];
+                productionName.getText -> name[];
+                (name[], listProd[]) -> map.associate;
+                
+           if);
+        #);
+     #);
+  exit map[]
+  #);
 
 processGrammar:
   (# grammar: ^meta.AGrammar;
      grammarName: ^meta.GrammarName;
      grammarNameDecl: ^NameDecl;
      productions: ^meta.ProductionList;
-  enter grammar[]   
+     specification: ^pretty.PrettyPrint;
+     productionList: ^pretty.ProductionList;
+     map: ^ProductionMap;
+  enter (grammar[], specification[])
   do grammar.getGrammarName -> grammarName[];
      grammarName.getNameDecl -> grammarNameDecl[];
      grammarNameDecl.getText -> putline;
      grammar.getProductionList -> productions[];
+     specification.getProductionList -> productionList[];
+     specification[] -> buildProductionMap -> map[];
      productions.newScan
      (# symbol: @integer;
         theRule: ^Rule;
+        prettyProduction: ^pretty.Production;
     do symbol + 1 -> symbol;
-       current[] -> processProduction -> theRule[];
-        symbol -> putInt;
-        ': ' -> putText;
-        theRule.description -> putLine;
+       current.getSynDeclText -> map.lookup -> prettyProduction[];
+       (current[], prettyProduction[]) -> processProduction -> theRule[];
+       
+       theRule.description -> putLine;
     #);
   #);
 
 processProduction:
   (# production: ^meta.Prod;
+     prettyProduction: ^pretty.Production;
      theRule: ^Rule;
-  enter production[]
+  enter (production[], prettyProduction[])
   do (if production.symbol
         //meta.Alternation then
             production[] -> processAlternation -> theRule[];
         //meta.ListOne then
-            production[] -> processListOne -> theRule[];
+            (production[], prettyProduction[]) -> processListOne -> theRule[];
         //meta.ListZero then
             production[] -> processListZero -> theRule[];
         //meta.Constructor then
-            production[] -> processConstructor -> theRule[];
+            (production[], prettyProduction[]) -> processConstructor -> theRule[];
         //meta.Opt then
             production[] -> processOpt -> theRule[];
         if);
@@ -68,13 +135,28 @@ processAlternation:
   #);
 processListOne:
   (# listOne: ^meta.ListOne;
+     prettyProduction: ^pretty.ListProd;
      theRule: ^Rule;
-  enter listOne[]
-  do &Rule[] -> theRule[];
-     listOne.getLeftSide -> getLeftSideName -> theRule.name[];
-     kinds.list -> theRule.kind;
-     listOne.getSynCat -> processSynCat -> theRule.first[];
-     listOne.getTermOp -> processTermOp -> theRule.first.next[];
+  enter (listOne[], prettyProduction[])
+  do (# nonTerminal: ^Item;
+        separator: ^Item;
+        listSpec: ^pretty.ListSpec;
+        current: ^Item;
+     do &Rule[] -> theRule[];
+        listOne.getLeftSide -> getLeftSideName -> theRule.name[];
+        kinds.list -> theRule.kind;
+        listOne.getSynCat -> processSynCat -> nonTerminal[];
+        listOne.getTermOp -> processTermOp -> separator[];
+        prettyProduction.getListSpec -> listSpec[];
+        listSpec.getBlockType -> createBeginBlock -> theRule.beginning[];
+        createEndBlock -> theRule.ending[];
+        nonTerminal[] -> theRule.first[] -> current[];
+        (if separator[] <> NONE then
+           separator[] -> current.next[];
+           separator[] -> current[];
+        if);
+        createDefaultBreak -> current.next[];
+     #);   
   exit theRule[]
   #);
 processListZero:
@@ -90,13 +172,147 @@ processListZero:
   #);
 processConstructor:
   (# constructor: ^meta.Constructor;
+     prettyProduction: ^pretty.Constructor;
      theRule: ^Rule;
-  enter constructor[]
-  do &Rule[] -> theRule[];
-     constructor.getLeftSide -> getLeftSideName -> theRule.name[];
-     kinds.cons -> theRule.kind;
-     constructor.getConsElemList -> processConsElemList -> theRule.first[];
+  enter (constructor[], prettyProduction[])
+  do (# ti: @integer;
+        ni: @integer;
+        current: ^Item;
+        stream: ^pretty.ItemList;
+        theGrammarItems: @GrammarItems;
+        items: @ItemDeque;
+        firstItem: ^Item;
+        currentItem: ^Item;
+     do &Rule[] -> theRule[];
+        constructor.getLeftSide -> getLeftSideName -> theRule.name[];
+        kinds.cons -> theRule.kind;
+        constructor.getConsElemList -> processConsElemList -> theRule.first[];
+        theRule.first[] -> current[];
+        loop:
+          (if current[] <> NONE then
+            (if current.type
+                //itemTypes.terminal then
+                    ti + 1 -> ti;
+                    current[] -> theGrammarItems.T[ti][];
+                //itemTypes.nonterminal then
+                    ni + 1 -> ni;
+                    current[] -> theGrammarItems.N[ni][];
+            if);
+            current.next[] -> current[];
+            restart loop;
+          if);
+        prettyProduction.getStream -> stream[];
+        (theGrammarItems[], stream[], items[]) -> createItemsFromStream;
+        items.scan
+          (#
+          do (if currentItem[] <> NONE then
+                current[] -> currentItem.next[];
+             else
+                current[] -> firstItem[];
+             if);
+             NONE -> current.next[];
+             current[] -> currentItem[];
+          #);
+
+        (if firstItem[] <> NONE then
+           firstItem[] -> theRule.first[];
+        if)  
+        
+     #)
   exit theRule[]
+  #);
+createItemsFromStream:
+  (# theGrammarItems: ^GrammarItems;
+     stream: ^pretty.ItemList;
+     items: ^ItemDeque;
+  enter (theGrammarItems[], stream[], items[])
+  do stream.newScan
+          (# 
+             defaultTerm: ^pretty.DefaultTerm;
+             nonTerm: ^pretty.NonTerm;
+             altBreak: ^pretty.AltBreak;
+             block: ^pretty.Block;
+             no: ^Const;
+             value: @integer;
+             space: ^Const;
+             indentation: ^Const;
+          do (if current.symbol
+               //pretty.DefaultTerm then
+                  current[] -> defaultTerm[];
+                  defaultTerm.getTerminalNo -> no[];
+                  no.getValue -> value;
+                  theGrammarItems.T[value][] ->items.insertBack;
+               //pretty.NonTerm then
+                  current[] -> nonTerm[];
+                  nonTerm.getNonTerminalNo -> no[];
+                  no.getValue -> value;
+                  theGrammarItems.N[value][] -> items.insertBack;
+               //pretty.DefaultBreak then
+                 createDefaultBreak ->items.insertBack;
+               //pretty.AltBreak then
+                 current[] -> altBreak[];
+                 altBreak.getSpace -> space[];
+                 altBreak.getIndention -> indentation[];
+                 (space.getValue, indentation.getValue) -> createBreak -> items.insertBack;
+               //pretty.Block then
+                 current[] -> block[];
+                 block.getBlockType -> createBeginBlock -> items.insertBack;
+                 (theGrammarItems[], block.getItemList, items[]) -> createItemsFromStream;
+                 createEndBlock -> items.insertBack;
+             if);
+          #);
+  #);  
+createDefaultBreak:
+  (# theItem: ^Item;
+  do (1, 3) -> createBreak -> theItem[];
+  exit theItem[]
+  #);
+createBreak:
+  (# theBlank: ^Blank;
+     theItem: ^Item;
+     spaces: @integer;
+     indentation: @integer;
+  enter (spaces, indentation)
+  do &Blank[] -> theBlank[];
+     spaces -> theBlank.spaces;
+     indentation -> theBlank.indentation;
+     &Item[] -> theItem[];
+     itemTypes.blank -> theItem.type;
+     theBlank[] -> theItem.produces[];
+     '$' -> theItem.name[];
+     spaces -> theItem.name.putInt;
+     ',' -> theItem.name.put;
+     indentation -> theItem.name.putInt;
+  exit theItem[]
+  #);
+createBeginBlock:
+  (# blockType: ^pretty.BlockType;
+     theItem: ^Item;
+     theToken: ^BeginBlock;
+  enter blockType[]
+  do &Item[] -> theItem[];
+     itemTypes.beginBlock -> theItem.type;
+     &BeginBlock[] -> theToken[];
+     (if blockType.symbol
+       //pretty.Consistent then 
+          blockTypes.consistent -> theToken.type;
+          '[c' -> theItem.name[];
+       //pretty.InConsistent then 
+          blockTypes.inConsistent -> theToken.type;
+          '[i' -> theItem.name[];
+     if);
+     theToken[] -> theItem.produces[];
+  exit theItem[]
+  #);
+createEndBlock:
+  (# theItem: ^Item;
+     theToken: ^EndBlock;
+  do &Item[] -> theItem[];
+     itemTypes.endBlock -> theItem.type;
+     &EndBlock[] -> theToken[];
+     theToken[] -> theItem.produces[];
+     ']' -> theItem.name[];
+  exit theItem[]
   #);
 processConsElemList:
   (# consElemList: ^meta.ConsElemList;
@@ -196,14 +412,17 @@ getLeftSideName:
      decl.getText -> name[];
   exit name[]
   #);
+
 -- ASTViewerInit: doPart --
 do (# 
     do &MetaGrammar[] -> meta[];
-        meta.init;
-        meta[] -> grammarTable.meta[];
-        'process ' -> putText;
-        name[] -> putLine;
-        name[] -> openGrammar -> processGrammar;
+       meta.init;
+       meta[] -> grammarTable.meta[];
+       &prettyprint[] -> pretty[];
+       '~beta/grammars/pretty/prettyprint-parser' -> expandToFullPath -> pretty.init;
+       'process ' -> putText;
+       name[] -> putLine;
+       (name[] -> openGrammar, name[] -> openPrettySpecification) -> processGrammar;
     #);
 
 -- RuleDescription: doPart --
@@ -217,8 +436,24 @@ do &Text[] -> value[];
         //kinds.list
         //kinds.cons then
           (# current: ^Item;
-          do first[] -> current[];
+          do beginning[] -> current[];
              loop:
+               (if current[] <> NONE then
+                  current.description -> value.putText;
+                  ' ' -> value.putText;
+                  current.next[] -> current[];
+                  restart loop;
+               if);
+             first[] -> current[];
+             loop:
+               (if current[] <> NONE then
+                  current.description -> value.putText;
+                  ' ' -> value.putText;
+                  current.next[] -> current[];
+                  restart loop;
+               if);
+              ending[] -> current[];
+              loop:
                (if current[] <> NONE then
                   current.description -> value.putText;
                   ' ' -> value.putText;
@@ -233,9 +468,17 @@ do &Text[] -> value[];
 do &Text[] -> value[];
    (if type
      //itemTypes.terminal then
+        '\'' -> value.put;
+       name[] -> value.putText;
+       '\'' -> value.put;
+     //itemTypes.beginBlock
+     //itemTypes.endBlock then
         name[] -> value.putText;
      //itemTypes.nonterminal then
        '<' -> value.put;
        name[] -> value.putText;
        '>' -> value.put;
+     //itemTypes.blank then
+       name[]-> value.putText;
+    
    if);
