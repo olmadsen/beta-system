@@ -1,0 +1,220 @@
+ORIGIN '../astviewer';
+INCLUDE '~beta/containers/seqContainers';
+
+-- ASTViewerLib: attributes --
+
+OppenPrinter: PrettyPrinter
+  (# output: ^Stream;
+     columns: @integer;
+     
+     Block: Token
+       (# type: @integer;
+          size: @integer;
+          indentation: @integer;
+          fits: @boolean;
+          
+          length:: (# do size -> value #);
+
+          description::
+            (#
+            do &Text[] -> value[];
+               '{' -> value.put;
+               (if type
+                 //blockTypes.consistent then 'c' -> value.put;
+                 //blockTypes.inConsistent then 'i' -> value.put;
+               if);
+               '[' -> value.put;
+               length -> value.putInt;
+               ']' -> value.put;
+            #);
+       #);
+     
+     scanner: @
+       (# buffer: [0] ^Token;
+          left: @integer;
+          right: @integer;
+          total: @integer;
+          stack: @Deque
+            (# element:: Block;
+            #);
+          
+          currentBlank: ^Blank;
+          consumeBlank:
+            (#
+            do (if currentBlank[] <> NONE then
+                  currentBlank[] -> append;
+                  total + currentBlank.length -> total;
+                  NONE -> currentBlank[];
+               if);
+            #);
+
+          start:
+            (#
+            do 2048 -> buffer.new; (* Should be 3 times columns *)
+               NONE -> currentBlank[];
+               1 -> left;
+               1 -> right;
+               1 -> total;
+            #);
+          next:
+            (# theToken: ^Token;
+               theWord: ^Word;
+            enter theToken[]
+            do (if theToken.kind
+                //tokenKinds.word then
+                  consumeBlank;
+                  theToken[] -> append;
+                  total + theToken.length -> total;
+                //tokenKinds.blank then
+                  theToken[] -> currentBlank[];
+                //tokenKinds.beginBlock then
+                  consumeBlank;
+                  theToken[] -> pushBlock -> append;
+                //tokenKinds.endBlock then
+                  theToken[] -> append;
+                  popBlock;
+               if);
+            #);
+          pushBlock:
+            (# begin: ^BeginBlock;
+               theBlock: ^Block;
+            enter begin[]
+            do &Block[] -> theBlock[];
+               -total -> theBlock.size;
+               theBlock[] -> stack.insertBack;
+               begin.kind -> theBlock.kind;
+               begin.type -> theBlock.type;
+            exit theBlock[]   
+            #);
+          popBlock:
+            (# theBlock: ^Block;
+            do stack.removeBack -> theBlock[];
+               total + theBlock.size -> theBlock.size;
+            #);
+          display:
+            (# index: @integer;
+            do 1 -> index;
+               loop:
+                 (if index <> right then
+                     buffer[index].description -> output.putLine;
+                     index + 1 -> index;
+                     restart loop;
+                 if);
+            #);  
+          finish:
+            (# theToken: ^Token;
+            do display;
+               loop:
+               (if left <> right then
+                  buffer[left][] -> theToken[];
+                  (if theToken.kind
+                    //tokenKinds.word then
+                      theToken[] -> printer.printWord;
+                    //tokenKinds.blank  then
+                      (theToken[], buffer[left + 1].length) -> printer.printBlank;
+                    //tokenKinds.beginBlock then
+                      theToken[] -> printer.pushBlock;
+                    //tokenKinds.endBlock then
+                      printer.popBlock;  
+                  if);
+                  left + 1 -> left;
+                  restart loop;
+               if);
+            #);  
+          
+          append:
+            (# theToken: ^Token;
+            enter theToken[]
+            do theToken[] -> buffer[right][];
+               right + 1 -> right;
+            #);
+          
+          
+       #);
+     printer: @
+       (# space: @integer;
+          stack: @Deque
+            (# element:: Block;
+            #);
+          start:
+            (#
+            do columns -> space;
+            #);
+
+          printWord:
+            (# theWord: ^Word;
+            enter theWord[]
+            do theWord.value[] -> output.putText;
+               space - theWord.length -> space;
+            #);
+          printBlank:
+            (# theBlank: ^Blank;
+               length: @integer;
+               top: ^Block;
+               breaks: @boolean;
+            enter (theBlank[], length)
+            do stack.back -> top[];
+               (***
+               '/* break: ' -> output.putText;
+               theBlank.description -> output.putText;
+               ' | L: ' ->  output.putText;
+               length -> output.putInt;
+               ' | S: ' -> output.putText;
+               space -> output.putInt;
+               ' | T: ' -> output.putText;
+               top.type -> output.putInt;
+               ' | F:' -> output.putText;
+               (if top.fits then
+                  'true' -> output.putText;
+                else
+                  'false' -> output.putText;
+               if);
+               ' */' -> output.puttext;
+               ***)
+                (if top.type = blockTypes.consistent then
+                    NOT top.fits -> breaks;
+                else
+                    length > space -> breaks;
+                if);
+               (if breaks then
+                   top.indentation - theBlank.indentation -> space;
+                   output.newline;
+                   (for (columns - space) repeat
+                      ' ' -> output.put;
+                   for);
+               else
+                   (for theBlank.spaces repeat
+                      ' ' -> output.put;
+                   for);
+                   space - theBlank.spaces -> space;
+               if);
+            #);
+          pushBlock:
+            (# theBlock: ^Block;
+            enter theBlock[]
+            do space -> theBlock.indentation;
+               theBlock.length <= space -> theBlock.fits;
+               theBlock[] -> stack.insertBack;
+            #);
+          popBlock:
+            (#
+            do stack.removeBack;
+            #);
+       #);  
+     
+     start::
+       (#
+       do output[] -> THIS(OppenPrinter).output[];
+          columns -> THIS(OppenPrinter).columns;
+          scanner.start;
+          printer.start;
+       #);
+     next::
+       (# 
+       do theToken[] -> scanner.next;
+       #);
+     finish::
+       (# 
+       do scanner.finish;
+       #); 
+  #);
