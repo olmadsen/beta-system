@@ -15,6 +15,34 @@ GrammarItems:
      N: [10] ^Item;
   #);
 
+EchoPrettyPrinter: PrettyPrinter
+  (# output: ^Stream;
+     currentBlank: ^Blank;
+     start::
+       (#
+       do output[] -> THIS(EchoPrettyPrinter).output[];
+       #);
+     next::
+       (#
+       do (if theToken.kind = 0 then
+             'ERROR!' -> putLine;
+          if);
+          (if theToken.kind = tokenKinds.blank then
+             theToken[] -> currentBlank[];
+          else
+             (if theToken.kind
+               //tokenKinds.word
+               //tokenKinds.beginBlock then
+                 (if currentBlank[] <> NONE then
+                    currentBlank.description -> output.putLine;
+                    NONE -> currentBlank[];
+                 if);
+             if);
+             theToken.description -> output.putline;
+          if);
+       #);
+  #);
+
 openGrammar:
   (# name: ^Text;
      grammar: ^meta.AGrammar;
@@ -277,6 +305,7 @@ createBreak:
      indentation: @integer;
   enter (spaces, indentation)
   do &Blank[] -> theBlank[];
+     tokenKinds.blank -> theBlank.kind;
      spaces -> theBlank.spaces;
      indentation -> theBlank.indentation;
      &Item[] -> theItem[];
@@ -296,6 +325,7 @@ createBeginBlock:
   do &Item[] -> theItem[];
      itemTypes.beginBlock -> theItem.type;
      &BeginBlock[] -> theToken[];
+     tokenKinds.beginBlock -> theToken.kind;
      (if blockType.symbol
        //pretty.Consistent then 
           blockTypes.consistent -> theToken.type;
@@ -313,6 +343,7 @@ createEndBlock:
   do &Item[] -> theItem[];
      itemTypes.endBlock -> theItem.type;
      &EndBlock[] -> theToken[];
+     tokenKinds.endBlock -> theToken.kind;
      theToken[] -> theItem.produces[];
      ']' -> theItem.name[];
   exit theItem[]
@@ -366,13 +397,14 @@ processTermOp:
 processTerm:
   (# term: ^meta.Term;
      theItem: ^Item;
-     theString: ^String;
+     theWord: ^Word;
   enter term[]
   do &Item[] -> theItem[];
-     &String[] -> theString[];
-     term.getText -> theString.value[];
-     theString[] -> theItem.produces[];
-     theString.value[] -> theItem.name[];
+     &Word[] -> theWord[];
+     tokenKinds.word -> theWord.kind;
+     term.getText -> theWord.value[];
+     theWord[] -> theItem.produces[];
+     theWord.value[] -> theItem.name[];
      itemTypes.terminal -> theItem.type;
   exit theItem[]
   #);
@@ -424,7 +456,129 @@ do (#
        &prettyprint[] -> pretty[];
        '~beta/grammars/pretty/prettyprint-parser' -> expandToFullPath -> pretty.init;
        (name[] -> openGrammar, name[] -> openPrettySpecification) -> processGrammar -> rules[];
+       '\'' -> stringChar;
+       &EchoPrettyPrinter[] -> thePrettyPrinter[];
     #);
+
+-- ASTViewerPresent: doPart --
+do (# 
+      presentAst:
+        (# node: ^AST;
+        enter node[]
+        do (if node.kind
+             //kinds.interior then
+                (if node.nodeClass
+                  //kinds.cons then node[] -> presentCons;
+                  //kinds.list then node[] -> presentList;
+                if);
+             //kinds.nameDecl
+             //kinds.nameAppl
+             //kinds.const then
+               node[] -> presentLexemText;
+             //kinds.string then
+               node[] -> presentString;
+             //kinds.optional then
+               (** Nothing **)  
+           else
+             'KIND: ' -> output.putText;
+            node.kind -> output.putInt;
+            output.newLine;
+           
+           if); 
+        #);
+      presentCons:
+        (# node: ^Cons;
+           theRule: ^Rule;
+           son: ^AST;
+           current: ^Item;
+        enter node[]
+        do node.symbol -> rules.get -> theRule[];
+           node.son[] -> son[];
+           theRule.first[] -> current[];
+           loop:
+             (if current[] <> NONE then
+                (if current.type = itemTypes.nonterminal then
+                   son[] -> presentAst;
+                   son.nextBrother -> son[];
+                else
+                   current.produces[] -> thePrettyPrinter.next;   
+                if);
+                current.next[] -> current[];
+                restart loop;
+             if);
+        #);
+      presentList:
+        (# node: ^List;
+           theRule: ^Rule;
+           son: ^AST;
+           current: ^Item;
+        enter node[]
+        do node.symbol -> rules.get -> theRule[];
+           node.son[] -> son[];
+           theRule.beginning[] -> current[];
+           loop:
+             (if current[] <> NONE then
+                current.produces[] -> thePrettyPrinter.next;   
+                current.next[] -> current[];
+                restart loop;
+             if);
+           loop:
+             (if son[] <> NONE then
+                son[] -> presentAst;
+                son.nextBrother -> son[];
+                (if son[] <> NONE then
+                  theRule.first[] -> current[];
+                  separatorLoop:
+                     (if current[] <> NONE then
+                        (if current.produces[] <> NONE then
+                           current.produces[] -> thePrettyPrinter.next;
+                        if);
+                        current.next[] -> current[];
+                        restart separatorLoop;
+                     if);
+                  restart loop;
+                if);
+             if);
+            theRule.ending[] -> current[];
+            loop:
+             (if current[] <> NONE then
+                current.produces[] -> thePrettyPrinter.next;   
+                current.next[] -> current[];
+                restart loop;
+             if); 
+        #);
+      presentLexemText:
+        (# node: ^LexemText;
+           theToken: ^Word;
+        enter node[]
+        do &Word[] -> theToken[];
+           tokenKinds.word -> theToken.kind;
+           node.getText -> theToken.value[];
+           theToken[] -> thePrettyPrinter.next;
+        #);
+      presentString:
+        (# node: ^String;
+           theToken: ^Word;
+        enter node[]
+        do &Word[] -> theToken[];
+           tokenKinds.word -> theToken.kind;
+           node.getText -> escapeText -> theToken.value[];
+           theToken[] -> thePrettyPrinter.next;
+        #);
+      escapeText:
+        (# input: ^Text;
+           value: ^Text;
+        enter input[]
+        do &Text[] -> value[];
+           stringChar -> value.put;
+           input[] -> value.putText;
+           stringChar -> value.put;
+        exit value[]
+        #);  
+   do (columns, output[]) -> thePrettyPrinter.start;
+      root[] -> presentAst;
+      thePrettyPrinter.finish;
+   #);
 
 -- RuleDescription: doPart --
 do &Text[] -> value[];
