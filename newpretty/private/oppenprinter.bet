@@ -50,7 +50,7 @@ OppenPrinter: PrettyPrinter
 
           start:
             (#
-            do 2048 -> buffer.new; (* Should be 3 times columns *)
+            do 3 * columns -> buffer.new;
                NONE -> currentBlank[];
                1 -> left;
                1 -> right;
@@ -65,6 +65,8 @@ OppenPrinter: PrettyPrinter
                   consumeBlank;
                   theToken[] -> append;
                   total + theToken.length -> total;
+                  checkStack;
+                  printAvailable;
                 //tokenKinds.blank then
                   theToken[] -> currentBlank[];
                 //tokenKinds.beginBlock then
@@ -73,6 +75,7 @@ OppenPrinter: PrettyPrinter
                 //tokenKinds.endBlock then
                   theToken[] -> append;
                   popBlock;
+                  printAvailable;
                if);
             #);
           pushBlock:
@@ -88,8 +91,52 @@ OppenPrinter: PrettyPrinter
             #);
           popBlock:
             (# theBlock: ^Block;
-            do stack.removeBack -> theBlock[];
-               total + theBlock.size -> theBlock.size;
+            do (if NOT stack.empty then
+                  stack.removeBack -> theBlock[];
+                  total + theBlock.size -> theBlock.size;
+               if);
+            #);
+          checkStack:
+            (# bottom: ^Block;
+            do loop:
+               (if NOT stack.empty then
+                  stack.front -> bottom[];
+                  (if bottom.size + total > columns then
+                      columns + 1 -> bottom.size;
+                      stack.removeFront;
+                      restart loop;
+                  if);
+               if);
+            #);
+          printAvailable:
+            (# theToken: ^Token;
+               length: @integer;
+            do loop:
+               (if left <> right then
+                  buffer[left][] -> theToken[];
+                  (if theToken.kind
+                    //tokenKinds.word then
+                      theToken[] -> printer.printWord;
+                    //tokenKinds.blank  then
+                      buffer[(left mod buffer.range) + 1].length -> length;
+                      (if length >= 0 then
+                         (theToken[], length) -> printer.printBlank;
+                       else
+                         leave loop;  
+                      if)
+                    //tokenKinds.beginBlock then
+                      theToken.length -> length;
+                      (if length >= 0 then
+                          theToken[] -> printer.pushBlock;
+                       else
+                          leave loop;   
+                      if);
+                    //tokenKinds.endBlock then
+                      printer.popBlock;  
+                  if);
+                  (left mod buffer.range) + 1 -> left;
+                  restart loop;
+               if)
             #);
           display:
             (# index: @integer;
@@ -102,31 +149,15 @@ OppenPrinter: PrettyPrinter
                  if);
             #);  
           finish:
-            (# theToken: ^Token;
-            do display;
-               loop:
-               (if left <> right then
-                  buffer[left][] -> theToken[];
-                  (if theToken.kind
-                    //tokenKinds.word then
-                      theToken[] -> printer.printWord;
-                    //tokenKinds.blank  then
-                      (theToken[], buffer[left + 1].length) -> printer.printBlank;
-                    //tokenKinds.beginBlock then
-                      theToken[] -> printer.pushBlock;
-                    //tokenKinds.endBlock then
-                      printer.popBlock;  
-                  if);
-                  left + 1 -> left;
-                  restart loop;
-               if);
+            (#
+            do 
             #);  
           
           append:
             (# theToken: ^Token;
             enter theToken[]
             do theToken[] -> buffer[right][];
-               right + 1 -> right;
+               (right mod buffer.range) + 1 -> right;
             #);
           
           
@@ -154,24 +185,7 @@ OppenPrinter: PrettyPrinter
                breaks: @boolean;
             enter (theBlank[], length)
             do stack.back -> top[];
-               (***
-               '/* break: ' -> output.putText;
-               theBlank.description -> output.putText;
-               ' | L: ' ->  output.putText;
-               length -> output.putInt;
-               ' | S: ' -> output.putText;
-               space -> output.putInt;
-               ' | T: ' -> output.putText;
-               top.type -> output.putInt;
-               ' | F:' -> output.putText;
-               (if top.fits then
-                  'true' -> output.putText;
-                else
-                  'false' -> output.putText;
-               if);
-               ' */' -> output.puttext;
-               ***)
-                (if top.type = blockTypes.consistent then
+               (if top.type = blockTypes.consistent then
                     NOT top.fits -> breaks;
                 else
                     length > space -> breaks;
@@ -211,7 +225,9 @@ OppenPrinter: PrettyPrinter
        #);
      next::
        (# 
-       do theToken[] -> scanner.next;
+       do (if scanner.right <= scanner.buffer.range then
+              theToken[] -> scanner.next;
+          if);
        #);
      finish::
        (# 
