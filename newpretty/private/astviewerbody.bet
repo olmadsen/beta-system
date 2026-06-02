@@ -132,12 +132,12 @@ processProduction:
         //meta.ListOne then
             (production[], prettyProduction[]) -> processListOne -> theRule[];
         //meta.ListZero then
-            production[] -> processListZero -> theRule[];
+            (production[], prettyProduction[]) -> processListZero -> theRule[];
         //meta.Constructor then
             (production[], prettyProduction[]) -> processConstructor -> theRule[];
         //meta.Opt then
             production[] -> processOpt -> theRule[];
-        if);
+     if);
   exit theRule[]
   #);
 processAlternation:
@@ -164,6 +164,39 @@ processListOne:
         listOne.getSynCat -> processSynCat -> nonTerminal[];
         listOne.getTermOp -> processTermOp -> separator[];
         prettyProduction.getListSpec -> listSpec[];
+        (if true
+           //'Imperatives' -> theRule.name.equal then
+              createAlwaysBlock -> theRule.beginning[];
+           //'Attributes' -> theRule.name.equal then
+              createAlwaysBlock -> theRule.beginning[];   
+           else
+              listSpec.getBlockType -> createBeginBlock -> theRule.beginning[];
+        if);
+        createEndBlock -> theRule.ending[];
+        nonTerminal[] -> theRule.first[] -> current[];
+        (if separator[] <> NONE then
+           separator[] -> current.next[];
+           separator[] -> current[];
+        if);
+        createDefaultBreak -> current.next[];
+     #);
+  exit theRule[]
+  #);
+processListZero:
+  (# listZero: ^meta.ListZero;
+     prettyProduction: ^pretty.ListProd;
+     theRule: ^Rule;
+  enter (listZero[], prettyProduction[])
+  do (# nonTerminal: ^Item;
+        separator: ^Item;
+        listSpec: ^pretty.ListSpec;
+        current: ^Item;
+     do &Rule[] -> theRule[];
+        listZero.getLeftSide -> getLeftSideName -> theRule.name[];
+        kinds.list -> theRule.kind;
+        listZero.getSynCat -> processSynCat -> nonTerminal[];
+        listZero.getTermOp -> processTermOp -> separator[];
+        prettyProduction.getListSpec -> listSpec[];
         listSpec.getBlockType -> createBeginBlock -> theRule.beginning[];
         createEndBlock -> theRule.ending[];
         nonTerminal[] -> theRule.first[] -> current[];
@@ -172,18 +205,7 @@ processListOne:
            separator[] -> current[];
         if);
         createDefaultBreak -> current.next[];
-     #);   
-  exit theRule[]
-  #);
-processListZero:
-  (# listZero: ^meta.ListZero;
-     theRule: ^Rule;
-  enter listZero[]
-  do &Rule[] -> theRule[];
-     listZero.getLeftSide -> getLeftSideName -> theRule.name[];
-     kinds.list -> theRule.kind;
-     listZero.getSynCat -> processSynCat -> theRule.first[];
-     listZero.getTermOp -> processTermOp -> theRule.first.next[];
+     #);
   exit theRule[]
   #);
 processConstructor:
@@ -343,6 +365,18 @@ createBeginBlock:
      theToken[] -> theItem.produces[];
   exit theItem[]
   #);
+createAlwaysBlock:
+  (# theItem: ^Item;
+     theToken: ^BeginBlock;
+  do &Item[] -> theItem[];
+     itemTypes.beginBlock -> theItem.type;
+     &BeginBlock[] -> theToken[];
+     tokenKinds.beginBlock -> theToken.kind;
+     blockTypes.always -> theToken.type;
+     '[a' -> theItem.name[];
+     theToken[] -> theItem.produces[];
+  exit theItem[]
+  #);
 createEndBlock:
   (# theItem: ^Item;
      theToken: ^EndBlock;
@@ -457,6 +491,8 @@ do (#
        '~beta/grammars/pretty/prettyprint-parser' -> expandToFullPath -> pretty.init;
        (name[] -> openGrammar, name[] -> openPrettySpecification) -> processGrammar -> rules[];
        '\'' -> stringChar;
+       '(*' -> commentBegin[];
+       '*)' -> commentEnd[];
        (* &EchoPrettyPrinter[] -> thePrettyPrinter[]; *)
        &OppenPrinter[] -> thePrettyPrinter[];
     #);
@@ -493,12 +529,22 @@ do (# presentAst:
            theRule: ^Rule;
            son: ^AST;
            current: ^Item;
+           currentComment: ^Comment;
         enter node[]
         do node.symbol -> rules.get -> theRule[];
            node.son[] -> son[];
+           node.com[] -> currentComment[];
            theRule.first[] -> current[];
            loop:
              (if current[] <> NONE then
+                commentLoop:
+                  (if currentComment[] <> NONE then
+                      (if currentComment.position < current.position then
+                          currentComment[] -> presentComment;
+                          currentComment.nextBrother -> currentComment[];
+                          restart commentLoop;
+                      if);
+                  if);
                 (if current.type = itemTypes.nonterminal then
                    son[] -> presentAst;
                    son.nextBrother -> son[];
@@ -514,10 +560,25 @@ do (# presentAst:
            theRule: ^Rule;
            son: ^AST;
            current: ^Item;
+           currentComment: ^Comment;
+           position: @integer;
+           presentComments:
+             (#
+             do commentLoop:
+                  (if currentComment[] <> NONE then
+                      (if currentComment.position < position then
+                          currentComment[] -> presentComment;
+                          currentComment.nextBrother -> currentComment[];
+                          restart commentLoop;
+                      if);
+                  if);
+             #);
         enter node[]
         do node.symbol -> rules.get -> theRule[];
            node.son[] -> son[];
+           node.com[] -> currentComment[];
            theRule.beginning[] -> current[];
+           1 -> position;
            loop:
              (if current[] <> NONE then
                 current.produces[] -> printer.next;   
@@ -526,8 +587,11 @@ do (# presentAst:
              if);
            loop:
              (if son[] <> NONE then
+                presentComments;
                 son[] -> presentAst;
                 son.nextBrother -> son[];
+                position + 1 -> position;
+                presentComments;
                 (if son[] <> NONE then
                   theRule.first[] -> current[];
                   separatorLoop:
@@ -538,6 +602,7 @@ do (# presentAst:
                         current.next[] -> current[];
                         restart separatorLoop;
                      if);
+                  position + 1 -> position;
                   restart loop;
                 if);
              if);
@@ -565,6 +630,20 @@ do (# presentAst:
         do &Word[] -> theToken[];
            tokenKinds.word -> theToken.kind;
            node.getText -> escapeText -> theToken.value[];
+           theToken[] -> printer.next;
+        #);
+      presentComment:
+        (# node: ^Comment;
+           theToken: ^Word;
+           value: ^Text;
+        enter node[]
+        do &Word[] -> theToken[];
+           tokenKinds.word -> theToken.kind;
+           &Text[] -> value[];
+           commentBegin[] -> value.putText;
+           node.getText -> value.putText;
+           commentEnd[] -> value.putText;
+           value[] -> theToken.value[];
            theToken[] -> printer.next;
         #);
       presentUnExpanded:
