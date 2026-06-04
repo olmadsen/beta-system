@@ -319,9 +319,11 @@ createItemsFromStream:
                  block.getBlockType -> createBeginBlock -> items.insertBack;
                  (theGrammarItems[], block.getItemList, items[]) -> createItemsFromStream;
                  createEndBlock -> items.insertBack;
+               //pretty.CommentPlace then
+                 (* createCommentPlace -> items.insertBack;   *)
              if);
           #);
-  #); 
+  #);
 
 createTerminalItem:
   (# value: ^Text;
@@ -403,6 +405,13 @@ createEndBlock:
      theToken[] -> theItem.produces[];
      ']' -> theItem.name[];
   exit theItem[]
+  #);
+createCommentPlace:
+  (# theItem: ^Item
+  do &Item[] -> theItem[];
+     itemTypes.comment -> theItem.type;
+     '(*)' -> theItem.name[];
+  exit theITem[] 
   #);
 processConsElemList:
   (# consElemList: ^meta.ConsElemList;
@@ -514,7 +523,8 @@ do (#
     #);
 
 -- ASTViewerPresent: doPart --
-do (# presentAst:
+do (# defaultBreak: ^Item;
+      presentAst:
         (# node: ^AST;
         enter node[]
         do (if node.kind
@@ -544,8 +554,23 @@ do (# presentAst:
         (# node: ^Cons;
            theRule: ^Rule;
            son: ^AST;
+           previous: ^Item;
            current: ^Item;
            currentComment: ^Comment;
+           filterBlank:
+             (# input: ^Blank;
+                output: ^Blank;
+             enter input[]
+             do (if input.spaces < 0 then
+                    &Blank[] -> output[];
+                     tokenKinds.blank -> output.kind;
+                     -input.spaces -> output.spaces;
+                     input.indentation -> output.indentation;
+                 else
+                    input[] -> output[];
+                if)
+             exit output[]   
+             #);  
         enter node[]
         do node.symbol -> rules.get -> theRule[];
            node.son[] -> son[];
@@ -557,6 +582,15 @@ do (# presentAst:
                   (if currentComment[] <> NONE then
                       (if currentComment.position < current.position then
                           currentComment[] -> presentComment;
+                          (if previous[] <> NONE then
+                              (if previous.type = itemTypes.blank then
+                                  previous.produces[] -> filterBlank -> printer.next;
+                              else
+                                  defaultBreak.produces[] ->  printer.next;   
+                              if);
+                           else
+                              defaultBreak.produces[] ->  printer.next;
+                          if);
                           currentComment.nextBrother -> currentComment[];
                           restart commentLoop;
                       if);
@@ -567,9 +601,17 @@ do (# presentAst:
                 else
                    current.produces[] -> printer.next;   
                 if);
+                current[] -> previous[];
                 current.next[] -> current[];
                 restart loop;
              if);
+             commentLoop:
+                  (if currentComment[] <> NONE then
+                        defaultBreak.produces[] ->  printer.next;
+                        currentComment[] -> presentComment;
+                        currentComment.nextBrother -> currentComment[];
+                        restart commentLoop;
+                  if);
         #);
       presentList:
         (# node: ^List;
@@ -583,7 +625,9 @@ do (# presentAst:
              do commentLoop:
                   (if currentComment[] <> NONE then
                       (if currentComment.position < position then
+                          defaultBreak.produces[] -> printer.next;
                           currentComment[] -> presentComment;
+                          defaultBreak.produces[] -> printer.next;
                           currentComment.nextBrother -> currentComment[];
                           restart commentLoop;
                       if);
@@ -650,17 +694,49 @@ do (# presentAst:
         #);
       presentComment:
         (# node: ^Comment;
-           theToken: ^Word;
-           value: ^Text;
+           commentText: ^Text;
+           presentWord:
+             (# value: ^Text;
+                theToken: ^Word;
+             enter value[]
+             do &Word[] -> theToken[];
+               tokenKinds.word -> theToken.kind;
+               value[] -> theToken.value[];
+               theToken[] -> printer.next;
+             #);
+           presentMultiLine:
+             (# input: ^Text;
+                value: ^Text;
+                more: @boolean;
+                break: ^Item;
+             enter input[]   
+             do (0, 1) -> createBreak -> break[];
+                (createAlwaysBlock).produces[] -> printer.next;
+                input.reset;
+                loop:
+                  (if NOT input.eos then
+                    (if more then
+                        break.produces[] -> printer.next;
+                    if);
+                    input.getLine -> value[];
+                    value.reset;
+                    value.scanWhiteSpace;
+                    value.getLine -> presentWord;
+                    true -> more;
+                    restart loop;
+                  if);
+                (createEndBlock).produces[] -> printer.next;  
+             #);
         enter node[]
-        do &Word[] -> theToken[];
-           tokenKinds.word -> theToken.kind;
-           &Text[] -> value[];
-           commentBegin[] -> value.putText;
-           node.getText -> value.putText;
-           commentEnd[] -> value.putText;
-           value[] -> theToken.value[];
-           theToken[] -> printer.next;
+        do &Text[] -> commentText[];
+           commentBegin[] -> commentText.putText;
+           node.getText -> commentText.putText;
+           commentEnd[] -> commentText.putText;
+           (if node.breaks = 0 then
+               commentText[] -> presentWord;
+            else
+               commentText[] -> presentMultiLine;
+           if)
         #);
       presentUnExpanded:
         (# node: ^UnExpanded;
@@ -700,7 +776,8 @@ do (# presentAst:
            stringChar -> value.put;
         exit value[]
         #);  
-   do (columns, output[]) -> printer.start;
+   do createDefaultBreak -> defaultBreak[];
+      (columns, output[]) -> printer.start;
       root[] -> presentAst;
       printer.finish;
    #);
@@ -758,7 +835,7 @@ do &Text[] -> value[];
        '<' -> value.put;
        name[] -> value.putText;
        '>' -> value.put;
-     //itemTypes.blank then
+     //itemTypes.blank//itemTypes.comment then
        name[]-> value.putText;
     
    if);
