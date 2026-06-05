@@ -245,6 +245,11 @@ processConstructor:
           (#
           do (if currentItem[] <> NONE then
                 current[] -> currentItem.next[];
+                (if currentItem.type = itemTypes.blank then
+                    (if (current.type = itemTypes.terminal) OR (current.type = itemTypes.nonTerminal) then
+                        current.position -> currentItem.position;
+                    if);
+                if);
              else
                 current[] -> firstItem[];
              if);
@@ -342,6 +347,11 @@ createTerminalItem:
 createDefaultBreak:
   (# theItem: ^Item;
   do (1, 0) -> createBreak -> theItem[];
+  exit theItem[]
+  #);
+createNoBreak:
+  (# theItem: ^Item;
+  do (-1, 0) -> createBreak -> theItem[];
   exit theItem[]
   #);
 createBreak:
@@ -524,6 +534,7 @@ do (#
 
 -- ASTViewerPresent: doPart --
 do (# defaultBreak: ^Item;
+      noBreak: ^Item;
       presentAst:
         (# node: ^AST;
         enter node[]
@@ -570,7 +581,8 @@ do (# defaultBreak: ^Item;
                     input[] -> output[];
                 if)
              exit output[]   
-             #);  
+             #);
+             hadComment: @boolean;
         enter node[]
         do node.symbol -> rules.get -> theRule[];
            node.son[] -> son[];
@@ -578,18 +590,23 @@ do (# defaultBreak: ^Item;
            theRule.first[] -> current[];
            loop:
              (if current[] <> NONE then
+                false -> hadComment;
                 commentLoop:
                   (if currentComment[] <> NONE then
                       (if currentComment.position < current.position then
-                          currentComment[] -> presentComment;
-                          (if previous[] <> NONE then
-                              (if previous.type = itemTypes.blank then
-                                  previous.produces[] -> filterBlank -> printer.next;
-                              else
-                                  defaultBreak.produces[] ->  printer.next;   
-                              if);
+                          true -> hadComment;
+                          (if currentComment.inLine then
+                              noBreak.produces[] -> printer.next;
                            else
-                              defaultBreak.produces[] ->  printer.next;
+                              (if current.type = itemTypes.blank then
+                                  current.produces[] -> printer.next;
+                               else
+                                  defaultBreak.produces[] ->  printer.next; 
+                              if);
+                          if);
+                          currentComment[] -> presentComment;
+                          (if current.type <> itemTypes.blank then
+                              defaultBreak.produces[] -> printer.next;
                           if);
                           currentComment.nextBrother -> currentComment[];
                           restart commentLoop;
@@ -599,7 +616,11 @@ do (# defaultBreak: ^Item;
                    son[] -> presentAst;
                    son.nextBrother -> son[];
                 else
-                   current.produces[] -> printer.next;   
+                   (if hadComment AND (current.type = itemTypes.blank) then
+                       current.produces[] -> filterBlank -> printer.next;
+                    else
+                       current.produces[] -> printer.next;
+                   if);
                 if);
                 current[] -> previous[];
                 current.next[] -> current[];
@@ -625,7 +646,11 @@ do (# defaultBreak: ^Item;
              do commentLoop:
                   (if currentComment[] <> NONE then
                       (if currentComment.position < position then
-                          defaultBreak.produces[] -> printer.next;
+                         (if currentComment.inline then
+                             noBreak.produces[] -> printer.next;
+                          else
+                             defaultBreak.produces[] -> printer.next;
+                         if);
                           currentComment[] -> presentComment;
                           defaultBreak.produces[] -> printer.next;
                           currentComment.nextBrother -> currentComment[];
@@ -777,6 +802,7 @@ do (# defaultBreak: ^Item;
         exit value[]
         #);  
    do createDefaultBreak -> defaultBreak[];
+      createNoBreak -> noBreak[];
       (columns, output[]) -> printer.start;
       root[] -> presentAst;
       printer.finish;
@@ -837,5 +863,4 @@ do &Text[] -> value[];
        '>' -> value.put;
      //itemTypes.blank//itemTypes.comment then
        name[]-> value.putText;
-    
    if);
