@@ -119,6 +119,106 @@ scanImport:
      for);
   #);
 
+packComments:
+  (# output: ^Stream;
+     
+     countComments:
+       (# node: ^AST;
+          current: ^Comment;
+          count: @integer;
+       enter node[]
+       do node.com[] -> current[];
+          loop:
+            (if current[] <> NONE then
+                count + 1 -> count;
+                current.brother[] -> current[];
+                restart loop;
+            if);
+       exit count     
+       #);
+     packComment:
+       (# current: ^Comment;
+       enter current[]
+       do current.position -> comments.putInt16u;
+         current.breaks -> comments.putInt16u;
+         (if current.inline then
+            1 -> comments.putInt8u;
+         else
+            0 -> comments.putInt8u;   
+         if);
+         current.type -> comments.putInt16u;
+         current.getText -> comments.putBinText;
+       #);  
+     packCommentInfo:
+       (# node: ^AST;
+          current: ^Comment;
+          count: @integer;
+       enter node[]
+       do node.inx -> comments.putInt32u;
+          node[] -> countComments -> comments.putInt16u;
+          node.com[] -> current[];
+          loop:
+            (if current[] <> NONE then
+                current[] -> packComment;
+                current.brother[] -> current[];
+                restart loop;
+            if);
+       #);
+     comments: ^Text;  
+  enter output[]
+  do &Text[] -> comments[];
+     (for inx: table.range repeat
+          (if table[inx].com[] <> NONE then
+              table[inx][] -> packCommentInfo;
+          if);
+     for);
+     comments[] -> output.putBinText;
+  #);
+
+unPackComments:
+  (# input: ^Stream;
+     comments: ^Text;
+     unPackComment:
+       (# current: ^Comment;
+          inline: @int8u;
+       do &Comment[] -> current[];
+          comments.getInt16u -> current.position;
+          comments.getInt16u -> current.breaks;
+          comments.getInt8u -> inline;
+          (inline = 1) -> current.inline;
+          comments.getInt16u -> current.type;
+          comments.getBinText -> current.putText;
+       exit current[]
+       #);
+     unPackCommentInfo:
+       (# inx: @integer;
+          node: ^AST;
+          count: @integer;
+          first: ^Comment;
+          last: ^Comment;
+          current: ^Comment;
+       do comments.getInt32u -> inx;
+          table[inx][] -> node[];
+          comments.getInt16u -> count;
+          (for count repeat
+              unPackComment -> current[];
+              (if last[] <> NONE then
+                  current[] -> last.brother[];
+               else
+                  current[] -> node.com[];
+              if);
+              current[] -> last[];
+          for)
+       #);
+  enter input[]
+  do input.getBinText -> comments[];
+     comments.reset;
+     loop:
+       (if NOT comments.eos then
+           unPackCommentInfo;
+           restart loop;
+       if);
+  #);
 packSemantics:
   (# header: ^Text;
      info: ^Text;
@@ -756,6 +856,12 @@ do (#
       (#
       do output[] -> current.packSemantics;
       #);
+      (if options.saveComments then
+          fragmentlist.scan
+            (#
+            do output[] -> current.packComments;
+            #);
+      if);
    #);
 
 -- FragmentGroupUnpack: doPart --
@@ -812,7 +918,14 @@ do unpacking:
             (#
             do input[] -> current.unPackSemantics;
             #);
+            (if (NOT input.eos) AND options.saveComments then
+                fragmentlist.scan
+                  (#
+                  do input[] -> current.unPackComments;
+                  #);
+            if);
             true -> isRealOpen;
+            unPackSemanticInfo;
         if);
         true -> OK;
      #);
