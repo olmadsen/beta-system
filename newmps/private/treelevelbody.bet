@@ -40,6 +40,22 @@ Rule:
      next: ^Rule;
   #);
 
+ProdInfo:
+  (# name: ^Text;
+     type: @integer; (* meta.Alternation
+                      * meta.Constructor
+                      * meta.ListOne
+                      * meta.ListZero
+                      * meta.Opt
+                      *)
+     first: ^SonInfo;
+  #);
+SonInfo:
+  (# symbol: @integer;
+     next: ^SonInfo;
+  #);
+
+
 initLabelsFromGrammar:
   (# meta: ^MetaGrammar;
      grammar: ^meta.AGrammar;
@@ -58,12 +74,95 @@ initLabelsFromGrammar:
      
   #);
 
+initGrammarInfo:
+  (# meta: ^MetaGrammar;
+     grammar: ^meta.AGrammar;
+     productions: ^meta.ProductionList;
+  do grammarTable.meta[] -> meta[];
+     (if grammarAst[] <> NONE then
+         maxproductions -> parser.private.infoArray.new;
+         grammarAst.root[] -> grammar[];
+         grammar.getProductionList -> productions[];
+         productions.newScan
+            (# symbol: @integer;
+               constructor: ^meta.Constructor;
+               consElemList: ^meta.ConsElemList;
+               info: ^ProdInfo;
+            do symbol + 1 -> symbol;
+               &ProdInfo[] -> info[];
+               current.getSynDeclText -> info.name[];
+               current.symbol -> info.type;
+               info[] -> parser.private.infoArray[symbol][];
+               (if current.symbol
+                   // meta.Constructor then
+                      current[] -> constructor[];
+                      constructor.getConsElemList -> consElemList[];
+                      consElemList.newScan
+                        (# taggedSyn: ^meta.TaggedSyn;
+                           synCat: ^meta.SynCat;
+                           synName: ^meta.SynName;
+                           lastSonInfo: ^SonInfo;
+                           currentSonInfo: ^SonInfo;
+                        do (if current.symbol
+                               // meta.TaggedSyn then
+                                  current[] -> taggedSyn[];
+                                  taggedSyn.getSynName -> synName[];
+                               // meta.SynCat then
+                                  current[] -> synCat[];
+                                  synCat.getSynName -> synName[];
+                               else
+                                  NONE -> synName[];   
+                           if);
+                           (if synName[] <> NONE then
+                               &SonInfo[] -> currentSonInfo[];
+                               synName.getSynText -> nameToSymbol -> currentSonInfo.symbol;
+                               (if lastSonInfo[] <> NONE then
+                                   currentSonInfo[] -> lastSonInfo.next[];
+                                else
+                                   currentSonInfo[] -> info.first[];   
+                               if);
+                               currentSonInfo[] -> lastSonInfo[];
+                           if);
+                        #);
+               if);
+            #);
+     if);
+  #);
+displayGrammarInfo:
+  (# output: ^Stream;
+     info: ^ProdInfo;
+     current: ^SonInfo;
+     count: @integer;
+  enter output[]
+  do (for symbol: parser.private.infoArray.range repeat
+         parser.private.infoArray[symbol][] -> info[];
+         info.name[] -> output.putText;
+         ' => ' -> output.putText;
+         0 -> count;
+         info.first[] -> current[];
+         loop:
+           (if current[] <> NONE then
+               count + 1 -> count;
+               current.symbol -> symbolToName -> output.putText;
+               ' ' -> output.put;
+               current.next[] -> current[];
+               restart loop;
+           if);
+         (if count <> sonArray[symbol] then
+             ' - son count mismatch!' -> screen.putText;
+         if);  
+         output.newLine;
+         
+     for);
+  #);
+
 -- TreeLevelInit: doPart --
 do (if tableFileName[] <> NONE then
       tableFileName[] -> parser.init;
    if);
    (if grammarAst[] <> NONE then
       initLabelsFromGrammar;
+      initGrammarInfo;
    if);
    INNER;
    THIS(TreeLevel)[] -> grammarTable.register;
@@ -108,6 +207,14 @@ do (if symbol < 1 then
       (if symbol
        //prodno.unExpanded then
          'UnExpanded' -> name[];
+       //prodno.nameAppl then
+         'NameAppl' -> name[];
+       //prodno.nameDecl then
+         'NameDecl' -> name[];
+       //prodno.string then
+         'String' -> name[];
+       //prodno.const then
+         'Const' -> name[];  
       else
          &Text[] -> name[];
          symbol -> name.putint;
@@ -121,21 +228,34 @@ do (if symbol < 1 then
    if);
 
 -- TreeLevelNameToSymbol: doPart --
-do search:
-(for inx: parser.private.labelArray.range repeat
-   (if parser.private.labelArray[inx][] <> NONE then
-      (if parser.private.labelArray[inx][] -> name.equalNCS then
-         inx -> symbol;
-         leave search;
-      if);
-   if);
-for);
+do (if true
+         // 'NameAppl' -> name.equalNCS then
+            prodNo.nameAppl -> symbol;
+         // 'NameDecl' -> name.equalNCS then
+            prodNo.nameDecl -> symbol;
+         // 'String' -> name.equalNCS then
+            prodNo.string -> symbol;
+         // 'Const' -> name.equalNCS then
+            prodNo.const -> symbol;
+     else
+         search:
+         (for inx: parser.private.labelArray.range repeat
+            (if parser.private.labelArray[inx][] <> NONE then
+               (if parser.private.labelArray[inx][] -> name.equalNCS then
+                     inx -> symbol;
+                     leave search;
+               if);
+            if);
+         for);
+     if);
+
+   
 
 -- TreeLevelKindOfSymbol: doPart --
 do 'TreeLevelKindOfSymbol: doPart' -> putline;
 
 -- TreeLevelNewUnexpanded: doPart --
-do (if symbol = 0 then
+do (if symbol <= 0 then
        &UnExpanded[] -> theAst[];
     else
        symbol -> symbolToAst -> theAst[];
@@ -146,16 +266,50 @@ do (if symbol = 0 then
    frag[] -> theAst.frag[];
 
 -- TreeLevelNewAst: doPart --
-do (if symbol
-    //prodNo.nameAppl then
-      &NameAppl[] -> new[];
-      prodno.nameAppl -> new.symbol;
-      kinds.nameAppl -> new.astKind;
+do (# last: ^AST;
+      current: ^AST;
+      info: ^ProdInfo;
+      currentSonInfo: ^SonInfo;
+   do symbol -> symbolToAst -> new[];
       frag[] -> new.frag[];
-   else
-      symbol -> symbolToAst -> new[];
-      frag[] -> new.frag[];
-   if);
+      (if symbol > 0 then
+          (if parser.private.infoArray.range > 0 then
+              parser.private.infoArray[symbol][] -> info[];
+              info.first[] -> currentSonInfo[];
+              loop:
+                (if currentSonInfo[] <> NONE then
+                    (currentSonInfo.symbol, frag[]) -> newUnExpanded -> current[];
+                    (if last[] <> NONE then
+                        current[] -> last.brother[];
+                    else
+                        current[] -> new.son[];   
+                    if);
+                    current[] -> last[];
+                    currentSonInfo.next[] -> currentSonInfo[];
+                    restart loop;
+                if);
+               (if last[] <> NONE then
+                   new[] -> last.brother[];
+                   1 -> last.status;
+               if);
+           else
+               (for inx: sonArray[symbol] repeat
+                     (0, frag[]) -> newUnExpanded -> current[];
+                     (if last[] <> NONE then
+                        current[] -> last.brother[];
+                     else
+                        current[] -> new.son[];   
+                     if);
+                     current[] -> last[];
+               for);
+               (if last[] <> NONE then
+                  new[] -> last.brother[];
+                  1 -> last.status;
+               if);
+          if);
+      if);
+   #);
+
 -- TreeLevelNewLexemText: doPart --
 do (symbol, frag[]) -> newAst -> new[];
 
@@ -486,6 +640,7 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
    actionArray: [0] @int8;
    labelArray: [0] ^Text;
    rules: [0] ^Rule;
+   infoArray: [0] ^ProdInfo;
    
    EDesc: [100] ^b.ErrorDescriptor; 
    epositions: [100] @integer;
