@@ -3,6 +3,8 @@ INCLUDE '~beta/bobs/bobs';
 INCLUDE '~beta/bobs/private/lex';
 INCLUDE '../semanticerrortext';
 INCLUDE '../metagramsematt';
+INCLUDE '~beta/containers/dictionary';
+
 -- astLib: attributes --
 
 scan:
@@ -74,6 +76,128 @@ initLabelsFromGrammar:
      
   #);
 
+setupSuper:
+  (# meta: ^MetaGrammar;
+     grammar: ^meta.AGrammar;
+     productions: ^meta.ProductionList;
+    
+     declarations: @Dictionary
+       (# Key:: Text;
+          element:: IntegerObject;
+          define:
+            (# name: ^Text;
+               value: @integer;
+               index: ^IntegerObject;
+            enter (name[], value)
+            do &IntegerObject[] -> index[];
+               value -> index;
+               (name[], index[]) -> associate;
+            #);
+          rangeInitial:: (# do 200 -> value #);
+          H: @HoneyMan;
+          init::
+            (#
+            do H.init;
+            #);  
+          keyEqual:: (#  do left[]->right.equalNCS->value #);
+          hashFunction:: 
+            (# t: ^Text;
+            do k.copy -> t[];
+               t.makeLC;
+               t[] -> H.hash -> value;
+            #);
+       #);
+     findLeftSide:
+       (# inx: @integer;
+          p: ^meta.Prod;
+          ls: ^meta.LeftSide;
+       enter inx
+       do inx->productions.get->p[];
+          p.leftside->ls[];
+       exit ls[]
+       #);
+     setSuperAttribute:
+       (# value: @integer;
+          ls: ^meta.LeftSide;
+       enter (value, ls[])
+       do (if NOT ((value = super.cons) AND (ls.superValue > 0)) then
+              value -> ls.superValue;
+          if);
+       #);  
+  do grammarTable.meta[] -> meta[];
+     (if grammarAst[] <> NONE then
+         declarations.init;
+         ('nameappl', nameAppl)->declarations.define;
+         ('namedecl', nameDecl)->declarations.define;
+         ('const', const)->declarations.define;
+         ('string', string)->declarations.define;
+         grammarAst.root[] -> grammar[];
+         grammar.getProductionList -> productions[];
+         productions.newScan
+           (# ls: ^meta.LeftSide;
+           do current.leftside->ls[];
+              super.undefined->ls.superValue;
+              (ls.getSynDeclText, currentSonNo) -> declarations.define;
+           #);
+         meta.SynName -> productions.suffixWalkForProd
+           (# scanCat::< meta.synName;
+              index: ^IntegerObject;
+           do current.getSynText -> declarations.lookup -> index[];
+              (if index[] <> NONE then
+                 index -> current.dclRef;
+               else
+                 'was not able to find ' -> screen.putText;
+                 current.getSynText -> screen.putLine;
+              if);
+           #);
+         (super.cons, (1->findLeftSide))->setSuperAttribute;
+         productions.newScan
+           (# constructor: ^meta.Constructor;
+              consElemList: ^meta.ConsElemList;
+              value: @integer;
+           do (if current.symbol
+                  // meta.ListOne // meta.ListZero then
+                     (super.list, current.leftSide)->setSuperAttribute;
+                     meta.SynName -> current.suffixWalkForProd
+                       (# scanCat::< meta.synName;
+                          theProd: ^meta.Prod;
+                       do current.dclRefProd->theProd[];
+                          (if theProd[] <> NONE then
+                              (super.cons, theProd.leftside)->setSuperAttribute;
+                          if);
+                       #);
+                  // meta.Constructor then
+                     meta.SynName -> current.suffixWalkForProd
+                       (# scanCat::< meta.synName;
+                          theProd: ^meta.Prod;
+                       do current.dclRefProd->theProd[];
+                          (if theProd[] <> NONE then
+                              (super.cons, theProd.leftside)->setSuperAttribute;
+                          if);
+                       #);
+                  // meta.Alternation then
+                     meta.SynName -> current.suffixWalkForProd
+                       (# scanCat::< meta.synName;
+                          theProd: ^meta.Prod;
+                       do current.dclRefProd->theProd[];
+                          (if theProd[] <> NONE then
+                              (currentSonNo, theProd.leftSide)->setSuperAttribute;
+                          if);
+                       #);
+                  // meta.Opt // meta.Dummy then
+                     current.superValue -> value;
+                     meta.SynName -> current.suffixWalkForProd
+                       (# scanCat::< meta.synName;
+                          theProd: ^meta.Prod;
+                       do current.dclRefProd->theProd[];
+                          (if theProd[] <> NONE then
+                              (value, theProd.leftSide)->setSuperAttribute;
+                          if);
+                       #);
+              if);
+           #);
+     if);
+  #);
 initGrammarInfo:
   (# meta: ^MetaGrammar;
      grammar: ^meta.AGrammar;
@@ -163,6 +287,7 @@ do (if tableFileName[] <> NONE then
    (if grammarAst[] <> NONE then
       initLabelsFromGrammar;
       initGrammarInfo;
+      setupSuper;
    if);
    INNER;
    THIS(TreeLevel)[] -> grammarTable.register;
