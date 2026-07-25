@@ -10,27 +10,27 @@ OGsequence: SuperOGsequence
    *    Semantic Analysis of Virtual Classes and Nested Classes
    * 
    * In the qBeta implementation, we use a sequence of ObjectDescriptors
-   *    [OG1, OG2, ..., OGn]
+   *    [OD1, OD2, ..., ODn]
    * where in the simple form
-   *    OG1.super = OG2, OG2.super = OG3, ..., OGn-1.super = OGn
-   * OG1 is enclosing the application qualified by the virtual
+   *    OD1.super = OD2, OD2.super = OG3, ..., ODn-1.super = ODn
+   * OD1 is enclosing the application qualified by the virtual
    * where we want to find the most specific binding.
    * To handle remote access, an OGsequence may in general have nested OGs:
-   *       [OG1, OG2, ..., OGn-1, nest(OGn)]
-   * meaning that OGn is nested within OGn-1.
-   * OGn within nest(OGn) may have super patterns:
-   *       [OG1, OG2, ..., OGn-1, nest(OGn),OGn+1, ...,OGm]
-   * Parameters, where this(OGsequence) = [OG1, OG2, ..., OGn]
-   *    DOG = OGn, 
-   *    isNest: if true then OGn is nested in OGn-1,
-   *    pred = [OG1, OG2, ..., OGn-1], possibly none
+   *       [OD1, OD2, ..., ODn-1, nest(ODn)]
+   * meaning that ODn is nested within ODn-1.
+   * ODn within nest(ODn) may have super patterns:
+   *       [OD1, OD2, ..., ODn-1, nest(ODn),ODn+1, ...,ODm]
+   * Parameters, where this(OGsequence) = [OD1, OD2, ..., ODn]
+   *    DOG = ODn, 
+   *    isNest: if true then ODn is nested in ODn-1,
+   *    pred = [OD1, OD2, ..., ODn-1], possibly none
    *)
   (# thisOGS:: OGsequence;
      on,pn,on1,pn1: @integer; (* for new version *)
      isRemote: @boolean; (* DOG is a remote super of pred.DOG *)
-     enclosingOG: ^ObjectDescriptor; (* enclosingOG.origin.encOG* = OG1, i.e. the immediate 
+     enclosingOG: ^ObjectDescriptor; (* enclosingOG.origin.encOG* = OD1, i.e. the immediate 
                                    * encloser of the application qualified by the virtual
-                                   * none for OGi, i > 1 and sometimes also for i = 1 ???
+                                   * none for ODi, i > 1 and sometimes also for i = 1 ???
                                    *)
      pathToSuper:
        (# OGsuper: ^ObjectDescriptor; on,pn,vNameOn,vNamePn: @integer; E: ^Exp; 
@@ -350,9 +350,6 @@ OGsequence: SuperOGsequence
                       ('**   this(OGS):',0,0)->print
                   if);
                   DOG[] -> pred.handleRemote -> encOGS[];
-                  (* ('isRemoteX',level)-> pred.ENC -> OGSx[];
-                   * (predDOG[],pn,1,level) -> OGSx.newRemote -> encOGS[];
-                  *)
               else
                   (DOG[],predDOG[],('isRemote',level)-> pred.ENC,level) -> Remote -> encOGS[];
               if) 
@@ -365,9 +362,10 @@ OGsequence: SuperOGsequence
                       '**   ENC:pred:'-> dumpT; 'pred.DOG:' -> dumpT; pred.DOG.doPT -> putheadN;
                   if);
                  (id[],level + 1) -> pred.ENC -> encOGS[];
-                 (if true then
+                 (if true then (* ISSUE: on1,pn1 ! see below *)
                      pred.getpathToSuper -> (OGsuper[],onx,pnx,isR,vNameOn,vNamePn);
                      0 -> on -> pn; vNameOn -> on1; vNamePn -> pn1
+                     (* ISSUE: eliminate on and pn *)
                  else
                     on -> onx; pn -> onx; 
                  if);
@@ -377,8 +375,8 @@ OGsequence: SuperOGsequence
                  if);
                  (for i: onx repeat (id[],level + i) -> encOGS.ENC -> encOGS[] for);
                  (for i: pnx repeat level -> encOGS.PRE -> encOGS[] for);
-                 (if (on1 > 0) or (pn1 > 0) then 
-                     (if traceGetVqualShort then 
+                 (if (on1 > 0) or (pn1 > 0) then (* Super is implict super of the form V:< A *)
+                     (if traceGetVqualShort and ((on1 > 0) or (pn1 > 0)) then 
                          ('**** ENC:on1',on1)->dumpTI; ('pn1',pn1)->dumpTI; newline;
                          ('**   encOGS:A',0,0) -> encOGS.print
                      if);
@@ -699,12 +697,13 @@ OGsequence: SuperOGsequence
                '**** handleRemote:DOG:'->dumpTN; DOG.doPT->dumpTN;
                '**   thisDOG:'->dumpTN; thisDOG.doPT -> putHeadN; print;
            if);
-           (if true then ENC -> encOGS[]; if);
+           ENC -> encOGS[];
            DOG.super.scanExps
               (# n: @integer; Ra,Sa: ^Exp; Rd,Sd: ^Decl; OGx: ^ObjectDescriptor;
-              do n + 1 -> n; (*'**   super:elm:'->dumpT; current.dopt->dumpTN;*)
+              do n + 1 -> n;
                  current[] -> Ra[];
-                 (if ((Ra.ATd.asDecl).OG[] = thisDOG[]) and false then
+                 (if false and ((Ra.ATd.asDecl).OG[] = thisDOG[]) then
+                     (* we still do not understand what to do here; see also remote *)
                      '!!!! We got thisDOG:'->dumpT; n->dumpI; newline; encOGS.print
                  if);
                  (if not isLast then
@@ -718,7 +717,7 @@ OGsequence: SuperOGsequence
                          (Ra.on = 0,'Ra.on > 0, n > 1') -> AssertOrFail
                      if);
                      (for Ra.pn repeat encOGS.PRE -> encOGS[] for); 
-                     Ra.getATd -> Rd[]; (* Ra = R, Rd = R: ref S, Rd.OG.super = Sa *)
+                     Ra.getATd -> Rd[]; (* Ra = R, Rd = R: ref S, S: S0{...} or S:< V  *)
                      (if trace then '\n**   Rd:'->dumpT; Rd.dopt->putHeadN if);
                      (enclosingOG[],false,encOGS[]) ->  Rd.getVqual -> (encOGS[],OGx[]);
                      (OGx[],true,encOGS[]) -> OGsequence -> encOGS[];
@@ -726,12 +725,12 @@ OGsequence: SuperOGsequence
                           '**   getVqual:'->dumpT; Ra.dopt->dumpT; Rd.dopt->putHeadN;
                           '**           :'->dumpT;encOGS.print;
                      if);
-                     (if false then
+                     (if FALSE then
                      (if not (Rd[] -> possibleBindings) then
                         (* Rd: ref T, Rd: obj T *)
                         Rd.OG.super.last -> Sa[]; (* must handle super as remote *)
                         Sa.ATd[] -> Sd[]; (* Sd: S0a:{...} *)
-                        (if trace then
+                        (if true or trace then
                             '**   Sa:'->dumpT; Sa.on->dumpI; Sa.pn->dumpI; Sa.doPT->dumpT;
                             'Sd:'->dumpTN; Sd.dopt->putHeadN;
                         if);
@@ -763,122 +762,6 @@ OGsequence: SuperOGsequence
               if)#);
               (if trace then '**   handleRemote:END'->dumpT; encOGS.print if)
         exit encOGS[]
-        #);
-     newRemote:
-        (# remoteDOG: ^ObjectDescriptor; 
-           (* = Dn in [D1,D2,...,Dn] where Dn = R1.R2.R3.P{...}
-            * this(OGS) = [D1,D2,...,Dn-1]
-            * remoteInx: no of recursive calls of newRemote
-            *          = 1, handle R3; = 2, handle R2; = 3, handle R1 - bottom
-            *)
-           superPn (* explain *)
-           ,remoteInx
-           ,level: @integer;
-           OGSx: ^OGsequence; OGx: ^ObjectDescriptor; exps: [1] ^Exp;  Ra: ^Exp; Rd,Sd: ^Decl;
-           currentRemoteInx: @integer;
-           isNotRef: BooleanValue
-              (# D: ^Decl; DI: ^DataItem 
-              enter D[]
-              do true -> value;
-                 (if D.isDataItem then
-                     D[] -> DI[];
-                     (if DI.isValue then
-                         true -> value
-                      else
-                         DI.isConst -> value
-              if)if)#)
-        enter(remoteDOG[],superPn,remoteInx,level)
-        do (if traceGetVqualShort then 
-                 '**** REMOTEx:BEGIN:remoteInx:'->dumpT; remoteInx->dumpI;
-                 'superPN:'->dumpT; superPN->dumpI;
-                 'remoteDOG:'->dumpT; remoteDOG.dopt->putHeadN;
-                 ('**   REMOTEx:OGS',0,level) -> print;
-           if);
-           this(OGsequence)[] -> OGSx[];
-           remoteDOG.super.getExps -> exps[];
-           (if traceGetVqual then
-               ('**   exps.range',exps.range)->dumpTI; 
-               (for i: exps.range repeat exps[i].dopt -> dumpT for); newline 
-           if);
-           exps.range - remoteInx -> currentRemoteInx;
-           exps[currentRemoteInx][] -> Ra[];
-           Ra.getATd -> Rd[];
-           (if true then
-                (if not Rd.OG.IS.isEmpty or Rd.OG.hasVirtualArgs then
-                    (if Rd.OG.hasVirtualArgs then
-                        '**** REMOTEx:Rd.hasVirtualArgs:Ra: '->dumpT;
-                        Ra.doPT->dumpTN; '**   Rd:'->dumpTN; Rd.dopt -> putHeadN;
-                        '**   Rd.OG:'->dumpTN; Rd.OG.dopt -> putHeadN;
-                        print
-            if)if)if);
-           (if traceGetVqualShort then
-                '**   REMOTEx:currentRemoteInx:'->dumpT; currentRemoteInx->dumpI; 
-                'Ra:'->dumpT; Ra.dopt->dumpQ; 
-                ('Ra.on',Ra.on)->dumpTI; ('Ra.pn',Ra.pn)->dumpTI; 'Rd:'->putline; Rd.dopt->putHeadN;
-            if);
-            (if currentRemoteInx > 1 (*i < (exps.range - remoteInx)*) then 
-                (if traceGetVqualShort then 'Situation:R1.R2.R3:'->dumpTN; 
-                    not Rd.OG.IS.isEmpty ->dumpB; Rd.OG.hasVirtualArgs ->dumpB; newline;
-                if);
-                (remoteDOG[],superPn,remoteInx + 1,level) -> OGSx.newRemote -> OGSx[];
-                (for i: Ra.pn repeat level -> OGSx.PRE -> OGSx[] for);
-                (if not Rd.OG.IS.isEmpty or Rd.OG.hasVirtualArgs then
-                    (if traceGetVqualShort then 
-                        'Singular:'->dumpTN; Rd.dopt->dumpTN; 'last:'->dumpT;
-                        (remoteDOG.super.last).dopt -> dumpTN;
-                    if);
-                    (if false then 
-                        (Rd.OG.super.last).ATd.OG[] -> OGx[]
-                    else
-                         Rd.OG[] -> OGx[]
-                    if)
-                else
-                    (if traceGetVqualShort then
-                        '**   REMOTEx:at:R2-R3 in R1.R2.R3.P'->dumpT;
-                        rA.dopt->putheadN; rD.dopt->putHeadN;
-                        print
-                    if);
-                    Rd.OG.super.getATd -> Sd[]; (* OBS, will this work for remote?
-                                                 * (R1.R2.R3.P).getAtd -> P.ATd
-                                                 * how about R1,R2,R3?
-                                                 *)
-                    (DOG[],Sd[],level) -> OGSx.append -> (OGSx[],OGx[]);
-                if);     
-                (OGx[],true,OGSx[]) -> OGsequence -> OGSx[];
-            else (* 'Situation:R:'->dumpTN; *)
-                (for i: Ra.on repeat ('REMOTEx:goENC',level + i) -> OGSx.ENC -> OGSx[] for);
-                (for i: Ra.pn repeat level -> OGSx.PRE -> OGSx[] for); 
-                (if not Rd.OG.IS.isEmpty or Rd.OG.hasVirtualArgs and (Rd[] -> isNotRef) then
-                    (*'Singular:'->dumpTN; Rd.dopt->dumpTN; 'last:'->dumpT;
-                    * (remoteDOG.super.last).dopt -> dumpTN;*)
-                    (if traceGetVqualShort then
-                        '**   REMOTEx:at:R1 in R1.R2.R3.P'->dumpT;
-                        rA.dopt->putheadN; rD.dopt->putHeadN;
-                        print
-                    if);
-                    (if true then 
-                        (Rd.OG.super.last).ATd.OG[] -> OGx[]
-                    else
-                        Rd.OG[] -> OGx[]
-                    if)
-                else
-                    Rd.OG.super.getATd -> Sd[]; (* OBS, will this work for remote?
-                                                 * (R1.R2.R3.P).getAtd -> P.ATd
-                                                 * how about R1,R2,R3?
-                                                 *) 
-                    (DOG[],Sd[],level) -> OGSx.append -> (OGSx[],OGx[]);
-                if);
-                (for i: superPn repeat level -> OGSx.PRE -> OGSx[] for);
-                (OGx[],true,OGSx[]) -> OGsequence -> OGSx[];
-            if);
-            (if traceGetVqualShort then
-                ('**   REMOTEx:after:append:',0,0)->OGSx.print; '**   OGx:'->dumpt; OGx.dopt->putHeadN;
-                '**   remoteDOG.last:'->dumpT; (remoteDOG.super.last).label->dumpT;
-                (remoteDOG.super.last).dopt->dumpT; ('pn',(remoteDOG.super.last).pn)->dumpTI; newline
-            if);
-           (if traceGetVqualShort then ('**   REMOTEx:xtendedOGS:',0,0) -> OGSx.print if);
-           (if traceGetVqualShort then ('**** REMOTEx:END',0,level) -> OGSx.print if)
-        exit OGSx[]
         #);
      getenclosingOG:
         (# iDOG: ^ObjectDescriptor; atNest: @Boolean
@@ -1039,11 +922,11 @@ OGsequence: SuperOGsequence
      getOGstart:: 
        (* Return the start OG of this OGsequence from where a virtual binding
         * has to be searched. For a simple OGs with no nesting:
-        *    [OG1, OG2, ... OGn]
-        * the start is OG1.
+        *    [OD1, OD2, ... ODn]
+        * the start is OD1.
         * If nesting appers:
-        *    [OG1, OG2, ..., OGn-1, nest(OGn),OGn+1, ...,OGm]
-        * the start is OGn asssuming no isNest(OGk), n < k and k <= m
+        *    [OD1, OD2, ..., ODn-1, nest(ODn),ODn+1, ...,ODm]
+        * the start is ODn asssuming no isNest(OGk), n < k and k <= m
         *)
        (#
        do (if tracegetvqualShort then
