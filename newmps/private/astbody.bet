@@ -1,6 +1,31 @@
 ORIGIN '../astlevel';
 INCLUDE '../bytestream';
+INCLUDE '~beta/containers/seqContainers';
 
+-- astInterfaceLib: attributes --
+
+kindToString:
+  (# kind: @integer;
+     value: ^Text;
+  enter kind
+  do (if kind
+      // kinds.interior then
+         'Interior' -> value[];
+      // kinds.Optional then
+         'Optional' -> value[];
+      // kinds.UnExpanded then
+         'UnExpanded' -> value[];   
+      // kinds.NameAppl then
+         'NameAppl' -> value[];   
+      // kinds.NameDecl then
+         'NameDecl' -> value[];
+      // kinds.String then
+         'String' -> value[];
+      // kinds.Const then
+         'Const' -> value[];   
+     if);
+  exit value[]   
+  #);
 -- astLib: attributes --
 
 setLastBrother:
@@ -81,6 +106,74 @@ do THIS(AST)[] -> theFather[];
              restart loop;
          if);
      if);
+-- ASTSonNo: doPart --
+do (# theFather: ^AST;
+      current: ^AST;
+   do father -> theFather[];
+      (if theFather[] <> NONE then
+          theFather.son[] -> current[];
+          1 -> sonNo;
+          loop:
+            (if current[] <> THIS(AST)[] then
+                current.brother[] -> current[];
+                sonNo + 1 -> sonNo;
+                restart loop;
+            if);
+      if);
+   #)
+-- ASTNearestCommonAncestor: doPart--
+do (# myAncestors: @Deque
+        (# element:: AST;
+        #);
+      otherAncestors: @Deque
+        (# element:: AST;
+        #);
+      current: ^AST;
+      myAncestor: ^AST;
+      otherAncestor: ^AST;
+   do THIS(AST)[] -> current[];
+      loop:
+        (if current[] <> NONE then
+           current[] -> myAncestors.insertBack;
+           current.father -> current[];
+           restart loop;
+        if);
+      other[] -> current[];
+      loop:
+        (if current[] <> NONE then
+           current[] -> otherAncestors.insertBack;
+           current.father -> current[];
+           restart loop;
+        if);
+
+      (if THIS(AST)[] <> other[] then
+          loop:
+            (#
+            do 
+               myAncestors.removeBack -> myAncestor[];
+               otherAncestors.removeBack -> otherAncestor[];
+               (if myAncestor[] = otherAncestor[] then
+                  myAncestor[] -> nca[];
+                  (if nca[]
+                     // THIS(AST)[] then
+                        otherAncestors.removeBack -> otherAncestor[];
+                        otherAncestor.sonNo -> otherSonNo;
+                     // other[] then
+                        myAncestors.removeBack -> myAncestor[];
+                        myAncestor.sonNo -> mySonNo;
+                     else
+                        restart loop;   
+                  if);
+                else
+                    myAncestor.sonNo -> mySonNo;
+                    otherAncestor.sonNo -> otherSonNo;
+               if);
+             #);  
+       else
+          other[] -> nca[];
+      if)
+   #)
+
 -- ASTIsSlot: doPart --
 do (if son[] <> NONE then
        son.astKind = kinds.slotDesc -> value;
@@ -358,14 +451,18 @@ do '[' -> output.put;
 -- UnExpandedDump: doPart --
 do (if options.verboseAstDump then
        '#' -> output.putText;
-         THIS(UnExpanded)[] -> getPatternName -> output.putText;
-         '{kind: ' -> output.putText;
-         kind -> output.putInt;
-         ' | symbol: ' -> output.putText;
-         symbol -> output.putInt;
-         ' | nonterminalSymbol: ' -> output.putText;
-         nonterminalSymbol -> output.putInt;
-         '}' -> output.putText;
+       THIS(UnExpanded)[] -> getPatternName -> output.putText;
+       '{kind: ' -> output.putText;
+         kind -> kindToString -> output.putText;
+        (if nonterminalSymbol > 0 then
+            ' => ' -> output.putText;
+            nonterminalSymbol -> frag.grammar.symbolToName -> output.puttext;
+        if);
+        ' ' -> output.putText;
+        start -> output.putInt;
+        ', ' -> output.putText;
+        end -> output.putInt;
+        '}' -> output.putText;
    if);
    INNER;
 
