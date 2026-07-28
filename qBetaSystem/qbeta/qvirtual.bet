@@ -36,325 +36,31 @@ ODsequence: SuperODsequence
                                    * encloser of the application qualified by the virtual
                                    * none for ODi, i > 1 and sometimes also for i = 1 ???
                                    *)
-     pathToSuper:
-       (# superOD: ^ObjectDescriptor; on,pn,implSuperON,implSuperPN: @integer; E: ^Exp; 
-          D: ^Decl; ptn: ^Pattern; i: @integer; isR: @boolean;
-       do (*'\n!!!! OBSOLETE: pathToSUper:'->putline;  DOG.doPT -> putheadN;*)
-          (if tracegetvqualShort then 
-              '**** pathToSuper: '->puttext; 
-              (if DOG.super.isImplSuper then 'implicitSuper: ' -> puttext if);
-              '"'->put; DOG.super.dopt -> puthead; '" of:DOG: ' -> puttext; DOG.doPT -> putheadN;
-              (if enclosingOG[] <> none then
-                  '**   enclosingOG: ' -> puttext; enclosingOG.doPT -> putheadN
-          if)if);
-          (if not DOG.isChecked then
-              (* this happens*) (none,DOG.origin[],DOG.origin[],true) -> DOG.check;
-          if);
-          L:
-            DOG.super.scanExps
-            (# emitDump: 
-                  (# isArg: @Boolean enter isArg
-                  do (if true then 
-                         ('**** enclosingOG:',isArg)->dumpTB; enclosingOG.dopt->putHeadN; 
-                         ('pathToSuper:got:enclosingOG:',0,0) -> print
-                  if)#);
-                enclosingOGinArgs: BooleanValue
-                   (* check if enclosingOG is an argument of E - but why ? *)
-                   (# E: ^Exp; 
-                   enter E[]
-                   do L: (if (E[] = enclosingOG[])->value then (* do we ever come here? *)
-                             emitDump; 
-                             leave L
-                          else
-                            (if (enclosingOG[] <> none) and (E.args[] <> none) then
-                                E.args.scanSons
-                                (#
-                                do (if (E[] = enclosingOG[])-> value then 
-                                       true -> emitDump; 
-                                       leave L; 
-                   if)#)if)if)#)
-            do (if tracegetvqualShort then '**   pathToSuper:exp:'->dumpT; current.dopt -> dumpTN if);
-               (i + 1 -> i) > 1 -> isR;
-               current[] -> E[];
-               (if E[] -> enclosingOGinArgs then leave L if);
-            #);
-          (if DOG.super.isImplSuper then
-              DOG.super.ATd[] -> D[]; (* D is a virtaul pattern/binding *)
-              0 -> on;
-              DOG.super.pn -> pn; 
-              (if newVbinding and D.OG.IS.isEmpty then (* D has the form V:< A, no mainpart *)
-                  D.OG.super.on -> implSuperON; (D.OG.super.last).pn -> implSuperPN;
-              if); 
-           else
-              E.ATd[] -> D[];
-              E.on -> on; 
-              E.pn -> pn; 
-          if);
-          (if tracegetvqualShort then
-              '**   pathToSuper:E:' -> dumpT; 
-              (if DOG.super.isImplSuper then '#'->dumpT else  E.dopt -> puthead if);
-              (' isR',isR) -> dumpTB;
-              ('on',on) -> dumpTI; ('pn',pn) -> dumpTI;
-              ('implSuperON',implSuperON)->dumpTI; ('implSuperPN',implSuperPN)->dumpTI; 
-              '\n**   D = DOG.super.ATd:'->dumpT; 
-              (if D[] = none then 'none'->dumpTN else D.dopt->putHeadN if);
-          if);
-          L:
-          (if true
-           // D[] = none then 
-              (*'!!!! pathToSuper:super.ATd is none' -> putline;*)
-              ObjectDecl[] -> D[] -> ptn[]
-           // D.isPattern then D[] -> ptn[]
-           // D.isNameDecl then 
-              (# ND: ^NameDecl
-              do (*'****nameDecl:'->puttext; D.dopt -> putline;*)
-                 (* only if nameListInDcl *)
-                 D[] -> ND[];
-                 ND.ATd[] -> D[]; 
-                 restart L
-              #)
-           else 
-              '!!!! pathToSuper:super.ATd is not Pattern or is empty: '  -> putline;
-              DOG.doPT -> puthead;
-              leave pathToSuper
-          if);
-          ptn.OG[] -> superOD[];
-          (if tracegetvqualShort then
-              '**   pathToSuper:end:super:'->dumpT; 
-              (if DOG.super.isImplSuper then '#'->dumpT else E.dopt -> puthead if);
-              ('super.on',on)->dumpTI; ('super.pn',pn)->dumpTI; ('isR',isR)->dumpTB;
-              ('super.ATd.isVirt',ptn.isVirtual)->dumpTB; 'super.ATd:'->dumpT; ptn.doPT->putheadN;
-          if);
-       exit(superOD[],on,pn,isR,implSuperON,implSuperPN)
-       #);
      encLevel: @integer;
      ENC:
        (* ENC[D] = [D.origin]
         * ENC[D1,D2,...,Dn] = PRE(j) o ENC(i) 0 ENC[D1,D2,...,Dn-1], Path(Dn) = (i,j)
         *)
        (# encOGS,OGSx: ^ODsequence; superOD,predDOG: ^ObjectDescriptor; 
-          level: @integer; 
-          isR: @boolean; id: ^Text; org: ^Scope;
-          getEncOGX: 
-             (# inv: ^Invocation;  OI: ^ObjectInvocation; BE: ^BracketedExp; prev: ^Exp; N: ^Node;
-                encOG: ^ObjectDescriptor; OSx: ^ODsequence;
-                setEncOG:
-                   (* superInv = R1.R2.R3.P; assigns a reference to encOG *)
-                   (# superInv: ^Invocation; prev: ^Exp; theATd: ^Decl
-                   enter superInv[] 
-                   do superInv.scanSons (#do (if not isLast then current[] -> prev[] if)#);
-                      prev.getATd -> theATd[];
-                      (if traceGetVqualShort then
-                          '**** ENC:head:remoteOD:prev:'->dumpT; prev.doPT->dumpTN; 
-                          '**   DOG:'->dumpT; DOG.dopt->putheadN;
-                          '**   prev.ATd:'->dumpT; theATd.dopt->putheadN;
-                          '**   theATd.OG.hasVirtualArgs:'->dumpT;theATd.OG.hasVirtualArgs->dumpB; newline;
-                          '**   prev.ATd.OG.isEmpty:'->dumpT;  theATd.OG.IS.isEmpty->dumpB;
-                          ' not (theATd.OG.super.getATd).OG.hasVirtualArgs:'->dumpT; 
-                          (if not theATd.OG.super.isEmpty then
-                              not (theATd.OG.super.getATd).OG.hasVirtualArgs->dumpB 
-                           else 'false'->dumpT if); newline;
-                      if);
-                      theATd.OG[] -> encOG[];
-                      (* prev.ATd = ref/obj ObjSpec where ObjSpec = Foo{...}, Foo(#Bar),
-                       * Go to ObjSpec.decl if no items and no virtuals args; also for R: ref Foo(#bar)
-                       *)
-                      (if theATd.OG.IS.isEmpty and not theATd.OG.hasVirtualArgs
-                                 (*not (theATd.OG.super.getATd).OG.hasVirtualArgs*) then 
-                          '**   getEncOG:call:getVqual:'->dumpT; theATd.OG.super.doPT -> dumpTN;
-                          (if true then 
-                              (DOG[],false,(enclosingOG[],false,none)->ODsequence) -> theATd.OG.super.getVqual -> (OSx[],encOG[])
-                           else
-                              (theATd.OG.super.getATd).OG[] -> encOG[];
-                          if);
-                          (if traceGetVqualShort then '**   superDecl:'->dumpT; encOG.doPT -> putHeadN
-                      if)if);
-                      (if traceGetVqualShort then 
-                          '**   encOG:'->dumpT; encOG.doPT -> putHeadN ;
-                          '**   org.encOG:'->dumpT; org.encOG.dopt->putHeadN;
-                   if)#)
-             do (if traceGetVqualShort then 
-                    '**** ENC:getEncOG:'->dumpT; ('super.isRemote',DOG.super.noOfSons > 1)->dumpTB; 
-                    'id:'->dumpT; id[]->dumpTN; '**   DOG:'->dumpT; DOG.dopt->putHeadN;
-                if);
-                (if (DOG.super.noOfSons > 1)  then (* remote super *)
-                    DOG.super -> setEncOG
-                else (* no super or simple super: T{...} *)
-                    org.encOG[] -> encOG[]; 
-                if)
-             exit encOG[]
-                #); 
-          handleHeadX: (* DOG = R.P{...}; R: ref S; S: S0{ ... }*)
-             (# trace: (#exit true #); Ra,Sa: ^Exp; Rd,Sd: ^Decl; n: @integer; OGx: ^ObjectDescriptor;
-             do (if (DOG.super.noOfSons > 1)  then (* remote super *)
-                    (if trace then '**   ENC:handleHead:DOG:'->dumpT; DOG.dopt ->putHeadN; if);
-                    DOG.super.scanSons
-                    (#
-                    do n + 1 -> n;
-                       (if not isLast then 
-                           current[] -> Ra[];
-                           Ra.getATd -> Rd[]; (* Ra = R, Rd = R: ref S, Rd.OG.super = S *)
-                           Rd.OG.super.last -> Sa[];
-                           Sa.ATd[] -> Sd[];
-                           (if trace then
-                                '**  handleHead:n:'->dumpT; n->dumpI; 
-                                Ra.on -> dumpI; Ra.pn -> dumpI;
-                                '\n**   enclosingOG:'->dumpT; enclosingOG.dopt ->putHeadN; 
-                                '\n**   Ra:'->dumpT; Ra.doPT -> dumpTN;
-                                '**   Ra.ATd:'->dumpT; Ra.ATd.dopt->putHeadN;
-                                '**   Ra.ATd.OG.super:'->dumpT; Rd.OG.super.dopt->dumpTN;
-                                '**   Rd.OG.super.pn:'->dumpT; (Rd.OG.super.last).pn -> dumpI; 
-                                (if Sd[] <> none then '\n**   Sd:'->dumpT; Sd.dopt->putHeadN if);
-                                '**   DOG.super.last.pn:'->dumpT; (DOG.super.last).pn->dumpI; 
-                           if);
-                           (if n = 1 then
-                               DOG[] -> OGx[];
-                               (for Ra.on + 1 repeat OGx.origin.encOG[] -> OGx[] for);
-                               (OGx,false,none) -> ODsequence -> encOGS[];
-                           else (* Ra.on = 0 *)
-                               (if trace then
-                                   '\n**   R1.R2.R3:Ra.on:'->dumpT; Ra.on -> dumpI; Ra.dopt->dumpTN;
-                               if);
-                               (for Ra.on repeat encOGS.ENC -> encOGS[] for);
-                           if);
-                           (for Ra.pn repeat encOGS.PRE -> encOGS[] for); 
-                           (* we need the qualification of Rd;  Perhaps just call Rd.getVqual 
-                            * must handle setting of nest in last if-imp *)
-                           (if Rd.OG.IS.isEmpty then (* missing Rd.OG.super if remote *)
-                               (for Rd.OG.super.on repeat 
-                                     ('handleHead:virtual',level) -> encOGS.ENC -> encOGS[] 
-                               for);
-                               (for (Rd.OG.super.last).pn repeat encOGS.PRE -> encOGS[] for);
-                               (Rd.OG.super.last).ATd[] -> Sd[];
-                           else
-                               Rd[] -> Sd[]
-                           if);
-                           (if trace then '\n**   Sd:'->dumpT; Sd.dopt->putheadN if);
-                           (if Sd.isVirtual then
-                               '**   Sd:isVirtual:'->dumpTN;
-                               (Sd.OG[],true,encOGS[])->ODsequence -> encOGS[];
-                               encOGS.print;
-                               (enclosingOG[],false,encOGS[]) -> (Rd.OG.super.last).getVqual -> (encOGS[],OGx[]);
-                               '**   OGx:'->dumpT; OGx.dopt->putHeadN; encOGS.print;
-                           else
-                              (Sd.OG[],true,encOGS[]) -> ODsequence -> encOGS[];
-                          if);
-                          (if trace then '**   handleHead:Sd:'->dumpTN; Sd.dopt -> dumpTN; (Sd.OG.super.last).pn -> dumpI; encOGS.print if)
-                     else
-                        (if trace then '**   handleHead:remote:last:'->dumpT; current.dopt->dumpTN if);
-                    if)#); (* current = DOG.super.last *)
-                    (if trace then 
-                        '**   before:last:'->dumpT;(DOG.super.last).dopt->dumpT; (DOG.super.last).pn->dumpI; encOGS.print
-                    if);
-                    (for (DOG.super.last).pn repeat encOGS.PRE -> encOGS[] for);
-                    (* do we need and extra ENC here? No: org.encOG below is NOt ENC *)
-                    (if trace then '**   handleHead:END' -> dumpT; encOGS.print if)
-                else (* no super or simple super: T{...} *)
-                   (org.encOG[],false,none) -> ODsequence -> encOGS[];
-                if);
-             #);
-          handleHead: (* DOG = R.P{...}; R: ref S; S: S0{ ... }*)
-             (# trace: (#exit traceGetVqualShort #); Ra,Sa: ^Exp; Rd,Sd: ^Decl; n: @integer; OGx: ^ObjectDescriptor;
-             do (if (DOG.super.noOfSons > 1)  then (* remote super *)
-                    (if trace then '**   ENC:handleHead:DOG:'->dumpT; DOG.dopt ->putHeadN; if);
-                    DOG.super.scanSons
-                    (#
-                    do n + 1 -> n;
-                       (if not isLast then 
-                           current[] -> Ra[];
-                           Ra.getATd -> Rd[]; (* Ra = R, Rd = R: ref S, Rd.OG.super = S *)
-                           Rd.OG.super.last -> Sa[];
-                           Sa.ATd[] -> Sd[];
-                           (if trace then
-                                '**   handleHead:n:'->dumpT; n->dumpI; 'Ra:'->dumpT; Ra.doPT -> dumpT; Ra.on->dumpI; Ra.pn->dumpI;
-                                '\n**   Rd:'->dumpT; Rd.dopt->putHeadN;
-                                '**   Sa:'->dumpT; Sa.on->dumpI; Sa.pn->dumpI; Sa.doPT->dumpTN; 
-                                '**   Sd:'->dumpTN; Sd.dopt->dumpTN;
-                           if);
-                           (if n = 1 then
-                               DOG[] -> OGx[];
-                               (for Ra.on + 1 repeat OGx.origin.encOG[] -> OGx[] for);
-                               (OGx,false,none) -> ODsequence -> encOGS[];
-                           else (* Ra.on = 0 *)
-                               (Ra.on = 0,'Ra.on > 0, n > 1') -> AssertOrFail;
-                               (for Ra.on repeat encOGS.ENC -> encOGS[] for);
-                           if);
-                           (for Ra.pn repeat encOGS.PRE -> encOGS[] for); 
-                           (for Sa.on repeat encOGS.ENC -> encOGS[] for);
-                           (for Sa.pn repeat encOGS.PRE -> encOGS[] for);
-                           (if false and Rd.OG.IS.isEmpty then (* missing Rd.OG.super if remote *)
-                               (for Rd.OG.super.on repeat 
-                                     ('handleHead:virtual',level) -> encOGS.ENC -> encOGS[] 
-                               for);
-                               (for (Rd.OG.super.last).pn repeat encOGS.PRE -> encOGS[] for);
-                               (Rd.OG.super.last).ATd[] -> Sd[];
-                           else
-                               (*Rd[] -> Sd[]*)
-                           if);
-                           (if Sd.isVirtual then
-                               '**   Sd:isVirtual:'->dumpTN;
-                               (Sd.OG[],true,encOGS[])->ODsequence -> encOGS[];
-                               encOGS.print;
-                               (enclosingOG[],false,encOGS[]) -> (Rd.OG.super.last).getVqual -> (encOGS[],OGx[]);
-                               '**   OGx:'->dumpT; OGx.dopt->putHeadN; encOGS.print;
-                           else
-                              (Sd.OG[],true,encOGS[]) -> ODsequence -> encOGS[];
-                          if);
-                          (if trace then '**   handleHead:end:n:'->dumpT; n->dumpI; encOGS.print if)
-                     else
-                        (if trace then '**   handleHead:remote:last:'->dumpT; current.dopt->dumpTN if);
-                        current[] -> Ra[] (* the remote pattern *)
-                    if)#); (* current = DOG.super.last *)
-                    (if trace then 
-                        '**   before:last:remotePtn:'->dumpT; Ra.dopt->dumpT; 'Ra.pn:'->dumpT; Ra.pn->dumpI; encOGS.print
-                    if);
-                    (for Ra.pn repeat encOGS.PRE -> encOGS[] for);
-                    (if trace then '**   handleHead:END' -> dumpT; encOGS.print if)
-                else (* no super or simple super: T{...} *)
-                   (org.encOG[],false,none) -> ODsequence -> encOGS[];
-                if);
-             #)
+          level: @integer; isR: @boolean; id: ^Text; org: ^Scope;
        enter(id[],level)
-       do (if traceGetVqualShort then 
-              '**** ENC:'->dumpT; ('isHead',pred[] = none)->dumpTB; ('isNest',isNest)->dumpTB;
-              ('isRemote',isRemote)->dumpTB; newline;
-              (if id[] = none then ''-> id[] if);
-              ('**   ENC:OGS:'->(id.copy).prepend,0,level) -> print
-           if);
+       do (if traceGetVqualShort then ('**   ENC:'->(id.copy).prepend,0,level) -> print if);
           (if true 
            // pred[] = none then (* head *) 
               (* ENC([D]) = [D.origin] *)
               (DOG.origin[] <> none,'ENC: DOG.origin is none!') -> AssertOrFail(#do DOG.doPT->dumpTN; print #);
               ((DOG.origin[]->org[]).encOG[] <> none,'ENC: DOG.origin.encOG is none!')-> assert;
-              (if false and newVbinding then
-                  (if true then
-                      handleHead
-                  else
-                     (getEncOGX,false,none) -> ODsequence -> encOGS[];
-                  if)
-              else
-                  (org.encOG[],false,none) -> ODsequence -> encOGS[];
-              if);
+              (org.encOG[],false,none) -> ODsequence -> encOGS[];
               enclosingOG[] -> encOGS.enclosingOG[]; (* the enclosing OD from the inital call of getVqual 
-                                              * why not enclosingOG[] -> encOGS.enclosingOG *)
-             (if false and (DOG[] <> enclosingOG[]) then (* they differ ! *)
-                '\n!!!! OBS! DOG[] <> enclosingOG[]' -> dumpTN; 
-                DOG.dopt -> putHeadN; enclosingOG.doPT -> putHeadN;
-                print if)
+                                                      * why not enclosingOG[] -> encOGS.enclosingOG ?
+                                                      *)
            // isNest then (* ENC([D1,D2,...,Dn-1,nest(Dn)]) = [D1,D2,...,Dn-1] *)
               pred[] -> encOGS[];
            // isRemote then (* ENC([D1,D2,...,Dn-1,R1.R2.R3.Q]) *)
               (* ENC([D1,D2,...,Dn-1,R.P]) = remote(enc([D1,D2,...,Dn-1]),R) *)
               (pred[]<>none,'ENC:isRemote:pred is none') -> assertOrFail(#do print #);
               pred.DOG[] -> predDOG[]; (* predDOG = Dn-1, DOG = Q *)
-              (if newVbinding then 
-                  (if traceGetVqualShort then
-                      ('**   ENC:isRemote:',0,0)->print
-                  if);
-                  DOG[] -> pred.handleRemote -> encOGS[];
-              else
-                  (DOG[],predDOG[],('isRemote',level)-> pred.ENC,level) -> Remote -> encOGS[];
-              if) 
+              DOG[] -> pred.handleRemote -> encOGS[];
            else
               (* thisOGS = [D1,D2,...,Dn-1,Dn], Dn = DOG 
                * ENC([D1,D2,...,Dn-1,Dn]) = PRE[PN] o ENC[ON] o ENC([D1,D2,...,Dn-1])
@@ -580,32 +286,29 @@ ODsequence: SuperODsequence
            DOG.super.scanExps
              (# n: @integer
              do (n + 1 -> n) > 1 -> isR;
-                current[] -> OIexp[];
+                current[] -> OIexp[]; 
+                (* the former pathToSuper had (if OIexp[]->enclosingOGinArgs then leave if)
+                 * the former code is saved in _qBETA/old_code folder on Mac
+                 *)
              #);
            (if DOG.super.isImplSuper then
                DOG.super.ATd[] -> D[]; (* D is a virtual pattern/binding *)
-               0 -> on;
-               DOG.super.pn -> pn; 
-               (if newVbinding and D.OG.IS.isEmpty then (* D has the form V:< A, no mainpart *)
+               0 -> on; DOG.super.pn -> pn; 
+               (if D.OG.IS.isEmpty then (* D has the form V:< A, no mainpart *)
                    D.OG.super.on -> implSuperON; (D.OG.super.last).pn -> implSuperPN;
                if); 
             else
                OIexp.ATd[] -> D[]; (* same as DOG.super.ATd ? *)
-               OIexp.on -> on; 
-               OIexp.pn -> pn; 
+               OIexp.on -> on; OIexp.pn -> pn; 
            if);
           L:
            (if true
-            // D[] = none then 
-               (*'!!!! getPathToSuper:super.ATd is none' -> putline;*)
+            // D[] = none then (*'!!!! getPathToSuper:super.ATd is none' -> putline;*)
                ObjectDecl[] -> D[] -> ptn[]
             // D.isPattern then D[] -> ptn[]
             // D.isNameDecl then 
                (# ND: ^NameDecl
-               do (*'****nameDecl:'->puttext; D.dopt -> putline;*)
-                  (* only if nameListInDcl *)
-                  D[] -> ND[];
-                  ND.ATd[] -> D[]; 
+               do (D[] -> ND[]).ATd[] -> D[]; 
                   restart L
                #)
             else 
@@ -618,7 +321,7 @@ ODsequence: SuperODsequence
               '**   getPathToSuper:END:super:'->dumpT; 
               (if DOG.super.isImplSuper then '#'->dumpT else OIexp.dopt -> puthead if);
               (' super.on',on)->dumpTI; ('super.pn',pn)->dumpTI; ('isR',isR)->dumpTB;
-              ('on1',implSuperON)->dumpTI; ('pn1',implSuperPN)->dumpTI;
+              ('implSuperON',implSuperON)->dumpTI; ('implSuperPN',implSuperPN)->dumpTI;
               ('super.ATd.isVirt',ptn.isVirtual)->dumpTB; 'super.ATd:'->dumpT; ptn.doPT->putheadN;
           if);
         exit(superOD[],on,pn,isR,implSuperON,implSuperPN)
