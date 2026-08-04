@@ -1358,67 +1358,105 @@ semchecker: UnitHandler
                     if);
                  #);
                checkForUnboundVirtuals:
-                  (# virtDcls: [8] ^Decl; top: @integer; D,D2: ^Decl; P,P2: ^Pattern; trace: (#exit false #)
-                  do (if trace then '**   checkForUnboundVirtuals:'->dumpT; dopt->PutHeadN if);
+                  (# virtDcls: [8] ^Decl; top: @integer; 
+                     bindings: [8] ^Decl; btop: @integer; 
+                     D,D2: ^Decl; P,P2: ^Pattern;
+                     countFuncArgs: IntegerValue
+                        (#
+                        do (if not super.isEmpty then 
+                               super.scanSons
+                               (# OI: ^ObjectInvocation; N: ^Node
+                               do current[] -> N[];
+                                  L: (if true
+                                      // N.isBracketedExp then '*** bracketed'->dumptn;
+                                         (N.son.last) -> N[]; restart L
+                                      // N.isObjectInvocation then  
+                                         N[]-> OI[];
+                                      else
+                                         N.label -> dumpT; N.dopt->dumpTN
+                                     if);
+                                     (if (OI[] <> none) and (OI.args[] <> none) and (OI.args.noOfSons > 0) then
+                                          OI.args.scanArgs(#do value + 1 -> value #);
+                        if)#)if)#);
+                     noOfFuncArgs: @ integer
+                  do (if traceInvAsDerived then '**   checkForUnboundVirtuals:'->dumpT; dopt->PutHeadN if);
                      IS.scanAllItemDecls
                      (# 
-                     do (if currentDcl.isVirtual or currentDcl.isVirtualDataItem then 
-                            (if (top + 1-> top) < virtDcls.range then virtDcls.range -> virtDcls.extend if);
-                            currentDcl[] -> virtDcls[top][];
-                            (if trace then '**** virtual:'->dumpT; currentDcl.doPT->dumpTN; if);
-                            (if true
-                             // currentDcl.isDataItem then
-                                (if trace then '**   isDataItem:'->dumptN; if); 
-                             // currentDcl.isPattern then 
-                                currentDcl[] -> P[];
-                                (if P.ptnKind
-                                 // virtualPtn then 
-                                 // furtherPtn // finalPtn then 
-                                    (if trace then
-                                       'bindingOf:'->dumpT;
-                                       (if P.isFinalDI then 
-                                           'iFinalDI:'->dumpT;
-                                           P.vDIdcl.doPT -> putHeadN;
-                                       else
-                                           P.vDcl.doPT -> putHeadN 
-                        if)if)if)if)if)#);
-                        (for i: top repeat
-                             virtDcls[i][] -> D[];
-                             check:
-                             (if true 
-                              // D.isVirtual then
-                                 D[] -> P[];
+                     do (if (currentDcl.isVirtual or currentDcl.isVirtualDataItem)
+                            and not ('Designator' -> (currentDcl.label).equal) then 
+                            (if currentDcl.isDataItem or
+                                currentDcl.isPattern and ((currentDcl[]->P[]).ptnKind = virtualPtn) then 
+                                (if (top + 1-> top) > virtDcls.range then virtDcls.range -> virtDcls.extend if);
+                                currentDcl[] -> virtDcls[top][];
+                            else
+                                (if (btop + 1-> btop) > bindings.range then bindings.range -> bindings.extend if);
+                                currentDcl[] -> bindings[btop][];
+                            if);
+                            (if traceInvAsDerived then 
+                                '**** virtual:'->dumpT; currentDcl.doPT->dumpTN;
+                                (if true
+                                 // currentDcl.isDataItem then '**   isDataItem:'->dumptN;
+                                 // currentDcl.isPattern then 
+                                    currentDcl[] -> P[];
+                                    (if P.ptnKind // furtherPtn // finalPtn then 'bindingOf:'->dumpT;
+                                        (if P.isFinalDI then 
+                                            'iFinalDI:'->dumpT; 
+                                            (if P.vDIdcl[] <> none then P.vDIdcl.doPT -> putHeadN
+                                             else P.vDcl.dopt->putHeadN
+                                            if)
+                                        else
+                                            P.vDcl.doPT -> putHeadN 
+                     if)if)if)if)if)#);
+                     (if traceInvAsDerived then
+                        (if top > 0 then
+                            '**   Virtuals:'->dumpTN;
+                            (for i: top repeat virtDcls[i].doPT -> putHeadN; for);
+                        if);
+                        (if btop > 0 then
+                            '**   Bindings:'->dumpTN;
+                            (for i: btop repeat bindings[i].doPT -> putHeadN; for);
+                     if)if);
+                     countFuncArgs -> noOfFuncArgs;
+                     (for i: top repeat
+                        virtDcls[i][] -> D[];
+                        check:
+                            (if true 
+                             // D.isVirtual then
+                                D[] -> P[];
                                  (if P.ptnKind = virtualPtn then
-                                     (if trace then '**   check:'->dumpT; D.dopt->dumpTN; if);
-                                     (for j: top repeat 
-                                          virtDcls[j][] -> D2[];
+                                     (if traceInvAsDerived then '**   check:'->dumpT; D.dopt->dumpTN; if);
+                                     (for j: btop repeat 
+                                          bindings[j][] -> D2[];
                                           (if D2.isVirtual then
                                               D2[] -> P2[];
                                               L:
                                                  (#
                                                  do (if P2.vDcl[] = D[] then 
-                                                        (if trace then '**   match:'->dumpT; P2.dopt->dumpTN;if);
+                                                        (if traceInvAsDerived then '**   match:'->dumpT; P2.dopt->dumpTN;if);
                                                         leave check
                                                     if);
                                                     (if P2.vDcl[] <> none then P2.vDcl[] -> P2[]; restart L if);
                                      #) if)for);
-                                     '!!!! No binding found for virtual pattern:'->dumpTN; D.doPT -> dumpTN;
-                                     '!!   in:'->dumpTN; doPT->putHeadN;
-                                 if)
+                                    (if i > noOfFuncArgs then
+                                        '!!!! No binding found for virtual pattern:'->dumpTN; D.doPT -> dumpTN;
+                                        '!!   in:'->dumpTN; doPT->putHeadN;
+                                 if)if)
                               // D.isVirtualDataItem then (*'**   virtualDI:'->dumpTN;*)
-                                 (if trace then '**   check:'->dumpT; D.dopt->dumpTN; if);
-                                 (for j: top repeat
-                                      virtDcls[j][] -> D2[]; (*'**   try:'->dumpT; D2.dopt->dumpTN;*)
+                                 (if traceInvAsDerived then '**   check:'->dumpT; D.dopt->dumpTN; if);
+                                 (for j: btop repeat
+                                      bindings[j][] -> D2[]; (if traceInvAsDerived then '**   try:'->dumpT; D2.dopt->dumpTN; if);
                                       (if D2.isVirtual then
                                           D2[] -> P2[];
                                           (if P2.isFinalDI then 
                                                   (if P2.vDIdcl[] = D[] then 
-                                                      (if trace then '**   match:'->dumpT; D2.dopt->dumpTN if); 
+                                                      (if traceInvAsDerived then '**   match:'->dumpT; D2.dopt->dumpTN if); 
                                                           leave check
                                  if)if)if)for);
-                                 '!!!! No binding found for data-item:'->dumpTN; D.doPT->dumpTN;
-                                 '!!   in:'->dumpTN; doPT->putHeadN;
-                  if)for)#);
+                                 (if i > noOfFuncArgs then
+                                    '!!!! No binding found for data-item:'->dumpT; i->dumpI; noOfFuncArgs -> dumpI; D.doPT->dumpTN;
+                                     D.father.father.father.dopt->putHeadN;
+                                    '!!   in:'->dumpTN; doPT->putHeadN;
+                  if)if)for)#);
 
                D: ^Decl
             do (if traceGetVqual then
@@ -1435,13 +1473,13 @@ semchecker: UnitHandler
                     '**** OG:semcheck:IS not empty:eOG: ' -> putline; eOG.dopt -> putheadn;
                if);
                superHasInner;
-               (if newFeature and not inPtn and not IS.isEmpty then checkForUnboundVirtuals if);
-                   (if (primNo <> indexedGet_prim) and ((getReturnDecl -> D[]) <> none) then
+               (if usingVirtualsAsParams and not inPtn and not IS.isEmpty then checkForUnboundVirtuals if);
+               (if (primNo <> indexedGet_prim) and ((getReturnDecl -> D[]) <> none) then
                        (if traceGetVqual then
                            '**** OG:returnDecl: ' -> puttext; D.dopt -> putline
                        if);
                        D.getQual -> eOG[]
-                   else
+                else
                        (if (primNo = indexedGet_prim) then
                            (if false then
                                '!!!! indexed_get'->dumpT; dopt -> dumptn;
