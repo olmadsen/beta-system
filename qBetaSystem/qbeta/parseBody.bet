@@ -1,4 +1,137 @@
 ORIGIN 'qparser'
+---parseLib:attributes---
+pKind:
+   (* name: ..., name:< ..., name::< ..., name:: ... *)
+   (# sig: ^Signature; OD: ^ObjectDescriptor; ptnKind: @integer
+   do 'pKind:'->trace;
+      (if lex.symb 
+       // lex.symbols.colon then
+          lex;
+          plainPtn -> ptnKind
+       // lex.symbols.virtual then
+          lex; 
+         virtualPtn -> ptnKind
+       // lex.symbols.further then 
+          lex;
+          furtherPtn-> ptnKind
+       // lex.symbols.final then
+          lex; 
+          finalPtn -> ptnKind
+       else   
+          syntaxError
+      if);
+   exit ptnKind
+   #);
+markSpecialPtn:
+   (# BreakPtn:< Object;
+      IndexedPtn:< Object;
+      OtherPrimPtn:< Object;
+      BitWitPtn:< Object;
+      GeneralPtn:< Object;
+      OD: ^ObjectDescriptor; 
+   enter OD[]
+   do (if OD.IS.primNo 
+         // restart_prim // leave_prim then
+            BreakPtn 
+         // indexedPut_prim // indexedGet_prim // stringGet_prim
+         // indexed_prim // rIndexed_prim // asString_prim then
+            IndexedPtn
+         // put_prim // get_prim
+         // ifthen_prim // inner_prim // none_prim
+         // suspend_prim // resume_prim 
+         // disable_prim // enable_prim // attach_prim
+         // cmpAndSwap_prim // fork_prim // sleep_prim 
+         // thisCore_prim 
+         // file_open_prim // file_get_prim 
+         // file_eof_prim // file_close_prim 
+         // dumpObj_prim then
+            OtherPrimPtn
+         else
+            (if OD.IS.primNo -> isBitWit then
+               BitWitPtn
+            else 
+               GeneralPtn; 
+   if)if)#);
+markSpecialDecl:
+   (# D: ^Decl
+   enter D[]   
+   do (if D.primNo
+                // object_prim then D[] -> objectDecl[]
+                // none_prim then D[] -> noneDecl[]
+                // integer_prim then D[] -> integerDecl[]
+                // char_prim then D[] -> charDecl[]
+                // string_prim then D[] -> stringDecl[]
+                // boolean_prim then D[] -> booleanDecl[]
+                // float_prim then D[] -> floatDecl[]
+                // error_prim then D[] -> errorDecl[]
+                // this_prim then D[] -> thisDecl[]
+                // thisCore_prim then D[] -> thisCoreDecl[]
+                // Resume_prim then D[] -> resumeDecl[]
+                // ifThen_prim then D[] -> ifThenDecl[]
+                // indexed_prim then D[] -> IndexedDecl[]
+                else
+                   (if D.isCore = core_prim then D[] -> coreDecl[]
+   if)if)#);
+pDefDecl:
+   (# D: ^Decl;  sig: ^Signature; ptnKind: @integer; isVar: @Boolean;
+      DI: ^DataItem; P: ^Pattern; OD: ^ObjectDescriptor; 
+      isInArg,isOutArg,isDesignator,isPtn,isDo: @boolean;
+   do (if lex.symb 
+           // lex.symbols.inArg then
+              lex;
+              true -> isInArg
+           // lex.symbols.outArg then
+              lex;
+              true -> isOutArg            
+           // lex.symbols.class // lex.symbols.def then
+              lex; 
+              true -> isPtn
+           // lex.symbols.designator then
+              lex;
+              true -> isDesignator
+      if);
+      'pDecl:after:inOut' -> trace;
+      pSignature -> sig[];
+      pKind -> ptnKind;
+      'pDecl:after:pKind: '->trace;
+      (if lex.symb 
+       // lex.symbols.varVal then
+          lex;
+          true -> isVar
+       // lex.symbols.doSy then (* in, out, class, def not allowed *)
+          lex;
+          true -> isDo
+      if);
+      pObjectSpec -> OD[];
+      OD.IS.handleNewProps;
+      'pDecl:after:pOD'->trace;
+      (if isPtn or (ptnKind > virtualPtn) then
+          OD[] -> markSpecialPtn
+          (# generalPtn:: (#do (sig[],OD[],ptnKind) -> GeneralPtnGen -> P[] -> D[]; OD.IS.isPrimitive -> P.isPrimitivePtn; #);
+             BreakPtn::< (#do 'A'->put; #);
+             IndexedPtn::< (#do 'B'->put; #);
+             OtherPrimPtn::< (#do 'B'->put; #);
+             BitWitPtn::< (#do 'C'->put; #);
+          #);
+       else (* DataItem params: (isConst,isValue,sig[],OG[])
+             * isConst = not isVar; isValue: depends on the Pattern *)
+          (not isVar,false,sig[],OD[]) -> DataItem -> DI[] -> D[];
+          (if ptnKind = virtualPtn then true -> DI.virtualDI if)
+      if);
+      D[] -> markSpecialDecl;
+      isInArg -> D.isInArg;
+      isOutArg -> D.isOutArg;
+      '**   pDecl:end:'->trace
+   exit D[]
+   #)
+---pDecl:doPart---
+do (if useDefDeclParser then (*'!!!! UseDefDcl'-> putline*) if);
+   (if not useDefDeclParser then
+       pDeclStd -> D[]
+   else
+      pDefDecl -> D[]
+   if)
+
 ---pStatement:doPart---
    (*
     <Item>		::= <Decl> | <Statement> | <Property>
@@ -38,7 +171,7 @@ do (# lINV,rINV: ^Invocation; E: ^Exp;  IS: ^Items;
                    'pStmt:fixIt:FIX'->trace
                    (#
                    do 'pOG:got:arg:as:mainPart: ' -> puttext;
-                      E.args.noOfSons -> putint; newline; IV.dopt -> puthead;
+                      E.args.noOfSons -> putint; newline; (*IV.dopt -> puthead;*)
                    #);                  
                    IV.mkOG -> (IV[],ISx[]);
                    (if false then
@@ -71,12 +204,12 @@ do (# lINV,rINV: ^Invocation; E: ^Exp;  IS: ^Items;
           'pStmt:not:assign'->trace;
           (if true then
               (*lex;*)
-              'pStmt:beforeBindings'->trace(#do lINV.doPT -> TL #);
+              'pStmt:beforeBindings'->trace(#do (*lINV.doPT -> TL*) #);
               pBindings -> IS[];
-              'pStmt:afterBindings'->trace(#do IS.dopt->TL #);
+              'pStmt:afterBindings'->trace(#do (*IS.dopt->TL*) #);
               IS[] -> pMainPartII -> IS[];
               IS.noOfSons = 0 -> IS.isEmpty;
-              'pStmt:after:MainPartII'->trace(#do IS.dopt->dumptn #)
+              'pStmt:after:MainPartII'->trace(#do (*IS.dopt->dumptn*) #)
            else
               pMainPart -> IS[];
           if);
@@ -85,7 +218,7 @@ do (# lINV,rINV: ^Invocation; E: ^Exp;  IS: ^Items;
           OG.IS.handleNewProps;
       if);
       'pStmt:end'->trace
-      (#do (if S[] = none then 'none'->TT else S.doPT->TT if)#)
+      (#do (if S[] = none then 'none'->TT else (*S.doPT->TT*) if)#)
    #)
       
    
