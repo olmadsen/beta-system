@@ -84,6 +84,7 @@ AbstractSyntaxTree: Tree
      traceCheck,
      traceGetVqual,
      traceGetVqualShort,
+     traceWeakQuaCheck,
      traceUnit,
      traceGen,
      traceAlloc,traceVDTalloc: @boolean;
@@ -3839,11 +3840,17 @@ AbstractSyntaxTree: Tree
             (# D: ^Decl; org: ^Items; F: ^Node; ptn: ^Pattern
             do (*'InValueObj:' -> puttext;*)               
                (if isSingularX then
-                   '\n!!!! inValueObj:isSingular:not Handled!\n' -> dumpTN;
+                   (*'\n!!!! inValueObj:isSingular:not Handled!\n' -> dumpTN;*)
                    (* {             <---- check if valueObj
                     *     foo{ ... } 
                     * }
                     *)
+                    origin.encOG.isValueObj -> value;
+                    (if traceWeakQuaCheck then
+                       '****  inValueObj:isSingular:\n' -> dumpT;
+                       value->dumpB; newline; dopT -> putHeadN; '---'->dumpTN;
+                       '**   origin:'->dumpT; origin.encOG.dopt->putHeadN;
+                    if)
                 else
                    (*'isPtn:' -> puttext;*)
                    (if false then
@@ -3891,6 +3898,164 @@ AbstractSyntaxTree: Tree
                              if);
                              restart L;
             if)if)if)#);
+         inSuperW: BooleanValue
+            (# lQ,rQ: ^ObjectDescriptor
+            enter lQ[]
+            do (if false then
+                   ('**** inSuper:lQ',lQ[]) -> display;
+                   ('**** rQ',this(ObjectSpecification)[]) -> display;
+               if);
+               this(ObjectSpecification)[] -> rQ[];
+               (if lQ.IS.isEmpty and rQ.IS.isEmpty then
+                   (lQ.super.last).ATd.OG[] -> lQ[];
+                   (rQ.super.last).ATd.OG[] -> rQ[];
+                   (if traceWeakQuaCheck then
+                       '**   inSuperW:Cat:'->dumpT;
+                       '**   lQ:'->dumpTN; lQ.doPT -> putHeadN;
+                       '**   rQ:'->dumpTN; rQ.doPT -> putHeadN;
+               if)if);
+               L:
+                 (if lQ[] = rQ[] then
+                     true -> value 
+                  else
+                     (if (lQ[] <> none) then
+                         (if (lQ.primNo <> object_prim) then
+                             lQ.super.getQual -> lQ[];
+                             (*'**   inSuper:super:lQ:\n' -> puttext;*)
+                             (if lQ[] =  none then
+                                 objectDecl.getQual -> lQ[];
+                                 (* 'none' -> putline*)
+                              else
+                                (* lQ.dopt -> puthead*)
+                             if);
+                             restart L;
+            if)if)if)#);   
+          getTopVdcl:
+             (# VP: ^Pattern;
+             enter VP[]
+             do VP.vDcl[] -> VP[];
+                (if vp[] = none then '!!!! getTopVdcl:VP is none!'->dumptn if);
+                (if not (VP.ptnKind = virtualPtn) then restart getTopVdcl if)
+             exit VP[]
+             #);
+          scanSuperOD:
+             (# ODx,current: ^ObjectDescriptor; 
+             do this(Node)[] -> ODx[]; (* ODx should be included *)
+                L: (#
+                   do ODx[] -> current[];
+                      inner scanSuperOD;
+                      (if not ODx.super.isEmpty then
+                          (ODx.super.last).ATd.OG[] -> ODx[];
+                        restart L
+                      else
+                        ObjectDecl.OG[]->ODx[];
+                        inner scanSuperOD
+             if)#)#);
+          mostSpecificSuper: BooleanValue
+            (# checkBindings: BooleanValue
+                  (# current: ^Pattern
+                  do (if traceWeakQuaCheck then '**   checkBindings:'->dumpT; top -> dumpI; newline if);
+                     true -> value;
+                     L:
+                     (for i: top - 1 repeat
+                          dstOD[i].IS.scanSons
+                          (# P: ^Pattern; DI: ^DataItem
+                          do (if true 
+                              // current.isPattern then
+                                 (if (current[]->P[]).isVirtual and (P.ptnKind > virtualPtn) then 
+                                     (if traceWeakQuaCheck then '**   isVirtualBinding:'->dumpTN; current.dopt->dumpTN if);
+                                     (if (P.vDIdcl[] <> none) or P.isFinalDI then
+                                         (if traceWeakQuaCheck then
+                                             '**   BindingOfDataItem:'->dumpT; P.vDIdcl.dopt->dumpTN
+                                          if);
+                                         (if P.vDIdcl.isDataItem then
+                                             (if (P.vDIdcl[] -> DI[]).isConst then
+                                                 (if traceWeakQuaCheck then '**   isConstant:'->dumpTN if);
+                                                 false -> value;
+                                                 leave L
+                                         if)if)
+                                     else
+                                         (if traceWeakQuaCheck then 
+                                            '**   CHECK if compatible binding in src:'->dumpTN;
+                                            P.doPT -> putHeadN;
+                                            '**   src:'->dumpTN; dopt -> putHeadN;
+                                            '**   dst:'->dumpTN; dst.dopt -> putHeadN;
+                                         if);
+                                         P[] -> this(checkBindings).current[];
+                                         inner CheckBindings
+                                     if)
+                                 else
+                                    false -> value;
+                                    leave L
+                                 if)
+                              // current.isNewProp then 
+                              else
+                                 false -> value;
+                                 leave L
+               if)#)for)#);
+               dstOD: [4] ^ObjectDescriptor; top: @integer;
+               dst: ^ObjectDescriptor; hasCommonSuper: @Boolean
+            enter dst[]
+            do (if traceWeakQuaCheck then 
+                   '***** Find mostSpecificSuper:' -> putHeadN;
+                   '**   dst:'->dumpTN; dst.dopt->putHeadN;
+                   '**   src:'->dumpTN; dopt -> putHeadN;
+               if);
+               find:
+                  dst.scanSuperOD
+                  (# ODz: ^ObjectDescriptor
+                  do current[] -> ODz[];
+                     (if (top + 1 -> top) > dstOD.range then dstOD.range -> dstOD.extend if);
+                     ODz[] -> dstOD[top][];
+                     (if traceWeakQuaCheck then
+                         '**   candidate:'->dumptn; ODz.dopt -> putHeadN;
+                         '**   checkSrc:'->dumpTN;
+                     if);
+                     scanSuperOD
+                      (#
+                      do (if traceWeakQuaCheck then current.dopt->putheadN; if); 
+                         (if current[] = ODz[] then
+                            (if traceWeakQuaCheck then  '**   Found most specific super:'->dumpTN; current.dopt -> putHeadN; if);
+                            true -> hasCommonSuper;
+                            leave find
+                     if)#);
+                  #);
+                  (if hasCommonSuper then 
+                      L: 
+                      checkBindings
+                      (# dstVB,dstTopVP: ^Pattern
+                      do current[] -> dstVB[] -> getTopVdcl -> dstTopVP[];
+                         (if traceWeakQuaCheck then 
+                             '**   check:srcBinding:'->dumpT; current.dopt -> dumpTN;
+                             '**   dstBinding:'->dumpT; dstTopVP.dopt -> dumpTN;
+                         if);
+                         scanSuperOD
+                            (#
+                            do current.IS.scanSons 
+                               (# srcVB,srcTopVP: ^Pattern
+                               do (if current.isPattern and ((current[]->srcVB[]).ptnKind > virtualPtn) then
+                                      srcVB[] -> getTopVdcl -> srcTopVP[];
+                                      (if traceWeakQuaCheck then 
+                                          '**   tryMatch:'->dumpTN; srcTopVP.doPT->dumpTN; 
+                                      if);
+                                      (if srcTopVP[] = dstTopVP then
+                                          (if traceWeakQuaCheck then 
+                                              '**   Matching vDcl:'->dumpTN; 
+                                              '**   dst:'->dumpT;  dstVB.dopt->putHeadN; 
+                                              '**   src:'->dumpTN; srcVB.dopt -> putHeadN;
+                                          if);
+                                          (if srcVB.OG[] -> dstVB.OG.inSuperW then
+                                              (if traceWeakQuaCheck then '**   Compliant bindings'->dumpT if)
+                                           else
+                                              (if traceWeakQuaCheck then '**   NON compliant bindings'->dumpTN if);
+                                              false -> value;
+                                              leave  L
+                       if)if)if)#)#)#)
+                       -> value 
+                   else
+                     (if traceWeakQuaCheck then  '**   Did not find a most specific super!'->dumpTN if);
+                  if)
+            #);
           getSubSuperRelation:
             (# lQ: ^ObjectDescriptor;
                isEq, (* lQ = this(OS) *)                      
