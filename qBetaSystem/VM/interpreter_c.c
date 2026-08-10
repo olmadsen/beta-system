@@ -4940,8 +4940,9 @@ case rshiftup:
 	allocFromStrucRefObj(thisBlock,thisBlock->origin);
 	restoreContext();
     case nop:
+    	arg1 = op1(bc,&glsc);
 #ifdef TRACE
-	fprintf(trace,"nop\n");
+	fprintf(trace,"nop %i\n",arg1);
 #endif
 	break;
       case _break:
