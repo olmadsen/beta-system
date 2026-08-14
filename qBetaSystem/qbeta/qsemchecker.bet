@@ -110,7 +110,7 @@ semchecker: UnitHandler
             do (if traceGetVqual then
                    '**** NameDecl:getVqual:'->dumpT; dopt -> dumpTN
                if);
-               (encOG[],isNest,OGS[]) -> ATd.getVqual -> (OGS[],qual[]);
+               (encOG[],isNest,OGS[]) -> ATd.getVqual -> (OGS[],qual[],pKind);
             #);
           getQual::
             (#
@@ -133,7 +133,7 @@ semchecker: UnitHandler
                    (*'!!!! no:checked:'->dumpT; dopt -> dumpTN;*)
                    (none,origin[],none,true) -> OG.check
                if);
-               (encOG[],false,OGS[]) -> OG.getVqual -> (OGS[],qual[]);
+               (encOG[],false,OGS[]) -> OG.getVqual -> (OGS[],qual[],pKind);
             #);
           getQual:: 
             (# U: ^Text
@@ -297,38 +297,18 @@ semchecker: UnitHandler
                  if)#)if)#);
                emitTrace:
                  (#                    
-                 do '\n**** DataItem:checkQual:' -> puttext; 
-                    (if isConst then ':C:' -> puttext if);
-                    (if isAssign then 'assign:' -> puttext if); newline;
-                    ('**   dst',this(DataItem)[]) -> display; 
-                    ('**   src',srcOS[]) -> display;
-                    (if false then
-                        '**   dst.lab:dataItem' -> putline;
-                        '**   src.lab: ' -> puttext; srcOS.label -> putline;
-                    if);
-                    '**   dstQual:'->putline; dstQual.label -> puttext;
-                    ' ' -> put; dstQual.dopt -> puthead;
-                    '**   srcQual:'->putline; srcQual.label -> puttext;
-                    ' ' -> put; srcQual.dopt -> puthead;
-                    '**   dstQual:isValueObj:'->puttext;
-                    dstQual.isValueObj->putboolean; newline;
-                    '**   srcQual:isValueObj:'->puttext; 
-                    srcqual.isValueObj -> putboolean;newline;
-                    '**   src: ' -> puttext; 
-                    srcOS.doPT -> putline;
-                    '**   srcOS.arg1Qual: ' -> puttext;                    
-                    (if srcOS.arg1Qual[] <> none then
-                        srcOS.arg1Qual.dopt -> putline
-                     else
-                        ' none ' -> putline
-                    if);
-                    (if false and (dstQual.primNo = indexed_prim) then
-                        '**** DI:checkQual:dst is Indexed: ' -> puttext; 
-                        this(DataItem).dopt -> putline;
-                        '**   src: ' -> puttext; srcOs.doPP -> puttext;
-                        ' ' -> put; srcOS.dopt -> putline;
-                    if);
-                 #);  
+                 do srcOs[] -> Message
+                    (#
+                    do 'DataItem:checkQual:'->msg; 
+                       (if isConst then ':C:'->msg if);
+                       (if isAssign then 'assign:'->msg if); 
+                       'dst: '->msg; this(DataItem)[]->PT; 'src: '->msg; srcOS[]->PT;
+                       'dstQual:'->msg; dstQual[]->PT; 'srcQual:'->msgN; srcQual[]->PT;
+                       'dstQual:isValueObj:'->msg; dstQual.isValueObj->msgB;
+                       'srcQual:isValueObj:'->msg; srcqual.isValueObj->msgB; ''->msgN;
+                       'src: '->msg; srcOS[] ->PT;
+                       'srcOS.arg1Qual:' ->msg; srcOS.arg1Qual[] ->PT;
+                 #)#);  
                checkSameEncloser:
                  (# src,dst: ^Decl; srcDI,dstDI: ^DataItem;
                     is,ix: @integer; 
@@ -338,8 +318,7 @@ semchecker: UnitHandler
                  do (if trace then 'checkSameEncloser:'->puttext; if);
                     (if src.isDataItem and dst.isDataItem then
                         (if trace then 'di:'->puttext; if);
-                        src[] -> srcDI[];
-                        dst[] -> dstDI[];
+                        src[] -> srcDI[]; dst[] -> dstDI[];
                         (* for objects must be isConst -  here isValueObj *)
                         (if src.OG.IS.isEmpty and dst.OG.IS.isEmpty then
                             (* src = s1.s2,...,sn ; dst = d1.d2,...,dn;  where sn = dn
@@ -348,24 +327,17 @@ semchecker: UnitHandler
                             (if trace then 'IS:empty:'->puttext; if);
                             src.OG.super.scanSons
                             (#
-                            do is + 1 -> is;
-                               lastSrc[] -> predSrc[];
-                               current[] -> lastSrc[]
+                            do is + 1 -> is; lastSrc[] -> predSrc[]; current[] -> lastSrc[]
                             #);
                             
                             dst.OG.super.scanSons
                             (#
-                            do ix + 1 -> ix;
-                               lastDst[] -> predDst[];
-                               current[] -> lastDst[]
+                            do ix + 1 -> ix; lastDst[] -> predDst[]; current[] -> lastDst[]
                             #);
                             (if (is > 1) and (ix > 1) then
                                 (if trace then 
-                                    'remote:'->dumpT;
-                                    predSrc.dopt -> dumpt;
-                                    lastSrc.dopt -> dumpt;
-                                    predDst.dopt -> dumpt;
-                                    lastDst.dopt -> dumptN;
+                                    'remote:'->dumpT; predSrc.dopt -> dumpt; lastSrc.dopt -> dumpt;
+                                    predDst.dopt -> dumpt; lastDst.dopt -> dumptN;
                                 if);
                                 (if predDst.ATd.asDecl <> predSrc.ATd.asDecl then
                                     srcOs[] -> warning
@@ -378,6 +350,39 @@ semchecker: UnitHandler
                                        ' and '->msg; predSrc.dopt -> qmsg;
                                        '\n**   and thus not the same '-> msg; lastSrc.dopt -> qmsg;
                  #)if)if)if)if)#);
+               checkIfDestHasVirtualType:
+                  (* An assignment R := S, where R: var V; V:<... or V::< ... needs a run-time check *)
+                  (# P: ^Pattern
+                  do (if OG.IS.isEmpty and (OG.super.ATd[]->P[]).isPattern then
+                         (if P.isVirtual then 
+                             (if P.ptnKind // virtualPtn // furtherPtn then
+                                 (if pKind // virtualPtn // furtherPtn then
+                                     srcOs[] -> QuaCheck
+                                     (#
+                                     do 'A run-time qualification check will be inserted here'->msgN; 
+                                        'since the type of the destination:' -> msgN;
+                                        this(DataItem)[]->PT;
+                                        'is a ' ->msg; 
+                                        (if pKind
+                                         // virtualPtn then 'virtual pattern: '->msgN
+                                         // furtherPtn then 'further binding: '->msgN
+                                         // finalPtn then 'final binding : '->msgN
+                                         else   ' unKnownPtn?'->msgN;
+                                        if);
+                                        OG.super.ATd[]->PT;
+                                        (if false then
+                                          'srcOS:'->msg; srcOS[]->PT;
+                                          'srcOs.ATd: '->msg; srcOS.label -> msgN; srcOS.ATd[]->PT;
+                                          'srcQual: '->msg; srcQual[]->PT;
+                                          'dstQual: '->msg; dstQual[]->PT;
+                                          'father+: '->msg; dstQual.father[]->PT; '---'->msgN; dstQual.father.father[]->PT;
+                         if)#)if)if)if)
+                      else
+                         '!!!! dstQual is not a pattern: P:'->putline; P.dopt->putHeadN;
+                         '!!   '->dumpT; P.isPattern->dumpB; newline;
+                         '!!   dst:'->dumpT; dopt -> putHeadN;
+                         '!!   src:'->dumpT; srcOs.dopt->dumpTN
+                  if)#);
                koks: booleanValue
                   (#
                   do (if true or traceWeakQuaCheck then
@@ -393,11 +398,6 @@ semchecker: UnitHandler
                 * I.e. OG = Unit and no items
                 * This may be a problem and perhaps we should get Unit.qual!?
                 *)
-               (if  traceGetVQual then
-                   '**** before:checkUnits:'->dumpT; dopt -> putheadN;;
-                   srcOs.dopt -> putHeadN;;
-                   srcQual.dopt -> putheadN;; dstQual.dopt -> putheadN;;
-               if);
                (srcOS[],srcQual[],dstQual[]) -> checkUnits  -> (srcQual[],dstQual[]);
                (* We need to call getV_qual at the point of the 
                 * ObjectInvocation: X := exp or R. foo
@@ -617,29 +617,35 @@ semchecker: UnitHandler
                            (if false then
                                'Equal:'->dumptN; srcQual.dopt->putheadN; dstQual.dopt->putheadN;
                                'src:'->dumpT; srcOS.dopt ->dumpTN; 'dst:'->dumpT; dopt -> puthead;
-                           if)
+                           if);
+                           (if false then checkIfDestHasVirtualType if) 
+                           (* they may problay be of different virtual types *)
                         // srcQual[] -> dstQual.inSuper then (* OK *)
                            (* This is just for test purposes: 
                             * for references this is ok, but for values, 
                             * the right-side may be truncated, see above
                             *)
                            (if false then
-                               srcOS[] -> Warning
-                               (# 
-                               do 'The right-side: "' -> msg;
-                                  srcOS.doPT -> msg;
-                                  '" refers to a subpattern/obj ' -> msg;
-                                  'of the left-side: "' -> msg;
-                                  doPT -> msg;
-                                  '"' -> msg
+                               this(DataItem)[] -> Message
+                               (# P: ^Pattern
+                               do 'Check if type of dst is virtual: '->msg;
+                                  this(DataItem)[]->PT;
+                                  'dstQual: ' ->msg; dstQual.father.label -> msg; dstQual.father[]->PT;
+                                  'qual:'->msg; 
+                                  (if OG.IS.isEmpty and (OG.super.ATd[]->P[]).isPattern then
+                                      (if P.isVirtual then 'VIRTUAL'->msg; if);
+                                  else   '!!!! dstQual is not a pattern'->putline
+                                  if)
                                #);
-                           if)
+                           if);
+                           checkIfDestHasVirtualType
                         // (*Koks or *) (dstQual[] -> srcQual.mostSpecificSuper) then 
                             srcOs[] -> Message
                              (#
                              do 'The object references are weak compliant:'->msgN;
                                 'src: '->msg; srcOS[]->PT; 'dst: '->msg; this(DataItem)[]->PT;
-                             #)
+                             #);
+                             checkIfDestHasVirtualType
                         // (srcQual[] <> none) 
                            and (dstQual[] -> srcQual.inSuper) then
                            srcOS[] -> QuaCheck
@@ -673,7 +679,7 @@ semchecker: UnitHandler
                    (if OGS[] = none then '!!!! OGS is none' -> putline if);
                    OGS.print
                if);
-               (encOG[],false,OGS[]) -> OG.getVqual -> (OGS[],qual[]);
+               (encOG[],false,OGS[]) -> OG.getVqual -> (OGS[],qual[],pKind);
                (if false then
                    '**   qual: ' -> putline;
                    qual.doPT -> putline
@@ -876,13 +882,11 @@ semchecker: UnitHandler
                          if)
                   if);
                   #);
-               org: ^Items; DI: ^DataItem
+               org: ^Items; DI: ^DataItem; pKind: @integer
             do <<SLOT sem_ptn_checkActualArgs:descriptor>>; 
                OG.IS.scanNonBoundItemArgs
                (#
-               do (if (top + 1 -> top) > fArgs.range then
-                      fArgs.range -> fArgs.extend
-                  if);
+               do (if (top + 1 -> top) > fArgs.range then fArgs.range -> fArgs.extend if);
                   currentArg[] -> fArgs[top][];
                #);
                (*theOI.OG.IS.scanNonBoundItemArgs(# do #);*)
@@ -909,7 +913,7 @@ semchecker: UnitHandler
                       theOI.savedOGS[] -> getOGsequenceOfArg -> OGS[];
                       (encOG[],false,OGS[]) 
                         -> fArgs[inx].getVqual 
-                        -> (OGS[],dstqual[]); 
+                        -> (OGS[],dstqual[],pKind); 
                       (current[],dstQual[]) -> checkForArrayPut -> dstQual[];
                       (none,theOI.enclosingObjectDescriptor)
                         -> current.semcheck -> srcQual[];
@@ -918,18 +922,15 @@ semchecker: UnitHandler
                         -> (srcQual[],dstQual[]);
                       <<SLOT semC5:descriptor>>;
                       (if false then
-                          '**** before:checkQual:theOI: ' -> puttext;
-                          theOI.label -> puttext; ' ' -> put;
-                          theOI.dopt -> putline;
-                          '**   ptn: ' -> puttext; dopt -> puthead;
-                          '**   vEq:' -> puttext; 
-                          OG.primNo = vEq_prim -> putboolean;
-                          ' rEq:' -> puttext; 
-                          OG.primNo = rEq_prim -> putboolean; newline;
-                          '**   fArg:'->puttext; fARgs[inx].dopt->putline;
-                          '**   aArg:isNone: ' -> puttext; 
-                          current.primNo = none_prim ->putBoolean; newline;
-                          current.dopt -> putline;
+                          '**** before:checkQual:theOI:'->dumpT;
+                          theOI.label ->dumpT; theOI.dopt->dumpTN;
+                          '**   ptn:'->dumpT; dopt->puthead;
+                          '**   vEq:'->dumpT; OG.primNo = vEq_prim->dumpB;
+                          ' rEq:'->dumpT; OG.primNo = rEq_prim->dumpB; newline;
+                          '**   fArg:'->dumpT; fARgs[inx].dopt->dumpT;
+                          '**   aArg:isNone:'->dumpT; 
+                          current.primNo = none_prim->dumpB; newline;
+                          current.dopt ->dumpTN;
                       if);
                       (theOI[],fArgs[inx][],current[],srcQual[],dstQual[]) 
                         -> (origin[]->org[]).checkForLocalsConflict;
@@ -945,9 +946,8 @@ semchecker: UnitHandler
                               '**** fArg:designator:'->dumpTN;
                               fArgs[inx].dopt->dumptn
                           if)
-                       else
-                          (current[],srcQual[],dstQual[],false) 
-                            -> fArgs[inx].checkQual;
+                       else 
+                          (current[],srcQual[],dstQual[],false,pKind) -> fArgs[inx].checkQual;
                   if)if)#);
                L:
                  (if (inx < top)  then
@@ -956,26 +956,25 @@ semchecker: UnitHandler
                      do (if currentDcl.isFinalDI then
                             inx + 1 -> inx;
                             (if inx > top then
-                                '!!!! Perhaps too many virtual bindings' ->putline;
-                                  sig.doPT
+                                '!!!! Perhaps too many virtual bindings' ->putline; sig.doPT
                             if);
                             (* check: as used above 
                              *  theOI.savedOGS[] -> getOGsequenceOfArg -> OGS[];
                              *)
                             (encOG[],false,OGS[]) 
                               -> fArgs[inx].getVqual 
-                              -> (OGS[],dstqual[]);          
+                              -> (OGS[],dstqual[],pKind);          
                             (none,theOI.enclosingObjectDescriptor)
                               -> currentDcl.OG.semcheck -> srcQual[];
                             (* check: checkForGenericUnit as above *)
                             (if traceInvAsDerived then
-                                '**** virtualDI:' -> dumpT; currentDcl.dopt->dumpTN;
+                                '**** virtualDI:'->dumpT; currentDcl.dopt->dumpTN;
                                 '**   srcQual:'->dumpTN; srcQual.dopt -> putHeadN;
                                 '**   dstQual:'->dumpTN;                  
                                 (if dstQual[] <> none then dstQual.dopt -> putHeadN if);
                                 '**   fArgs[inx]:'->dumpTN; fArgs[inx].dopt -> putHeadN;
                             if);
-                            (currentDcl.OG[],srcQual[],dstQual[],false) -> fArgs[inx].checkQual;
+                            (currentDcl.OG[],srcQual[],dstQual[],false,pKind) -> fArgs[inx].checkQual;
                             (if inx = top then
                                 leave L
                      if)if)#);
@@ -1011,7 +1010,7 @@ semchecker: UnitHandler
                        '**   PTN:getVqual:isVirtual:OGS: ' ->putline; 
                        OGS.print
                    if);
-                   this(pattern)[] -> OGS.newFindBinding -> qual[];
+                   this(pattern)[] -> OGS.newFindBinding -> (qual[],pKind);
                    (if qual.IS.isEmpty then 
                        (qual.super.ATd.asDecl).OG[] -> qual[]
                    if);
@@ -1145,7 +1144,7 @@ semchecker: UnitHandler
      Designator::<
        (# semCheck:: (# do #);
           getVqual:: 
-            (# do (encOG[],false,OGS[]) -> OG.getVqual -> (OGS[],qual[]) #);
+            (# do (encOG[],false,OGS[]) -> OG.getVqual -> (OGS[],qual[],pKind) #);
        #);
      AssignmentStatement::<
        (# semCheck::
@@ -1197,7 +1196,7 @@ semchecker: UnitHandler
                checkAssignable:
                  (* check that left can be assigned to right *)
                  (# receiver,receiverX: ^Exp; OGSx: ^ODsequence;
-                    srcQual, dstQual: ^ObjectDescriptor
+                    srcQual, dstQual: ^ObjectDescriptor; pKind: @integer
                  do left.last -> receiver[];
                     receiver.getActualReceiver -> receiverX[];
                     (* getActualReceiver is left over from similar
@@ -1213,10 +1212,9 @@ semchecker: UnitHandler
 
                     (encOG[],true,none)
                     (******* perhaps not always isFirst = true here ? *)
-                      -> receiver.getVqual 
-                      -> (OGSx[],dstQual[]);
+                      -> receiver.getVqual -> (OGSx[],dstQual[],pKind);
                     
-                    (right[],srcQual[],dstQual[],true) -> (receiver.ATd.asDecl).checkQual;
+                    (right[],srcQual[],dstQual[],true,pKind) -> (receiver.ATd.asDecl).checkQual;
                  exit(srcQual[],dstQual[])
                  #);
                checkLeftNotConstVal:
@@ -1309,7 +1307,7 @@ semchecker: UnitHandler
                    if);
                    savedQual[] -> qual[];
                 else
-                   (encOG[],false,OGS[]) -> super.getVqual -> (OGS[],qual[]);
+                   (encOG[],false,OGS[]) -> super.getVqual -> (OGS[],qual[],pKind);
                if)
             #);
           getQual::
@@ -1522,7 +1520,7 @@ semchecker: UnitHandler
                    newline
                if);
                (if not possibleBindings (* IS.isEmpty (*and not hasVirtualArgs*) then
-                   (encOG[],false,OGS[]) -> super.getVqual -> (OGS[],qual[]);
+                   (encOG[],false,OGS[]) -> super.getVqual -> (OGS[],qual[],pKind);
                 else
                    this(ObjectDescriptor)[] -> qual[]
                if)
@@ -2096,7 +2094,7 @@ semchecker: UnitHandler
                encOG[] -> qual[];
                scanSons
                (#
-               do (qual[],not isFirst,OGS[]) -> current.getVqual -> (OGS[],qual[]);
+               do (qual[],not isFirst,OGS[]) -> current.getVqual -> (OGS[],qual[],pKind);
                #);
                (if traceGetVqual then
                    'INV:getVqual:end:'->dumpT;dopt -> dumpTN;
@@ -2129,9 +2127,7 @@ semchecker: UnitHandler
                OI: ^ObjectInvocation; cnt: @integer 
             do (* rec = none if first OI in Invocation *) 
                <<SLOT sem_OI_semCheck_T1:descriptor>>;   
-               (if ATd[] = none then
-                   '**** ATd is none: '->puttext;  dopt -> putheadN;
-               if);
+               (if ATd[] = none then '**** ATd is none: '->puttext;  dopt -> putheadN    if);
                (if (ATd.asDecl).primno // inner_prim 
                (* // indexedPut_prim *) then
                    true -> noArgsCheck;
@@ -2213,13 +2209,11 @@ semchecker: UnitHandler
                            (* is theQual always correct for declarations?*)
                            savedQual[] -> qual[]
                         else
-                           '\n!!!!! no saved qual:'->puttext;
-                           dopt -> putheadN
+                           '\n!!!!! no saved qual:'->puttext; dopt -> putheadN
                        if);
                        (if (singleUnitArgQual[] <> none) and 
                            (qual[] <> singleUnitArgQual[]) then
-                           '****OI:changedQualToSingleUnitArgQual:'
-                             -> putline;
+                           '****OI:changedQualToSingleUnitArgQual:' -> putline;
                            singleUnitArgQual.doPT -> putline;
                            singleUnitArgQual[] -> qual[]
                        if);
@@ -2245,7 +2239,7 @@ semchecker: UnitHandler
             (* X via %include C via %include B via %include A
              * means: A.B.C.X, path = [A,nest(B),nest(C),nest(X)]
              *)
-            (# OI,OIx: ^ObjectInvocation; on,pn,onx: @integer; 
+            (# OI,OIx: ^ObjectInvocation; on,pn,onx,pKind: @integer; 
                OGS: ^ODsequence;
                MI: ^ModuleItem; encOG,OGx,qual: ^ObjectDescriptor
             enter(encOG[],OI[],on,pn,OGS[])
@@ -2283,7 +2277,7 @@ semchecker: UnitHandler
                      -> OIx.viaInclude 
                      -> (encOG[],OGS[]);
                    (if traceGetVqual then ('**   viaInclude:after',0,0) -> OGs.print if);
-                   (encOG[],false,OGS[]) -> ptnId.viaIncl.ATd.getVqual -> (OGS[],qual[]);
+                   (encOG[],false,OGS[]) -> ptnId.viaIncl.ATd.getVqual -> (OGS[],qual[],pKind);
                    (if traceGetVqual then
                        ('**   viaInclude:after:ptnId.viaIncl.ATd.getVqual:',0,0) -> OGs.print;
                 if)if)
@@ -2316,7 +2310,7 @@ semchecker: UnitHandler
                    (encOG[],this(ObjectInvocation)[],on,pn,OGS[]) 
                      -> viaInclude 
                      -> (encOG[],OGS[]);
-                   (encOG[],true,OGS[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
+                   (encOG[],true,OGS[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[],pKind);
                 else
                    (if (OGS[] -> OGSx[]) = none then
                        (* Given INV = R.X.Y, first call of R.getVQual *)
@@ -2325,7 +2319,7 @@ semchecker: UnitHandler
                        (OGx[],false,none) -> ODsequence -> OGSx[];
                        (for pn repeat OGSx.PRE -> OGSx[] for);
                        <<SLOT sem_OI_getVq_initial:descriptor>>;
-                       (encOG[],false,OGSx[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
+                       (encOG[],false,OGSx[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[],pKind);
                        <<SLOT sem_OI_getVq_afterATd:descriptor>>;
                     else
                        (if isNest then
@@ -2372,7 +2366,7 @@ semchecker: UnitHandler
                        for);
                        (for i: pn repeat OGSx.PRE -> OGSx[]; i -> markPRE for);
                        <<SLOT sem_OI_getVq_B2:descriptor>>;
-                       (encOG[],false,OGSx[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[]);
+                       (encOG[],false,OGSx[]) -> (ATd.asDecl).getVqual -> (OGSx[],qual[],pKind);
                        <<SLOT sem_OI_getVq_cont_afterATd:descriptor>>;
                if)if);
                (# IT: ^node; wasSaved,B: @boolean
@@ -2404,7 +2398,7 @@ semchecker: UnitHandler
                    if);
                    true -> gettingReturnQual;
                    (qual[],true,OGSx[]) -> ODsequence -> OGSy[];
-                   (encOG[],false,OGSy[]) -> DI.getVqual -> (OGSx[],qual[]);
+                   (encOG[],false,OGSy[]) -> DI.getVqual -> (OGSx[],qual[],pKind);
                    <<SLOT sem_OI_getVq_return:descriptor>>;
                    false -> gettingReturnQual;
                if); 
@@ -2569,8 +2563,8 @@ semchecker: UnitHandler
                if);
                (encOG[],true,OGS[])
                  -> leftRec.getVqual
-                 -> (OGS[],qual[]);
-               (qual[],false,OGS[]) -> M.getVqual -> (OGS[],qual[]);
+                 -> (OGS[],qual[],pKind);
+               (qual[],false,OGS[]) -> M.getVqual -> (OGS[],qual[],pKind);
             #);          
        #);
      UnaryExp::<
@@ -2586,7 +2580,7 @@ semchecker: UnitHandler
             do (if traceGetVqual then
                    '**** UnaryExp:getVqual:'->puttext; dopt -> putHeadN
                if);
-               (encOG[],true,OGS[]) -> trm.getVqual -> (OGS[],qual[]);
+               (encOG[],true,OGS[]) -> trm.getVqual -> (OGS[],qual[],pKind);
             #);
        #);
      BracketedExp::<
@@ -2617,7 +2611,7 @@ semchecker: UnitHandler
             do (if traceGetVqual then
                    'BrackedetExp:getVqual:'->puttext; dopt -> putline;
                if);
-               (encOG[],isNest,OGs[]) -> IV.getVqual -> (OGS[],qual[])
+               (encOG[],isNest,OGs[]) -> IV.getVqual -> (OGS[],qual[],pKind)
             #);
           getActualReceiver::
             (#
