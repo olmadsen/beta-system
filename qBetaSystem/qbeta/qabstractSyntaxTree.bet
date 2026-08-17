@@ -85,7 +85,7 @@ AbstractSyntaxTree: Tree
      traceCheck,
      traceGetVqual,
      traceGetVqualShort,
-     traceWeakQuaCheck,
+     traceWeakQuaCheck,traceWeakQuaCheckShort,
      traceUnit,
      traceGen,
      traceAlloc,traceVDTalloc: @boolean;
@@ -3904,7 +3904,7 @@ AbstractSyntaxTree: Tree
           inSuperW: BooleanValue
             (# lQ,rQ: ^ObjectDescriptor
             enter lQ[]
-            do (if false then
+            do (if traceWeakQuaCheck then
                    '**   inSuper:lQ:'->dumpT; lQ.dopt->dumpTN;
                    '**   rQ:'->dumpT; this(ObjectSpecification).dopt->dumpTN;
                if);
@@ -3953,13 +3953,33 @@ AbstractSyntaxTree: Tree
                           (ODx.super.last).ATd.OG[] -> ODx[];
                           restart L
                       else
-                          ObjectDecl.OG[]->ODx[];
+                          ObjectDecl.OG[]->current[]; (* shall we deliver Object here? *)
                           inner scanSuperOD
              if)#)#);
-          mostSpecificSuper: BooleanValue
-            (# checkBindings: BooleanValue
+          inStrucSubOf: BooleanValue
+            (# findMostSpecificSuper:
+                 (#
+                 do find:
+                     dst.scanSuperOD
+                    (# ODz: ^ObjectDescriptor
+                    do current[] -> ODz[];
+                       (if (top + 1 -> top) > dstOD.range then dstOD.range -> dstOD.extend if);
+                       ODz[] -> dstOD[top][];
+                       (if false and traceWeakQuaCheck then
+                           '**   candidate:'->dumpT; ODz.dopt -> putHeadN; '**   checkSrc:'->dumpTN;
+                       if);
+                       scanSuperOD
+                        (#
+                        do (if false and traceWeakQuaCheck then '**   aSuper:'->dumpT; current.dopt->putHeadN; if);
+                           (if current[] = ODz[] then
+                               (if traceWeakQuaCheck then  '**   Found most specific super:'->dumpT; current.dopt->putHeadN if);
+                               true -> hasCommonSuper;
+                               leave find
+                if)#)#)#);
+            
+               checkBindings: BooleanValue
                   (# current: ^Pattern
-                  do '---BOBS---'->dumptn; (if traceWeakQuaCheck then '**   checkBindings:'->dumpT; top -> dumpI; newline if);
+                  do (if traceWeakQuaCheck then '**   checkBindings:'->dumpT; top -> dumpI; newline if);
                      true -> value;
                      L:
                      (for i: top - 1 repeat
@@ -3968,7 +3988,7 @@ AbstractSyntaxTree: Tree
                           do (if true 
                               // current.isPattern then
                                  (if (current[]->P[]).isVirtual and (P.ptnKind > virtualPtn) then
-                                     (if traceWeakQuaCheck then '**   isVirtualBinding:'->dumpTN; current.dopt->dumpTN if);
+                                     (if traceWeakQuaCheck then '**   virtual binding in dst:'->dumpTN; P.dopt->dumpTN if);
                                      (if (P.vDIdcl[] <> none) or P.isFinalDI then
                                          (if traceWeakQuaCheck then
                                              '**   BindingOfDataItem:'->dumpT; P.vDIdcl.dopt->dumpTN
@@ -3981,10 +4001,7 @@ AbstractSyntaxTree: Tree
                                          if)if)
                                      else
                                          (if traceWeakQuaCheck then 
-                                            '**   CHECK if compatible binding in src:'->dumpTN;
-                                            P.doPT -> putHeadN;
-                                            '**   src:'->dumpTN; dopt -> putHeadN;
-                                            '**   dst:'->dumpTN; dst.dopt -> putHeadN;
+                                            '**   CHECK if compatible binding in src:'->dumpTN; dopt -> putHeadN;
                                          if);
                                          P[] -> this(checkBindings).current[];
                                          inner CheckBindings
@@ -3997,33 +4014,26 @@ AbstractSyntaxTree: Tree
                               else
                                  false -> value;
                                  leave L
-               if)#)for)#);
+                  if)#)for)#);
+               checkIfBindingIsFinalVirtual:
+                  (# binding,P: ^Pattern
+                  enter binding[]
+                  do (if (binding.ptnKind = finalPtn) and binding.OG.IS.isEmpty then
+                          binding.OG.super.ATd[]->P[];
+                         'isFinal:BoundTo:'->dumpT; P.dopt->putheadN
+                     if);
+                     newline
+                  #);
                dstOD: [4] ^ObjectDescriptor; top: @integer;
                dst: ^ObjectDescriptor; hasCommonSuper: @Boolean
             enter dst[]
             do (if traceWeakQuaCheck then
-                   '***** Find mostSpecificSuper:' -> putHeadN;
-                   '**   dst:'->dumpTN; dst.dopt->putHeadN;
-                   '**   src:'->dumpTN; dopt -> putHeadN;
+                   '**** inStrucSubOf:' -> putHeadN;
+                   '**   dst:'->dumpT; dst.dopt->putHeadN;
+                   '**   dst.theDecl:'->dumpT; dst.father.dopt -> dumpTN;
+                   '**   src:'->dumpT; dopt -> putHeadN;
                if);
-               find:
-                  dst.scanSuperOD
-                  (# ODz: ^ObjectDescriptor
-                  do current[] -> ODz[];
-                     (if (top + 1 -> top) > dstOD.range then dstOD.range -> dstOD.extend if);
-                     ODz[] -> dstOD[top][];
-                     (if traceWeakQuaCheck then
-                         '**   candidate:'->dumptn; ODz.dopt -> putHeadN;
-                         '**   checkSrc:'->dumpTN;
-                     if);
-                     scanSuperOD
-                      (#
-                      do (if traceWeakQuaCheck then current.dopt->putheadN; if);
-                         (if current[] = ODz[] then
-                            (if traceWeakQuaCheck then  '**   Found most specific super:'->dumpTN; current.dopt->putHeadN if);
-                            true -> hasCommonSuper;
-                            leave find
-                  if)#)#);
+               findMostSpecificSuper;
                (if hasCommonSuper then
                    L:
                       checkBindings
@@ -4039,17 +4049,17 @@ AbstractSyntaxTree: Tree
                                (# srcVB,srcTopVP: ^Pattern
                                do (if current.isPattern and ((current[]->srcVB[]).ptnKind > virtualPtn) then
                                       srcVB[] -> getTopVdcl -> srcTopVP[];
-                                      (if traceWeakQuaCheck then '**   tryMatch:'->dumpTN; srcTopVP.doPT->dumpTN if);
-                                      (if srcTopVP[] = dstTopVP then
+                                      (if false and traceWeakQuaCheck then '**   tryMatch:'->dumpTN; srcTopVP.doPT->dumpTN if);
+                                      (if srcTopVP[] = dstTopVP[] then
                                           (if traceWeakQuaCheck then
-                                              '**   Try matching:'->dumpTN;
-                                              '**   dst:'->dumpT;  dstVB.dopt->putHeadN;
-                                              '**   src:'->dumpTN; srcVB.dopt->putHeadN;
+                                              '**   Bindings to match:'->dumpTN;
+                                              '**   dstVB:isFinal:'->dumpT; dstVB.dopt->putHeadN; dstVB[]-> checkIfBindingIsFinalVirtual; 
+                                              '**   srcVB:isFinal:'->dumpT; srcVB.dopt->putHeadN; srcVB[]->checkIfBindingIsFinalVirtual;
                                           if);
                                           (if true
                                            // srcVB.OG[] -> dstVB.OG.inSuperW then
                                               (if traceWeakQuaCheck then '**   Compliant bindings'->dumpT if)
-                                           //  srcVB.OG[] -> dstVB.OG.mostSpecificSuper then
+                                           //  srcVB.OG[] -> dstVB.OG.inStrucSubOf then
                                               'BINGO'->dumpTN;
                                            else
                                               (if traceWeakQuaCheck then '**   NON compliant bindings'->dumpTN if);

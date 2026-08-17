@@ -386,7 +386,7 @@ semchecker: UnitHandler
                koks: booleanValue
                   (#
                   do (if true or traceWeakQuaCheck then
-                         '**** call mostSpecificSuper'->dumpTN;
+                         '**** call inStrucSubOf'->dumpTN;
                          '**   src:'->dumpTN; srcOS.dopt->putHeadN;
                          '**   src.father+:'->dumpT; srcOS.father.dopt -> dumpTN;;
                          '**   srcQual:'->dumpTN; srcQual.dopt -> putHeadN;
@@ -538,7 +538,7 @@ semchecker: UnitHandler
                                '**   srcQual: ' -> dumpTN;
                                srcQual.dopt -> putHeadN;
                            if)
-                        // dstQual[] -> srcQual.mostSpecificSuper then  
+                        // dstQual[] -> srcQual.inStrucSubOf then  
                            srcOs[] -> Message
                              (#
                              do 'The value objects are weak compliant' ->msgN;
@@ -639,7 +639,7 @@ semchecker: UnitHandler
                                #);
                            if);
                            checkIfDestHasVirtualType
-                        // (*Koks or *) (dstQual[] -> srcQual.mostSpecificSuper) then 
+                        // (*Koks or *) (dstQual[] -> srcQual.inStrucSubOf) then 
                             srcOs[] -> Message
                              (#
                              do 'The object references are weak compliant:'->msgN;
@@ -1093,14 +1093,6 @@ semchecker: UnitHandler
             #);
           semCheck::
             (# lastSuper: ^Exp; DI: ^Decl;
-               Bobs: BooleanValue
-                  (#
-                  do  this(Pattern)[] -> Message
-                           (#
-                           do 'Try mostSpecificSuper for this vDcl:'->msgN;
-                              vDcl[] -> PT
-                           #)
-                  #)
             do (if false then 
                    '**** Pattern:semCheck: '->puttext; sig.dopt -> putline;
                    OG.scanSuperSons(# do current.label -> dumpT #);
@@ -1132,17 +1124,48 @@ semchecker: UnitHandler
                        (if true
                         // OG.getQual -> (vDcl.OG.getQual).inSuper then
                            (* '**   qual ok'->putline*)
-                        // (*Bobs or*) (OG.getQual -> (vDcl.OG.getQual).mostSpecificSuper)  then
-                           '**** Weak subpattern match:'->dumpT;'vDvl:'->dumpT;  vDcl.dopt->putHeadN;  'this:'->dumpT; dopt->dumpTN;
                         else
-                           this(Pattern)[] -> SemanticError
-                           (#
-                           do 'The binding: \n"' -> msg; OG.doPT -> msg;
-                              '"\n****of the virtual pattern:\n\n "' -> msg;
-                              vDcl.doPT -> msg; '"\n\nmust be '->msg;
-                              'a subpattern of the virtual pattern' -> msg
-                           #);
-               if)if)if);
+                           (# srcX,dstX,OGx,srcQual,dstQual: ^ObjectDescriptor; 
+                              srcPkind, dstPkind: @integer; OGS: ^ODsequence; 
+                           do OG.getQual -> srcX[]; vDcl.OG.getQual -> dstX[]; origin.encOG[]->OGx[]; 
+                              (OGx[],false,none) -> ODsequence -> OGS[];
+                              (OGx[],false,OGS[]) -> OG.getVqual -> (OGS[],srcQual[],srcPkind);
+                              (OGx[],false,none) -> ODsequence -> OGS[];
+                              (OGx[],false,OGS[]) -> OG.getVqual -> (OGS[],dstQual[],dstPkind);
+                              (if traceWeakQuaCheck then
+                                  this(Pattern)[] -> Message
+                                  (# checkIfBindingIsFinalVirtual:
+                                        (# binding,P: ^Pattern
+                                        enter binding[]
+                                        do (if (binding.ptnKind = finalPtn) and binding.OG.IS.isEmpty then
+                                               binding.OG.super.ATd[]->P[]; 'isFinal:BoundTo:'->msg; P[]->PT
+                                            else ''->msgN
+                                        if)#);
+                                  do 'Try inStrucSubOf for this vDcl:'->msg; vDcl[]->PT;
+                                     'srcX:'->msg; srcX[]->PT; 'dstX:' ->msg; dstX[]->PT;
+                                     'src:this(PTN)'->msg; this(Pattern)[]->checkIfBindingIsFinalVirtual;
+                                     'dst:vDcl:'->msg; vDcl[]->checkIfBindingIsFinalVirtual;
+                                     'origin.encOG:'->msg; OGx[]->PT; 'src:qual:'->msg; srcQual[]->PT;
+                                     'src:pKind:'->msg; srcPkind ->msgI; ''->msgN;
+                                     'dst:qual:'->msg; dstQual.dopt->msg; 'dst:pKind:'->msg; dstPkind->msgI; ''->msgN;
+                                #)if);
+                                (if dstX[] <> dstQual[] then
+                                       (if traceWeakQuaCheckShort then '**   dst:realBinding:'->dumpTN if); 
+                                      dstQual[] -> dstX[]
+                                if);
+                                (if (srcX[] -> dstX.inStrucSubOf)  then
+                                    (if traceWeakQuaCheckShort then
+                                       '**** Virtual binding:weak subpattern match:'->dumpT;'vDcl:'->dumpT;  vDcl.dopt->putHeadN;
+                                       'this:'->dumpT; dopt->dumpTN;
+                                    if)
+                                 else 
+                                     this(Pattern)[] -> SemanticError
+                                    (#
+                                    do 'The binding: \n"' -> msg; OG.doPT -> msg;
+                                       '"\n****of the virtual pattern:\n\n "' -> msg;
+                                       vDcl.doPT -> msg; '"\n\nmust be '->msg;
+                                       'a subpattern of the virtual pattern' -> msg
+                #)if)#)if)if)if);
                (* this dont seem to survive super.semcheck - true -> done
                 * will probably not work
                (if (getReturnDecl -> DI[]) <> none then
@@ -1223,7 +1246,11 @@ semchecker: UnitHandler
                     (encOG[],true,none)
                     (******* perhaps not always isFirst = true here ? *)
                       -> receiver.getVqual -> (OGSx[],dstQual[],pKind);
-                    
+                    (if traceWeakQuaCheck then 
+                       (if pKind // finalPtn then 
+                           '**** checkAssignable:finalBinding:'->dumpT;  dstQual.dopt -> putHeadN;
+                       if)
+                    if);
                     (right[],srcQual[],dstQual[],true,pKind) -> (receiver.ATd.asDecl).checkQual;
                  exit(srcQual[],dstQual[])
                  #);
@@ -1665,112 +1692,7 @@ semchecker: UnitHandler
                              if);
                              restart L;
             if)if)if)#);
-          mostSpecificSuper: BooleanValue
-            (# checkBindings: BooleanValue
-                  (# current: ^Pattern
-                  do (if traceWeakQuaCheck then '**   checkBindings:'->dumpT; top -> dumpI; newline if);
-                     true -> value;
-                     L:
-                     (for i: top - 1 repeat
-                          dstOD[i].IS.scanSons
-                          (# P: ^Pattern; DI: ^DataItem
-                          do (if true 
-                              // current.isPattern then
-                                 (if (current[]->P[]).isVirtual and (P.ptnKind > virtualPtn) then
-                                     (if traceWeakQuaCheck then '**   isVirtualBinding:'->dumpTN; current.dopt->dumpTN if);
-                                     (if (P.vDIdcl[] <> none) or P.isFinalDI then
-                                         (if traceWeakQuaCheck then
-                                             '**   BindingOfDataItem:'->dumpT; P.vDIdcl.dopt->dumpTN
-                                          if);
-                                         (if P.vDIdcl.isDataItem then
-                                             (if (P.vDIdcl[] -> DI[]).isConst then
-                                                 (if traceWeakQuaCheck then '**   isConstant:'->dumpTN if);
-                                                 false -> value;
-                                                 leave L
-                                         if)if)
-                                     else
-                                         (if traceWeakQuaCheck then 
-                                            '**   CHECK if compatible binding in src:'->dumpTN;
-                                            P.doPT -> putHeadN;
-                                            '**   src:'->dumpTN; dopt -> putHeadN;
-                                            '**   dst:'->dumpTN; dst.dopt -> putHeadN;
-                                         if);
-                                         P[] -> this(checkBindings).current[];
-                                         inner CheckBindings
-                                     if)
-                                 else
-                                    false -> value;
-                                    leave L
-                                 if)
-                              // current.isNewProp then
-                              else
-                                 false -> value;
-                                 leave L
-               if)#)for)#);
-               dstOD: [4] ^ObjectDescriptor; top: @integer;
-               dst: ^ObjectDescriptor; hasCommonSuper: @Boolean
-            enter dst[]
-            do (if traceWeakQuaCheck then
-                   '***** Find mostSpecificSuper:' -> putHeadN;
-                   '**   dst:'->dumpTN; dst.dopt->putHeadN;
-                   '**   src:'->dumpTN; dopt -> putHeadN;
-               if);
-               find:
-                  dst.scanSuperOD
-                  (# ODz: ^ObjectDescriptor
-                  do current[] -> ODz[];
-                     (if (top + 1 -> top) > dstOD.range then dstOD.range -> dstOD.extend if);
-                     ODz[] -> dstOD[top][];
-                     (if traceWeakQuaCheck then
-                         '**   candidate:'->dumptn; ODz.dopt -> putHeadN;
-                         '**   checkSrc:'->dumpTN;
-                     if);
-                     scanSuperOD
-                      (#
-                      do (if traceWeakQuaCheck then current.dopt->putheadN; if);
-                         (if current[] = ODz[] then
-                            (if traceWeakQuaCheck then  '**   Found most specific super:'->dumpTN; current.dopt->putHeadN if);
-                            true -> hasCommonSuper;
-                            leave find
-                  if)#)#);
-               (if hasCommonSuper then
-                   L:
-                      checkBindings
-                      (# dstVB,dstTopVP: ^Pattern
-                      do current[] -> dstVB[] -> getTopVdcl -> dstTopVP[];
-                         (if traceWeakQuaCheck then 
-                             '**   check:srcBinding:'->dumpT; current.dopt -> dumpTN;
-                             '**   dstBinding:'->dumpT; dstTopVP.dopt -> dumpTN;
-                         if);
-                         scanSuperOD
-                            (#
-                            do current.IS.scanSons
-                               (# srcVB,srcTopVP: ^Pattern
-                               do (if current.isPattern and ((current[]->srcVB[]).ptnKind > virtualPtn) then
-                                      srcVB[] -> getTopVdcl -> srcTopVP[];
-                                      (if traceWeakQuaCheck then '**   tryMatch:'->dumpTN; srcTopVP.doPT->dumpTN if);
-                                      (if srcTopVP[] = dstTopVP then
-                                          (if traceWeakQuaCheck then
-                                              '**   Try matching:'->dumpTN;
-                                              '**   dst:'->dumpT;  dstVB.dopt->putHeadN;
-                                              '**   src:'->dumpTN; srcVB.dopt->putHeadN;
-                                          if);
-                                          (if true
-                                           // srcVB.OG[] -> dstVB.OG.inSuperW then
-                                              (if traceWeakQuaCheck then '**   Compliant bindings'->dumpT if)
-                                           //  srcVB.OG[] -> dstVB.OG.mostSpecificSuper then
-                                              'BINGO'->dumpTN;
-                                           else
-                                              (if traceWeakQuaCheck then '**   NON compliant bindings'->dumpTN if);
-                                              false -> value;
-                                              leave  L
-                      if)if)if)#)#)#)
-                       -> value 
-               else
-                  (if traceWeakQuaCheck then  '**   Did not find a most specific super!'->dumpTN if);
-             if)#);
-
-       #);
+          #);
      Items::<
        (# checkInterfaceRestrictions::
             (* This decl: must be a pattern (or virtual)
