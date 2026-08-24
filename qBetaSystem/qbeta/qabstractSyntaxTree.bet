@@ -96,6 +96,7 @@ AbstractSyntaxTree: Tree
      reportNone: (# exit false #);
      showUnits,   (* print unit for each Invocation: qbeta --showUnits *)
      allowUnsafe, (* dont report errors for unsafe code *)
+     newSyntax, (* convert to possible new syntax *)
      verbose: @boolean;
      PTwithBCP: @Boolean;
      putI:
@@ -2113,9 +2114,7 @@ AbstractSyntaxTree: Tree
                if);
                inner 
             #);
-         setUpOrigin::<
-            (# do inner; this(Decl)[] -> OG.inDecl[]
-            #);
+          setUpOrigin::< (# do inner; this(Decl)[] -> OG.inDecl[] #);
           isArg: @boolean;
           sig: ^Signature;
           OG: ^ (*ObjectDescriptor*) ObjectSpecification;
@@ -2427,9 +2426,23 @@ AbstractSyntaxTree: Tree
                    '**** signature:pt: ' -> puttext; id[] -> putline;
                if);
                print:
-                 (* we may have id = 'for:to:repeat'; only print 'for' *)
-                 id.scanAll
-                   (#do (if ch =':' then leave print else ch -> lx.put if)#);
+                  (* we may have id = 'for:to:repeat'; only print 'for' *)
+                  id.scanAll(#do (if ch =':' then leave print else ch -> lx.put if)#);
+                  (*'**** id:'->dumpT; id[] -> putline;*)
+               (if newSyntax then 
+                  (* '<'->lx.put; paramItems.noOfSOns->lx.putint; '>'->lx.put; *)
+                   paramItems.scanSons
+                   (# D: ^Decl; n: @ integer;
+                   do (*(if (n + 1 -> n) = 1 then ':' -> lx.put if);*)
+                      (*(if true
+                       // current.isNewProp then
+                       // current.isDecl then
+                          (pos + 3,true) -> mkBreak;
+                          (if (current[]->D[]).isOutArg then 'out ' -> lx.append if);
+                          'in ' -> lx.append;
+                          (if false then 'NAME'->lx.append else (pos,break) -> current.PT; if);
+                   if)*)#);
+               else
                (if isProlonged then '$' -> lx.put if);
                (if not ppInvAsDerived then
                    paramItems.scanSons
@@ -2452,6 +2465,7 @@ AbstractSyntaxTree: Tree
                             leave L
                if)#)if);
                (if isBinary then ' ' -> lx.put; ' ' -> lx.put if)
+               if);
             #);
           length:: 
             (# 
@@ -2498,6 +2512,11 @@ AbstractSyntaxTree: Tree
           isSignature:: TrueValue;
 
           id: ^text; (* should be a Name *)
+          getPreId: 
+             (# T: @ Text 
+             do L: id.scanAll(#do (if ch =':' then leave L else ch -> T.put if)#)
+             exit T[] 
+             #);
           names: ^NameList;
           return: ^Arguments; (* probably not used *)
           paramItems: ^Items;
@@ -2799,8 +2818,7 @@ AbstractSyntaxTree: Tree
        (# PT:: 
             (# 
             do (if isDesignator then '@' -> lx.put if);
-               (pos,break,true) -> sig.PT;
-               ':' -> lx.put;
+               (pos,break,true) -> sig.PT; ':' -> lx.put;
                (if ppInvAsDerived then
                    (if true
                     // isInArg then
@@ -2817,15 +2835,15 @@ AbstractSyntaxTree: Tree
             (# D: ^Decl
             do (if true
                 // isValue and isConst then 
-                   (if (theModule).defSyntax then ''-> lab[] else ' ' -> lx.put; 'val' -> lab[] if)
+                   (if (theModule).defSyntax or newSyntax  then ''-> lab[] else ' ' -> lx.put; 'val' -> lab[] if)
                 // isValue and not isConst then 
-                   (if (theModule).defSyntax then  ' '-> lx.put if);
+                   (if (theModule).defSyntax or newSyntax then  ' '-> lx.put if);
                    'var' -> lab[]
                 // not isValue and isConst then 
-                  (if (theModule).defSyntax then ' ' -> lab[] else ' ' -> lx.put; 'obj' -> lab[] if)
+                  (if (theModule).defSyntax or newSyntax then ' ' -> lab[] else ' ' -> lx.put; 'obj' -> lab[] if)
                 // not isValue and not isConst then 
                     ' ' -> lx.put;
-                   (if (theModule).defSyntax then  'var'->lab[] else 'ref' -> lab[] ;if);
+                   (if (theModule).defSyntax or newSyntax then  'var'->lab[] else 'ref' -> lab[] ;if);
                    (# E: ^Exp; N: ^ObjectInvocation
                       (* ad hoc to get old syntax x: ?integer pretty-printed
                        * as x: var integer and not as x: ref integer
@@ -3014,10 +3032,10 @@ AbstractSyntaxTree: Tree
      Pattern:< Decl
        (# label::< (# do 'pattern' -> lab[]; inner #);
           PT::< 
-            (# 
-            do (*'**** pattern: ' -> puttext; sig.type.id[] -> puttext;
-                ' ' -> put; sig.id[] -> putline;*)
-                (if (theModule).defSyntax and ((ptnKind = plainPtn) or (ptnKind = virtualPtn)) then 'def ' -> lx.append if);
+            (#
+            do (if newSyntax or (theModule).defSyntax and ((ptnKind = plainPtn) or (ptnKind = virtualPtn)) then 
+                  'def ' -> lx.append;
+               if);
                (pos,break,true) -> sig.PT; ':' -> lx.put;
                (if ptnKind
                 // virtualPtn then '<' -> lx.put
@@ -4665,6 +4683,21 @@ AbstractSyntaxTree: Tree
                    super.noOfSons->lx.putint; ' ' -> lx.put; 
                    (if IS.isEmpty then 'isEmpty'->lx.puttext; if)
                if);
+               (if newSyntax then
+                   (if inDecl[] <> none then (* only paramters in sig must be printed *)   
+                       inDecl.sig.paramItems.scanSons
+                        (# D: ^Decl; n: @ integer;
+                        do (*(if (n + 1 -> n) = 1 then ':' -> lx.put if);*)
+                           (if true
+                            // current.isNewProp then
+                            // current.isDecl then
+                               (pos + 3,true) -> mkBreak;
+                               (if (current[]->D[]).isOutArg then 'out ' -> lx.append if);
+                                   'in ' -> lx.append;
+                                   (if false then 'NAME'->lx.append else (pos,break) -> current.PT; if);
+                           if)
+                   #)
+               if)if);
                (if (* (lx.length > 0) or *) (super.noOfSons > 0) then 
                    (* lx.length = 0 -> do not indent first line unless super.noOfSons > 0;
                     * The above does not work well; we now use the parameter break below:
@@ -5312,20 +5345,15 @@ AbstractSyntaxTree: Tree
             #);
           Unary: InvType 
             (# Label:: (# do 'ObjectInvocation_Unary' -> lab[] #);
-               PT:: (# do (pos,break) -> ptnId.PT; 
-                       (pos,break,false) -> args.PT #);
+               PT:: (# do (pos,break) -> ptnId.PT; (pos,break,false) -> args.PT #);
                length:: (# do ptnId.length + args.length -> value #);
                HTML:: 
                  (#
                  do (pos,break)  -> ptnId.HTML;
                     (pos,break) -> args.HTML (* weird! *)
                  #);
-               isOP:: 
-                 (#do(*this(ObjectInvocation).getUnit*) ''-> op[]#);
-               copyAST::<
-                 (#
-                 do nAST.unary -> nAST.type[] 
-                 #)
+               isOP::  (#do(*this(ObjectInvocation).getUnit*) ''-> op[] #);
+               copyAST::< (# do nAST.unary -> nAST.type[] #)
             #);
           Binary: InvType
             (# Label:: (# do 'ObjectInvocation_Binary' -> lab[] #);
@@ -5368,7 +5396,46 @@ AbstractSyntaxTree: Tree
             #);
           KeyWord: InvType
             (# Label:: (# do 'ObjectInvocation_KeyWord' -> lab[] #);
-               PT:: (# do (pos,false,false) -> args.PT #);
+               PT:: 
+                  (# fPar: [4] ^Decl; top: @integer
+                  do (if newSyntax then
+                        (if (ATd[] <> none) and (ATd.sig[] <> none) then
+                            ATd.sig.paramItems.scanSons
+                               (# D: ^Decl
+                               do (if true
+                                   // current.isNewProp then
+                                   // current.isDecl then
+                                      (if (current[]->D[]).isInarg then
+                                         (if (top + 1 -> top) > fPar.range then fPar.range -> fPar.extend if);
+                                         D[]-> fPar[top][];
+                               if)if)#);
+                            (*'\n###'->dumpT; top -> dumpI; newline;
+                            (for i: top repeat fPar[i].label -> putline;  for);
+                               '---'->putline;
+                               args.scanSons(#do current.label -> putline #);
+                               '////'->putline;*)
+                            ATd.sig.getPreId -> lx.append;
+                            0 -> top;
+                            args.scanSons
+                               (# n: @ integer
+                               do n + 1 -> n; (*current.label->dumpT; top -> dumpI; current.isObjectDescriptor->dumpB; newline;*)
+                                  (if current.isObjectDescriptor and (fPar[top + 1][] <> none) then
+                                      top + 1 -> top; 
+                                      (if top <= fPar.range then 
+                                          (pos + 3, true) -> mkBreak;
+                                          fPar[top].sig.getPreId -> lx.append; ' :: ' -> lx.append;
+                                      else '!!!'->lx.append; 
+                                      if); 
+                                      (pos + 3, break) ->  current.PT; 
+                                 if);
+                               #);
+                         else
+                            '??? no match!!!'->lx.append
+                         if)
+                      else
+                         (pos,false,false) -> args.PT 
+                     if)
+                  #);
                length:: 
                  (# do args.scanSons(# do current.length + value -> value #)#);
                HTML:: (# do ptnId.T[] -> lx.append #); 
