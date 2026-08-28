@@ -2595,9 +2595,7 @@ AbstractSyntaxTree: Tree
                                        (if currentArg## <= Decl## then
                                            currentArg[] -> firstPar[];
                                            leave L
-                                       if)
-                                    #)
-                              if);
+                              if)#)if);
                               (pos,break) -> current.PT; 
                               pos + 3 -> pos;
                               (pos,true) -> mkBreak
@@ -2630,9 +2628,7 @@ AbstractSyntaxTree: Tree
                                else
                                   (pos,break) -> current.PT;
                                   (pos,true) -> mkBreak
-                              if);
-                          if)
-                       #)
+                      if)if)#)
                    else
                        scanSons
                        (# doBreak,blankAfter: @boolean;
@@ -4683,8 +4679,17 @@ AbstractSyntaxTree: Tree
                    super.noOfSons->lx.putint; ' ' -> lx.put; 
                    (if IS.isEmpty then 'isEmpty'->lx.puttext; if)
                if);
+               (if (* (lx.length > 0) or *) (super.noOfSons > 0) then 
+                   (* lx.length = 0 -> do not indent first line unless super.noOfSons > 0;
+                    * The above does not work well; we now use the parameter break below:
+                    * (super.noOfSons > 0) is always true!
+                    *)
+                   (pos,false) -> super.PT;
+                   break or (super.length > 1) -> break;
+                   3 -> ind 
+               if);
                (if newSyntax then
-                   (if inDecl[] <> none then (* only paramters in sig must be printed *)   
+                   (if inDecl[] <> none then (* only parameters in sig must be printed *)   
                        inDecl.sig.paramItems.scanSons
                         (# D: ^Decl; n: @ integer;
                         do (*(if (n + 1 -> n) = 1 then ':' -> lx.put if);*)
@@ -4698,15 +4703,6 @@ AbstractSyntaxTree: Tree
                            if)
                    #)
                if)if);
-               (if (* (lx.length > 0) or *) (super.noOfSons > 0) then 
-                   (* lx.length = 0 -> do not indent first line unless super.noOfSons > 0;
-                    * The above does not work well; we now use the parameter break below:
-                    * (super.noOfSons > 0) is always true!
-                    *)
-                   (pos,false) -> super.PT;
-                   break or (super.length > 1) -> break;
-                   3 -> ind 
-               if);
                (if not IS.isEmpty then
                    (pos + ind,break) -> mkBreak;
                    (pos + ind, length) -> block
@@ -5345,7 +5341,8 @@ AbstractSyntaxTree: Tree
             #);
           
           PPnewSyntax:
-             (# fPar: [4] ^Decl; top,pos: @integer; break: @boolean
+             (# fPar: [4] ^Decl; top,pos: @integer; break: @boolean;
+                doBreak:< (# pos: @integer enter pos do inner #)
              enter(pos,break)
              do (if (ATd[] <> none) and (ATd.sig[] <> none) then
                     ATd.sig.paramItems.scanSons
@@ -5356,22 +5353,24 @@ AbstractSyntaxTree: Tree
                               (if (current[]->D[]).isInarg then
                                   (if (top + 1 -> top) > fPar.range then fPar.range -> fPar.extend if);
                                       D[]-> fPar[top][];
-                      if)if)#);
-                      ATd.sig.getPreId -> lx.append;
-                      0 -> top;
-                      args.scanSons
-                        (# n: @ integer
-                        do n + 1 -> n; (*current.label->dumpT; top -> dumpI; current.isObjectDescriptor->dumpB; newline;*)
-                           (if current.isObjectDescriptor and (fPar[top + 1][] <> none) then
-                               top + 1 -> top; 
-                               (if top <= fPar.range then 
-                                   inner PPnewSyntax; 
-                                   fPar[top].sig.getPreId -> lx.append; ' :: ' -> lx.append;
-                               else '!!!'->lx.append; 
-                               if); 
-                               (pos + 3, break) ->  current.PT; 
-                           if);
-                        #);
+                    if)if)#);
+                    ATd.sig.getPreId -> lx.append;
+                    0 -> top;
+                    args.scanSons
+                      (# n: @ integer
+                      do n + 1 -> n; (*current.label->dumpT; top -> dumpI; current.isObjectDescriptor->dumpB; newline;*)
+                         (if current.isObjectDescriptor and (fPar[top + 1][] <> none) then
+                             top + 1 -> top; 
+                             (if top <= fPar.range then 
+                                 pos + 3 -> doBreak;
+                                 fPar[top].sig.getPreId -> lx.append; ' :: ' -> lx.append;
+                             else '!!!'->lx.append; 
+                             if); 
+                             (if fPar[top].isVirtual then 
+                                 pos + 6 -> pos -> doBreak; (pos + 6, break) ->  current.PT; 
+                             else
+                                (pos + 3, break) ->  current.PT; 
+                    if)if)#)
                  else
                      '???'->lx.append; (if ATd[]=none then '-ATD=none'->lx.append; if);
                 if)
@@ -5381,7 +5380,7 @@ AbstractSyntaxTree: Tree
                PT:: 
                   (# 
                   do (if newSyntax and (ATd[] <> none) then 
-                        (pos,break) -> PPnewSyntax(#do (pos + 3, true) -> mkBreak #);
+                        (pos,break) -> PPnewSyntax(#doBreak:: (# do (pos, true) -> mkBreak #)#);
                       else
                          (pos,break) -> ptnId.PT; (pos,break,false) -> args.PT 
                      if)
@@ -5422,7 +5421,37 @@ AbstractSyntaxTree: Tree
             #);
           Function: InvType
             (# label:: (# do 'ObjectInvocation_Function' -> lab[] #);
-               PT:: (# do (pos,break) -> ptnId.PT; (pos,break,false) -> args.PT #);
+               PT:: 
+                  (# fPar: [4] ^Decl; top: @integer; 
+                  do (pos,break) -> ptnId.PT; 
+                     (if newSyntax then
+                         (if ATd[] <> none then
+                            ATd.OG.IS.scanDecls
+                            (#do 
+                               (if currentDcl.isInarg then
+                                   (if (top + 1 -> top) > fPar.range then fPar.range -> fPar.extend if);
+                                   currentDcl[] -> fPar[top][]
+                               if)
+                            #)
+                         else
+                          (*  '--none:'->dumpT; ptnID.T[] -> dumpTN;*)
+                         if);
+                         (if top > 0 then  (*for this(P), top = 0 *)
+                             0 -> top;
+                            args.scanSons
+                            (#
+                            do (if current.isObjectDescriptor then
+                                   top + 1 -> top; (* '---arg:'->dumpT; top -> dumpI; fpar[top].sig.getPreId->dumpTN;*)
+                                  (pos + 3,true) -> mkBreak;
+                                  fpar[top].sig.getPreId -> lx.append; ' :: ' -> lx.append;
+                                  (if fPar[top].isVirtual then 
+                                      (pos + 6,true) -> mkBreak;  (pos + 6, break) ->  current.PT; 
+                                  else
+                                      (pos + 3,break)->current.PT;
+                         if)if)#)if)
+                     else 
+                        (pos,break,false) -> args.PT 
+               if)#);
                HTML:: 
                  (# 
                  do (pos,break) -> ptnId.HTML;
@@ -5437,9 +5466,9 @@ AbstractSyntaxTree: Tree
           KeyWord: InvType
             (# Label:: (# do 'ObjectInvocation_KeyWord' -> lab[] #);
                PT:: 
-                  (#
+                  (# 
                   do (if newSyntax then 
-                        (pos,break) -> PPnewSyntax(#do (pos + 3, true) -> mkBreak #);
+                        (pos,break) -> PPnewSyntax(# doBreak:: (# do (pos, true) -> mkBreak #)#)
                       else
                          (pos,false,false) -> args.PT 
                      if)
