@@ -1,11 +1,8 @@
-ORIGIN '~beta/guienv/guienvsystemenv';
+ORIGIN 'betaVM_IF';
 INCLUDE '~beta/basiclib/math';
 INCLUDE '~beta/sysutils/time';
-INCLUDE 'objectImage';
 INCLUDE '../compiler_IF/directoryComponents';
-INCLUDE 'Primitives';
-INCLUDE 'interpreterAPI'
-INCLUDE '../Obsolete/miniServices/Service';
+INCLUDE 'interpreterAPI';
 (*BUILD nti 'interpreter_c.obj' 'interpreter_c.c' 'betacc $0 $1'
       linux 'interpreter_c.obj' 'interpreter_c.c' '$CC -c -pthread -o $0 $1'
       default 'interpreter_c.obj' 'dummyinterpreter_c.c' '$CC -c -o $0  dummyinterpreter_c.c';*)
@@ -16,12 +13,20 @@ INCLUDE '../Obsolete/miniServices/Service';
 BUILD nti 'interpreter_c.obj' 'interpreter_c.c' 'gcc -m32 -c -o $0 $1'
       linux 'interpreter_c.obj' 'interpreter_c.c' '$CC -c -pthread -o $0 $1'
       default 'interpreter_c.obj' 'dummyinterpreter_c.c' '$CC -c -o $0 dummyinterpreter_c.c';
----systemlib:attributes---
+---VM_init:doPart--
+do (if (runMode = Run_BETA_INT) and runJavaServices then
+         BetaLib -> stdPath[];
+         '/qBetaSystem/miniServices/' -> stdPath.append;
+         ('FileService'-> (stdPath.copy).Append,5123) -> FS.init;
+         ('GUIService' -> (stdPath.copy).Append,5124) -> GS.init;
+         5125 -> MS.openSocket;
+         '*** Java services initialized' -> putline;
+      if);
+	   true -> ready;
+      false -> guiProgram;
 
+---BetaVMattributes:attributes---
 newVM: (#exit true #);
-Run_BETA_INT: (# exit 0 #);
-Run_C_INT: (# exit 1 #);
-Save_BC_image: (# exit 3 #);
 putBoolean: 
   (# B: @boolean 
   enter B do (if B then 'True' -> puttext else 'False'->puttext if)
@@ -64,307 +69,15 @@ getEvent: external
   #);
 close_interpreter: external(# do callC #);
 
-betaVM:
-  (# ready: @boolean;
-     mkRunTrace: (#exit true #);
-     genEvents: (#exit true #);
-     withDumps: (#exit false #);
-     testConc: (# exit false #);
-     withNewProxy: @Boolean;
-     valueProxyDescNo: @integer;
-     noPause: @boolean;
-     init:<
-       (# stdPath: ^text
-       enter runMode
-       do (if (runMode = Run_BETA_INT) and runJavaServices then
-              BetaLib -> stdPath[];
-              '/qBetaSystem/miniServices/' -> stdPath.append;
-              ('FileService'-> (stdPath.copy).Append,5123) -> FS.init;
-              ('GUIService' -> (stdPath.copy).Append,5124) -> GS.init;
-              5125 -> MS.openSocket;
-              '*** Java services initialized' -> putline;
-          if);
-	       true -> ready;
-          false -> guiProgram;
-       #);
-     putCh:< (# ch: @char enter ch do inner #);
-     getCh:< (# ch: @char do inner exit ch #);
-     putTop:< 
-       (# descInx,lsc: @integer; T: ^text 
-       enter(descInx, lsc) 
-       do &text[] ->T[];
-          inner 
-       exit T[] 
-       #);
-     (* Note! There is no common super for all VMevents
-      * And there is no trace for valueEvent opEvent, etc.
-      *)
-     eventNest: @integer;
-     verbose,traceEvents,exeTrace: @Boolean;
-     VMevent: 
-       (# caller,thisObj,org: ^ObjDesc.runTimeObject; 
-          descNo,bcPos: @integer;
-          doPause: (# do (if false then pause else suspend if)#);
-          event:< (# tx: ^text do inner exit tx[] #);
-          mkTrace:
-            (# dump:
-                 (# msg: ^text; obj: ^ObjDesc.runTimeObject
-                 enter(msg[],obj[])
-                 do msg[] -> T.puttext; 
-                    L:
-                      (if obj[]  <> none then
-                          '"' -> T.put;
-                          obj.myName -> T.puttext; 
-                          (if obj.isObj then '/O' -> T.puttext if);
-                          '"' -> T.puttext;
-                          (if false then
-                              ',' -> T.put;
-                              obj.myOrigin -> obj[];
-                              restart L
-                 if)if)#);
-               putEvent:
-                 (#
-                 do event -> T.puttext;
-                    (* 'alloc'length = 5 *)
-                    (for i: 3 - (event).length repeat ' ' -> T.put for)
-                 #);
-               T: @text;
-            do (for i: eventNest repeat '.' -> put for);
-               (if exeTrace then
-                   putEvent; ':' -> T.put; thisObj.myName -> T.puttext
-                else
-                   'VME:' -> T.puttext; putEvent; ':' -> T.put;
-                   (' clr:',caller[]) -> dump;
-                   (' this:',thisObj[]) -> dump;
-                   (' org:',org[]) -> dump;
-                   ' BCP:' -> T.puttext; bcPos -> T.putint;
-                   if);
-               T.newline;
-            exit T[]
-            #);
-          before:< object;
-          after:< object;
-       enter(caller[],thisObj[],org[],descNo,bcPos)
-       do (if thisObj[] <> none then 
-              (if traceEvents or exeTrace then
-                  before;
-                  (if true then
-                      mkTrace -> puttext;
-                   else
-                      mkTrace -> out.puttext
-                  if);
-                  after
-              if);
-              inner;
-              (*' descNo:'-> out.puttext; thisObj.myDescInx -> out.putint; 
-               ' id:'-> out.puttext; thisObj.id -> out.putint; out.newline *)
-          if)
-       #);
-     set:< (# do inner #); (* ad hoc *)
-     scanEvent:<
-       (# obj: ^ObjDesc.runTimeObject; items: [0] @integer
-       enter obj[]
-       do inner
-       exit items
-       #);
-     dumpObjEvent:<
-       (# obj: ^ObjDesc.runTimeObject; items: [0] @integer; 
-          objKind: @integer; (* 0: plain object, 1: value array, 2: reference array *)
-       enter obj[]
-       do inner
-       exit(items,objKind)
-       #);
-     startEvent:< VMevent(# event:: (# do 'start'->tx[] #) do inner #);
-     allocLevel: @integer; (* Note used? *)
-     allocEvent:< VMevent
-       (# isObj,isIndexed: @boolean;
-          event:: (# do 'alc'->tx[] #);
-          before:: (# do eventNest + 1 -> eventNest #);
-       enter(isObj,isIndexed) 
-       do inner; 
-          allocLevel + 1 -> allocLevel
-       #);
-     doEvent:< VMevent
-       (# event:: (# do 'do'->tx[] #);
-          preemptive: @boolean;
-          before:: (# do eventNest + 1 -> eventNest #);
-       enter preemptive
-       do (*(thisCode.descInx,glsc) -> thisObj.saveReturn;*)
-          inner ;
-          (* thisObj.restoreReturn (* we just pop the stack *)
-       #);
-     doExitEvent:< VMevent
-       (# event:: (# do 'doExit'->tx[] #);
-       do (descNo,bcPos) (*thisCode.descInx,glsc*) -> caller.saveReturn;
-          inner;
-          caller.restoreReturn (* we just pop the stack *)
-       #);
-     rtnEvent:< VMevent
-       (# event:: (# do 'rtn'->tx[] #);
-          after:: (# do eventNest - 1 -> eventNest #);
-       do (descNo,bcPos) (*thisCode.descInx,glsc*) -> caller.saveReturn;
-          inner;
-          caller.restoreReturn (* we just pop the stack *)
-       #);
-     rtnAllocEvent:< VMevent
-       (# event:: (# do 'rtA'->tx[] #);
-          after:: (# do eventNest - 1 -> eventNest #);
-       do (descNo,bcPos) (*thisCode.descInx,glsc*) -> caller.saveReturn;
-          inner;
-          caller.restoreReturn (* we just pop the stack *)
-       #);     
-     resumeEvent:< VMevent
-       (# event:: (# do 'resume' -> tx[] #);
-          preemptive: @boolean;
-       enter preemptive
-       do inner;
-       #);
-     suspendEvent:< VMevent
-       (# event::(#do 'suspend' -> tx[] #);
-          preemptive: @boolean;
-       enter preemptive
-       do (descNo,bcPos) (*thisCode.descInx,glsc*) -> caller.saveReturn;
-          inner;
-          caller.restoreReturn (* we just pop the stack *)
-       #);
-     breakEvent:<  VMevent(# event::(#do 'break'-> tx[] #) do inner #);
-     valueEvent:
-       (# event:< (# tx: ^text do inner exit tx[] #);
-          caller,from,to: ^ObjDesc.template; 
-          popRstack: @boolean; 
-          off: @integer;
-          isIndexed: @boolean;
-          inx,descNo,bcPos: @integer;
-          doPause: (# do suspend #);
-          mkTrace:<
-            (# T: ^Text
-            do event -> T[]; ':'->T.put;
-               inner mkTrace
-            exit T[]
-            #);
-       enter(caller[],from[],popRstack,to[],off,isIndexed,inx,descNo,bcPos)
-       do (descNo,bcPos) (*(thisCode.descInx,glsc)*) -> caller.saveReturn;
-          (if false then 
-              (if false then
-                  mkTrace -> putline
-               else
-                  mkTrace -> out.puttext 
-          if)if);
-          inner;
-          caller.restoreReturn (* we just pop the stack *)
-       #);
-     pushEvent: valueEvent
-       (* from: an object/activation where the value is loaded from
-        * to: a stack in the form of an object
-        *)
-       (# 
-       do inner
-       #);
-     vPushEvent:< pushEvent
-       (# event::(#do 'vPush'-> tx[] #);
-          mkTrace:: (#do value -> T.putint #);
-          value: @integer
-       enter value
-       do inner
-       #);
-     rPushEvent:< pushEvent
-       (# event::(#do 'rPush'-> tx[] #);
-          mkTrace:: (#do '@ref' -> T.puttext #);          
-          refValue: ^ObjDesc.template
-       enter refValue[]
-       do inner
-       #);
-     fPushEvent:< pushEvent
-       (# event::(#do 'fPush'-> tx[] #);
-          mkTrace:: (#do fValue -> T.putReal #);          
-          fValue: @Real
-       enter fValue
-       do inner
-       #);
-     storeEvent: valueEvent
-       (* from: a stack in the form of an object
-        * to: an object/activation where the value is stored
-        *)
-       (# 
-       do inner
-       #);
-     vStoreEvent:< storeEvent
-       (# event::(#do 'vStore'-> tx[] #);
-          mkTrace:: (#do value -> T.putint #);          
-          value: @integer
-       enter value
-       do inner
-       #);
-     rStoreEvent:< storeEvent
-       (# event::(#do 'rStore'-> tx[] #);
-          mkTrace:: (#do '@ref' -> T.puttext #);
-          refValue: ^ObjDesc.template
-       enter refValue[]
-       do inner
-       #);
-     fStoreEvent:< storeEvent
-       (# event::(#do 'fStore'-> tx[] #);
-          mkTrace:: (#do fValue -> T.putReal #);                    
-          fValue: @integer
-       enter fValue
-       do inner
-       #);
-     opEvent:
-       (# event:< (# tx: ^text do inner exit tx[] #);
-          operator: ^text; to: ^ObjDesc.template; 
-          descNo,bcPos: @integer
-       enter(operator[],to[],descNo,bcPos)
-       do (thisCode.descInx,glsc) -> to.saveReturn;
-          inner;
-          to.restoreReturn (* we just pop the stack *)
-       #);
-     iOpEvent: opEvent(# value: @integer enter value do inner #);
-     
-     binOpEvent:< iOpEvent(# event::(#do 'binOP'-> tx[] #) do inner #);
-     unOpEvent:< iOpEvent(# event::(#do 'unOP'-> tx[] #) do inner #);
-     jmpGTevent:< iOpEvent(# event::(#do 'jmpGT'-> tx[] #) do inner #);
-     popEvent:< iOpEvent(# event::(#do 'pop'-> tx[] #) do inner #);
-     
-     fOpEvent: opEvent(# fValue: @real enter fValue do inner #);
-     fBinOpEvent:< fOpEvent(# event::(#do 'binOP'-> tx[] #) do inner #);
-     fUnOpEvent:< fOpEvent(# event::(#do 'unOP'-> tx[] #) do inner #);
-     
-     errorEvent:< 
-       (# thisObj: ^ObjDesc.template; bcPos: @integer; msg: ^text
-       enter(thisObj[],bcPos,msg[])
-       do (thisCode.descInx,glsc) -> thisObj.saveReturn;
-          inner;
-          thisObj.restoreReturn (* we just pop the stack *)
-       #);
-     
-     done:< (# do inner #);
-     
-     thisModule, (* not used? *)
-     thisObj,
-     thisStack,
-     eventProcessor: ^ObjDesc.template;
-     
-     runJavaServices, (* Java services does not work on Linux, so we don't start then *)
-     isValObj : @boolean; (* executing a value object *)
-     
-     thisValObjDesc: ^ObjDesc;
-     thisValObjDescInx: @integer;
-     
-     runMode: @integer;
-     
-     guiProgram: @boolean;
-     
-     thisCode: ^ByteCode; 
-     
-     glsc: @integer;
-     
-     codes: @ ByteCodes;
-     
-     prim: @Primitives;
-     
-     stopErrors: ^text;
-     
-     fatalError:
+mkRunTrace: (#exit true #);
+genEvents: (#exit true #);
+withDumps: (#exit false #);
+testConc: (# exit false #);
+(* Note! There is no common super for all VMevents
+ * And there is no trace for valueEvent opEvent, etc.
+ *)
+ 
+fatalError:
        (# errNo: @integer; M: @text; T: ^Text
        enter errNo
        do 
@@ -384,7 +97,7 @@ betaVM:
           (thisObj[],glsc,stopErrors[]) -> errorEvent;
        #);
      
-     closeJavaServices:
+closeJavaServices:
        (#
        do (if not guiProgram then
               (if FS.trace then '\nFS.close'->putline if);
@@ -398,68 +111,10 @@ betaVM:
           if);
        #);
      
-     out: ^Stream;
      
-     FS,GS,MS: @Service;
-     mouseListener:  @ | system
-       (# T: ^text
-       do (if MS.trace or true then 
-              (*  'Starting mouseListener:'->putline *)
-          if);
-          cycle
-          (# event,noOfClicks,handle: @integer
-          do MS.receive -> T[];
-             (*'mouseListener: ' -> puttext; T[] -> putline;*)
-             T.setPos;
-             T.getInt -> handle;
-             T.getint -> event;             
-             (if GS.trace then
-                 'BETA:event:handle: ' -> puttext; handle -> putint;
-                 (if event
-                  // 1 then
-                     ' mouseClicked:'->puttext;
-                     T.getint -> noOfClicks -> putint;                
-                  // 2 then
-                     'BETA:Mouse exited' -> putline
-             if)if);
-
-             T[] -> execute.selectEventProcessor;
-             (* store handle/object in 1 -> thisStack.rstore *)
-             execute[] -> fork;
-             pause;
-             (* 'mouseListener reactivated'->putline*)
-          #);
-          
-          (if MS.trace or true then 'BETA:mouse: ' -> puttext; T[] -> putline if);
-       #);
-     
-     reActivate: (# do (if true then execute else execute[] -> fork if) #);
-     
-     execute: @ | system
-       (# saveBCimage:
-            (* Saves the byte code image on file FN..bc with execution *)
-            (# mainDescInx: @integer; FN: ^text
-            enter(mainDescInx,FN[])
-            do (mainDescInx,(FN[],'..bc') -> mkAuxName) -> descs.serialize;
-            #);
-          init:
-            (# RTT: @File;
-            enter(descs[],descInx,FN[],runMode)
-            do (if (runMode = run_BETA_INT) and runJavaServices then 
-                   mouseListener[] -> fork 
-               if);
-               (if runMode <> save_BC_Image then
-                   (FN[],'..run') -> mkAuxName -> RTT.name;
-                   RTT.openWrite;
-                   RTT[] -> out[];
-               if);
-               verbose -> descs.objPool.verbose;
-               pause;                
-            #);
-          selectEventProcessor:
-            (# eventSpec: ^text; D: ^objDesc
-            enter eventSpec[]
-            do eventProcessor[] -> thisModule[] -> thisObj[] -> thisStack[];
+ 
+---selectEventProcessor:dopart---
+ do eventProcessor[] -> thisModule[] -> thisObj[] -> thisStack[];
                thisObj.myObjDesc -> D[];
                (* '\n===='->putline;
                 (thisObj.myObjDesc).literals[1] -> putint; newline;
@@ -486,85 +141,95 @@ betaVM:
                descInx -> thisObj.myDescInx;
                true -> handleEvent;
                1 -> gLsc;
-            #);               
-          decodeEvent:
-            (# E: ^event; T: @text; obj: ^objDesc.cTemplate;
-               caller,thisObj,org: ^objDesc.cTemplate;
-            enter E[]
-            do (if E[] <> none then
-                   (* ','->put; E.caller -> putint; ','->put;*)
-                   (if (1 <= E.type) and (E.type < 18) then 
-                       E.caller -> descs.cObjCache.get -> caller[];
-                       E.thisObj -> descs.cObjCache.get -> thisObj[];
-                       E.org -> descs.cObjCache.get -> org[];
-                    else
-                       (if (E.type = 19) then (* can probably be handled by 
-                                               * code before else *)
-                           E.caller -> descs.cObjCache.get -> caller[];
-                       if)
-                   if);
-                   caller[] -> obj[];
-                   (* 'cObj: ' -> puttext; 
-                    loop:
-                    (if obj[]<> none then 
-                    obj.myName -> puttext; ' ' -> put;
-                    obj.objId -> putint;
-                    obj.myOrigin -> obj[];
-                    restart loop
-                    if);
-                    newline;*)
-                   (if E.type 
-                    // 0 then (*skip*)
-                    // 1 then
-                       (caller[],thisObj[],org[],E.descNo,E.bcPos + 1) -> startEvent
-                    // 2 then
-                       (caller[],thisObj[],org[],E.descNo,E.bcPos + 1,E.isObj=1,false) -> allocEvent
-                    // 3 then
-                       (caller[],thisObj[],org[],E.descNo,E.bcPos + 1,false) -> doEvent
-                    // 4 then
-                       (caller[],thisObj[],org[],E.descNo,E.bcPos + 1) -> doExitEvent
-                    // 5 then
-                       (caller[],thisObj[],org[],E.descNo,E.bcPos + 1) -> rtnEvent
-                    // 18 then (* stop *)
-                    // 19 then
-                       '\n*** Got scan_event'->putline;
-                       (caller[]) -> scanEvent
-                    else
-                       '\n\n*** Event not catched: ' -> puttext;
-                       E.type -> putint; newline;
-                       stop
-                   if);
+---execute_init:doPart---
+do (if (runMode = run_BETA_INT) and runJavaServices then 
+                   mouseListener[] -> fork 
                if);
-               (*newline*)
-            exit E.type  <> 18
-            #);
-          handleEvent: @boolean;
-          descs: ^RuntimeDescriptors;
-          descInx: @integer;
-          isObj: @integer;;
-          obj: ^ObjDesc.Template;
-          root: ^ObjDesc.Template;
-          world: ^ObjDesc.Template;
-          stringOrigin: ^ObjDesc.Template;
-          betaenvObj: ^ObjDesc.Template;
+               (if runMode <> save_BC_Image then
+                   (FN[],'..run') -> mkAuxName -> RTT.name;
+                   RTT.openWrite;
+                   RTT[] -> out[];
+               if);
+               verbose -> descs.objPool.verbose;
+        pause;  
+---execute_break:doPart---                 
+do (if false then
+       'betaVM:breakIn: ' -> puttext; descNo -> putint; 
+       ' at: ' -> puttext; bcPos -> putint; newline;
+       (*'OD.range: ' -> puttext; descs.OD.range->putint; newline;*)
+   if);               
+   (if descs[] = none then ' break:descs i none???'->putline;if);
+   (if descs.OD[descNo][] = none then
+       'break:bc none ' -> putline
+    else 
+       bcPos -> descs.OD[descNo].bc.setBreak
+   if)
+---VM_execute:doPart---
+do (# saveBCimage:
+         (* Saves the byte code image on file FN..bc with execution *)
+         (# mainDescInx: @integer; FN: ^text
+         enter(mainDescInx,FN[])
+         do (mainDescInx,(FN[],'..bc') -> mkAuxName) -> descs.serialize;
+         #);
+      decodeEvent:
+         (# E: ^event; T: @text; obj: ^objDesc.cTemplate;
+            caller,thisObj,org: ^objDesc.cTemplate;
+         enter E[]
+         do (if E[] <> none then
+                (* ','->put; E.caller -> putint; ','->put;*)
+                (if (1 <= E.type) and (E.type < 18) then 
+                    E.caller -> descs.cObjCache.get -> caller[];
+                    E.thisObj -> descs.cObjCache.get -> thisObj[];
+                    E.org -> descs.cObjCache.get -> org[];
+                 else
+                    (if (E.type = 19) then (* can probably be handled by 
+                                            * code before else *)
+                        E.caller -> descs.cObjCache.get -> caller[];
+                    if)
+                if);
+                caller[] -> obj[];
+                (* 'cObj: ' -> puttext; 
+                 loop:
+                 (if obj[]<> none then 
+                 obj.myName -> puttext; ' ' -> put;
+                 obj.objId -> putint;
+                 obj.myOrigin -> obj[];
+                 restart loop
+                 if);
+                 newline;*)
+                (if E.type 
+                 // 0 then (*skip*)
+                 // 1 then
+                    (caller[],thisObj[],org[],E.descNo,E.bcPos + 1) -> startEvent
+                 // 2 then
+                    (caller[],thisObj[],org[],E.descNo,E.bcPos + 1,E.isObj=1,false) -> allocEvent
+                 // 3 then
+                    (caller[],thisObj[],org[],E.descNo,E.bcPos + 1,false) -> doEvent
+                 // 4 then
+                    (caller[],thisObj[],org[],E.descNo,E.bcPos + 1) -> doExitEvent
+                 // 5 then
+                    (caller[],thisObj[],org[],E.descNo,E.bcPos + 1) -> rtnEvent
+                 // 18 then (* stop *)
+                 // 19 then
+                    '\n*** Got scan_event'->putline;
+                    (caller[]) -> scanEvent
+                 else
+                    '\n\n*** Event not catched: ' -> puttext;
+                    E.type -> putint; newline;
+                    stop
+                if);
+            if);
+            (*newline*)
+         exit E.type  <> 18
+         #);
+      isObj: @integer;;
+      obj: ^ObjDesc.Template;
+      root: ^ObjDesc.Template;
+      world: ^ObjDesc.Template;
+      stringOrigin: ^ObjDesc.Template;
+      betaenvObj: ^ObjDesc.Template;
           
-          break:
-            (# descNo,bcPos: @integer
-            enter(descNo,bcPos)
-            do (if false then
-                   'betaVM:breakIn: ' -> puttext; descNo -> putint; 
-                   ' at: ' -> puttext; bcPos -> putint; newline;
-                   (*'OD.range: ' -> puttext; descs.OD.range->putint; newline;*)
-               if);               
-               (if descs[] = none then ' break:descs i none???'->putline;if);
-               (if descs.OD[descNo][] = none then
-                   'break:bc none ' -> putline
-                else 
-                   bcPos -> descs.OD[descNo].bc.setBreak
-               if)
-            #);
-          
-          sendMsg:
+      sendMsg:
             (# serverId,handle,msgId: @integer; msg: ^objDesc.template; 
                T: @text
             enter(serverId,handle,msgId,msg[])
@@ -587,8 +252,8 @@ betaVM:
                    (handle,msgId,T[]) -> sendGuiMsg
                if)
             #);
-          doReceive: (# exit true #);
-          sendFileMsg:
+      doReceive: (# exit true #);
+      sendFileMsg:
             (# handle,msgId: @integer; msg: ^text; h: ^text
             enter(handle,msgId,msg[])
             do (if FS.trace then 'sendFileMsg: '-> puttext; if);
@@ -612,7 +277,7 @@ betaVM:
                    (if doReceive then FS.receive -> h[] if)
                if);
             #);
-          sendGuiMsg:
+      sendGuiMsg:
             (# handle,msgId: @integer; msg: ^text; h: ^text
             enter(handle,msgId,msg[])
             do (if GS.trace then
@@ -661,7 +326,7 @@ betaVM:
                    'betaVM:received: ' -> puttext; h[] -> putline;
                if)
             #);
-          mkTextObject:
+         mkTextObject:
             (# X: ^ObjDesc.template;
                length: @integer; 
                ch: @char
@@ -1157,14 +822,14 @@ betaVM:
                 enter(descInx,isObj,valueDescNo,isValueObj,arrayObjSize,originIsValueObj)
                 do thisStack.rPop->origin[];  thisStack.rPop->holder[];
                    thisStack.vPop -> inx;
-                                 (if mkRunTrace then '>>  arrayInx:'->out.puttext; inx -> out.putint if); 
+                   (if mkRunTrace then '>>  arrayInx:'->out.puttext; inx -> out.putint if); 
                    arrayStrucSize + (inx - 1) * arrayObjSize -> inx; 
-                                 (if mkRunTrace then 
-                                     ' holderOff:'->out.puttext; inx->out.putint;
-                                     ' valueDescNo:'->out.puttext; valueDescNo->out.putint;
-                                     out.newline 
-                                 if);
-                                 (if withDumps then
+                   (if mkRunTrace then 
+                       ' holderOff:'->out.puttext; inx->out.putint;
+                       ' valueDescNo:'->out.puttext; valueDescNo->out.putint;
+                       out.newline 
+                   if);
+                   (if withDumps then
                                      (if isValueObj = 1 then
                                          '\n**** mkValueProxy:valueProxyDescNo: ' -> puttext;
                                          valueProxyDescNo -> putint;
@@ -1173,7 +838,7 @@ betaVM:
                                      if);
                                      (if origin[] <> none then ('origin',true,out[]) -> origin.dump if);
                                      ('holder',true,out[]) -> holder.dump;
-                                 if);
+                   if);
                    (descInx,0,isObj = 1) -> invoke -> proxy[];
                    (if originIsValueObj = 1 then
                                      (if mkRunTrace then 'originIsValueObj:'->out.puttext if);
@@ -1678,7 +1343,7 @@ betaVM:
                    for);
                    newline;
                if);
-               X[] -> thisStack.rPush;
+               X[] -> thisStack.rPush; 
                (if withDumps then 
                    ('dumpObj:X:',true,out[]) -> X.dump;
                    ('dumpObj:thisObj:',true,out[]) -> thisObj.dump
@@ -1693,9 +1358,6 @@ betaVM:
                for);
                newline
             #);
-          isRunning,doTerminate: @Boolean;
-          terminate: (# do true -> doTerminate #);
-          FN: ^text; 
        (*enter(descs[],descInx,out[],FN[])*)
        do (if runMode = save_BC_Image then
               'SAVING BYTE CODE IMAGE - main desc: ' -> puttext; 
@@ -3860,4 +3522,4 @@ betaVM:
                done
             #)
        #)
-  #)
+
