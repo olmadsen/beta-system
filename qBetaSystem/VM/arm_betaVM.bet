@@ -1,0 +1,264 @@
+ORIGIN 'betaVM_IF';
+INCLUDE '../compiler_IF/directoryComponents';
+---VM_init:doPart--
+do 'VM_init'->putline;
+---BetaVMattributes:attributes---
+allocTemplate:
+    (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean;
+       obj: ^objDesc.template
+    enter(descNo,isObj,vInxSize,rInxSize)
+    do &descs.OD[descNo].template[] -> obj[];
+        descs.OD[descNo].objSize  -> obj.fields.new;
+               descNo -> obj.myDescInx;
+               obj[] -> descs.ObjPool;
+               isObj -> obj.isObj;
+               descs .OD[descNo].OSDvisibility -> obj.OSDvisibility; 
+               '\n**** CLASS '->out.puttext; obj.myNameDI -> out.puttext;
+    exit obj[]
+    #);
+---execute_lib:attributes---
+exe: 
+    (# T: ^text ; F: ^file
+    enter T[] 
+    do inner;
+       '\n   ' -> out.puttext; T[] -> out.puttext; ' '-> out.put;
+       glsc + 1 -> glsc;
+    #);
+exel: exe(# do (if mkRunTrace then out.newline if) #);
+                    op1: 
+                      (# arg: @integer
+                      do thisCode.B[glsc] -> arg;
+                         (if mkRunTrace then arg -> out.putint; ' ' -> out.put if); 
+                         glsc + 1 -> glsc
+                      exit arg
+                      #);
+                    op1asChar: 
+                      (# arg: @integer
+                      do thisCode.B[glsc] -> arg;
+                         (if mkRunTrace then arg -> out.put; ' ' -> out.put if); 
+                         glsc + 1 -> glsc
+                      exit arg 
+                      #);
+                    op2: 
+                      (# arg: @integer
+                      do thisCode.B[glsc] * 256 + thisCode.B[glsc+1] -> arg;
+                      (if mkRunTrace then arg -> out.putint; ' ' -> out.put if); 
+                         glsc + 2 -> glsc
+                      exit arg
+                      #);
+                    op4:
+                      (# arg: @ integer
+                      do (for i: 4 repeat
+                              (*thisCode.B[glsc + i - 1] -> puthex; newline;*)
+                              thisCode.B[glsc + i - 1] %putByteAt (@@arg + i - 1)
+                         for);
+                         glsc + 4 -> glsc;
+                      exit arg
+                      #);
+                    op8:
+                      (# X: @real; L1,L2: @integer
+                      do (for i: 8 repeat
+                              (*thisCode.B[glsc + i - 1] -> puthex; newline;*)
+                              thisCode.B[glsc + i - 1] %putByteAt (@@X + i - 1)
+                         for);
+                         (for i: 4 repeat
+                              thisCode.B[glsc + i - 1] %putByteAt (@@L1 + i -1);
+                              thisCode.B[glsc + 4 + i - 1] %putByteAt (@@L2 + i - 1)
+                         for);
+                         glsc + 8 -> glsc;
+                      exit(X,L1,L2)
+                      #);
+GenCode:
+   (#
+   do (for dno: descs.OD.range repeat 
+           (if descs.OD[dno][] <> none then
+               false -> doTerminate;
+               dNo -> EmitCode
+           if)
+       for);
+   #);
+EmitCode:
+   (# descInx: @integer
+   enter descInx
+   do (descInx,true,0,0)  -> allocTemplate -> thisModule[] -> thisObj[] -> thisStack[];
+      descs.OD[descInx].bc[] -> thisCode[];
+      1 -> glsc;
+      loop:
+        (# op,val,off,isObj,dinx,inx: @integer
+        do (if thisCode[] = none then 'thiscode none'->putline if);
+           (if thisCode.B[glsc] -> op
+            // codes.pushc then
+               'pushc' -> exe; op1 -> val
+            // codes.pushthis then
+               'pushthis' -> exe
+            // codes.pushg then
+               'pushg' -> exe; op1 -> off;
+            // codes.rpushg then
+                'rpushg' -> exe; op1 -> off;
+            // codes.vpushg then
+                       'vpushg ' -> exe;
+                       op1;
+                                             
+                    // codes.xrpush then
+                       'xrpush ' -> exe; op1;                 
+                    // codes.xpushg then
+                       'xpushg ' -> exe; op1; ' ' -> out.put; op1; 
+                    // codes.xrpushg then
+                       'xrpushg ' -> exe;   
+                    // codes.pushValue then
+                       'pushValue ' -> exe; op2; ' ' -> out.put; op1; 
+                    // codes.vassign then
+                       'vassign ' -> exe; op2; ' ' -> out.put; op1; 
+                       ' ' -> out.put; op1; 
+            // codes.vEq then
+                       'veq ' -> exe; op2; ' ' -> out.put; op1; 
+            // codes.pushText then
+               'pushText' -> exe; op1 -> inx; 
+            // codes.storeg  then
+               'storeg' -> exe; op1 -> off;
+            // codes.rstore  then
+               'rstore' -> exe;  op1->off;
+            // codes.rstoreg then
+               'rstoreg' -> exe; op1 -> off;
+            // codes.tstOriginNone then
+               'tstOriginNone' -> exe;
+               // codes.rpop then
+               'rpop' -> exe;
+            // codes.invoke then
+               'invoke' -> exe; op2 -> descInx; op2 -> off; op1 -> isObj;
+            // codes.invokeval then 
+               'invokeVal ' -> exe; op2; ' ' -> out.put; op2; ' '->out.put; op1;
+            // codes.call then
+               'call ' -> exe; (*true -> *) op1;
+            // codes.innerP then
+               'innerP' -> exel; op1 -> dinx;                          
+            // codes.toSuper then
+               'toSuper ' -> exe; op2;
+            // codes.rtn then
+               'rtn' -> exe; op1asChar -> inx; 
+               true -> doTerminate
+            // codes.jmp then
+                       'jmp ' -> exe; op2; 
+            // codes.jmpFalse then
+                       'jmpFalse ' -> exe; op2; 
+            // codes.jmpTrue then
+               'jmpTrue ' -> exe; op2; 
+            // codes.jmpGT then
+                       'jmpGT ' -> exe; op2; 
+            // codes.break then
+                'break ' -> exe; op1; ' ' -> out.put; op2;
+                ' ' -> out.put; op2; ' ' -> out.put; op1;
+            // codes.eq then
+                       'eq ' -> exe;
+                    // codes.lt then
+                       'lt' -> exe;
+                    // codes.le then
+                       'le' -> exe;
+                    // codes.gt then
+                       'gt ' -> exe;
+                    // codes.ge then
+                       'ge ' -> exe;
+            // codes.ne then
+                       'ne ' -> exe;
+            // codes.req then
+                       'req ' -> exe;
+            // codes.plus then
+               '+'-> exe;
+            // codes.minus then
+               '-'-> exe; 
+            // codes.uminus then
+               'u-' -> exe;
+            // codes.mult then
+               '*'-> exe;
+            // codes.modd then
+               'mod' -> exe;
+            // codes.idiv then
+               'idiv' -> exe;
+                    // codes.fplus then
+                       'fplus ' -> exe; 
+                    // codes.fminus then
+                       'fminus ' -> exe; 
+                    // codes.fUnaryMinus then
+                       'fUnaryMinus ' -> exe; 
+                    // codes.fmult then
+                       'fmult ' -> exe; 
+                    // codes.fdiv then
+                       'fdiv ' -> exe; 
+                    // codes.fexp then
+                       'fexp ' -> exe;                        
+                    // codes.pushFloatConst then
+                       'pushFloatConst ' -> exe; op8; 
+                    // codes.fpushg then
+                       'fpushg ' -> exe; op1; 
+                    // codes.fvstoreg then
+                       'fvstoreg ' -> exe; op1; 
+                    // codes.fstoreg then
+                       'fstoreg ' -> exe; op1; 
+                    // codes.fvpushg then
+                       'fvpushg ' -> exe; op1; 
+                    // codes.fvstoreg then
+                       'fvstoreg ' -> exe; op1; 
+                    // codes.i2f then
+                       'i2f' -> exe; 
+                    // codes.f2i then
+                       'f2i' -> exe;  
+                    // codes.feq then
+                       'feq' -> exe; 
+                    // codes.flt then
+                       'flt' -> exe; 
+                    // codes.mkVindexed then
+                       'mkIndexed' -> exe; 
+                    // codes.mkRindexed then
+                       'mkRindexed' -> exe;  
+                    // codes.nop then
+                       'nop' -> exe; (*true ->*) op1; 
+            // codes.allocEventQ then
+               'allocEventQ' -> exe; op1 -> isObj;
+            // codes.mvStack then
+               'mvStack'-> exe;
+            // codes.rtnAlloc then
+               'rtnAlloc' -> exe; op1 -> isObj;
+            // codes.doEventQ then
+               'doEventQ' -> exe;
+            // codes.setThisStack then
+               'setThisStack' -> exe;
+            // codes.saveBETAworld then
+               'saveBETAworld' -> exe;  op2 -> descInx;
+            // codes.stop then
+               'stop' -> exe;
+               true -> doTerminate
+       else
+            '\nop:'->out.puttext; op -> out.putint; 
+            glsc + 1 -> glsc
+       if);
+       (if not doTerminate and (glsc <= thisCode.B.range) then 
+           restart Loop
+       if)
+   #)#)
+---selectEventProcessor:dopart---
+ do 'selectEventProcessor'->putline;
+ ---execute_init:doPart---
+do 'execute_init'->putline;
+   (if (runMode = run_BETA_INT) and runJavaServices then 
+        mouseListener[] -> fork 
+   if);
+   (if runMode <> save_BC_Image then
+       (FN[],'..run') -> mkAuxName -> RTT.name;
+       RTT.openWrite;
+       RTT[] -> out[];
+   if);
+   verbose -> descs.objPool.verbose;
+   pause;
+---execute_break:doPart---                 
+do 'execute_break:'->putline
+---VM_execute:doPart---
+do 'ARM VM_execute: '->puttext; descInx -> putint; newline;
+   true -> isRunning; (*screen[] -> out[];*)
+   false -> doTerminate;
+   (if descs.OD[1][] = none then (* not used any more*)
+                   'Allocating dummy template in OD[1] for repetitions'  -> putline;
+                   &ObjDesc[] -> descs.OD[1][];
+                   ('ValueRep',1,0,0,false,out[],descs[])  -> descs.OD[1].init;
+   if);
+   genCode;
+   stop
