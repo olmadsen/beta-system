@@ -13,7 +13,8 @@ allocTemplate:
                obj[] -> descs.ObjPool;
                isObj -> obj.isObj;
                descs .OD[descNo].OSDvisibility -> obj.OSDvisibility; 
-               '\n**** CLASS '->out.puttext; obj.myNameDI -> out.puttext;
+        '\n.globl _'->out.puttext; obj.myName -> out.puttext; 
+        '\n_'->out.puttext; obj.myName -> out.puttext; ':' -> out.put;
     exit obj[]
     #);
 ---execute_lib:attributes---
@@ -21,56 +22,116 @@ exe:
     (# T: ^text ; F: ^file
     enter T[] 
     do inner;
-       '\n   ' -> out.puttext; T[] -> out.puttext; ' '-> out.put;
+       '\n;\t  ' -> out.puttext; T[] -> out.puttext; ' '-> out.put;
        glsc + 1 -> glsc;
     #);
 exel: exe(# do (if mkRunTrace then out.newline if) #);
-                    op1: 
+op1: 
                       (# arg: @integer
                       do thisCode.B[glsc] -> arg;
                          (if mkRunTrace then arg -> out.putint; ' ' -> out.put if); 
                          glsc + 1 -> glsc
                       exit arg
                       #);
-                    op1asChar: 
+op1asChar: 
                       (# arg: @integer
                       do thisCode.B[glsc] -> arg;
                          (if mkRunTrace then arg -> out.put; ' ' -> out.put if); 
                          glsc + 1 -> glsc
                       exit arg 
                       #);
-                    op2: 
-                      (# arg: @integer
+op2: 
+   (# arg: @integer
                       do thisCode.B[glsc] * 256 + thisCode.B[glsc+1] -> arg;
                       (if mkRunTrace then arg -> out.putint; ' ' -> out.put if); 
                          glsc + 2 -> glsc
                       exit arg
-                      #);
-                    op4:
-                      (# arg: @ integer
-                      do (for i: 4 repeat
-                              (*thisCode.B[glsc + i - 1] -> puthex; newline;*)
-                              thisCode.B[glsc + i - 1] %putByteAt (@@arg + i - 1)
-                         for);
-                         glsc + 4 -> glsc;
-                      exit arg
-                      #);
-                    op8:
-                      (# X: @real; L1,L2: @integer
-                      do (for i: 8 repeat
-                              (*thisCode.B[glsc + i - 1] -> puthex; newline;*)
-                              thisCode.B[glsc + i - 1] %putByteAt (@@X + i - 1)
-                         for);
-                         (for i: 4 repeat
-                              thisCode.B[glsc + i - 1] %putByteAt (@@L1 + i -1);
-                              thisCode.B[glsc + 4 + i - 1] %putByteAt (@@L2 + i - 1)
-                         for);
-                         glsc + 8 -> glsc;
-                      exit(X,L1,L2)
-                      #);
-GenCode:
+   #);
+op4:
+   (# arg: @ integer
+   do (for i: 4 repeat
+           thisCode.B[glsc + i - 1] %putByteAt (@@arg + i - 1)
+      for);
+      glsc + 4 -> glsc;
+   exit arg
+   #);
+op8:
+    (# X: @real; L1,L2: @integer
+    do  (for i: 8 repeat
+            thisCode.B[glsc + i - 1] %putByteAt (@@X + i - 1)
+        for);
+        (for i: 4 repeat
+            thisCode.B[glsc + i - 1] %putByteAt (@@L1 + i -1);
+            thisCode.B[glsc + 4 + i - 1] %putByteAt (@@L2 + i - 1)
+        for);
+        glsc + 8 -> glsc;
+    exit(X,L1,L2)
+    #);
+RegisterHandler:
+   (# thisObj : (#exit 29 #);
+      regNo: @integer;
+      get:
+         (# rn: @integer
+         do (if (regNo + 1 -> regNo) < 29 then regNo -> rn if);
+         exit rn
+         #);
+      free:
+         (# rn: @integer
+         enter rn
+         do (if rn = regNo then regNo - 1 -> regNo 
+            else
+                '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; regNo->out.putint;
+            if)
+         #); 
+      print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint#)
+   do
+   #);
+valueKind: (# exit 0 #);
+regKind: (# exit 1 #);
+StackHandler:
+   (# vStack: [8] @integer; vTop: @integer;
+      vKind: [8] @ integer; (* 0: const; 1: register *)
+      rStack: [8] @integer; rTop: @integer;
+      vPush: 
+         (# v,t: @integer 
+         enter(v,t) 
+         do (if (vTop + 1 -> vTop) > vStack.range then 
+                vStack.range -> vStack.extend; vKind.range -> vKind.extend;
+            if);
+            v -> vStack[vTop]; t -> vKind[vTop];
+         #);
+      vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else -1 -> v if) exit v #);
+      vTopKind: (# k: @integer do (if vTop > 0 then vKind[vTop] -> k else -1 -> k if) exit k #);
+      rPush: 
+         (# v: @integer 
+         enter v 
+         do (if (rTop + 1 -> rTop) < rStack.range then v -> rStack[rTop]if)
+         #);
+      rPop: (# r: @integer do (if rTop > 0 then rStack[rTop] -> r; rTop - 1 -> rTop else -1 -> r if) exit r #);
+   #);
+
+genHeading:
    (#
-   do (for dno: descs.OD.range repeat 
+   do '.global _main\n.align 2\n' -> out.puttext;
+   #);
+gen_putc:
+   (#
+   do '\t.text\n\t.global _putc\n' -> out.puttext;
+      '_putc: // Character is in w0\n' -> out.puttext;
+      '\tsub     sp, sp, #16\n\tstrb    w0, [sp]\t// write(1, sp, 1)\n'->out.puttext;
+      '\tmov     x0, #1              // stdout\n'->out.puttext;
+      '\tmov     x1, sp              // address of character\n' -> out.puttext;
+      '\tmov     x2, #1              // one byte\n'  -> out.puttext;
+      '\tmov     x16, #4             // write\n'  -> out.puttext;
+      '\tsvc     #0x80\n'  -> out.puttext;
+      '\tadd     sp, sp, #16\n'  -> out.puttext;
+      '\tret\n'  -> out.puttext;
+   #);
+GenCode:
+   (# 
+   do genHeading;
+      gen_putc;
+      (for dno: descs.OD.range repeat 
            (if descs.OD[dno][] <> none then
                false -> doTerminate;
                dNo -> EmitCode
@@ -78,7 +139,91 @@ GenCode:
        for);
    #);
 EmitCode:
-   (# descInx: @integer
+   (# descInx: @integer; reg: @RegisterHandler; stacks: @StackHandler;
+      pushConst:
+         (# cst,r: @integer
+         enter cst
+         do reg.get -> r;
+            '\n  mov ' -> out.puttext; r -> reg.print; ', #' -> out.puttext; cst -> out.putint;
+            (r,0) -> stacks.vPush
+         #);
+      pushg:
+         (# off,r: @integer
+         enter off
+         do '\n  ldr '->out.puttext; reg.get -> r; r -> reg.print;
+            ',['->out.puttext; stacks.rPop -> reg.print; ','->out.put; off -> out.putint; ']' -> out.put; 
+            (r,1) -> stacks.vPush
+         #);
+      storeg:
+         (# off,r: @integer
+         enter off
+         do '\n  str '->out.puttext;  stacks.vPop -> r -> reg.print;
+             ',['->out.puttext; stacks.rPop -> reg.print; ','->out.put; off -> out.putint; ']' -> out.put; 
+             r -> reg.free
+         #);
+      emitOp:
+         (# op: @integer
+         enter op
+         do (if op 
+            // codes.plus then
+               '\n  add '-> out.puttext;
+            // codes.minus then
+               '\n  sub '-> out.puttext;
+            // codes.mult then
+               '\n  mul '-> out.puttext;
+
+            if);
+         #);
+      binOpImm: (* binary operator with immediate argument *)
+         (# op,vr,vl,r: @integer
+         enter op
+         do (if stacks.vTopKind = valueKind then
+                stacks.vPop -> vr;
+                (if stacks.vTopKind = valueKind then
+                    stacks.vPop -> vl;
+                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                else (* vr: const, vl: register *)
+                    stacks.vPop -> vl;
+                    op -> emitOp;
+                    vl -> reg.print; ','->out.put; vl -> reg.print; ',#'->out.puttext; vr -> out.putint; 
+                    (vl,regKind) -> stacks.vPush
+                if)
+             else
+                stacks.vPop -> vr;
+                (if stacks.vTopKind = valueKind then
+             
+                else (* operands in registers *)
+                   stacks.vPop -> vl; 
+                   op -> emitOp;
+                   vl -> reg.print; ','->out.put; vl -> reg.print; ',' -> out.put; vr -> reg.print;
+                   (vl,regKind) -> stacks.vPush
+            if)if)
+         #);
+      binOpReg: (* binary operator with register argument *)
+         (# op,vr,vl,r: @integer
+         enter op
+         do (if stacks.vTopKind = valueKind then
+                stacks.vPop -> vr;
+                (if stacks.vTopKind = valueKind then
+                    stacks.vPop -> vl;
+                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                else (* vr: const, vl: register *)
+                    stacks.vPop -> vl;
+                    vr -> pushConst; stacks.vPop -> vr;
+                    op -> emitOp;
+                    vl -> reg.print; ','->out.put; vl -> reg.print; ','->out.put; vr ->reg.print;
+                    (vl,regKind) -> stacks.vPush
+                if)
+             else 
+         
+            if)
+         #);
+       emitPut:
+          (# ch: @char
+          enter ch
+          do '\n\tmov     w0, #' -> out.puttext; ch -> out.putint;
+             '\n\tbl      _putc\n' -> out.puttext;
+          #);
    enter descInx
    do (descInx,true,0,0)  -> allocTemplate -> thisModule[] -> thisObj[] -> thisStack[];
       descs.OD[descInx].bc[] -> thisCode[];
@@ -88,34 +233,37 @@ EmitCode:
         do (if thisCode[] = none then 'thiscode none'->putline if);
            (if thisCode.B[glsc] -> op
             // codes.pushc then
-               'pushc' -> exe; op1 -> val
+               'pushc' -> exe; op1 -> val;
+               (val,0) -> stacks.vPush;
             // codes.pushthis then
-               'pushthis' -> exe
-            // codes.pushg then
+               'pushthis' -> exe; reg.thisObj -> stacks.rPush;
+            // codes.pushg then (* we need to know if a parameter is pushed *)
                'pushg' -> exe; op1 -> off;
+               off -> pushg
             // codes.rpushg then
                 'rpushg' -> exe; op1 -> off;
             // codes.vpushg then
-                       'vpushg ' -> exe;
-                       op1;
+                'vpushg ' -> exe; op1;
                                              
-                    // codes.xrpush then
+            // codes.xrpush then
                        'xrpush ' -> exe; op1;                 
-                    // codes.xpushg then
+            // codes.xpushg then
                        'xpushg ' -> exe; op1; ' ' -> out.put; op1; 
-                    // codes.xrpushg then
+            // codes.xrpushg then
                        'xrpushg ' -> exe;   
-                    // codes.pushValue then
+            // codes.pushValue then
                        'pushValue ' -> exe; op2; ' ' -> out.put; op1; 
-                    // codes.vassign then
+            // codes.vassign then
                        'vassign ' -> exe; op2; ' ' -> out.put; op1; 
                        ' ' -> out.put; op1; 
             // codes.vEq then
                        'veq ' -> exe; op2; ' ' -> out.put; op1; 
             // codes.pushText then
                'pushText' -> exe; op1 -> inx; 
-            // codes.storeg  then
+            // codes.storeg  then (* we may store a parameter here - thus no registers are allocated *)
                'storeg' -> exe; op1 -> off;
+               (if stacks.vTopKind = 0 then stacks.vPop -> pushConst if);
+               off -> storeg
             // codes.rstore  then
                'rstore' -> exe;  op1->off;
             // codes.rstoreg then
@@ -136,82 +284,94 @@ EmitCode:
                'toSuper ' -> exe; op2;
             // codes.rtn then
                'rtn' -> exe; op1asChar -> inx; 
+               '\n\tret\n' -> out.puttext;
                true -> doTerminate
             // codes.jmp then
-                       'jmp ' -> exe; op2; 
+               'jmp ' -> exe; op2; 
             // codes.jmpFalse then
-                       'jmpFalse ' -> exe; op2; 
+               'jmpFalse ' -> exe; op2; 
             // codes.jmpTrue then
                'jmpTrue ' -> exe; op2; 
             // codes.jmpGT then
-                       'jmpGT ' -> exe; op2; 
+               'jmpGT ' -> exe; op2; 
             // codes.break then
                 'break ' -> exe; op1; ' ' -> out.put; op2;
                 ' ' -> out.put; op2; ' ' -> out.put; op1;
             // codes.eq then
-                       'eq ' -> exe;
-                    // codes.lt then
-                       'lt' -> exe;
-                    // codes.le then
-                       'le' -> exe;
-                    // codes.gt then
-                       'gt ' -> exe;
-                    // codes.ge then
-                       'ge ' -> exe;
+                'eq ' -> exe;
+            // codes.lt then
+                'lt' -> exe;
+            // codes.le then
+                'le' -> exe;
+            // codes.gt then
+                'gt ' -> exe;
+            // codes.ge then
+                'ge ' -> exe;
             // codes.ne then
-                       'ne ' -> exe;
+                'ne ' -> exe;
             // codes.req then
-                       'req ' -> exe;
+                'req ' -> exe;
             // codes.plus then
                '+'-> exe;
+               codes.plus -> binOpImm
             // codes.minus then
                '-'-> exe; 
+               codes.minus -> binOpImm
             // codes.uminus then
                'u-' -> exe;
             // codes.mult then
                '*'-> exe;
+               codes.mult -> binOpReg
             // codes.modd then
                'mod' -> exe;
             // codes.idiv then
                'idiv' -> exe;
-                    // codes.fplus then
-                       'fplus ' -> exe; 
-                    // codes.fminus then
-                       'fminus ' -> exe; 
-                    // codes.fUnaryMinus then
-                       'fUnaryMinus ' -> exe; 
-                    // codes.fmult then
-                       'fmult ' -> exe; 
-                    // codes.fdiv then
-                       'fdiv ' -> exe; 
-                    // codes.fexp then
-                       'fexp ' -> exe;                        
-                    // codes.pushFloatConst then
-                       'pushFloatConst ' -> exe; op8; 
-                    // codes.fpushg then
-                       'fpushg ' -> exe; op1; 
-                    // codes.fvstoreg then
-                       'fvstoreg ' -> exe; op1; 
-                    // codes.fstoreg then
-                       'fstoreg ' -> exe; op1; 
-                    // codes.fvpushg then
-                       'fvpushg ' -> exe; op1; 
-                    // codes.fvstoreg then
-                       'fvstoreg ' -> exe; op1; 
-                    // codes.i2f then
-                       'i2f' -> exe; 
-                    // codes.f2i then
-                       'f2i' -> exe;  
-                    // codes.feq then
-                       'feq' -> exe; 
-                    // codes.flt then
-                       'flt' -> exe; 
-                    // codes.mkVindexed then
-                       'mkIndexed' -> exe; 
-                    // codes.mkRindexed then
-                       'mkRindexed' -> exe;  
-                    // codes.nop then
-                       'nop' -> exe; (*true ->*) op1; 
+            // codes.fplus then
+                'fplus ' -> exe; 
+            // codes.fminus then
+                'fminus ' -> exe; 
+            // codes.fUnaryMinus then
+                'fUnaryMinus ' -> exe; 
+            // codes.fmult then
+                'fmult ' -> exe; 
+            // codes.fdiv then
+                'fdiv ' -> exe; 
+            // codes.fexp then
+                'fexp ' -> exe;                        
+            // codes.pushFloatConst then
+                'pushFloatConst ' -> exe; op8; 
+            // codes.fpushg then
+                'fpushg ' -> exe; op1; 
+            // codes.fvstoreg then
+                'fvstoreg ' -> exe; op1; 
+            // codes.fstoreg then
+                'fstoreg ' -> exe; op1; 
+            // codes.fvpushg then
+                'fvpushg ' -> exe; op1; 
+            // codes.fvstoreg then
+                'fvstoreg ' -> exe; op1; 
+            // codes.i2f then
+                'i2f' -> exe; 
+            // codes.f2i then
+                'f2i' -> exe;  
+            // codes.feq then
+                'feq' -> exe; 
+            // codes.flt then
+                'flt' -> exe; 
+            // codes.mkVindexed then
+                'mkIndexed' -> exe; 
+            // codes.mkRindexed then
+                'mkRindexed' -> exe;  
+            // codes.nop then
+                'nop' -> exe; (*true ->*) op1;
+            // codes.prim then
+                '%prim' -> exe;
+                (if op1 -> inx
+                 // prim.put then 
+                    stacks.vPop -> emitPut (* OBS! the argument may be a const or a var - check vKind *)
+                else
+                   '\n!!!! missing prim: ' -> out.puttext; inx -> out.putint;
+                if) 
             // codes.allocEventQ then
                'allocEventQ' -> exe; op1 -> isObj;
             // codes.mvStack then
