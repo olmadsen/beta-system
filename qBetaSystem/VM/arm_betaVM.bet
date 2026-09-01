@@ -2,50 +2,45 @@ ORIGIN 'betaVM_IF';
 INCLUDE '../compiler_IF/directoryComponents';
 ---VM_init:doPart--
 do 'VM_init'->putline;
----BetaVMattributes:attributes---
-allocTemplate:
-    (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean;
-       obj: ^objDesc.template
-    enter(descNo,isObj,vInxSize,rInxSize)
-    do &descs.OD[descNo].template[] -> obj[];
-        descs.OD[descNo].objSize  -> obj.fields.new;
-               descNo -> obj.myDescInx;
-               obj[] -> descs.ObjPool;
-               isObj -> obj.isObj;
-               descs .OD[descNo].OSDvisibility -> obj.OSDvisibility; 
-        '\n.globl _'->out.puttext; obj.myName -> out.puttext; 
-        '\n_'->out.puttext; obj.myName -> out.puttext; ':' -> out.put;
-    exit obj[]
-    #);
+---execute_state:descriptor---
+(# labs: @
+      (# labNo: @integer; thisLab: ^Text;
+         new: 
+            (# 
+            do labNo + 1 -> labNo; 
+               'L' -> thisLab[]; labNo -> thisLab.putint; '_'->thisLab.put
+            #)
+      #)
+#)
 ---execute_lib:attributes---
 exe: 
     (# T: ^text ; F: ^file
     enter T[] 
     do inner;
-       '\n;\t  ' -> out.puttext; T[] -> out.puttext; ' '-> out.put;
+       '\n;\t    ' -> out.puttext; T[] -> out.puttext; ' '-> out.put;
        glsc + 1 -> glsc;
     #);
 exel: exe(# do (if mkRunTrace then out.newline if) #);
 op1: 
-                      (# arg: @integer
+   (# arg: @integer
                       do thisCode.B[glsc] -> arg;
                          (if mkRunTrace then arg -> out.putint; ' ' -> out.put if); 
                          glsc + 1 -> glsc
                       exit arg
-                      #);
+   #);
 op1asChar: 
-                      (# arg: @integer
+   (# arg: @integer
                       do thisCode.B[glsc] -> arg;
                          (if mkRunTrace then arg -> out.put; ' ' -> out.put if); 
                          glsc + 1 -> glsc
                       exit arg 
-                      #);
+   #);
 op2: 
    (# arg: @integer
-                      do thisCode.B[glsc] * 256 + thisCode.B[glsc+1] -> arg;
+   do thisCode.B[glsc] * 256 + thisCode.B[glsc+1] -> arg;
                       (if mkRunTrace then arg -> out.putint; ' ' -> out.put if); 
                          glsc + 2 -> glsc
-                      exit arg
+   exit arg
    #);
 op4:
    (# arg: @ integer
@@ -56,8 +51,8 @@ op4:
    exit arg
    #);
 op8:
-    (# X: @real; L1,L2: @integer
-    do  (for i: 8 repeat
+   (# X: @real; L1,L2: @integer
+   do  (for i: 8 repeat
             thisCode.B[glsc + i - 1] %putByteAt (@@X + i - 1)
         for);
         (for i: 4 repeat
@@ -65,24 +60,40 @@ op8:
             thisCode.B[glsc + 4 + i - 1] %putByteAt (@@L2 + i - 1)
         for);
         glsc + 8 -> glsc;
-    exit(X,L1,L2)
-    #);
+   exit(X,L1,L2)
+   #);
 RegisterHandler:
-   (# thisObj : (#exit 29 #);
-      regNo: @integer;
-      get:
+   (# refRegStart: (# exit 15 #);
+      thisObj: (#exit 28 #);
+      vRegNo,rRegNo: @integer;
+      init: (# do refRegStart -> rRegNo #);
+      getV:
          (# rn: @integer
-         do (if (regNo + 1 -> regNo) < 29 then regNo -> rn if);
+         do (if (vRegNo + 1 -> vRegNo) < refRegStart then vRegNo -> rn if);
          exit rn
          #);
-      free:
+      freeV:
          (# rn: @integer
          enter rn
-         do (if rn = regNo then regNo - 1 -> regNo 
+         do (if rn = vRegNo then vRegNo - 1 -> vRegNo 
             else
-                '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; regNo->out.putint;
+                '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
             if)
-         #); 
+         #);
+      stat: (# do '\n; vRegNo: ' -> out.puttext; vRegNo -> out.putint; ' rRegNo: ' -> out.puttext; rRegNo -> out.putint #);
+      getR:
+         (# rn: @integer
+         do (if (rRegNo + 1 -> rRegNo) < thisObj then rRegNo -> rn if);
+         exit rn
+         #);
+      freeR:
+         (# rn: @integer
+         enter rn
+         do (if rn = rRegNo then rRegNo - 1 -> rRegNo 
+            else
+                (if rn <> thisObj then
+                   '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; rRegNo->out.putint;
+         if)if)#);
       print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint#)
    do
    #);
@@ -113,6 +124,39 @@ StackHandler:
 genHeading:
    (#
    do '.global _main\n.align 2\n' -> out.puttext;
+      '_main:\n\tbl _VM\n' -> out.puttext;
+   #);
+mkOprName:
+   (# n: ^text; T: ^text
+   enter n[]
+   do (if true 
+      // '+' -> ((1,1)->n.sub).equal then '$PLUS' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '-' -> ((1,1)->n.sub).equal then '$MINUS' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '*' -> ((1,1)->n.sub).equal then '$MULT' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '/' -> ((1,1)->n.sub).equal then '$DIV' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '=' -> ((1,1)->n.sub).equal then '$EQ' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '<=' -> ((1,2)->n.sub).equal then '$LE' -> T[]; (3,n.length)->n.sub -> T.append;
+      if)
+   exit T[]
+   #);
+mkODname:
+   (# n: ^Text; T: ^text
+   enter n[]
+   do (if (n[] -> mkOprName -> T[]) = none then
+          '' -> T[];
+          n.scanAll(#do (if ch = ':' then '$' -> T.put else ch -> T.put if) #)
+      if)
+   exit T[]
+   #);
+gen_allocTemplate:
+   (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean; N: ^Text
+   enter(descNo,isObj,vInxSize,rInxSize)
+   do descs.OD[descNo].name[] -> mkODname -> N[];
+      '\n.globl _' -> out.puttext; N[] -> out.puttext;
+      '\n_' -> out.puttext; N[] -> out.puttext;
+
+      ':\n\tmov x0, #' -> out.puttext; descs.OD[descNo].objSize * 4 + 4 -> out.putint;
+      '\n\tbl _malloc\t // adr in x0\n\tmov x28,x0\n' -> out.puttext;
    #);
 gen_putc:
    (#
@@ -143,34 +187,47 @@ EmitCode:
       pushConst:
          (# cst,r: @integer
          enter cst
-         do reg.get -> r;
-            '\n  mov ' -> out.puttext; r -> reg.print; ', #' -> out.puttext; cst -> out.putint;
+         do reg.getV -> r;
+            '\n\tmov ' -> out.puttext; r -> reg.print; ', #' -> out.puttext; cst -> out.putint;
             (r,0) -> stacks.vPush
          #);
       pushg:
-         (# off,r: @integer
+         (# off,rv,rr: @integer
          enter off
-         do '\n  ldr '->out.puttext; reg.get -> r; r -> reg.print;
-            ',['->out.puttext; stacks.rPop -> reg.print; ','->out.put; off -> out.putint; ']' -> out.put; 
-            (r,1) -> stacks.vPush
+         do reg.stat;
+            '\n\tldr '->out.puttext; reg.getV -> rv -> reg.print;
+            ',['->out.puttext; stacks.rPop -> rr -> reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+            rr -> reg.freeR;
+            (rv,1) -> stacks.vPush
+         #);
+      rpushg:
+         (# off,rrd,rrs: @integer
+         enter off
+         do reg.stat;
+            '\n\tldr '->out.puttext; reg.getR -> rrd -> reg.print;
+            ',['->out.puttext; stacks.rPop -> rrs -> reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+            rrs -> reg.freeR;
+            rrd -> stacks.rPush
          #);
       storeg:
-         (# off,r: @integer
+         (# off,vr,rr: @integer
          enter off
-         do '\n  str '->out.puttext;  stacks.vPop -> r -> reg.print;
-             ',['->out.puttext; stacks.rPop -> reg.print; ','->out.put; off -> out.putint; ']' -> out.put; 
-             r -> reg.free
+         do reg.stat;
+            '\n\tstr '->out.puttext;  stacks.vPop -> vr -> reg.print;
+             ',['->out.puttext; stacks.rPop -> rr -> reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+             vr -> reg.freeV; rr -> reg.freeR;
+             reg.stat;
          #);
       emitOp:
          (# op: @integer
          enter op
          do (if op 
             // codes.plus then
-               '\n  add '-> out.puttext;
+               '\n\tadd '-> out.puttext;
             // codes.minus then
-               '\n  sub '-> out.puttext;
+               '\n\tsub '-> out.puttext;
             // codes.mult then
-               '\n  mul '-> out.puttext;
+               '\n\tmul '-> out.puttext;
 
             if);
          #);
@@ -196,6 +253,7 @@ EmitCode:
                    stacks.vPop -> vl; 
                    op -> emitOp;
                    vl -> reg.print; ','->out.put; vl -> reg.print; ',' -> out.put; vr -> reg.print;
+                   vr -> reg.freeV;
                    (vl,regKind) -> stacks.vPush
             if)if)
          #);
@@ -212,25 +270,65 @@ EmitCode:
                     vr -> pushConst; stacks.vPop -> vr;
                     op -> emitOp;
                     vl -> reg.print; ','->out.put; vl -> reg.print; ','->out.put; vr ->reg.print;
+                    vr -> reg.freeV;
                     (vl,regKind) -> stacks.vPush
                 if)
              else 
          
             if)
          #);
-       emitPut:
+      emitPut:
           (# ch: @char
           enter ch
-          do '\n\tmov     w0, #' -> out.puttext; ch -> out.putint;
-             '\n\tbl      _putc\n' -> out.puttext;
+          do '\n\tmov w0, #' -> out.puttext; ch -> out.putint;
+             '\n\tbl _putc\n' -> out.puttext;
           #);
+      invoke:
+          (# descInx,off,r: @integer
+          enter(descInx,off)
+          do (*'\n\t mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
+             (* push of origin as first arg, but we dont know;
+              * also, some objects have no origin
+              *)
+             '\n\tbl _'-> out.puttext; descs.OD[descInx].name[] -> out.puttext;
+          #);
+      defLab:
+         (# lsc: @integer; isDefined: @boolean (* to avoid two identical lables *)
+         enter lsc
+         do (for i: descs.OD[descInx].labs.range repeat 
+                 (if descs.OD[descInx].labs[i] = lsc then
+                     '\n' -> out.put; state.labs.thisLab[] -> out.puttext; lsc -> out.putint; 
+                     (if isDefined then 'x' -> out.put if);
+                     ':'->out.put; true -> isDefined
+            if)for)
+         #);
+      emitLab:
+         (# lsc: @integer
+         enter lsc
+         do state.labs.thisLab[] -> out.puttext; lsc -> out.putint;
+         #)
    enter descInx
-   do (descInx,true,0,0)  -> allocTemplate -> thisModule[] -> thisObj[] -> thisStack[];
+   do reg.init;
+      state.labs.new;
+      (descInx,true,0,0)  ->  gen_allocTemplate;
+      ';\tvTop,rTop: '->out.puttext; stacks.vTop -> out.putint; ','->out.put; stacks.rTop -> out.putint; 
+      '\n; ' -> out.puttext; 
+      (for i: descs.OD[descInx].labs.range repeat 
+           (if descs.OD[descInx].labs[i] > 0 then
+               descs.OD[descInx].labs[i] -> out.putint; ' ' -> out.put
+           if);
+      for); 
+      (*(for i: stacks.vTop repeat (reg.get,regKind) -> stacks.vPush for); *)
+      (* there may be a problem with order of elements on the two stacks
+       * however, we should problay divide the registers into value-regs and ref-regs 
+       *)
+      (*(for i: stacks.rTop repeat reg.get -> stacks.rPush for); *)
       descs.OD[descInx].bc[] -> thisCode[];
-      1 -> glsc;
+      1 -> glsc; 
       loop:
-        (# op,val,off,isObj,dinx,inx: @integer
+        (# op,val,off,isObj,di,dinx,inx: @integer
         do (if thisCode[] = none then 'thiscode none'->putline if);
+           glsc -> defLab;
            (if thisCode.B[glsc] -> op
             // codes.pushc then
                'pushc' -> exe; op1 -> val;
@@ -242,6 +340,7 @@ EmitCode:
                off -> pushg
             // codes.rpushg then
                 'rpushg' -> exe; op1 -> off;
+                off -> rPushg
             // codes.vpushg then
                 'vpushg ' -> exe; op1;
                                              
@@ -273,7 +372,8 @@ EmitCode:
                // codes.rpop then
                'rpop' -> exe;
             // codes.invoke then
-               'invoke' -> exe; op2 -> descInx; op2 -> off; op1 -> isObj;
+               'invoke' -> exe; op2 -> di; op2 -> off; op1 -> isObj;
+               (di,off) -> invoke
             // codes.invokeval then 
                'invokeVal ' -> exe; op2; ' ' -> out.put; op2; ' '->out.put; op1;
             // codes.call then
@@ -287,13 +387,17 @@ EmitCode:
                '\n\tret\n' -> out.puttext;
                true -> doTerminate
             // codes.jmp then
-               'jmp ' -> exe; op2; 
+               'jmp ' -> exe; op2 -> off;
+               '\n\tb '->out.puttext; off -> emitLab; 
             // codes.jmpFalse then
-               'jmpFalse ' -> exe; op2; 
+               'jmpFalse ' -> exe; op2 -> off;
+               '\n\tbne '->out.puttext; off -> emitLab; 
             // codes.jmpTrue then
-               'jmpTrue ' -> exe; op2; 
+               'jmpTrue ' -> exe; op2 -> off;
+               '\tbeq '->out.puttext; off -> off;
             // codes.jmpGT then
-               'jmpGT ' -> exe; op2; 
+               'jmpGT ' -> exe; op2 -> emitLab; 
+               '\n\tbgt '->out.puttext; off -> emitLab; 
             // codes.break then
                 'break ' -> exe; op1; ' ' -> out.put; op2;
                 ' ' -> out.put; op2; ' ' -> out.put; op1;
@@ -370,7 +474,7 @@ EmitCode:
                  // prim.put then 
                     stacks.vPop -> emitPut (* OBS! the argument may be a const or a var - check vKind *)
                 else
-                   '\n!!!! missing prim: ' -> out.puttext; inx -> out.putint;
+                   '\n; !!!! missing prim: ' -> out.puttext; inx -> out.putint;
                 if) 
             // codes.allocEventQ then
                'allocEventQ' -> exe; op1 -> isObj;
@@ -383,12 +487,12 @@ EmitCode:
             // codes.setThisStack then
                'setThisStack' -> exe;
             // codes.saveBETAworld then
-               'saveBETAworld' -> exe;  op2 -> descInx;
+               'saveBETAworld' -> exe;  op2 -> di;
             // codes.stop then
                'stop' -> exe;
                true -> doTerminate
        else
-            '\nop:'->out.puttext; op -> out.putint; 
+            '\n;\top: '->out.puttext; op -> out.putint; 
             glsc + 1 -> glsc
        if);
        (if not doTerminate and (glsc <= thisCode.B.range) then 
