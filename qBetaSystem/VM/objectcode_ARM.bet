@@ -1,10 +1,9 @@
 ORIGIN 'objectcode'
 ---ObjectCode_init:descriptor---
 (#
-do '**** BUM'->putline; out[] = none -> putboolean; newline;
-
-state.genHeading; 'AAA'->putline;
-   state.gen_putc; 'AAA'->putline;
+do true -> isArm;
+   state.genHeading;
+   state.gen_putc;
 #)
 ---ObjectCode_state:descriptor---
 (# mkODname:
@@ -27,8 +26,8 @@ state.genHeading; 'AAA'->putline;
       // '=' -> ((1,1)->n.sub).equal then '$EQ' -> T[]; (2,n.length)->n.sub -> T.append;
       // '<=' -> ((1,2)->n.sub).equal then '$LE' -> T[]; (3,n.length)->n.sub -> T.append;
       if)
-   exit T[]
-   #);
+      exit T[]
+      #);
    labs: @
       (# labNo: @integer; thisLab: ^Text;
          new: 
@@ -41,7 +40,7 @@ state.genHeading; 'AAA'->putline;
    (# refRegStart: (# exit 15 #);
       thisObj: (#exit 28 #);
       vRegNo,rRegNo: @integer;
-      init: (# do refRegStart -> rRegNo #);
+      init: (# do 0 -> vRegNo; refRegStart -> rRegNo #);
       getV:
          (# rn: @integer
          do (if (vRegNo + 1 -> vRegNo) < refRegStart then vRegNo -> rn if);
@@ -75,7 +74,8 @@ state.genHeading; 'AAA'->putline;
    valueKind: (# exit 0 #);
    regKind: (# exit 1 #);
    StackHandler:
-   (# vStack: [8] @integer; vTop: @integer;
+   (# init: (# do 0 -> vTop -> rTop #);
+      vStack: [8] @integer; vTop: @integer;
       vKind: [8] @ integer; (* 0: const; 1: register *)
       rStack: [8] @integer; rTop: @integer;
       vPush: 
@@ -91,9 +91,14 @@ state.genHeading; 'AAA'->putline;
       rPush: 
          (# v: @integer
          enter v 
-         do (if (rTop + 1 -> rTop) < rStack.range then v -> rStack[rTop]if)
+         do (if (rTop + 1 -> rTop) <= rStack.range then v -> rStack[rTop] else '\n; !!! rStack overflow:'->out.putline if)
          #);
-      rPop: (# r: @integer do (if rTop > 0 then rStack[rTop] -> r; rTop - 1 -> rTop else -1 -> r if) exit r #);
+      rPop: 
+         (# r: @integer 
+         do (if (rTop > 0) and (rTop <= 8) then rStack[rTop] -> r; rTop - 1 -> rTop else -1 -> r if) 
+         exit r 
+         #);
+      stat: (# do '\n;stack:vTop:'->out.puttext; vTop -> out.putint; ' rTop:'->out.puttext; rTop -> out.putint; out.newline; #)
    #);
  reg: @RegisterHandler; stacks: @StackHandler;
  allocParameters:
@@ -108,7 +113,7 @@ state.genHeading; 'AAA'->putline;
                  (if thisDesc.params[i]
                   // 0 then (reg.getV,regKind) -> stacks.vPush
                   // 1 then '\n!!!! EmitCode:allocParameters: compound values not supported'->dumpTN
-                  // 2 then reg.getR -> stacks.rPush
+                  // 2 then (*reg.getR -> stacks.rPush*)
                   // 3 then
                   else
                      '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
@@ -116,7 +121,7 @@ state.genHeading; 'AAA'->putline;
                  if)
             for)  
          #);
- emitOp:
+    emitOp:
          (# op: @integer
          enter op
          do (if op 
@@ -129,7 +134,7 @@ state.genHeading; 'AAA'->putline;
 
             if);
          #);
-      binOpImm: (* binary operator with immediate argument *)
+   binOpImm: (* binary operator with immediate argument *)
          (# op,vr,vl,r: @integer
          enter op
          do (if stacks.vTopKind = valueKind then
@@ -175,20 +180,21 @@ state.genHeading; 'AAA'->putline;
          
             if)
          #);
-      emitPut:
+      emitPutConst:
           (# ch: @char
           enter ch
           do '\n\tmov w0, #' -> out.puttext; ch -> out.putint;
              '\n\tbl _putc\n' -> out.puttext;
           #);
       invoke:
-          (# descInx,off,r: @integer
-          enter(descInx,off)
+          (# N: ^Text; off: @integer
+          enter(N[],off)
           do (*'\n\t mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
              (* push of origin as first arg, but we dont know;
               * also, some objects have no origin
               *)
-             '\n\tbl _'-> out.puttext; descs.OD[descInx].name[] -> state.mkODname -> out.puttext;
+             '\n\tbl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
+             state.stacks.init (* clear possible registers used for parameters  -not OK *)
           #);
       defLab:
          (# lsc: @integer; isDefined: @boolean (* to avoid two identical lables *)
@@ -207,8 +213,8 @@ state.genHeading; 'AAA'->putline;
          #);
    genHeading:
       (#
-      do 'XXX'->putline; out[]=none ->putboolean; '.global _main\n.align 2\n' -> out.puttext;
-      '_main:\n\tbl _VM\n' -> out.puttext;'AAAZZZ'->putline;
+      do '.global _main\n.align 2\n' -> out.puttext;
+      '_main:\n\tbl _VM\n' -> out.puttext;
       #);
     gen_putc:
       (#
@@ -221,14 +227,14 @@ state.genHeading; 'AAA'->putline;
       '\tmov     x16, #4             // write\n'  -> out.puttext;
       '\tsvc     #0x80\n'  -> out.puttext;
       '\tadd     sp, sp, #16\n'  -> out.puttext;
-      '\tret\n'  -> out.puttext; 'YYY'->putline;
+      '\tret\n'  -> out.puttext;
       #);
    descInx: @integer; (* this descInx *)
-   emitPutX:
-    (# ch: @char
-    enter ch
-    do '\n\tmov w0, #' -> out.puttext; ch -> out.putint;
-       '\n\tbl _putc\n' -> out.puttext;
+   emitPutReg:
+    (# r: @integer
+    enter r
+    do '\n\tmov w0, w' -> out.puttext; r -> out.putint;
+       '\n\tbl _putc\n' -> out.puttext; r -> state.reg.freeV
     #);
 #)
 ---classDef:doPart---
@@ -252,8 +258,14 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    (**** ARM stuff ****)
    state.reg.init;
    state.labs.new;
+   state.stacks.init;
    (if false then state.allocParameters; if);
    descNo -> state.descInx;
+#)
+---actions:descriptor---
+(#
+do  state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
+    state.labs.thisLab[] -> out.puttext; 'DO:' -> out.putline;
 #)
 ---pushConst:descriptor---
 (# r: @integer
@@ -271,18 +283,22 @@ do (if true
    if);
    state.reg.getV -> r;
     '\n\tmov ' -> out.puttext; r -> state.reg.print; ', #' -> out.puttext; cst -> out.putint;
-    (r,0) -> state.stacks.vPush
+    (r,state.regKind) -> state.stacks.vPush
 #)
----pushTHis:descriptor---
+---pushThis:descriptor---
 (#
-do
+do state.reg.thisObj -> state.stacks.rPush;
 #)
 ---pushg:descriptor---
-(#
-do 
+(# rv,rr: @integer
+do state.reg.stat;
+    '\n\tldr '->out.puttext; state.reg.getV -> rv -> state.reg.print;
+    ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+    rr -> state.reg.freeR;
+    (rv,1) -> state.stacks.vPush
 #)
 ---rpushg:descriptor---
-(# off,rrd,rrs: @integer
+(# rrd,rrs: @integer
 do codes.rpushg -> emit; off -> emit;
    state.reg.stat;
     '\n\tldr '->out.puttext; state.reg.getR -> rrd -> state.reg.print;
@@ -292,28 +308,36 @@ do codes.rpushg -> emit; off -> emit;
 #)
 
 ---storeg:descriptor---
- (#
- do
+ (# vr,rr: @integer
+ do state.reg.stat; state.stacks.stat;
+    '\n\tstr '->out.puttext;  state.stacks.vPop -> vr -> state.reg.print;
+    ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+    vr -> state.reg.freeV; rr -> state.reg.freeR;
+    state.reg.stat;state.stacks.stat;
  #)
+ ---defLab:descriptor---
+(#
+do state.labs.thisLab[] -> out.puttext; lab -> out.putint; ':' -> out.put; out.newline
+#)
 ---jmp:doPart---
 do 'jmp' -> emitOp; 'L'->out.put; lab -> out.putint; out.newline;
    codes.jmp -> emit;
    0 -> emit2;
    lab -> labs.mark;
 
-   '\n\tb '->out.puttext; lab -> state.emitLab; 
+   '\n\tb '->out.puttext; lab -> state.emitLab; out.newline;
 ---jmpFalse:descriptor---
 (#
 do codes.jmpFalse -> emit; 0 -> emit2; Flab -> labs.mark;
-   '\n\tbne '->out.puttext; -17 -> emitLab; 
+   '\n\tbne '->out.puttext; Flab -> state.emitLab; out.newline
 #)
 ---invoke:descriptor---
 (#
-do
+do (N[],staticOff) -> state.invoke
 #)
 ---rtn:descriptor---
 (#
-do
+do '\n\tret\n' -> out.puttext;
 #)
 ---invokev:descriptor---
 (#
@@ -336,7 +360,11 @@ do codes.prim -> emit; op -> emit;
    if);
     (if op
     // prim.put then 
-        state.stacks.vPop -> state.emitPut (* OBS! the argument may be a const or a var - check vKind *)
+        (if state.stacks.vTopKind = state.valueKind then
+            state.stacks.vPop -> state.emitPutConst (* OBS! the argument may be a const or a var - check vKind *)
+        else 
+           state.stacks.vPop -> state.emitPutReg
+        if)
     else
          '\n; !!!! missing prim: ' -> out.puttext; op -> out.putint;
     if) 
@@ -348,10 +376,10 @@ do codes.prim2 -> emit; op -> emit; arg -> emit
 ---binaryOp:descriptor---
 (#
 do (if operator
-               // codes.plus then 'plus' -> emitOp; 
-               // codes.minus then 'minus' -> emitOp
+    // codes.plus then codes.plus -> state.binOpImm 
+    // codes.minus then codes.minus -> state.binOpImm
                // codes.uminus then 'uminus' -> emitOp
-               // codes.mult then 'mult' -> emitOp; 
+    // codes.mult then  codes.mult -> state.binOpReg
                // codes.rdiv then 'div' -> emitOp (* not used? *)
                // codes.idiv then 'idiv' -> emitOp
                // codes.modd then 'modd' -> emitOp
