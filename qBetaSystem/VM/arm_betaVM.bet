@@ -114,7 +114,7 @@ StackHandler:
       vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else -1 -> v if) exit v #);
       vTopKind: (# k: @integer do (if vTop > 0 then vKind[vTop] -> k else -1 -> k if) exit k #);
       rPush: 
-         (# v: @integer 
+         (# v: @integer
          enter v 
          do (if (rTop + 1 -> rTop) < rStack.range then v -> rStack[rTop]if)
          #);
@@ -149,12 +149,12 @@ mkODname:
    exit T[]
    #);
 gen_allocTemplate:
-   (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean; N: ^Text
+   (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean; N: ^Text; 
    enter(descNo,isObj,vInxSize,rInxSize)
    do descs.OD[descNo].name[] -> mkODname -> N[];
       '\n.globl _' -> out.puttext; N[] -> out.puttext;
-      '\n_' -> out.puttext; N[] -> out.puttext;
 
+      '\n_' -> out.puttext; N[] -> out.puttext;
       ':\n\tmov x0, #' -> out.puttext; descs.OD[descNo].objSize * 4 + 4 -> out.putint;
       '\n\tbl _malloc\t // adr in x0\n\tmov x28,x0\n' -> out.puttext;
    #);
@@ -184,6 +184,26 @@ GenCode:
    #);
 EmitCode:
    (# descInx: @integer; reg: @RegisterHandler; stacks: @StackHandler;
+      allocParameters:
+         (* not sufficient since we must know the order of val and ref parameters
+          * also, dealloc of registers is in reverse order 
+          *)
+         (# par: [16]@integer; parTop: @integer; thisDesc: ^ObjDesc; 
+         do descs.OD[descInx][] -> thisDesc[];
+            '\n; parameters: ' -> out.puttext; thisDesc.pTop -> out.put; ':'->out.put;
+            (for i: thisDesc.pTop repeat 
+                 thisDesc.params[i] -> out.putint; ' ' -> out.put;
+                 (if thisDesc.params[i]
+                  // 0 then (reg.getV,regKind) -> stacks.vPush
+                  // 1 then '\n!!!! EmitCode:allocParameters: compound values not supported'->dumpTN
+                  // 2 then reg.getR -> stacks.rPush
+                  // 3 then
+                  else
+                     '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
+                     thisDesc.params[i]->putint; newline
+                 if)
+            for)  
+         #);
       pushConst:
          (# cst,r: @integer
          enter cst
@@ -290,7 +310,7 @@ EmitCode:
              (* push of origin as first arg, but we dont know;
               * also, some objects have no origin
               *)
-             '\n\tbl _'-> out.puttext; descs.OD[descInx].name[] -> out.puttext;
+             '\n\tbl _'-> out.puttext; descs.OD[descInx].name[] -> mkODname -> out.puttext;
           #);
       defLab:
          (# lsc: @integer; isDefined: @boolean (* to avoid two identical lables *)
@@ -310,6 +330,7 @@ EmitCode:
    enter descInx
    do reg.init;
       state.labs.new;
+      allocParameters;
       (descInx,true,0,0)  ->  gen_allocTemplate;
       ';\tvTop,rTop: '->out.puttext; stacks.vTop -> out.putint; ','->out.put; stacks.rTop -> out.putint; 
       '\n; ' -> out.puttext; 
