@@ -1,0 +1,388 @@
+ORIGIN 'objectcode'
+---ObjectCode_init:descriptor---
+(#
+do '**** BUM'->putline; out[] = none -> putboolean; newline;
+
+state.genHeading; 'AAA'->putline;
+   state.gen_putc; 'AAA'->putline;
+#)
+---ObjectCode_state:descriptor---
+(# mkODname:
+      (# n: ^Text; T: ^text
+      enter n[]
+      do (if (n[] -> mkOprName -> T[]) = none then
+             '' -> T[];
+             n.scanAll(#do (if ch = ':' then '$' -> T.put else ch -> T.put if) #)
+         if)
+      exit T[]
+      #);
+   mkOprName:
+   (# n: ^text; T: ^text
+   enter n[]
+   do (if true 
+      // '+' -> ((1,1)->n.sub).equal then '$PLUS' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '-' -> ((1,1)->n.sub).equal then '$MINUS' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '*' -> ((1,1)->n.sub).equal then '$MULT' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '/' -> ((1,1)->n.sub).equal then '$DIV' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '=' -> ((1,1)->n.sub).equal then '$EQ' -> T[]; (2,n.length)->n.sub -> T.append;
+      // '<=' -> ((1,2)->n.sub).equal then '$LE' -> T[]; (3,n.length)->n.sub -> T.append;
+      if)
+   exit T[]
+   #);
+   labs: @
+      (# labNo: @integer; thisLab: ^Text;
+         new: 
+            (# 
+            do labNo + 1 -> labNo; 
+               'L' -> thisLab[]; labNo -> thisLab.putint; '_'->thisLab.put
+            #)
+      #);
+   RegisterHandler:
+   (# refRegStart: (# exit 15 #);
+      thisObj: (#exit 28 #);
+      vRegNo,rRegNo: @integer;
+      init: (# do refRegStart -> rRegNo #);
+      getV:
+         (# rn: @integer
+         do (if (vRegNo + 1 -> vRegNo) < refRegStart then vRegNo -> rn if);
+         exit rn
+         #);
+      freeV:
+         (# rn: @integer
+         enter rn
+         do (if rn = vRegNo then vRegNo - 1 -> vRegNo 
+            else
+                '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
+            if)
+         #);
+      stat: (# do '\n; vRegNo: ' -> out.puttext; vRegNo -> out.putint; ' rRegNo: ' -> out.puttext; rRegNo -> out.putint #);
+      getR:
+         (# rn: @integer
+         do (if (rRegNo + 1 -> rRegNo) < thisObj then rRegNo -> rn if);
+         exit rn
+         #);
+      freeR:
+         (# rn: @integer
+         enter rn
+         do (if rn = rRegNo then rRegNo - 1 -> rRegNo 
+            else
+                (if rn <> thisObj then
+                   '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; rRegNo->out.putint;
+         if)if)#);
+      print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint#)
+   do
+   #);
+   valueKind: (# exit 0 #);
+   regKind: (# exit 1 #);
+   StackHandler:
+   (# vStack: [8] @integer; vTop: @integer;
+      vKind: [8] @ integer; (* 0: const; 1: register *)
+      rStack: [8] @integer; rTop: @integer;
+      vPush: 
+         (# v,t: @integer 
+         enter(v,t) 
+         do (if (vTop + 1 -> vTop) > vStack.range then 
+                vStack.range -> vStack.extend; vKind.range -> vKind.extend;
+            if);
+            v -> vStack[vTop]; t -> vKind[vTop];
+         #);
+      vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else -1 -> v if) exit v #);
+      vTopKind: (# k: @integer do (if vTop > 0 then vKind[vTop] -> k else -1 -> k if) exit k #);
+      rPush: 
+         (# v: @integer
+         enter v 
+         do (if (rTop + 1 -> rTop) < rStack.range then v -> rStack[rTop]if)
+         #);
+      rPop: (# r: @integer do (if rTop > 0 then rStack[rTop] -> r; rTop - 1 -> rTop else -1 -> r if) exit r #);
+   #);
+ reg: @RegisterHandler; stacks: @StackHandler;
+ allocParameters:
+         (* not sufficient since we must know the order of val and ref parameters
+          * also, dealloc of registers is in reverse order 
+          *)
+         (# par: [16]@integer; parTop: @integer; thisDesc: ^ObjDesc; 
+         do descs.OD[descInx][] -> thisDesc[];
+            '\n; parameters: ' -> out.puttext; thisDesc.pTop -> out.put; ':'->out.put;
+            (for i: thisDesc.pTop repeat 
+                 thisDesc.params[i] -> out.putint; ' ' -> out.put;
+                 (if thisDesc.params[i]
+                  // 0 then (reg.getV,regKind) -> stacks.vPush
+                  // 1 then '\n!!!! EmitCode:allocParameters: compound values not supported'->dumpTN
+                  // 2 then reg.getR -> stacks.rPush
+                  // 3 then
+                  else
+                     '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
+                     thisDesc.params[i]->putint; newline
+                 if)
+            for)  
+         #);
+ emitOp:
+         (# op: @integer
+         enter op
+         do (if op 
+            // codes.plus then
+               '\n\tadd '-> out.puttext;
+            // codes.minus then
+               '\n\tsub '-> out.puttext;
+            // codes.mult then
+               '\n\tmul '-> out.puttext;
+
+            if);
+         #);
+      binOpImm: (* binary operator with immediate argument *)
+         (# op,vr,vl,r: @integer
+         enter op
+         do (if stacks.vTopKind = valueKind then
+                stacks.vPop -> vr;
+                (if stacks.vTopKind = valueKind then
+                    stacks.vPop -> vl;
+                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                else (* vr: const, vl: register *)
+                    stacks.vPop -> vl;
+                    op -> emitOp;
+                    vl -> reg.print; ','->out.put; vl -> reg.print; ',#'->out.puttext; vr -> out.putint; 
+                    (vl,regKind) -> stacks.vPush
+                if)
+             else
+                stacks.vPop -> vr;
+                (if stacks.vTopKind = valueKind then
+             
+                else (* operands in registers *)
+                   stacks.vPop -> vl; 
+                   op -> emitOp;
+                   vl -> reg.print; ','->out.put; vl -> reg.print; ',' -> out.put; vr -> reg.print;
+                   vr -> reg.freeV;
+                   (vl,regKind) -> stacks.vPush
+            if)if)
+         #);
+      binOpReg: (* binary operator with register argument *)
+         (# op,vr,vl,r: @integer
+         enter op
+         do (if stacks.vTopKind = valueKind then
+                stacks.vPop -> vr;
+                (if stacks.vTopKind = valueKind then
+                    stacks.vPop -> vl;
+                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                else (* vr: const, vl: register *)
+                    stacks.vPop -> vl;
+                    vr -> pushConst; stacks.vPop -> vr;
+                    op -> emitOp;
+                    vl -> reg.print; ','->out.put; vl -> reg.print; ','->out.put; vr ->reg.print;
+                    vr -> reg.freeV;
+                    (vl,regKind) -> stacks.vPush
+                if)
+             else 
+         
+            if)
+         #);
+      emitPut:
+          (# ch: @char
+          enter ch
+          do '\n\tmov w0, #' -> out.puttext; ch -> out.putint;
+             '\n\tbl _putc\n' -> out.puttext;
+          #);
+      invoke:
+          (# descInx,off,r: @integer
+          enter(descInx,off)
+          do (*'\n\t mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
+             (* push of origin as first arg, but we dont know;
+              * also, some objects have no origin
+              *)
+             '\n\tbl _'-> out.puttext; descs.OD[descInx].name[] -> state.mkODname -> out.puttext;
+          #);
+      defLab:
+         (# lsc: @integer; isDefined: @boolean (* to avoid two identical lables *)
+         enter lsc
+         do (for i: descs.OD[descInx].labs.range repeat 
+                 (if descs.OD[descInx].labs[i] = lsc then
+                     '\n' -> out.put; state.labs.thisLab[] -> out.puttext; lsc -> out.putint; 
+                     (if isDefined then 'x' -> out.put if);
+                     ':'->out.put; true -> isDefined
+            if)for)
+         #);
+    emitLab:
+         (# lsc: @integer
+         enter lsc
+         do state.labs.thisLab[] -> out.puttext; lsc -> out.putint;
+         #);
+   genHeading:
+      (#
+      do 'XXX'->putline; out[]=none ->putboolean; '.global _main\n.align 2\n' -> out.puttext;
+      '_main:\n\tbl _VM\n' -> out.puttext;'AAAZZZ'->putline;
+      #);
+    gen_putc:
+      (#
+      do '\t.text\n\t.global _putc\n' -> out.puttext;
+         '_putc: // Character is in w0\n' -> out.puttext;
+      '\tsub     sp, sp, #16\n\tstrb    w0, [sp]\t// write(1, sp, 1)\n'->out.puttext;
+      '\tmov     x0, #1              // stdout\n'->out.puttext;
+      '\tmov     x1, sp              // address of character\n' -> out.puttext;
+      '\tmov     x2, #1              // one byte\n'  -> out.puttext;
+      '\tmov     x16, #4             // write\n'  -> out.puttext;
+      '\tsvc     #0x80\n'  -> out.puttext;
+      '\tadd     sp, sp, #16\n'  -> out.puttext;
+      '\tret\n'  -> out.puttext; 'YYY'->putline;
+      #);
+   descInx: @integer; (* this descInx *)
+   emitPutX:
+    (# ch: @char
+    enter ch
+    do '\n\tmov w0, #' -> out.puttext; ch -> out.putint;
+       '\n\tbl _putc\n' -> out.puttext;
+    #);
+#)
+---classDef:doPart---
+do
+---class:descriptor---
+(#
+do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
+   (if descs.OD[topDescNo][]= none then 
+       dumpClass;
+       ' descs.OD[topDescNo='->puttext; topDescNo -> putint; '][]= none' -> putline
+    else
+       (topDescNo,descs.OD[topDescNo].bc[]) -> descs.current.setSuperBC;
+   if);
+   descs.markAllocE;
+   (if procE then 
+       'procE:' -> puttext; N[] -> putline;
+       descs.markProcE 
+   if);
+   initGCinfo;
+   labs.init;
+   (**** ARM stuff ****)
+   state.reg.init;
+   state.labs.new;
+   (if false then state.allocParameters; if);
+   descNo -> state.descInx;
+#)
+---pushConst:descriptor---
+(# r: @integer
+do (if true 
+    // cst <= 255 then
+       codes.pushc -> emit;
+       cst -> emit
+    // cst <= 255 * 255  then
+       codes.pushc2 -> emit;
+       cst -> emit2
+    else 
+       codes.pushc4 -> emit;
+       cst -> emit4;
+       fcom(#do 'OBS! Constant >= 2^16 is not implemented' ->TT #)
+   if);
+   state.reg.getV -> r;
+    '\n\tmov ' -> out.puttext; r -> state.reg.print; ', #' -> out.puttext; cst -> out.putint;
+    (r,0) -> state.stacks.vPush
+#)
+---pushTHis:descriptor---
+(#
+do
+#)
+---pushg:descriptor---
+(#
+do 
+#)
+---rpushg:descriptor---
+(# off,rrd,rrs: @integer
+do codes.rpushg -> emit; off -> emit;
+   state.reg.stat;
+    '\n\tldr '->out.puttext; state.reg.getR -> rrd -> state.reg.print;
+    ',['->out.puttext; state.stacks.rPop -> rrs -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+    rrs -> state.reg.freeR;
+    rrd -> state.stacks.rPush
+#)
+
+---storeg:descriptor---
+ (#
+ do
+ #)
+---jmp:doPart---
+do 'jmp' -> emitOp; 'L'->out.put; lab -> out.putint; out.newline;
+   codes.jmp -> emit;
+   0 -> emit2;
+   lab -> labs.mark;
+
+   '\n\tb '->out.puttext; lab -> state.emitLab; 
+---jmpFalse:descriptor---
+(#
+do codes.jmpFalse -> emit; 0 -> emit2; Flab -> labs.mark;
+   '\n\tbne '->out.puttext; -17 -> emitLab; 
+#)
+---invoke:descriptor---
+(#
+do
+#)
+---rtn:descriptor---
+(#
+do
+#)
+---invokev:descriptor---
+(#
+do codes.invokev -> emit; dinx -> emit; noOfRefArgs -> emit;
+   (if recIsValueObj then 1  -> emit else 0 -> emit if);
+#)
+---callPrim:descriptor---
+(#
+do codes.prim -> emit; op -> emit;
+   (if op 
+    // prim.attach then 
+       ' ' -> out.put;
+       'D' -> out.put;
+       'D' -> emit 
+    // prim.fork // prim.cmpAndSwap // prim.thisCore then
+       (* perhaps more prims require C-mode, 
+        * but we are probably shure with the above ones
+        *)
+       true -> descs.onlyCinterpreter;
+   if);
+    (if op
+    // prim.put then 
+        state.stacks.vPop -> state.emitPut (* OBS! the argument may be a const or a var - check vKind *)
+    else
+         '\n; !!!! missing prim: ' -> out.puttext; op -> out.putint;
+    if) 
+#)
+---callPrim2:descriptor---
+(#
+do codes.prim2 -> emit; op -> emit; arg -> emit
+#)
+---binaryOp:descriptor---
+(#
+do (if operator
+               // codes.plus then 'plus' -> emitOp; 
+               // codes.minus then 'minus' -> emitOp
+               // codes.uminus then 'uminus' -> emitOp
+               // codes.mult then 'mult' -> emitOp; 
+               // codes.rdiv then 'div' -> emitOp (* not used? *)
+               // codes.idiv then 'idiv' -> emitOp
+               // codes.modd then 'modd' -> emitOp
+               // codes.eq then 'eq' -> emitOp
+               // codes.lt then 'lt' -> emitOp; 
+               // codes.le then 'le' -> emitOp;
+               // codes.gt then 'gt' -> emitOp;
+               // codes.ge then 'ge' -> emitOp
+               // codes.ne then 'ne' -> emitOp
+               // codes.andd then 'andd' -> emitOp
+               // codes.orr then 'orr' -> emitOp
+               // codes.xorr then 'xorr' -> emitOp
+               // codes.nott then 'nott' -> emitOp
+               // codes.req then 'req' -> emitOp
+               // codes.rne then 'rne' -> emitOp
+               // codes.fplus then 'fplus' -> emitOp
+               // codes.fminus then 'fminus' -> emitOp
+               // codes.funaryminus then 'funaryminus' -> emitOp
+               // codes.fmult then 'fmult' -> emitOp
+               // codes.fdiv then 'fdiv' -> emitOp
+               // codes.feq then 'feq' -> emitOp
+               // codes.flt then 'flt' -> emitOp 
+               // codes.fle then 'fle' -> emitOp
+               // codes.fgt then 'fgt' -> emitOp
+               // codes.fge then 'fge' -> emitOp
+               // codes.fne then 'fne' -> emitOp
+               // codes.fexp then 'fexp' -> emitOp
+               else
+                  operator -> out.putint;
+              if);
+              out.newline;
+              operator -> emit;
+#)
+   
