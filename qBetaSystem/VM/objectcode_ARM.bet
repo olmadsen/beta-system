@@ -28,6 +28,25 @@ do true -> isArm;
       if)
       exit T[]
       #);
+   gen_allocTemplate:
+   (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean; N: ^Text; 
+   enter(descNo,isObj,vInxSize,rInxSize)
+   do descs.OD[descNo].name[] -> mkODname -> N[];
+      '\n.globl _' -> out.puttext; N[] -> out.puttext;
+
+      '\n_' -> out.puttext; N[] -> out.puttext; ':' -> out.put;
+      '\n\t adrp    x1, TMP@PAGE' -> out.puttext;
+      '\n\t add     x1, x1, TMP@PAGEOFF' -> out.puttext;
+      '\n\t str     lr, [x1]' -> out.puttext;
+                                                                (* FIX save thisObj *)
+      '\n\t mov x0, #' -> out.puttext; descs.OD[descNo].objSize * 4 + 4 -> out.putint; (* FIX + 8 , and * 4 + 4 several places *)
+      '\n\t bl _malloc\t // adr in x0\n\tmov x28,x0' -> out.puttext;
+      
+      '\n\t adrp    x1, TMP@PAGE' -> out.puttext;
+      '\n\t add     x1, x1, TMP@PAGEOFF' -> out.puttext;   (*  FIXrestore and save thisObj *)
+      '\n\t ldr     lr, [x1]' -> out.puttext;
+      '\n\t str lr, [x28, #0]\n' -> out.puttext
+   #);
    labs: @
       (# labNo: @integer; thisLab: ^Text;
          new: 
@@ -204,12 +223,21 @@ do true -> isArm;
          #);
    genHeading:
       (#
-      do '.global _main\n.align 2\n' -> out.puttext;
-      '_main:\n\tbl _VM\n' -> out.puttext;
+      do '\n.bss' -> out.puttext;
+         '\n.align 3' -> out.puttext;
+         '\nTMP:' -> out.puttext;
+         '\n.space 8\n' -> out.puttext;  (* TMP for thisObj *)
+
+         '\n.text' -> out.puttext;
+         '\n.global _main\n.align 2' -> out.puttext;
+         '\n_main:\n\tbl _VM' -> out.puttext;
+         '\n\tret\n' -> out.puttext;
+
       #);
     gen_putc:
       (#
-      do '\t.text\n\t.global _putc\n' -> out.puttext;
+      do '\n.text'->out.puttext;
+         '\n.global _putc\n' -> out.puttext;
          '_putc: // Character is in w0\n' -> out.puttext;
       '\tsub     sp, sp, #16\n\tstrb    w0, [sp]\t// write(1, sp, 1)\n'->out.puttext;
       '\tmov     x0, #1              // stdout\n'->out.puttext;
@@ -251,6 +279,7 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.labs.new;
    state.stacks.init;
    descNo -> state.descInx;
+   (descNo,true,0,0)  ->  state.gen_allocTemplate;
 #)
 ---setNoOfParams:doPart---
 do params -> state.params; pTop -> state.pTop;
@@ -309,10 +338,16 @@ do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out
 ---storeg:descriptor---
  (# vr,rr: @integer
  do state.reg.stat; state.stacks.stat;
-    '\n\tstr '->out.puttext;  state.stacks.vPop -> vr -> state.reg.print;
-    ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
-    vr -> state.reg.freeV; rr -> state.reg.freeR;
-    state.reg.stat;state.stacks.stat;
+    state.stacks.vPop -> vr; 
+    state.stacks.rPop -> rr;
+    (if (vr >= 0) and (rr >= 0) then
+       '\n\tstr '->out.puttext;  vr -> state.reg.print;
+       ',['->out.puttext; rr -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+       vr -> state.reg.freeV; rr -> state.reg.freeR;
+       state.reg.stat;state.stacks.stat;
+    else
+       '\n; MISSING str because of x-1 registers\n'->out.puttext
+    if)
  #)
  ---defLab:descriptor---
 (#
@@ -336,7 +371,8 @@ do (N[],staticOff) -> state.invoke
 #)
 ---rtn:descriptor---
 (#
-do '\n\tret\n' -> out.puttext;
+do '\n\tldr lr, [x28,#0]' -> out.puttext;
+   '\n\tret\n' -> out.puttext;
 #)
 ---prepareReturn:descriptor---
 (#
