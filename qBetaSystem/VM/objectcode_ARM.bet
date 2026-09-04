@@ -43,13 +43,14 @@ do true -> isArm;
       init: (# do 0 -> vRegNo; refRegStart -> rRegNo #);
       getV:
          (# rn: @integer
-         do (if (vRegNo + 1 -> vRegNo) < refRegStart then vRegNo -> rn if);
+         do vRegNo -> rn;
+            (if (vRegNo + 1 -> vRegNo) >= refRegStart then '\n!!!! ARM codegen. value register overflow'-> putline if);
          exit rn
          #);
       freeV:
          (# rn: @integer
          enter rn
-         do (if rn = vRegNo then vRegNo - 1 -> vRegNo 
+         do (if rn = (vRegNo - 1) then vRegNo - 1 -> vRegNo 
             else
                 '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
             if)
@@ -57,13 +58,14 @@ do true -> isArm;
       stat: (# do '\n; vRegNo: ' -> out.puttext; vRegNo -> out.putint; ' rRegNo: ' -> out.puttext; rRegNo -> out.putint #);
       getR:
          (# rn: @integer
-         do (if (rRegNo + 1 -> rRegNo) < thisObj then rRegNo -> rn if);
+         do rRegNo -> rn;
+            (if (rRegNo + 1 -> rRegNo) >= thisObj then '\n!!!! ARM codegen. reference register overflow'-> putline  if);
          exit rn
          #);
       freeR:
          (# rn: @integer
          enter rn
-         do (if rn = rRegNo then rRegNo - 1 -> rRegNo 
+         do (if rn = (rRegNo - 1) then rRegNo - 1 -> rRegNo 
             else
                 (if rn <> thisObj then
                    '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; rRegNo->out.putint;
@@ -102,26 +104,24 @@ do true -> isArm;
    #);
  reg: @RegisterHandler; stacks: @StackHandler;
  allocParameters:
-         (* not sufficient since we must know the order of val and ref parameters
-          * also, dealloc of registers is in reverse order 
-          *)
-         (# par: [16]@integer; parTop: @integer; thisDesc: ^ObjDesc; 
-         do descs.OD[descInx][] -> thisDesc[];
-            '\n; parameters: ' -> out.puttext; thisDesc.pTop -> out.put; ':'->out.put;
-            (for i: thisDesc.pTop repeat 
-                 thisDesc.params[i] -> out.putint; ' ' -> out.put;
-                 (if thisDesc.params[i]
-                  // 0 then (reg.getV,regKind) -> stacks.vPush
-                  // 1 then '\n!!!! EmitCode:allocParameters: compound values not supported'->dumpTN
-                  // 2 then (*reg.getR -> stacks.rPush*)
-                  // 3 then
-                  else
-                     '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
-                     thisDesc.params[i]->putint; newline
-                 if)
-            for)  
-         #);
-    emitOp:
+    (* NOT sufficient for compound values - must need size *)
+    (# 
+    do '\n; parameters:pTop:' -> out.puttext; pTop -> out.putint; ':'->out.put;
+        (for i: pTop repeat 
+            params[i] -> out.putint; ' ' -> out.put;
+            (if params[i]
+            // 0 then (reg.getV,regKind) -> stacks.vPush
+            // 1 then '\n!!!! EmitCode:allocParameters: compound values not supported'->dumpTN
+            // 2 then reg.getR -> stacks.rPush;
+            // 3 then
+            else
+                '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
+                params[i]->putint; newline
+        if)for);
+        out.newline
+    #);
+  params: [0] @integer; pTop: @integer;
+  emitOp:
          (# op: @integer
          enter op
          do (if op 
@@ -194,18 +194,9 @@ do true -> isArm;
               * also, some objects have no origin
               *)
              '\n\tbl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
-             state.stacks.init (* clear possible registers used for parameters  -not OK *)
+             state.stacks.init; (* clear possible registers used for parameters  -not OK *)
+             state.reg.init;
           #);
-      defLab:
-         (# lsc: @integer; isDefined: @boolean (* to avoid two identical lables *)
-         enter lsc
-         do (for i: descs.OD[descInx].labs.range repeat 
-                 (if descs.OD[descInx].labs[i] = lsc then
-                     '\n' -> out.put; state.labs.thisLab[] -> out.puttext; lsc -> out.putint; 
-                     (if isDefined then 'x' -> out.put if);
-                     ':'->out.put; true -> isDefined
-            if)for)
-         #);
     emitLab:
          (# lsc: @integer
          enter lsc
@@ -259,9 +250,11 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.reg.init;
    state.labs.new;
    state.stacks.init;
-   (if false then state.allocParameters; if);
    descNo -> state.descInx;
 #)
+---setNoOfParams:doPart---
+do params -> state.params; pTop -> state.pTop;
+   state.allocParameters;
 ---actions:descriptor---
 (#
 do  state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
@@ -298,15 +291,21 @@ do state.reg.stat;
     (rv,1) -> state.stacks.vPush
 #)
 ---rpushg:descriptor---
-(# rrd,rrs: @integer
+(# rrs,rrd: @integer
 do codes.rpushg -> emit; off -> emit;
+   state.stacks.rPop -> rrs;
+   (if rrs = state.reg.thisObj then
+       state.reg.getR -> rrd
+    else
+       rrs -> rrd
+   if);
    state.reg.stat;
-    '\n\tldr '->out.puttext; state.reg.getR -> rrd -> state.reg.print;
-    ',['->out.puttext; state.stacks.rPop -> rrs -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
-    rrs -> state.reg.freeR;
+    '\n\tldr '->out.puttext; rrd -> state.reg.print;
+    ',['->out.puttext; rrs -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
     rrd -> state.stacks.rPush
 #)
-
+---pushParam:doPart---
+do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out.putint;
 ---storeg:descriptor---
  (# vr,rr: @integer
  do state.reg.stat; state.stacks.stat;
@@ -339,6 +338,10 @@ do (N[],staticOff) -> state.invoke
 (#
 do '\n\tret\n' -> out.puttext;
 #)
+---prepareReturn:descriptor---
+(#
+do state.reg.thisObj -> state.stacks.rPush; state.reg.thisObj -> state.stacks.rPush;
+#)
 ---invokev:descriptor---
 (#
 do codes.invokev -> emit; dinx -> emit; noOfRefArgs -> emit;
@@ -365,6 +368,8 @@ do codes.prim -> emit; op -> emit;
         else 
            state.stacks.vPop -> state.emitPutReg
         if)
+    // prim.asString then
+       (*'___%prim: asString' -> putline*)
     else
          '\n; !!!! missing prim: ' -> out.puttext; op -> out.putint;
     if) 
