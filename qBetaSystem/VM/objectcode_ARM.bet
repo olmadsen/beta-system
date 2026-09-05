@@ -29,23 +29,33 @@ do true -> isArm;
       exit T[]
       #);
    gen_allocTemplate:
-   (# descNo,vInxSize,rInxSize: @integer; isObj: @boolean; N: ^Text; 
-   enter(descNo,isObj,vInxSize,rInxSize)
+   (# descNo,vInxSize,rInxSize,objSize: @integer; isObj: @boolean; N: ^Text; 
+   enter(descNo,isObj,vInxSize,rInxSize,objSize)
    do descs.OD[descNo].name[] -> mkODname -> N[];
       '\n.globl _' -> out.puttext; N[] -> out.puttext;
 
       '\n_' -> out.puttext; N[] -> out.puttext; ':' -> out.put;
-      '\n\t adrp    x1, TMP@PAGE' -> out.puttext;
-      '\n\t add     x1, x1, TMP@PAGEOFF' -> out.puttext;
+      '\n\t adrp    x1, LR_TMP@PAGE' -> out.puttext;
+      '\n\t add     x1, x1, LR_TMP@PAGEOFF' -> out.puttext;
       '\n\t str     lr, [x1]' -> out.puttext;
-                                                                (* FIX save thisObj *)
-      '\n\t mov x0, #' -> out.puttext; descs.OD[descNo].objSize * 4 + 4 -> out.putint; (* FIX + 8 , and * 4 + 4 several places *)
-      '\n\t bl _malloc\t // adr in x0\n\tmov x28,x0' -> out.puttext;
+      '\n\t adrp    x1, thisObj_TMP@PAGE' -> out.puttext;
+      '\n\t add     x1, x1, thisObj_TMP@PAGEOFF' -> out.puttext;
+      '\n\t str     x28, [x1]' -> out.puttext;
+                                                              
+      '\n\t mov     x0, #' -> out.puttext; objSize * 4 + 8 -> out.putint; (* elim descs.OD *)
+      '\n\t bl _malloc\t\t // adr of object in x0' -> out.puttext;
+      '\n\t mov     x28,x0' -> out.puttext;
       
-      '\n\t adrp    x1, TMP@PAGE' -> out.puttext;
-      '\n\t add     x1, x1, TMP@PAGEOFF' -> out.puttext;   (*  FIXrestore and save thisObj *)
+      '\n\t adrp    x1, thisObj_TMP@PAGE' -> out.puttext;           (* save thisObj in new object *)
+      '\n\t add     x1, x1, thisObj_TMP@PAGEOFF' -> out.puttext; 
+      '\n\t ldr     x0, [x1]' -> out.puttext;                       (* caller thisObj *)
+      '\n\t str     x0, [x28, #4]\n' -> out.puttext;
+
+      '\n\t adrp    x1, LR_TMP@PAGE' -> out.puttext;                (* save lr in new object *)
+      '\n\t add     x1, x1, LR_TMP@PAGEOFF' -> out.puttext; 
       '\n\t ldr     lr, [x1]' -> out.puttext;
-      '\n\t str lr, [x28, #0]\n' -> out.puttext
+      '\n\t str     lr, [x28, #0]\n' -> out.puttext;
+
    #);
    labs: @
       (# labNo: @integer; thisLab: ^Text;
@@ -74,7 +84,11 @@ do true -> isArm;
                 '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
             if)
          #);
-      stat: (# do '\n; vRegNo: ' -> out.puttext; vRegNo -> out.putint; ' rRegNo: ' -> out.puttext; rRegNo -> out.putint #);
+      stat: 
+         (# 
+         do (if false then
+                '\n; vRegNo: ' -> out.puttext; vRegNo -> out.putint; ' rRegNo: ' -> out.puttext; rRegNo -> out.putint
+         if) #);
       getR:
          (# rn: @integer
          do rRegNo -> rn;
@@ -107,8 +121,8 @@ do true -> isArm;
             if);
             v -> vStack[vTop]; t -> vKind[vTop];
          #);
-      vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else -1 -> v if) exit v #);
-      vTopKind: (# k: @integer do (if vTop > 0 then vKind[vTop] -> k else -1 -> k if) exit k #);
+      vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else 28 -> v if) exit v #);
+      vTopKind: (# k: @integer do (if vTop > 0 then vKind[vTop] -> k else 27 -> k if) exit k #);
       rPush: 
          (# v: @integer
          enter v 
@@ -116,10 +130,14 @@ do true -> isArm;
          #);
       rPop: 
          (# r: @integer 
-         do (if (rTop > 0) and (rTop <= 8) then rStack[rTop] -> r; rTop - 1 -> rTop else -1 -> r if) 
+         do (if (rTop > 0) and (rTop <= 8) then rStack[rTop] -> r; rTop - 1 -> rTop else 27 -> r if) 
          exit r 
          #);
-      stat: (# do '\n;stack:vTop:'->out.puttext; vTop -> out.putint; ' rTop:'->out.puttext; rTop -> out.putint; out.newline; #)
+      stat: 
+         (#
+         do (if false then
+            '\n; vTop:'->out.puttext; vTop -> out.putint; ' rTop:'->out.puttext; rTop -> out.putint; out.newline
+         if) #)
    #);
  reg: @RegisterHandler; stacks: @StackHandler;
  allocParameters:
@@ -145,44 +163,53 @@ do true -> isArm;
          enter op
          do (if op 
             // codes.plus then
-               '\n\tadd '-> out.puttext;
+               '\n\t add '-> out.puttext;
             // codes.minus then
-               '\n\tsub '-> out.puttext;
+               '\n\t sub '-> out.puttext;
             // codes.mult then
-               '\n\tmul '-> out.puttext;
+               '\n\t mul '-> out.puttext;
 
             if);
          #);
-   binOpImm: (* binary operator with immediate argument *)
+   binOpImm: (* binary operator with posble immediate argument *)
          (# op,vr,vl,r: @integer
          enter op
-         do (if stacks.vTopKind = valueKind then
-                stacks.vPop -> vr;
+         do '\n;binOpImm:'->out.puttext;
+            (if stacks.vTopKind = valueKind then 
+                stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
-                    stacks.vPop -> vl;
+                    stacks.vPop -> vl; 'vl:value'->out.puttext; vl -> out.putint; 
                     (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
                 else (* vr: const, vl: register *)
                     stacks.vPop -> vl;
+                    ':vl:reg:'->out.puttext; vl -> out.putint; 
                     op -> emitOp;
                     vl -> reg.print; ','->out.put; vl -> reg.print; ',#'->out.puttext; vr -> out.putint; 
                     (vl,regKind) -> stacks.vPush
                 if)
              else
+                'vr:reg:'->out.puttext; vr -> out.putint;
                 stacks.vPop -> vr;
                 (if stacks.vTopKind = valueKind then
-             
+                     'vr:value: missing: '->out.puttext; vr -> out.putint; 
                 else (* operands in registers *)
                    stacks.vPop -> vl; 
+                   'vl:reg:'->out.puttext; vl-> out.putint;
                    op -> emitOp;
                    vl -> reg.print; ','->out.put; vl -> reg.print; ',' -> out.put; vr -> reg.print;
                    vr -> reg.freeV;
                    (vl,regKind) -> stacks.vPush
             if)if)
          #);
-      binOpReg: (* binary operator with register argument *)
+      binOpReg: 
+         (* binary operator with register argument
+          * mult and other caxn only take register arguments
+          *)
          (# op,vr,vl,r: @integer
          enter op
-         do (if stacks.vTopKind = valueKind then
+         do '\n;binOpReg'->out.puttext;
+             (if stacks.vTopKind = valueKind then 
+                '\nvTopKind=valueKind - should not happen' -> puttext;
                 stacks.vPop -> vr;
                 (if stacks.vTopKind = valueKind then
                     stacks.vPop -> vl;
@@ -202,17 +229,17 @@ do true -> isArm;
       emitPutConst:
           (# ch: @char
           enter ch
-          do '\n\tmov w0, #' -> out.puttext; ch -> out.putint;
-             '\n\tbl _putc\n' -> out.puttext;
+          do '\n\t mov w0, #' -> out.puttext; ch -> out.putint;
+             '\n\t bl _putc\n' -> out.puttext;
           #);
       invoke:
           (# N: ^Text; off: @integer
           enter(N[],off)
-          do (*'\n\t mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
+          do (*'\n\t  mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
              (* push of origin as first arg, but we dont know;
               * also, some objects have no origin
               *)
-             '\n\tbl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
+             '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
              state.stacks.init; (* clear possible registers used for parameters  -not OK *)
              state.reg.init;
           #);
@@ -225,35 +252,39 @@ do true -> isArm;
       (#
       do '\n.bss' -> out.puttext;
          '\n.align 3' -> out.puttext;
-         '\nTMP:' -> out.puttext;
-         '\n.space 8\n' -> out.puttext;  (* TMP for thisObj *)
+         '\nLR_TMP:' -> out.puttext;
+         '\n.space 8\n' -> out.puttext;
+         '\nthisObj_TMP:' -> out.puttext;
+         '\n.space 8\n' -> out.puttext;
 
          '\n.text' -> out.puttext;
          '\n.global _main\n.align 2' -> out.puttext;
-         '\n_main:\n\tbl _VM' -> out.puttext;
-         '\n\tret\n' -> out.puttext;
+         '\n_main:\n\t bl _VM' -> out.puttext;
+         '\n\t ret\n' -> out.puttext;
 
       #);
     gen_putc:
       (#
       do '\n.text'->out.puttext;
-         '\n.global _putc\n' -> out.puttext;
+         '\n.global _putc\n\t // write(1, sp, 1)\n' -> out.puttext;
          '_putc: // Character is in w0\n' -> out.puttext;
-      '\tsub     sp, sp, #16\n\tstrb    w0, [sp]\t// write(1, sp, 1)\n'->out.puttext;
-      '\tmov     x0, #1              // stdout\n'->out.puttext;
-      '\tmov     x1, sp              // address of character\n' -> out.puttext;
-      '\tmov     x2, #1              // one byte\n'  -> out.puttext;
-      '\tmov     x16, #4             // write\n'  -> out.puttext;
-      '\tsvc     #0x80\n'  -> out.puttext;
-      '\tadd     sp, sp, #16\n'  -> out.puttext;
-      '\tret\n'  -> out.puttext;
+      '\t sub     sp, sp, #16\n\t strb    w0, [sp]\n'->out.puttext;
+      '\t str     x28, [sp, #4]\n' -> out.puttext;
+      '\t mov     x0, #1              // stdout\n'->out.puttext;
+      '\t mov     x1, sp              // address of character\n' -> out.puttext;
+      '\t mov     x2, #1              // one byte\n'  -> out.puttext;
+      '\t mov     x16, #4             // write\n'  -> out.puttext;
+      '\t svc     #0x80\n'  -> out.puttext;
+      '\t ldr     x28, [sp,#4]\n' -> out.puttext;
+      '\t add     sp, sp, #16\n'  -> out.puttext;
+      '\t ret\n'  -> out.puttext;
       #);
    descInx: @integer; (* this descInx *)
    emitPutReg:
     (# r: @integer
     enter r
-    do '\n\tmov w0, w' -> out.puttext; r -> out.putint;
-       '\n\tbl _putc\n' -> out.puttext; r -> state.reg.freeV
+    do '\n\t mov w0, w' -> out.puttext; r -> out.putint;
+       '\n\t bl _putc\n' -> out.puttext; r -> state.reg.freeV
     #);
 #)
 ---classDef:doPart---
@@ -279,15 +310,15 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.labs.new;
    state.stacks.init;
    descNo -> state.descInx;
-   (descNo,true,0,0)  ->  state.gen_allocTemplate;
 #)
 ---setNoOfParams:doPart---
 do params -> state.params; pTop -> state.pTop;
+   (state.descInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
    state.allocParameters;
 ---actions:descriptor---
 (#
 do  state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
-    state.labs.thisLab[] -> out.puttext; 'DO:' -> out.putline;
+    out.newline;state.labs.thisLab[] -> out.puttext; 'DO:' -> out.puttext;
 #)
 ---pushConst:descriptor---
 (# r: @integer
@@ -304,7 +335,7 @@ do (if true
        fcom(#do 'OBS! Constant >= 2^16 is not implemented' ->TT #)
    if);
    state.reg.getV -> r;
-    '\n\tmov ' -> out.puttext; r -> state.reg.print; ', #' -> out.puttext; cst -> out.putint;
+    '\n\t mov ' -> out.puttext; r -> state.reg.print; ', #' -> out.puttext; cst -> out.putint;
     (r,state.regKind) -> state.stacks.vPush
 #)
 ---pushThis:descriptor---
@@ -314,8 +345,8 @@ do state.reg.thisObj -> state.stacks.rPush;
 ---pushg:descriptor---
 (# rv,rr: @integer
 do state.reg.stat;
-    '\n\tldr '->out.puttext; state.reg.getV -> rv -> state.reg.print;
-    ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+    '\n\t ldr '->out.puttext; state.reg.getV -> rv -> state.reg.print;
+    ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 4 + 4-> out.putint; ']' -> out.put;
     rr -> state.reg.freeR;
     (rv,1) -> state.stacks.vPush
 #)
@@ -329,8 +360,8 @@ do codes.rpushg -> emit; off -> emit;
        rrs -> rrd
    if);
    state.reg.stat;
-    '\n\tldr '->out.puttext; rrd -> state.reg.print;
-    ',['->out.puttext; rrs -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+    '\n\t ldr '->out.puttext; rrd -> state.reg.print;
+    ',['->out.puttext; rrs -> state.reg.print; ','->out.put; off * 4  + 4 -> out.putint; ']' -> out.put;
     rrd -> state.stacks.rPush
 #)
 ---pushParam:doPart---
@@ -340,18 +371,18 @@ do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out
  do state.reg.stat; state.stacks.stat;
     state.stacks.vPop -> vr; 
     state.stacks.rPop -> rr;
-    (if (vr >= 0) and (rr >= 0) then
-       '\n\tstr '->out.puttext;  vr -> state.reg.print;
-       ',['->out.puttext; rr -> state.reg.print; ','->out.put; off * 4 -> out.putint; ']' -> out.put;
+    (if (vr <> 27) and (rr <> 27) then
+       '\n\t str '->out.puttext;  vr -> state.reg.print;
+       ',['->out.puttext; rr -> state.reg.print; ','->out.put; off * 4 + 4 -> out.putint; ']' -> out.put;
        vr -> state.reg.freeV; rr -> state.reg.freeR;
        state.reg.stat;state.stacks.stat;
     else
-       '\n; MISSING str because of x-1 registers\n'->out.puttext
+       '\n; MISSING str because of x27 registers\n'->out.puttext
     if)
  #)
  ---defLab:descriptor---
 (#
-do state.labs.thisLab[] -> out.puttext; lab -> out.putint; ':' -> out.put; out.newline
+do out.newline; state.labs.thisLab[] -> out.puttext; lab -> out.putint; ':' -> out.put;
 #)
 ---jmp:doPart---
 do 'jmp' -> emitOp; 'L'->out.put; lab -> out.putint; out.newline;
@@ -359,11 +390,11 @@ do 'jmp' -> emitOp; 'L'->out.put; lab -> out.putint; out.newline;
    0 -> emit2;
    lab -> labs.mark;
 
-   '\n\tb '->out.puttext; lab -> state.emitLab; out.newline;
+   '\n\t b '->out.puttext; lab -> state.emitLab; out.newline;
 ---jmpFalse:descriptor---
 (#
 do codes.jmpFalse -> emit; 0 -> emit2; Flab -> labs.mark;
-   '\n\tbne '->out.puttext; Flab -> state.emitLab; out.newline
+   '\n\t bne '->out.puttext; Flab -> state.emitLab; out.newline
 #)
 ---invoke:descriptor---
 (#
@@ -371,8 +402,9 @@ do (N[],staticOff) -> state.invoke
 #)
 ---rtn:descriptor---
 (#
-do '\n\tldr lr, [x28,#0]' -> out.puttext;
-   '\n\tret\n' -> out.puttext;
+do '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
+   '\n\t ldr x28, [x28,#4]' -> out.puttext; (* restor thisObj *)
+   '\n\t ret\n' -> out.puttext;
 #)
 ---prepareReturn:descriptor---
 (#
