@@ -1,16 +1,25 @@
-ORIGIN 'objectcode'
+ORIGIN 'objectcode';
+INCLUDE 'ARM_instructions'
 ---ObjectCode_init:descriptor---
 (#
 do true -> isArm;
+   out[] -> state.ins.init;
    state.genHeading;
+   state.gen_qAllocindexed;
    state.gen_putc;
 #)
 ---ObjectCode_state:descriptor---
 (# trace: (# exit true #);
-   udiv:
-      (# r1,r2,r3: @integer
-      enter(r1,r2,r3)
-      do '\n\t UDIV ' ->out.puttext; r1->reg.print; ','->out.put; r2->reg.print; ','->out.put; r3->reg.print
+
+   ins: @ ARM_instructions;
+   gen_qAllocindexed:
+      (* x0 = arrayStrucSize + range * size *)
+      (#
+      do '\n.globl _qAllocIndexed' -> out.puttext;
+         '\n_qAllocIndexed:' -> out.puttext;
+          (29,29,0) -> ins.addR;
+          (reg.refRegStart,29) -> ins.movR;
+          '\n\t ret' -> out.puttext;
       #);
    mkODname:
       (# n: ^Text; T: ^text
@@ -46,7 +55,38 @@ do true -> isArm;
          '\n\t str     x28, [x29, #8]' -> out.puttext;
          '\n\t mov     x28, x29' -> out.puttext; 
 
-         (if trace then N[] -> printTrace if);
+      #);
+   QallocIndexed:
+      (* op2 -> descInx; op1 -> size; op1 -> isRIndexed;
+       * a superflous thisObj is pushed by compiler should be eliminated 
+       * thisStack.rpop -> X[]; (* origin * )
+       * thisStack.vpop -> dinx;
+       * thisStack.vpop -> rangee;
+       * X[],descInx,size,rangee,isRindexed) -> QallocIndexed
+       * arrayStrucSize + range * size --> alloc
+       *   fields[1] = origin, but perhaps not used?
+       *   fields[arrayStrucSize - 1] = range
+       *   fields[arrayStrucSize]     = size
+       *   fields[arrayStrucSize + 1] = rep[1]
+       *   ...
+       * rangee -> fields[arrayStrucSize - 1];
+       * size -> fields[arrayStrucSize];
+      *)
+      (# size,isRIndexed,sizeR,rangeR,dInxR,calleeR: @ integer
+      enter(size,isRIndexed)
+      do reg.getV -> sizeR; reg.getR -> calleeR; 
+         (sizeR,size) -> ins.movI;
+         stacks.vPop -> dInxR; (* not used ?*)
+         stacks.vPop -> rangeR; 
+         (rangeR,RangeR,sizeR) -> ins.mulR;
+         (rangeR,RangeR,arrayStrucSize) -> ins.addI;
+         sizeR -> reg.freeV; dInxR -> reg.freeV;
+         (rangeR,regKind) -> stacks.vPush;
+         '\n\t bl _qAllocIndexed' -> out.puttext;
+         (rangeR,reg.refRegStart,arrayStrucSize -1) -> ins.str;
+         (size,reg.refRegStart,arrayStrucSize) -> ins.str;
+         calleeR -> stacks.rPush;
+         state.stat
       #);
    labs: @
       (# labNo: @integer; thisLab: ^Text;
@@ -94,7 +134,7 @@ do true -> isArm;
                 (if rn <> thisObj then
                    '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; rRegNo->out.putint;
          if)if)#);
-      print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint#)
+      print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint #)
    do
    #);
    valueKind: (# exit 0 #);
@@ -144,7 +184,7 @@ do true -> isArm;
  allocParameters:
     (* NOT sufficient for compound values - must need size *)
     (# 
-    do '\n; parameters:pTop:' -> out.puttext; pTop -> out.putint; ':'->out.put;
+    do '\n; parameters:pTop=' -> out.puttext; pTop -> out.putint; ':'->out.put;
         (for i: pTop repeat 
             params[i] -> out.putint; ' ' -> out.put;
             (if params[i]
@@ -271,7 +311,7 @@ do true -> isArm;
                    stacks.vPop -> vl; 
                    ':vl:reg:'->out.puttext; vl-> out.putint;
                    reg.getV -> vx; 
-                   (vx,vl,vr) -> udiv;
+                   (vx,vl,vr) -> ins.udiv;
                    '\n\t MSUB ' -> out.puttext;
                    vl -> reg.print; ',' -> out.put; vx -> reg.print; ','->out.put; vr -> reg.print; ','->out.put; vl->reg.print; 
                    vx -> reg.freeV;  vr -> reg.freeV; 
@@ -294,6 +334,7 @@ do true -> isArm;
              '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
              state.stacks.init; (* clear possible registers used for parameters  -not OK *)
              state.reg.init;
+             state.stat
           #);
     emitLab:
          (# lsc: @integer
@@ -325,19 +366,21 @@ do true -> isArm;
       (#
       do '\n.text'->out.puttext;
          '\n.global _putc\n\t // write(1, sp, 1)\n' -> out.puttext;
-         '_putc: // Character is in x0\n' -> out.puttext;
-      '\t sub     sp, sp, #16\n\t str    x0, [sp]\n'->out.puttext;
-      '\t str     x28, [sp, #4]\n' -> out.puttext;
-      '\t mov     x0, #1              // stdout\n'->out.puttext;
-      '\t mov     x1, sp              // address of character\n' -> out.puttext;
-      '\t mov     x2, #1              // one byte\n'  -> out.puttext;
-      '\t mov     x16, #4             // write\n'  -> out.puttext;
-      '\t svc     #0x80\n'  -> out.puttext;
-      '\t ldr     x28, [sp,#4]\n' -> out.puttext;
-      '\t add     sp, sp, #16\n'  -> out.puttext;
-      '\t ret\n'  -> out.puttext;
+         '_putc:\t // Character is in x0' -> out.puttext;
+         '\n\t sub     sp, sp, #16'-> out.puttext;
+         '\n\t str     x0, [sp]'->out.puttext;
+         '\n\t str     x28, [sp, #4]\n' -> out.puttext;
+         '\t mov     x0, #1              // stdout\n'->out.puttext;
+         '\t mov     x1, sp              // address of character\n' -> out.puttext;
+         '\t mov     x2, #1              // one byte\n'  -> out.puttext;
+         '\t mov     x16, #4             // write\n'  -> out.puttext;
+         '\t svc     #0x80\n'  -> out.puttext;
+         '\t ldr     x28, [sp,#4]\n' -> out.puttext;
+         '\t add     sp, sp, #16\n'  -> out.puttext;
+         '\t ret\n'  -> out.puttext;
       #);
    descInx: @integer; (* this descInx *)
+   thisName: ^Text; (* name of current class *)
    emitPutReg:
     (# r: @integer
     enter r
@@ -389,7 +432,9 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.reg.init;
    state.labs.new;
    state.stacks.init;
+   state.stat;
    descNo -> state.descInx;
+   N[] -> state.thisName[]
 #)
 ---setNoOfParams:doPart---
 do params -> state.params; pTop -> state.pTop;
@@ -399,6 +444,7 @@ do params -> state.params; pTop -> state.pTop;
 (#
 do  state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
     out.newline;state.labs.thisLab[] -> out.puttext; 'DO:' -> out.puttext;
+    (if state.trace then state.thisName[] -> state.printTrace if);
 #)
 ---pushConst:descriptor---
 (# r: @integer
@@ -432,7 +478,7 @@ do state.reg.stat;
 #)
 ---rpushg:descriptor---
 (# rrs,rrd: @integer
-do codes.rpushg -> emit; off -> emit;
+do state.stat;
    state.stacks.rPop -> rrs;
    (if rrs = state.reg.thisObj then
        state.reg.getR -> rrd
@@ -442,10 +488,16 @@ do codes.rpushg -> emit; off -> emit;
    state.reg.stat;
     '\n\t ldr '->out.puttext; rrd -> state.reg.print;
     ',['->out.puttext; rrs -> state.reg.print; ','->out.put; off * 8  + 16 -> out.putint; ']' -> out.put;
-    rrd -> state.stacks.rPush
+    (if rrs <> rrd then '; rrs: ' -> out.puttext; rrs -> out.putint; rrs -> state.reg.freeR; if);
+    rrd -> state.stacks.rPush;
+    state.stat
 #)
 ---pushParam:doPart---
 do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out.putint;
+---xpushg:descriptor---
+(#
+do
+#)
 ---storeg:descriptor---
  (# vr,rr: @integer
  do state.stat;
@@ -461,6 +513,7 @@ do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out
     if)
  #)
 ---rstore:descriptor---
+(* store in thisObj, which is not on rStack *)
 (# rs: @integer
 do state.stat;
     state.stacks.rPop -> rs;
@@ -470,8 +523,58 @@ do state.stat;
        rs -> state.reg.freeR;
        state.stat;
     else
-       '\n; MISSING str because of x27 registers\n'->out.puttext
+       '\n; storeg:MISSING str because of x27 registers\n'->out.puttext
     if)
+#)
+---rstoreg:descriptor---
+(# rs,rd: @ integer
+do state.stat;
+   state.stacks.rPop -> rs; state.stacks.rPop -> rd;
+   (if (rs <> 27) then
+       (rd,rs,off) -> state.ins.str
+    else
+       '\n; rstoreg: MISSING str because of x27 registers\n'->out.puttext
+   if);
+   rd -> state.reg.freeR; rs -> state.reg.freeR; 
+   state.stat
+#)
+---xstoreg:descriptor---
+(* op1 -> size; op1 -> isValueObj; 
+ * thisStack.rpop -> X[];
+   (if X[] = none then 3 -> fatalError; leave loop if);
+   thisStack.vpop -> inx;
+   (if size = 0 then
+       arrayStrucSize -> X.get -> size;
+   if);
+   arrayStrucSize + (inx - 1) * size + size + 1 -> inx;
+ *   sub x0,inx,-1
+ *   mul x0, 
+ * (for i: size repeat
+        inx - i -> ix;
+        thisStack.vPop -> value;
+        (value,ix) -> X.assign
+   for);
+ *)
+(# Xr,inxR,sizeR,valR: @integer
+do state.stat;
+   state.stacks.rPop -> Xr; state.stacks.vPop -> inxR;
+   (inxR,inxR,1) -> state.ins.subI;
+   size -> pushConst; state.stacks.vPop -> sizeR;
+   (inxR,inxR,sizeR) -> state.ins.mulR;
+   sizeR -> state.reg.freeV;
+   '\n; after sizeR -> state.reg.freeV;' -> out.puttext;
+   state.stat;
+   (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI;
+   (for i: size repeat
+        (inxR,inxR,1) -> state.ins.subI;
+        state.stacks.vPoP -> valR;
+        (valR,Xr,inxR) -> state.ins.strR;
+        inxR -> state.reg.freeV;
+        '\n; after inxR -> state.reg.freeV;' -> out.puttext;
+      state.stat;
+   for);
+   Xr -> state.reg.freeR;
+   state.stat
 #)
  ---defLab:descriptor---
 (#
@@ -524,6 +627,19 @@ do state.reg.thisObj -> state.stacks.rPush; state.reg.thisObj -> state.stacks.rP
 (#
 do codes.invokev -> emit; dinx -> emit; noOfRefArgs -> emit;
    (if recIsValueObj then 1  -> emit else 0 -> emit if);
+#)
+---allocIndexed:descriptor--
+(#
+do (* op2 -> descInx; op1 -> size; op1 -> isRIndexed;
+      a superflous thisObj is pushed by compiler should be eliminated 
+      thisStack.rpop -> X[]; (* origin * )
+      thisStack.vpop -> dinx;
+      thisStack.vpop -> rangee;
+      X[],descInx,size,rangee,isRindexed) -> QallocIndexed
+      arrayStrucSize + range * size --> alloc
+   *)
+   state.stat;
+   (size,isRefIndexed) -> state.QallocIndexed
 #)
 ---callPrim:descriptor---
 (#
