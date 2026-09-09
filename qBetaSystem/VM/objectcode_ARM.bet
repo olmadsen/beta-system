@@ -10,17 +10,65 @@ do true -> isArm;
 #)
 ---ObjectCode_state:descriptor---
 (# trace: (# exit true #);
-
+   x0: (#exit 0 #);
+   x1: (#exit 1 #);
+   x2: (#exit 2 #);
+   x29: (#exit 29 #);
    ins: @ ARM_instructions;
    gen_qAllocindexed:
-      (* x0 = arrayStrucSize + range * size *)
-      (#
-      do '\n.globl _qAllocIndexed' -> out.puttext;
-         '\n_qAllocIndexed:' -> out.puttext;
-          (29,29,0) -> ins.addR;
-          (reg.refRegStart,29) -> ins.movR;
+      (*                      fields[1], [8] = origin, but perhaps not used?
+       *     fields[arrayStrucSize - 1],[16] = range,  in 16-bit words
+       *         fields[arrayStrucSize],[24] = size,   in 16-bit words
+       *     fields[arrayStrucSize + 1],[32] = rep[1]
+       *                      arrayStrucSize = 3 - defined in objectImage
+       *                            bytRange = (arrayStrucSize + range * size) * 8
+       * x0 = range, x1 = dInx, x2 = size
+       *)
+      (# cr: @ integer
+      do '\n.globl _qAllocIndexed' -> out.puttext; 'a'->put;
+         '\n_qAllocIndexed:' -> out.puttext; 
+         (for i:  3 repeat reg. getV for); (* alloc x0,x1,x2 *)
+         (x0,x0,x2) -> ins.mulR;  (* range * size -> range *) 
+         (x0,x0,arrayStrucSize) -> ins.addI; (* arrayStrucSize + range -> range *)
+         8 -> pushConst; stacks.vPop -> cr;
+         (x0,x0,cr) -> ins.mulR;   (* range * 8 -> range *)
+         (29,29,x0) -> ins.addR;   (* allocate array *)
+         
+         (x0,x29,arrayStrucSize - 1 - 2) -> ins.str; (* adjustment for str *)
+         (x2,x29,arrayStrucSize - 2) -> ins.str;
+
+         (reg.refRegStart,x29) -> ins.movR; (* return start in refRegStart *)
           '\n\t ret' -> out.puttext;
       #);
+   computeArrayIndex:
+      (* copmpute arrayStrucSize + (inx - 1) * size + size + 1 -> inx; 
+       *  fields[1] 
+       *               fields[2] = range
+       *  fields[arrayStrucSize] = size       <- arrayStrucSize 
+       *               fields[1] = 1st element
+       *                ...
+       *         fields[inx - 1] =  <- arrayStrucSize + (inx - 1) * size
+       *             fields[inx] =  <- element indexed
+       *         fields[inx + 1] =  <- computed inx
+       *                ...
+       * return inx * 8
+       *)
+      (# size,Xr,inxR,sizeR,valR,c8: @integer
+      enter size
+      do state.stat;
+         state.stacks.rPop -> Xr; state.stacks.vPop -> inxR;
+         (inxR,inxR,1) -> state.ins.subI;   (* inx - 1 -> inx *)
+         size -> pushConst; state.stacks.vPop -> sizeR;
+         (inxR,inxR,sizeR) -> state.ins.mulR; (* inx * size -> inx *)
+         (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI; (* arrayStrucSize + size + 1 -> inx *)
+         sizeR -> state.reg.freeV;
+         size * 8 -> pushConst; state.stacks.vPop -> c8;
+         (inxR,inxR,c8) -> state.ins.mulR;
+         c8 -> state.reg.freeV;
+         '\n; after sizeR -> state.reg.freeV;' -> out.puttext;
+         state.stat;
+      exit(Xr,inxR)
+      #); 
    mkODname:
       (# n: ^Text; T: ^text
       enter n[]
@@ -74,20 +122,24 @@ do true -> isArm;
       *)
       (# size,isRIndexed,sizeR,rangeR,dInxR,calleeR,cr: @ integer
       enter(size,isRIndexed)
-      do reg.getV -> sizeR; reg.getR -> calleeR; 
+      do reg.getR -> calleeR; 
+         stacks.vPop -> dInxR;  (* x1, not used ?*)
+         stacks.vPop -> rangeR; (* x0 *)
+         reg.getV -> sizeR;     (* x2 *)
+         (if false then 
+         (rangeR,RangeR,sizeR) -> ins.mulR;  
          (sizeR,size) -> ins.movI;
-         stacks.vPop -> dInxR; (* not used ?*)
-         stacks.vPop -> rangeR; 
-         (rangeR,RangeR,sizeR) -> ins.mulR;
          (rangeR,RangeR,arrayStrucSize) -> ins.addI;
-         
          8 -> pushConst; stacks.vPop -> cr;
          (rangeR,rangeR,cr) -> ins.mulR;
          (rangeR,regKind) -> stacks.vPush;  (* range of array to be allocated *)
+         if);
          '\n\t bl _qAllocIndexed' -> out.puttext;
+         (if false then
          (rangeR,reg.refRegStart,arrayStrucSize - 1 - 2) -> ins.str; (* adjustment for str *)
          (sizeR,reg.refRegStart,arrayStrucSize - 2) -> ins.str;
          cr -> reg.freeV; sizeR -> reg.freeV; dInxR -> reg.freeV;
+         if);
          calleeR -> stacks.rPush;
          state.stat
       #);
@@ -451,19 +503,7 @@ do  state.reg.init; (* OBS! to clear registers after possible parameter allocati
 #)
 ---pushConst:descriptor---
 (# r: @integer
-do (if true 
-    // cst <= 255 then
-       codes.pushc -> emit;
-       cst -> emit
-    // cst <= 255 * 255  then
-       codes.pushc2 -> emit;
-       cst -> emit2
-    else 
-       codes.pushc4 -> emit;
-       cst -> emit4;
-       fcom(#do 'OBS! Constant >= 2^16 is not implemented' ->TT #)
-   if);
-   state.reg.getV -> r;
+do state.reg.getV -> r;
     '\n\t mov ' -> out.puttext; r -> state.reg.print; ', #' -> out.puttext; cst -> out.putint;
     (r,state.regKind) -> state.stacks.vPush
 #)
@@ -501,9 +541,10 @@ do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out
 (* rStack: ... X = Array-object
  * vStack: ... inx = index into array,   (0 < inx) and (inx <= size)
  *)
-(# Xr,inxR,sizeR: @integer
+(# Xr,inxR,sizeR,vr: @integer
 do (* p1 -> size;  op1 -> isValueObj; thisStack.rpop -> X[]; thisStack.vpop -> inx;*)
-   state.stat;
+   (if false then 
+      state.stat;
    state.stacks.rPop -> Xr;
    state.stacks.vPop -> inxR;
 
@@ -515,12 +556,16 @@ do (* p1 -> size;  op1 -> isValueObj; thisStack.rpop -> X[]; thisStack.vpop -> i
    (inxR,inxR,sizeR) -> state.ins.mulR;  (* inx * size -> inx *)
    sizeR -> state.reg.freeV;
    (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI; (* arrayStrucSize + inx -> inx; *)
-
+   else
+      size -> state.computeArrayIndex -> (Xr,inxR)
+   if);
    (if (isValueObj = 0) and (size = 1) then
        (*inx + 1 -> X.get -> value -> thisStack.vpush;*)
-       (inxR,Xr,inxR) -> state.ins.ldr;
+       (inxR,inxR,1 * 8) -> state.ins.subI;
+       state.reg.getV -> vr;
+       (vr,Xr,inxR) -> state.ins.ldrR;
        Xr -> state.reg.freeR;
-       (inxR,state.regKind) -> state.stacks.vPush
+       (vr,state.regKind) -> state.stacks.vPush
    else (* valueObject *)
        (if size > 1 then
            (for i: size repeat
@@ -587,24 +632,32 @@ do state.stat;
         (value,ix) -> X.assign
    for);
  *)
-(# Xr,inxR,sizeR,valR: @integer
-do state.stat;
+(# Xr,inxR,sizeR,valR,c8: @integer
+do (if true then
+       size -> state.computeArrayIndex -> (Xr,inxR)
+    else
+    state.stat;
    state.stacks.rPop -> Xr; state.stacks.vPop -> inxR;
-   (inxR,inxR,1) -> state.ins.subI;
-   size * 8 -> pushConst; state.stacks.vPop -> sizeR;
-   (inxR,inxR,sizeR) -> state.ins.mulR;
+   (inxR,inxR,1) -> state.ins.subI;   (* inx - 1 -> inx *)
+   size -> pushConst; state.stacks.vPop -> sizeR;
+   (inxR,inxR,sizeR) -> state.ins.mulR; (* inx * size -> inx *)
+   (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI; (* arrayStrucSize + size + 1 -> inx *)
    sizeR -> state.reg.freeV;
+   size * 8 -> pushConst; state.stacks.vPop -> c8;
+   (inxR,inxR,c8) -> state.ins.mulR;
+   c8 -> state.reg.freeV;
    '\n; after sizeR -> state.reg.freeV;' -> out.puttext;
    state.stat;
-   (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI;
+   if); 
+
    (for i: size repeat
-        (inxR,inxR,1) -> state.ins.subI;
+        (inxR,inxR,i * 8) -> state.ins.subI;
         state.stacks.vPoP -> valR;
         (valR,Xr,inxR) -> state.ins.strR;
-        inxR -> state.reg.freeV;
-        '\n; after inxR -> state.reg.freeV;' -> out.puttext;
-      state.stat;
+        state.stat;
    for);
+   inxR -> state.reg.freeV;
+   '\n; after inxR -> state.reg.freeV;' -> out.puttext;
    Xr -> state.reg.freeR;
    state.stat
 #)
