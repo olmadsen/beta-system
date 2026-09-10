@@ -97,12 +97,13 @@ do true -> isArm;
       do descs.OD[descNo].name[] -> mkODname -> N[];
          '\n.globl _' -> out.puttext; N[] -> out.puttext;
          '\n_' -> out.puttext; N[] -> out.puttext; ':' -> out.put;
-         (* allocate object on hepa - missing check for out-of-memory *)
-         '\n\t add     x29, x29, ' -> out.puttext; '#' -> out.puttext; objSize * 8 + 16 -> out.putint; 
+         (* allocate object on hepa - missing check for out-of-memory 
+          * x29 points to next free area of heap
+          *)
          '\n\t str     lr, [x29, #0]' -> out.puttext;
          '\n\t str     x28, [x29, #8]' -> out.puttext;
          '\n\t mov     x28, x29' -> out.puttext; 
-
+         '\n\t add     x29, x29, ' -> out.puttext; '#' -> out.puttext; objSize * 8 + 16 -> out.putint;
       #);
    QallocIndexed:
       (* op2 -> descInx; op1 -> size; op1 -> isRIndexed;
@@ -251,7 +252,7 @@ do true -> isArm;
                 '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
                 params[i]->putint; newline
         if)for);
-        reg.getR -> stacks.rPush; (* origin register *)
+        (if hasOrigin then reg.getR -> stacks.rPush; if);
         out.newline
     #);
   params: [0] @integer; pTop: @integer;
@@ -373,6 +374,36 @@ do true -> isArm;
                    (vl,regKind) -> stacks.vPush
             if)if)
          #);
+      emitCmpOp:
+         (* cmp     x0, x1
+          * cset    x2, lt         // x2 = 1 if x0 < x1, otherwise 0
+          *)
+         (# op: ^text; vr,vl: @integer
+         enter op[]
+         do state.stat;
+            '\n;\temitCmpOp:'->out.puttext; 
+            (if stacks.vTopKind = valueKind then 
+                stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
+                (if stacks.vTopKind = valueKind then
+                    stacks.vPop -> vl; 'vl:value'->out.puttext; vl -> out.putint; 
+                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                else
+                    stacks.vPop -> vl
+                if)
+             else
+                stacks.vPop -> vr; 'vr:reg'->out.puttext; vr -> out.putint; 
+                (if stacks.vTopKind = valueKind then
+                    vl -> pushConst; stacks.vPop -> vr
+                else
+                    stacks.vPop -> vl
+                if);
+            if);
+            state.stat;
+            (vl,vr) -> ins.cmp;
+            vr -> reg.freeV;
+            (vl,op[]) -> ins.cset;
+            (vl,regKind) -> stacks.vPush
+         #);
       emitPutConst:
           (# ch: @char
           enter ch
@@ -403,19 +434,18 @@ do true -> isArm;
          '\nLR_TMP:' -> out.puttext;
          '\n.space 8\n' -> out.puttext;
          '\nthisObj_TMP:' -> out.puttext;
-         '\n.space 8 * 1014 *1024\n' -> out.puttext;
-         
-         '\nheap:' -> out.puttext;
          '\n.space 8\n' -> out.puttext;
+
+         '\nheap:' -> out.puttext;
+         '\n.space 8 * 1014 *1024\n' -> out.puttext;
 
          '\n.text' -> out.puttext;
          '\n.global _main\n.align 2' -> out.puttext;
+         '\n_main:'->out.puttext; 
          '\n\t adrp    x29, heap@PAGE' -> out.puttext;       (* heapTop = x29 *)
          '\n\t add     x29, x29,heap@PAGEOFF' -> out.puttext;
-         
-         '\n_main:\n\t bl _VM' -> out.puttext;
+         '\n\t bl _VM' -> out.puttext;
          '\n\t ret\n' -> out.puttext;
-
       #);
     gen_putc:
       (#
@@ -436,6 +466,7 @@ do true -> isArm;
       #);
    descInx: @integer; (* this descInx *)
    thisName: ^Text; (* name of current class *)
+   hasOrigin: @boolean;
    emitPutReg:
     (# r: @integer
     enter r
@@ -489,7 +520,8 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.stacks.init;
    state.stat;
    descNo -> state.descInx;
-   N[] -> state.thisName[]
+   N[] -> state.thisName[];
+   originOff > 0 -> state.hasOrigin
 #)
 ---setNoOfParams:doPart---
 do params -> state.params; pTop -> state.pTop;
@@ -512,12 +544,16 @@ do state.reg.getV -> r;
 do state.reg.thisObj -> state.stacks.rPush;
 #)
 ---pushg:descriptor---
-(# rv,rr: @integer
-do state.reg.stat;
+(# r1,r2: @integer
+do state.reg.stat; state.reg.getV -> r1; state.stacks.rPop -> r2;
+   (r1,r2,off) -> state.ins.ldr;
+    r2 -> state.reg.freeR;
+    (r1,state.regKind) -> state.stacks.vPush
+   (*
     '\n\t ldr '->out.puttext; state.reg.getV -> rv -> state.reg.print;
     ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 8 + 16 -> out.putint; ']' -> out.put;
     rr -> state.reg.freeR;
-    (rv,1) -> state.stacks.vPush
+    (rv,1) -> state.stacks.vPush*)
 #)
 ---rpushg:descriptor---
 (# rrs,rrd: @integer
@@ -759,7 +795,8 @@ do codes.prim2 -> emit; op -> emit; arg -> emit
 #)
 ---binaryOp:descriptor---
 (#
-do (if operator
+do state.stat;
+   (if operator
     // codes.plus then codes.plus -> state.binOpImm 
     // codes.minus then codes.minus -> state.binOpImm
                // codes.uminus then 'uminus' -> emitOp
@@ -768,10 +805,10 @@ do (if operator
     // codes.idiv then codes.idiv -> state.binOpReg
     // codes.modd then state.emitMod
                // codes.eq then 'eq' -> emitOp
-               // codes.lt then 'lt' -> emitOp; 
-               // codes.le then 'le' -> emitOp;
-               // codes.gt then 'gt' -> emitOp;
-               // codes.ge then 'ge' -> emitOp
+    // codes.lt then 'lt' -> state.emitCmpOp; 
+    // codes.le then 'le' -> state.emitCmpOp; 
+    // codes.gt then 'gt' -> state.emitCmpOp; 
+    // codes.ge then 'ge' -> state.emitCmpOp; 
                // codes.ne then 'ne' -> emitOp
                // codes.andd then 'andd' -> emitOp
                // codes.orr then 'orr' -> emitOp
