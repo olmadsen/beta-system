@@ -237,6 +237,73 @@ do true -> isArm;
    #);
  stat: (# do '\n;'->out.puttext; stacks.stat; reg.stat #);
  reg: @RegisterHandler; stacks: @StackHandler;
+ newVDT:
+    (# N: ^text; 
+    enter N[]
+    do (if descInx > vdtTable.range then
+            descInx - vdtTable.range + 50 -> vdtTable.extend
+      if);
+      &VDTentry[] -> vdtTable[descInx][] -> thisVDTentry[];
+      thisName[] -> mkODname -> thisVDTentry.ODid[]
+    #);
+ vdtTable: [100] ^ VDTentry;
+ thisVDTentry: ^VDTentry;
+ VDTentry:
+   (# ODid: ^text; bindings: [8] @integer;
+      mkVDT:
+         (# mkLab:
+              (#
+              do (if not labDone then 
+                     '\n\nVDT_' -> out.puttext; ODid[] -> out.puttext; ':' -> out.puttext;
+                 if);
+                 true -> labDone
+              #);
+            labDone: @Boolean
+         do (for i: bindings.range repeat
+                  (if bindings[i] > 0 then
+                      mkLab;
+                      '\n\t.quad ' -> out.puttext; 
+                      (if bindings[i] > 0 then
+                           '_' -> out.put;
+                           vdtTable[bindings[i]].ODid[] -> out.puttext;
+         if)if)for)#);
+      print:
+         (#
+         do '---'->puttext; ODid[] -> putline;
+            (for i: bindings.range repeat
+                 (if bindings[i] > 0 then
+                     i -> putint; ':'->put; bindings[i] -> putint;
+                     newline
+            if)for);
+         #)
+   #);
+ addVDT:
+    (# inx,bDI: @integer
+    enter(inx,bDI)
+    do (if inx > thisVDTentry.bindings.range then 
+           (inx - thisVDTentry.bindings.range) + 10 -> thisVDTentry.bindings.extend
+       if);
+       bDI -> thisVDTentry.bindings[inx]
+    #);
+ printVDT:
+    (#
+    do (for i: vdtTable.range repeat
+            (if vdtTable[i][] <> none  then
+                vdtTable[i].print
+            if)
+       for);
+    #);
+ mkVDTtables:
+    (#
+    do '\n\n; **** VDT tables:' -> out.puttext;
+       '\n.section __DATA,__data' -> out.puttext;
+       '\n.align 3' -> out.puttext; 
+       (for i: vdtTable.range repeat
+            (if vdtTable[i][] <> none  then
+                vdtTable[i].mkVDT
+            if)
+       for);
+    #);
  allocParameters:
     (* NOT sufficient for compound values - must need size *)
     (# 
@@ -521,7 +588,8 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.stat;
    descNo -> state.descInx;
    N[] -> state.thisName[];
-   originOff > 0 -> state.hasOrigin
+   originOff > 0 -> state.hasOrigin;
+   state.newVDT;
 #)
 ---setNoOfParams:doPart---
 do params -> state.params; pTop -> state.pTop;
@@ -838,5 +906,35 @@ do state.stat;
               if);
               out.newline;
               operator -> emit;
+#)
+---vdtTable:descriptor---
+(#
+do (inx,DescInx) -> state.addVDT
+#)
+---vdtTableAt:descriptor---
+(#
+do (inx,DescInx) -> state.addVDT
+#)
+---vdtPatchAdd:descriptor---
+(#
+do 'vdtPatchAdd:'->putline;
+   (ix,bx) -> state.addVDT
+#)
+---vdtPatchPatch:descriptor---
+(#
+do 'vdtPatchPatch:'->putline;
+   state.printVDT;
+   state.mkVDTtables
+#)
+---vdtTableCopy:doPart---
+do 'vdtTableCopy'->putline;
+   (if state.vdtTable[superDescNo][] <> none then 
+       (for i: state.vdtTable[superDescNo].bindings.range repeat
+             (i, state.vdtTable[superDescNo].bindings[i])-> state.addVDT
+   for)if); 
+
+---endClass:descriptor---
+(#
+do (*state.printVDT*)
 #)
    
