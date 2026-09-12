@@ -216,7 +216,7 @@ do true -> isArm;
             if);
             v -> vStack[vTop]; t -> vKind[vTop];
          #);
-      vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else 28 -> v if) exit v #);
+      vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else 27 -> v if) exit v #);
       vTopKind: (# k: @integer do (if vTop > 0 then vKind[vTop] -> k else 27 -> k if) exit k #);
       rPush: 
          (# v: @integer
@@ -283,9 +283,7 @@ do true -> isArm;
                  (if bindings[i] > 0 then
                      i -> putint; ':'->put; bindings[i] -> putint;
                      newline
-            if)for);
-         #);
-
+            if)for)#)
    #);
  addVDT:
     (# inx,bDI: @integer
@@ -311,9 +309,7 @@ do true -> isArm;
        (for i: vdtTable.range repeat
             (if vdtTable[i][] <> none  then
                 vdtTable[i].mkVDT
-            if)
-       for);
-    #);
+    if)for)#);
  allocParameters:
     (* NOT sufficient for compound values - must need size *)
     (# 
@@ -496,6 +492,7 @@ do true -> isArm;
               *)
              '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
              state.stacks.init; (* clear possible registers used for parameters  -not OK *)
+             (* we need to handle possible return value *)
              state.reg.init;
              state.stat
           #);
@@ -568,10 +565,21 @@ do true -> isArm;
          '\n\t svc     #0x80' -> out.puttext
       #);
    printTrace:
-      (# S: ^text
+      (# S,T: ^text
       enter S[]
-      do '\\n' -> (S.copy).puttext -> S[]; S[] -> printString; 
-      #)
+      do '\\n' -> T[]; S.copy -> T.append; '\\n' -> T.append; T[] -> printString; 
+      #);
+   toSuper:
+      (# descInx: @integer; L: ^Text
+      enter descInx
+      do (if vdtTable[descInx][] <> none then 
+             '**** found super:' -> puttext; vdtTable[descInx].ODid[] -> putline;
+             vdtTable[descInx].ODid.copy -> L[]; '_DO' -> L.append;
+             L[] -> ins.bLab
+         else
+             '**** did not found super: '->puttext; descInx -> putint; newline;
+         if);
+      #);
 #)
 ---classDef:doPart---
 do
@@ -608,7 +616,7 @@ do params -> state.params; pTop -> state.pTop;
 ---actions:descriptor---
 (#
 do  state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
-    out.newline;state.labs.thisLab[] -> out.puttext; 'DO:' -> out.puttext;
+    out.newline;state.thisName[] -> state.mkODname -> out.puttext; '_DO:' -> out.puttext;
     (if state.trace then state.thisName[] -> state.printTrace if);
 #)
 ---pushConst:descriptor---
@@ -833,19 +841,29 @@ do state.reg.thisObj -> state.stacks.rPush; state.reg.thisObj -> state.stacks.rP
  * add     x0, x0, VDT@PAGEOFF
  * ldr     x1, [x0]          // x1 = address of qAllocIndexed
  *)
-(# arg,r: @integer
+(# arg,r,r2: @integer
 do state.stat;
-   state.stacks.rPop -> r;
-   state.reg.getR -> arg;
-   '\n\t mov '->out.puttext; arg -> state.reg.print; ', ' -> out.puttext; r -> state.reg.print;
-   r -> state.reg.freeR;
-   state.reg.getV -> r;
-   '\n\t ldr ' -> out.puttext; r -> state.reg.print; 
+   (* load origin *)
+   state.stacks.rPop -> r; 
+   state.stat;
+   (if r <> 15  then  (* should we free r? *)
+      state.reg.getR -> arg;
+     '\n\t mov '->out.puttext; arg -> state.reg.print; ', ' -> out.puttext; r -> state.reg.print;
+   if);
+   
+   (* r = callee *) 
+   
+   state.reg.getV -> r2;
+   '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
    ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
-        
-   '\n\t ldr ' -> out.puttext; r -> state.reg.print; 
-   ', [' -> out.puttext;  r -> state.reg.print; ',#' -> out.puttext; dinx -> out.putint; ' ]' -> out.puttext;
-      r -> state.reg.freeR;
+   (* r2 = callee.VDT *)
+
+   '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+   ', [' -> out.puttext;  r2 -> state.reg.print; ',#' -> out.puttext; (dinx - 1) * 8 -> out.putint; ' ]' -> out.puttext;
+   r2 -> state.reg.freeV; r -> state.reg.freeR;
+   (* r2 = calle.vBinding *)
+   
+   r2 -> state.ins.brR
 #)
 ---allocIndexed:descriptor--
 (#
@@ -943,12 +961,30 @@ do (inx,DescInx) -> state.addVDT
 ---vdtPatchAdd:descriptor---
 (#
 do 'vdtPatchAdd:'->putline;
-   (ix,bx) -> state.addVDT
+   (if (top + 1 -> top) > index.range then
+       index.range -> index.extend;
+       bindInx.range -> bindInx.extend;
+       descInx.range -> descInx.extend;
+       LLVMsigs.range -> LLVMsigs.extend
+   if);
+   ix -> index[top];
+   bx -> bindInx[top];
+   dx -> descInx[top];
+   LLVMsig[] -> LLVMsigs[top][];
 #)
 ---vdtPatchPatch:descriptor---
 (#
 do 'vdtPatchPatch:'->putline;
-   (*state.printVDT;*)
+   (for i: top repeat
+                    (if false then
+                        'Patch:range:' -> puttext; index.range -> putint; 
+                        ' ' -> put;
+                        index[i] -> putint; ' ' -> put;
+                        bindinx[i] -> putint; ' ' -> put;
+                        descInx[i] -> putint;  ' ' -> put;  newline;
+                    if);
+        (index[i],bindInx[i]) -> state.addVDT
+   for);
    state.mkVDTtables
 #)
 ---vdtTableCopy:doPart---
@@ -956,7 +992,11 @@ do (if state.vdtTable[superDescNo][] <> none then
        (for i: state.vdtTable[superDescNo].bindings.range repeat
              (i, state.vdtTable[superDescNo].bindings[i])-> state.addVDT
    for)if); 
-
+---toSuper:descriptort---
+(#
+do (* jump to super.DO *)
+   descInx -> state.toSuper
+#)
 ---endClass:descriptor---
 (#
 do (*state.printVDT*)
