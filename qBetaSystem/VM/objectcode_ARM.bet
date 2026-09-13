@@ -330,19 +330,49 @@ do true -> isArm;
     #);
   params: [0] @integer; pTop: @integer;
   emitOp:
-         (# op: @integer
-         enter op
-         do (if op 
-            // codes.plus then
-               '\n\t add '-> out.puttext;
-            // codes.minus then
-               '\n\t sub '-> out.puttext;
-            // codes.mult then
-               '\n\t mul '-> out.puttext;
-            // codes.idiv then
-               '\n\t sdiv '-> out.puttext;
-            if);
-         #);
+     (# op: @integer
+     enter op
+     do (if op 
+         // codes.plus then '\n\t add '-> out.puttext
+         // codes.minus then '\n\t sub '-> out.puttext
+         // codes.mult then '\n\t mul '-> out.puttext
+         // codes.idiv then '\n\t sdiv '-> out.puttext
+        if);
+     #);
+   doBinOp:
+      (# vl,op,vr: @integer
+      enter(vl,op,vr)
+      do (if op
+          // codes.plus then vl + vr -> vl
+          // codes.minus then vl - vr -> vl 
+          // codes.mult then vl * vr -> vl
+          // codes.modd then vl mod vr  -> vl
+          // codes.idiv then vl div vr -> vl
+            (* do we ever come here ? *)
+            // codes.eq then (if vl = vr then 1 -> vl else 0 -> vl if)
+            // codes.lt then (if vl < vr then 1 -> vl else 0 -> vl if)
+            // codes.le then (if vl <= vr then 1 -> vl else 0 -> vl if)
+            // codes.gt then (if vl > vr then 1 -> vl else 0 -> vl if)
+            // codes.ge then (if vl >= vr then 1 -> vl else 0 -> vl if)
+            // codes.ne then (if vl <> vr then 1 -> vl else 0 -> vl if)
+          // codes.req then (if vl = vr then 1 -> vl else 0 -> vl if)
+         if)
+      exit vl
+      #);
+   doRelOp:
+      (# vl,vr: @integer; op: ^text
+      enter(vl,op[],vr)
+      do (if true
+            // 'eq ' -> op.equal then (if vl = vr then 1 -> vl else 0 -> vl if)
+            // 'lt' -> op.equal then (if vl < vr then 1 -> vl else 0 -> vl if)
+            // 'le' -> op.equal then (if vl <= vr then 1 -> vl else 0 -> vl if)
+            // 'gt ' -> op.equal then (if vl > vr then 1 -> vl else 0 -> vl if)
+            // 'ge ' -> op.equal then (if vl >= vr then 1 -> vl else 0 -> vl if)
+            // 'ne ' -> op.equal then (if vl <> vr then 1 -> vl else 0 -> vl if)
+            // 'req ' -> op.equal then (if vl = vr then 1 -> vl else 0 -> vl if)
+         if)
+      exit vl
+      #);
    binOpImm: (* binary operator with posble immediate argument *)
          (# op,vr,vl,r: @integer
          enter op
@@ -351,7 +381,8 @@ do true -> isArm;
                 stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
                     stacks.vPop -> vl; 'vl:value'->out.puttext; vl -> out.putint; 
-                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                    (vl,op,vr) -> doBinOp -> vl;
+                    (vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
                 else (* vr: const, vl: register *)
                     stacks.vPop -> vl;
                     ':vl:reg:'->out.puttext; vl -> out.putint; 
@@ -423,7 +454,7 @@ do true -> isArm;
                 stacks.vPop -> vr; 'vr:value:NOT OK'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then 
                     stacks.vPop -> vl; 'vl:value:NOT OK'->out.puttext; vl -> out.putint; 
-                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                    (vl mod vr,valueKind) -> stacks.vPush (* Obs must be correct op *)
                 else (* vr: const, vl: register *)
                     stacks.vPop -> vl;
                     ':vl:reg:NOT OK'->out.puttext; vl -> out.putint; 
@@ -459,7 +490,8 @@ do true -> isArm;
                 stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
                     stacks.vPop -> vl; 'vl:value'->out.puttext; vl -> out.putint; 
-                    (vr + vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
+                    (vl,op[],vr) -> doRelOp -> vl;
+                    (vl,valueKind) -> stacks.vPush (* Obs must be correct op *)
                 else
                     stacks.vPop -> vl
                 if)
@@ -622,8 +654,13 @@ do  state.reg.init; (* OBS! to clear registers after possible parameter allocati
 ---pushConst:descriptor---
 (# r: @integer
 do state.reg.getV -> r;
-    '\n\t mov ' -> out.puttext; r -> state.reg.print; ', #' -> out.puttext; cst -> out.putint;
-    (r,state.regKind) -> state.stacks.vPush
+   (* should just do*)
+   (if false then (* need to check for const a str, ... *)
+      (cst,state.valueKind) -> state.stacks.vPush
+    else
+       '\n\t mov ' -> out.puttext; r -> state.reg.print; ', #' -> out.puttext; cst -> out.putint;
+       (r,state.regKind) -> state.stacks.vPush
+   if)
 #)
 ---pushThis:descriptor---
 (#
@@ -803,7 +840,14 @@ do codes.jmpFalse -> emit; 0 -> emit2; Flab -> labs.mark;
    else
       '\n\t bne '->out.puttext; Flab -> state.emitLab; out.newline;
    if)
-   
+#)
+---jmpTrue:descriptor---
+(#
+do
+#)
+---break:descriptor---
+(#
+do 
 #)
 ---invoke:descriptor---
 (# arg,r: @integer
@@ -832,9 +876,21 @@ do '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
    if);
    '\n\t ret\n' -> out.puttext;
 #)
+---rtnInner:descriptor---
+(#
+do  '\n; MISSIG rtnInner '->out.putline
+#)
+---rtnAlloc:descriptor---
+(#
+do
+#)
 ---prepareReturn:descriptor---
 (#
 do state.reg.thisObj -> state.stacks.rPush; state.reg.thisObj -> state.stacks.rPush;
+#)
+---tstOriginNone:descriptor---
+(#
+do 
 #)
 ---invokev:descriptor---
 (* adrp    x0, VDT@PAGE
@@ -877,6 +933,38 @@ do (* op2 -> descInx; op1 -> size; op1 -> isRIndexed;
    *)
    state.stat;
    (size,isRefIndexed) -> state.QallocIndexed
+#)
+---mkVindexed:descriptor---
+(#
+do
+#)
+---mkRindexed:descriptor---
+(#
+do
+#)
+---invokeVal:descriptor---
+(#
+do
+#)
+---mkValueProxy:descriptor---
+(#
+do
+#)
+---mkIndexedValueProxy:descriptor---
+(#
+do
+#)
+---boxedInvokeVal:descriptor---
+(#
+do
+#)
+---invokeWithProxy:descriptor---
+(#
+do
+#)
+---invokeExternal:descriptor---
+(#
+do
 #)
 ---callPrim:descriptor---
 (#
