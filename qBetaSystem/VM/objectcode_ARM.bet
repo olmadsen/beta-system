@@ -163,6 +163,7 @@ do true -> isArm;
    RegisterHandler:
    (# refRegStart: (# exit 15 #);
       thisObj: (#exit 28 #);
+      lr: (#exit 30 #);
       vRegNo,rRegNo: @integer;
       init: (# do 0 -> vRegNo; refRegStart -> rRegNo #);
       getV:
@@ -248,17 +249,16 @@ do true -> isArm;
  newVDT:
     (# N: ^text; 
     enter N[]
-    do L: (if descInx > vdtTable.range then
+    do L: (if thisDescInx > vdtTable.range then
             vdtTable.range -> vdtTable.extend;
             (*descInx - vdtTable.range + 50 -> vdtTable.extend*) restart L
       if);
-      &VDTentry[] -> vdtTable[descInx][] -> thisVDTentry[];
+      &VDTentry[] -> vdtTable[thisDescInx][] -> thisVDTentry[];
       thisName[] -> mkODname -> thisVDTentry.ODid[];
     #);
- vdtTable: [100] ^ VDTentry;
- thisVDTentry: ^VDTentry;
+ vdtTable: [4] ^ VDTentry; thisVDTentry: ^VDTentry;
  VDTentry:
-   (# ODid: ^text; bindings: [8] @integer;
+   (# ODid: ^text; bindings: [8] @integer; isInner: [8] @Boolean; 
       mkVDT:
          (# mkLab:
               (#
@@ -273,9 +273,12 @@ do true -> isArm;
                   (if bindings[i] > 0 then
                       '\n\t.quad ' -> out.puttext; 
                       (if bindings[i] > 0 then
-                           '_' -> out.put;
-                           vdtTable[bindings[i]].ODid[] -> out.puttext;
-         if)if)for)#);
+                          (if isInner[i] then 
+                              vdtTable[bindings[i]].ODid[] -> out.puttext; '_DO' -> out.puttext
+                           else
+                              '_' -> out.put;
+                              vdtTable[bindings[i]].ODid[] -> out.puttext;
+         if)if)if)for)#);
       print:
          (#
          do '---'->puttext; ODid[] -> putline;
@@ -286,12 +289,12 @@ do true -> isArm;
             if)for)#)
    #);
  addVDT:
-    (# inx,bDI: @integer
-    enter(inx,bDI)
+    (# inx,bDI: @integer; isInn: @Boolean;
+    enter(inx,bDI,isInn)
     do (if inx > thisVDTentry.bindings.range then 
            (inx - thisVDTentry.bindings.range) + 10 -> thisVDTentry.bindings.extend
        if);
-       bDI -> thisVDTentry.bindings[inx]
+       bDI -> thisVDTentry.bindings[inx]; isInn -> thisVDTentry.isInner[inx]
     #);
  printVDT:
     (#
@@ -310,7 +313,7 @@ do true -> isArm;
             (if vdtTable[i][] <> none  then
                 vdtTable[i].mkVDT
     if)for)#);
- allocParameters:
+allocParameters:
     (* NOT sufficient for compound values - must need size *)
     (# 
     do '\n; parameters:pTop=' -> out.puttext; pTop -> out.putint; ':'->out.put;
@@ -328,8 +331,8 @@ do true -> isArm;
         (if hasOrigin then reg.getR -> stacks.rPush; if);
         out.newline
     #);
-  params: [0] @integer; pTop: @integer;
-  emitOp:
+params: [0] @integer; pTop: @integer;
+emitOp:
      (# op: @integer
      enter op
      do (if op 
@@ -339,7 +342,7 @@ do true -> isArm;
          // codes.idiv then '\n\t sdiv '-> out.puttext
         if);
      #);
-   doBinOp:
+doBinOp:
       (# vl,op,vr: @integer
       enter(vl,op,vr)
       do (if op
@@ -359,7 +362,7 @@ do true -> isArm;
          if)
       exit vl
       #);
-   doRelOp:
+doRelOp:
       (# vl,vr: @integer; op: ^text
       enter(vl,op[],vr)
       do (if true
@@ -373,7 +376,7 @@ do true -> isArm;
          if)
       exit vl
       #);
-   binOpImm: (* binary operator with posble immediate argument *)
+binOpImm: (* binary operator with posble immediate argument *)
          (# op,vr,vl,r: @integer
          enter op
          do '\n;binOpImm:'->out.puttext;
@@ -404,7 +407,7 @@ do true -> isArm;
                    (vl,regKind) -> stacks.vPush
             if)if)
          #);
-      binOpReg: 
+binOpReg: 
          (* binary operator with register argument
           * mult and other caxn only take register arguments
           *)
@@ -442,7 +445,7 @@ do true -> isArm;
                     (vl,regKind) -> stacks.vPush
             if)if)
          #);
-      emitMod:
+emitMod:
          (# vr,vl,vx,vy: @integer
          do (* '\n;\t Goal: Calculate X3 = X0 % X1'
              * '\n\t UDIV X2, X0, X1        // 1. Get Quotient: X2 = X0 / X1'
@@ -478,7 +481,7 @@ do true -> isArm;
                    (vl,regKind) -> stacks.vPush
             if)if)
          #);
-      emitCmpOp:
+emitCmpOp:
          (* cmp     x0, x1
           * cset    x2, lt         // x2 = 1 if x0 < x1, otherwise 0
           *)
@@ -509,7 +512,7 @@ do true -> isArm;
             (vl,op[]) -> ins.cset;
             (vl,regKind) -> stacks.vPush
          #);
-      emitPutConst:
+emitPutConst:
           (# ch: @char
           enter ch
           do '\n\t mov x0, #' -> out.puttext; ch -> out.putint;
@@ -528,12 +531,27 @@ do true -> isArm;
              state.reg.init;
              state.stat
           #);
-    emitLab:
+invokev:
+         (# r,dinx,r2: @integer
+         enter(r,dinx)
+         do (* r = callee *) 
+            state.reg.getV -> r2;
+           '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+           ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
+            (* r2 = callee.VDT *)
+            '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+            ', [' -> out.puttext;  r2 -> state.reg.print; 
+            ',#' -> out.puttext; (dinx - 1) * 8 -> out.putint; ' ]' -> out.puttext;
+            r2 -> state.reg.freeV; r -> state.reg.freeR;
+            (* r2 = calle.vBinding *)
+            r2 -> state.ins.brR
+         #);
+emitLab:
          (# lsc: @integer
          enter lsc
          do state.labs.thisLab[] -> out.puttext; lsc -> out.putint;
          #);
-   genHeading:
+genHeading:
       (#
       do '\n.bss' -> out.puttext;
          '\n.align 3' -> out.puttext;
@@ -553,7 +571,7 @@ do true -> isArm;
          '\n\t bl _VM' -> out.puttext;
          '\n\t ret\n' -> out.puttext;
       #);
-    gen_putc:
+gen_putc:
       (#
       do '\n.text'->out.puttext;
          '\n.global _putc\n\t // write(1, sp, 1)\n' -> out.puttext;
@@ -570,17 +588,17 @@ do true -> isArm;
          '\t add     sp, sp, #16\n'  -> out.puttext;
          '\t ret\n'  -> out.puttext;
       #);
-   descInx: @integer; (* this descInx *)
-   thisName: ^Text; (* name of current class *)
-   hasOrigin: @boolean;
-   emitPutReg:
+thisDescInx: @integer; (* this descInx *)
+thisName: ^Text; (* name of current class *)
+hasOrigin: @boolean;
+emitPutReg:
     (# r: @integer
     enter r
     do '\n\t mov x0, x' -> out.puttext; r -> out.putint;
        '\n\t bl _putc\n' -> out.puttext; r -> state.reg.freeV
     #);
-   STR_lab: @ integer;
-   printString:
+STR_lab: @ integer;
+printString:
       (# S,L: ^Text
       enter S[]
       do '\n.section __DATA,__data\n' -> out.puttext;
@@ -596,22 +614,40 @@ do true -> isArm;
          '\n\t mov     x16, #4         // write'
          '\n\t svc     #0x80' -> out.puttext
       #);
-   printTrace:
+printTrace:
       (# S,T: ^text
       enter S[]
       do '\\n' -> T[]; S.copy -> T.append; '\\n' -> T.append; T[] -> printString; 
       #);
-   toSuper:
-      (# descInx: @integer; L: ^Text
-      enter descInx
-      do (if vdtTable[descInx][] <> none then 
-             '**** found super:' -> puttext; vdtTable[descInx].ODid[] -> putline;
-             vdtTable[descInx].ODid.copy -> L[]; '_DO' -> L.append;
-             L[] -> ins.bLab
-         else
-             '**** did not found super: '->puttext; descInx -> putint; newline;
+toSuper:
+   (# descInx: @integer; L: ^Text
+   enter descInx
+   do (if vdtTable[descInx][] <> none then 
+         (if false then 
+            '**** found super:' -> puttext; vdtTable[descInx].ODid[] -> putline;
          if);
-      #);
+         vdtTable[descInx].ODid.copy -> L[]; '_DO' -> L.append; L[] -> ins.bLab
+      else
+         '**** did not find super: '->puttext; descInx -> putint; newline;
+      if);
+   #);
+#)
+---innerP:descriptor---
+(* Main: Super{...; DO: ...; }; Super: S{...; DO: ...; inner(Super); ...; rtn  }
+   Main.s: ...; toSuper DO: ...; rtnInner
+   Super.S: ... DO ...; inner(Super); ...
+   Invoke Main: Main.exe.; ...; toSuper; Super.DO; ...; inner(Super); ...;  main.RtnInner; ...; Super.rtn
+   for Main, inner(Super) should be Main.DO
+*)
+(# X: @integer 
+do ' descInx: ' -> out.puttext; descInx -> out.putint;
+   ' inx:'->out.puttext; inx -> out.putint;
+   ' innerOff: '->out.puttext; innerOff -> out.putint;
+   state.stacks.rPop -> X;  (* callee *)
+   (X,state.reg.thisObj,innerOff) -> state.ins.str;
+   (state.reg.lr,state.reg.thisObj,innerOff + 1) -> state.ins.str;
+   (X,inx - 1) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+   (* we can restore X here or at rtnAlloc *)
 #)
 ---classDef:doPart---
 do
@@ -636,14 +672,14 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.labs.new;
    state.stacks.init;
    state.stat;
-   descNo -> state.descInx;
+   descNo -> state.thisDescInx;
    N[] -> state.thisName[];
    originOff > 0 -> state.hasOrigin;
    state.newVDT;
 #)
 ---setNoOfParams:doPart---
 do params -> state.params; pTop -> state.pTop;
-   (state.descInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
+   (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
    state.allocParameters;
 ---actions:descriptor---
 (#
@@ -877,12 +913,39 @@ do '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
    '\n\t ret\n' -> out.puttext;
 #)
 ---rtnInner:descriptor---
-(#
-do  '\n; MISSIG rtnInner '->out.putline
+(*'rtnInner' -> exe;
+   thisObj.restoreReturn -> (descInx,glsc);
+   descs.OD[descInx].BC[] -> thisCode[];
+ *)
+(# T: ^Text; rtn: @integer
+do  (* we need innerOff of super 
+    * restore caller
+    * branch return
+    *)
+   ' descInx:'->out.puttext; descInx -> out.putint; 
+   ' superInnerOff:'->out.puttext; superInnerOff -> out.putint; out.newline;
+   (* it seems that superInnerOff may be 0 
+    * and it seems that rtnInner is also generated even if no super?
+    * but probably not harmful, since it will never be excuted because of no inner in super
+    *)
+   (if superInnerOff > 0 then
+       (if false then
+           '\\nRtnInner:' -> T[]; descInx -> T.putint; ' superInnerOff:'->T.puttext; 
+           superInnerOff -> T.putint; '\\n'->T.puttext;
+           T[] -> state.printString;
+       if);
+       state.reg.getV -> rtn;
+       (rtn,state.reg.thisObj,superInnerOff + 1) -> state.ins.ldr;
+       (state.reg.thisObj,state.reg.thisObj,superInnerOff) -> state.ins.ldr;
+       (rtn,rtn,20) -> state.ins.addI;
+       rtn -> state.ins.brR;
+       rtn -> state.reg.freeV
+   if)
 #)
 ---rtnAlloc:descriptor---
-(#
-do
+(* we need innerOff of super *)
+(# 
+do 
 #)
 ---prepareReturn:descriptor---
 (#
@@ -908,7 +971,6 @@ do state.stat;
    if);
    
    (* r = callee *) 
-   
    state.reg.getV -> r2;
    '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
    ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
@@ -1040,11 +1102,15 @@ do state.stat;
 #)
 ---vdtTable:descriptor---
 (#
-do (inx,DescInx) -> state.addVDT
+do (inx,DescInx,isInner) -> state.addVDT
 #)
 ---vdtTableAt:descriptor---
 (#
-do (inx,DescInx) -> state.addVDT
+do (if true then
+       (inx,descInx,descNo,T[]) -> VdtPatch.add
+    else
+       (inx,DescInx,false) -> state.addVDT (* should this be patch as in VM *)
+    if)
 #)
 ---vdtPatchAdd:descriptor---
 (#
@@ -1071,14 +1137,14 @@ do 'vdtPatchPatch:'->putline;
                         bindinx[i] -> putint; ' ' -> put;
                         descInx[i] -> putint;  ' ' -> put;  newline;
                     if);
-        (index[i],bindInx[i]) -> state.addVDT
+        (index[i],bindInx[i],false) -> state.addVDT
    for);
    state.mkVDTtables
 #)
 ---vdtTableCopy:doPart---
 do (if state.vdtTable[superDescNo][] <> none then 
        (for i: state.vdtTable[superDescNo].bindings.range repeat
-             (i, state.vdtTable[superDescNo].bindings[i])-> state.addVDT
+             (i, state.vdtTable[superDescNo].bindings[i],state.vdtTable[superDescNo].isInner[i])-> state.addVDT
    for)if); 
 ---toSuper:descriptort---
 (#
