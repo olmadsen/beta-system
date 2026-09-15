@@ -154,11 +154,27 @@ do true -> isArm;
          state.stat
       #);
    labs: @
-      (# labNo: @integer; thisLab: ^Text;
+      (# labNo,localLabNo: @integer; thisLab: ^Text;
          new: 
             (# 
             do labNo + 1 -> labNo; 
                'L' -> thisLab[]; labNo -> thisLab.putint; '_'->thisLab.put
+            #);
+         newLocal:
+            (#
+            do localLabNo + 1 -> localLabNo
+            exit localLabNo
+            #);
+         local:
+            (# l: @integer; lab: ^text
+            enter l
+            do thisLab.copy -> lab[]; 'L'->lab.put; l -> lab.putint
+            exit lab[]
+            #);
+         def:
+            (# lab: ^Text
+            enter lab[]
+            do '\n'->out.put; lab[] -> out.puttext; ':'->out.put
             #)
       #);
    RegisterHandler:
@@ -536,27 +552,35 @@ emitPutConst:
              state.reg.init;
              state.stat
           #);
-invokev:
-         (# r,dinx,r2: @integer
-         enter(r,dinx)
-         do (* r = callee *) 
-            state.reg.getV -> r2;
-           '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-           ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
-            (* r2 = callee.VDT *)
-            '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-            ', [' -> out.puttext;  r2 -> state.reg.print; 
-            ',#' -> out.puttext; (dinx - 1) * 8 -> out.putint; ' ]' -> out.puttext;
-            r2 -> state.reg.freeV; r -> state.reg.freeR;
-            (* r2 = calle.vBinding *)
-            r2 -> state.ins.brR
-         #);
-emitLab:
+   invokev:
+      (# r,dinx,r2: @integer; isInner: @boolean; L: ^Text
+      enter(r,dinx,isInner)
+      do (* r = callee *) 
+         state.reg.getV -> r2;
+         '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+         ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
+         (* r2 = callee.VDT *)
+         '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+         ', [' -> out.puttext;  r2 -> state.reg.print; 
+         ',#' -> out.puttext; (dinx - 1) * 8 -> out.putint; ' ]' -> out.puttext;
+          r2 -> state.reg.freeV; r -> state.reg.freeR;
+         (* r2 = calle.vBinding *)
+         (if isInner then
+             labs.local -> L[];
+             (r2,0) -> ins.cmpI;
+             L[] -> ins.bEqZero
+         if);
+         r2 -> state.ins.brR;
+         (if isInner then
+            L[] -> labs.def
+         if)
+       #);
+   emitLab:
          (# lsc: @integer
          enter lsc
          do state.labs.thisLab[] -> out.puttext; lsc -> out.putint;
          #);
-genHeading:
+   genHeading:
       (#
       do '\n.bss' -> out.puttext;
          '\n.align 3' -> out.puttext;
@@ -664,7 +688,7 @@ do ' descInx: ' -> out.puttext; descInx -> out.putint;
    (X,state.reg.thisObj,innerOff) -> state.ins.str;
    (state.reg.lr,state.reg.thisObj,innerOff + 1) -> state.ins.str;
    (* In betaVM, it is checked that VDT[inx] >  and if not, no jump - MUST be FIXED *)
-   (X,inx) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+   (X,inx,true) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
 #)
 ---classDef:doPart---
 do
@@ -942,7 +966,7 @@ do  (* we need innerOff of super
        state.reg.getV -> rtn;
        (rtn,state.reg.thisObj,superInnerOff + 1) -> state.ins.ldr;
        (state.reg.thisObj,state.reg.thisObj,superInnerOff) -> state.ins.ldr;
-       (rtn,rtn,20) -> state.ins.addI;
+       (rtn,rtn,28) -> state.ins.addI;
        rtn -> state.ins.brR;
        rtn -> state.reg.freeV
    if)
@@ -974,19 +998,22 @@ do state.stat;
       state.reg.getR -> arg;
      '\n\t mov '->out.puttext; arg -> state.reg.print; ', ' -> out.puttext; r -> state.reg.print;
    if);
-   
-   (* r = callee *) 
-   state.reg.getV -> r2;
-   '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-   ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
-   (* r2 = callee.VDT *)
+   (if true then
+   (r,dinx,false) -> state.invokev
+   else
+    (* r = callee *) 
+    state.reg.getV -> r2;
+    '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+    ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
+    (* r2 = callee.VDT *)
 
-   '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-   ', [' -> out.puttext;  r2 -> state.reg.print; ',#' -> out.puttext; (dinx - 1) * 8 -> out.putint; ' ]' -> out.puttext;
-   r2 -> state.reg.freeV; r -> state.reg.freeR;
-   (* r2 = calle.vBinding *)
+    '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+    ', [' -> out.puttext;  r2 -> state.reg.print; ',#' -> out.puttext; (dinx - 1) * 8 -> out. putint; ' ]' -> out.puttext;
+    r2 -> state.reg.freeV; r -> state.reg.freeR;
+    (* r2 = calle.vBinding *)
    
-   r2 -> state.ins.brR
+    r2 -> state.ins.brR
+   if)
 #)
 ---allocIndexed:descriptor--
 (#
