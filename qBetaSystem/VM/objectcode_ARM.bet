@@ -7,6 +7,7 @@ do true -> isArm;
    state.genHeading;
    state.gen_qAllocindexed;
    state.gen_putc;
+   state.gen_putt;
 #)
 ---ObjectCode_state:descriptor---
 (# trace: (# exit true #);
@@ -258,7 +259,7 @@ do true -> isArm;
     #);
  vdtTable: [4] ^ VDTentry; thisVDTentry: ^VDTentry;
  VDTentry:
-   (# ODid: ^text; bindings: [8] @integer; isInner: [8] @Boolean; 
+   (# ODid: ^text; bindings: [8] @integer; isInner: [8] @Boolean;  vdtTop: @integer;
       mkVDT:
          (# mkLab:
               (#
@@ -269,20 +270,22 @@ do true -> isArm;
               #);
             labDone: @Boolean
          do mkLab;
-            (for i: bindings.range repeat
-                  (if bindings[i] > 0 then
-                      '\n\t.quad ' -> out.puttext; 
-                      (if bindings[i] > 0 then
-                          (if isInner[i] then 
-                              vdtTable[bindings[i]].ODid[] -> out.puttext; '_DO' -> out.puttext
-                           else
-                              '_' -> out.put;
-                              vdtTable[bindings[i]].ODid[] -> out.puttext;
-         if)if)if)for)#);
+            (for i: vdtTop repeat
+               (if bindings[i] > 0 then
+                  '\n\t.quad ' -> out.puttext; 
+                  (if isInner[i] then 
+                     vdtTable[bindings[i]].ODid[] -> out.puttext; '_DO' -> out.puttext
+                  else
+                     '_' -> out.put;
+                     vdtTable[bindings[i]].ODid[] -> out.puttext;
+                  if)
+               else
+                  '\n\t.space 8' -> out.puttext
+         if)for)#);
       print:
          (#
          do '---'->puttext; ODid[] -> putline;
-            (for i: bindings.range repeat
+            (for i: vdtTop repeat
                  (if bindings[i] > 0 then
                      i -> putint; ':'->put; bindings[i] -> putint;
                      newline
@@ -294,6 +297,8 @@ do true -> isArm;
     do (if inx > thisVDTentry.bindings.range then 
            (inx - thisVDTentry.bindings.range) + 10 -> thisVDTentry.bindings.extend
        if);
+       (*'**** addVDT:'->puttext; inx -> putint; ' ' -> put; bDI->putint; ' ' -> put; isInn->putBoolean; newline;*)
+       (if inx > thisVDTentry.vdtTop then inx -> thisVDTentry.vdtTop if);
        bDI -> thisVDTentry.bindings[inx]; isInn -> thisVDTentry.isInner[inx]
     #);
  printVDT:
@@ -572,22 +577,34 @@ genHeading:
          '\n\t ret\n' -> out.puttext;
       #);
 gen_putc:
-      (#
-      do '\n.text'->out.puttext;
-         '\n.global _putc\n\t // write(1, sp, 1)\n' -> out.puttext;
-         '_putc:\t // Character is in x0' -> out.puttext;
-         '\n\t sub     sp, sp, #16'-> out.puttext;
-         '\n\t str     x0, [sp]'->out.puttext;
-         '\n\t str     x28, [sp, #4]\n' -> out.puttext;
-         '\t mov     x0, #1              // stdout\n'->out.puttext;
-         '\t mov     x1, sp              // address of character\n' -> out.puttext;
-         '\t mov     x2, #1              // one byte\n'  -> out.puttext;
-         '\t mov     x16, #4             // write\n'  -> out.puttext;
-         '\t svc     #0x80\n'  -> out.puttext;
-         '\t ldr     x28, [sp,#4]\n' -> out.puttext;
-         '\t add     sp, sp, #16\n'  -> out.puttext;
-         '\t ret\n'  -> out.puttext;
-      #);
+   (#
+   do '\n.text'->out.puttext;
+      '\n.global _putc\n\t // write(1, sp, 1)\n' -> out.puttext;
+      '_putc:\t // Character is in x0' -> out.puttext;
+      '\n\t sub     sp, sp, #16'-> out.puttext;
+      '\n\t str     x0, [sp]'->out.puttext;
+      '\n\t str     x28, [sp, #4]\n' -> out.puttext;
+      '\t mov     x0, #1              // stdout\n'->out.puttext;
+      '\t mov     x1, sp              // address of character\n' -> out.puttext;
+      '\t mov     x2, #1              // one byte\n'  -> out.puttext;
+      '\t mov     x16, #4             // write\n'  -> out.puttext;
+      '\t svc     #0x80\n'  -> out.puttext;
+      '\t ldr     x28, [sp,#4]\n' -> out.puttext;
+      '\t add     sp, sp, #16\n'  -> out.puttext;
+      '\t ret\n'  -> out.puttext;
+   #);
+gen_putt:
+   (* x1 = adr of text *)
+   (# length: @integer
+   enter length
+   do '\n.global _putt\n\t // write(1, sp, 1)\n' -> out.puttext;
+      '_putt:\t\n\t mov     x0, #1          // stdout' -> out.puttext;
+      '\n\t mov     x2, #' -> out.puttext; length -> out.putint; (* must be in register at call site *)
+      (* perhaps same as putc *)
+      '\n\t mov     x16, #4         // write'
+      '\n\t svc     #0x80' -> out.puttext;
+      '\n\t ret' -> out.puttext
+   #);
 thisDescInx: @integer; (* this descInx *)
 thisName: ^Text; (* name of current class *)
 hasOrigin: @boolean;
@@ -647,7 +664,7 @@ do ' descInx: ' -> out.puttext; descInx -> out.putint;
    (X,state.reg.thisObj,innerOff) -> state.ins.str;
    (state.reg.lr,state.reg.thisObj,innerOff + 1) -> state.ins.str;
    (* In betaVM, it is checked that VDT[inx] >  and if not, no jump - MUST be FIXED *)
-   (X,inx - 1) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+   (X,inx) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
 #)
 ---classDef:doPart---
 do
@@ -898,18 +915,6 @@ do state.stat;
 (#
 do '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
    '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj *)
-
-   (if false then 
-      '\n\t mov x26, lr ' -> out.puttext;
-
-      '\n\t mov x0, #98\n\t bl _putc'-> out.puttext;
-      '\n\t bl _newline' -> out.puttext;
-      '\n\t mov x0, x28\n\t bl _puthex' -> out.puttext;
-      '\n\t bl _newline' -> out.puttext;
-      '\n\t mov x0, x26\n\t bl _puthex' -> out.puttext;
-      '\n\t bl _newline' -> out.puttext;
-      '\n\t mov lr, x26' -> out.puttext;
-   if);
    '\n\t ret\n' -> out.puttext;
 #)
 ---rtnInner:descriptor---
@@ -977,7 +982,7 @@ do state.stat;
    (* r2 = callee.VDT *)
 
    '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-   ', [' -> out.puttext;  r2 -> state.reg.print; ',#' -> out.puttext; (dinx - 2) * 8 -> out.putint; ' ]' -> out.puttext;
+   ', [' -> out.puttext;  r2 -> state.reg.print; ',#' -> out.puttext; (dinx - 1) * 8 -> out.putint; ' ]' -> out.puttext;
    r2 -> state.reg.freeV; r -> state.reg.freeR;
    (* r2 = calle.vBinding *)
    
@@ -1143,7 +1148,7 @@ do 'vdtPatchPatch:'->putline;
 #)
 ---vdtTableCopy:doPart---
 do (if state.vdtTable[superDescNo][] <> none then 
-       (for i: state.vdtTable[superDescNo].bindings.range repeat
+       (for i: state.vdtTable[superDescNo].vdtTop repeat
              (i, state.vdtTable[superDescNo].bindings[i],state.vdtTable[superDescNo].isInner[i])-> state.addVDT
    for)if); 
 ---toSuper:descriptort---
