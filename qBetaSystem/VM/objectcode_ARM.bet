@@ -7,6 +7,7 @@ do true -> isArm;
    state.genHeading;
    state.gen_qAllocindexed;
    state.gen_putc;
+   state.gen_putObj;
    state.gen_putt;
 #)
 ---ObjectCode_state:descriptor---
@@ -33,12 +34,12 @@ do true -> isArm;
          (x0,x0,arrayStrucSize) -> ins.addI; (* arrayStrucSize + range -> range *)
          8 -> pushConst; stacks.vPop -> cr;
          (x0,x0,cr) -> ins.mulR;   (* range * 8 -> range *)
-         (29,29,x0) -> ins.addR;   (* allocate array *)
          
          (x0,x29,arrayStrucSize - 1 - 2) -> ins.str; (* adjustment for str *)
          (x2,x29,arrayStrucSize - 2) -> ins.str;
 
          (reg.refRegStart,x29) -> ins.movR; (* return start in refRegStart *)
+         (29,29,x0) -> ins.addR;   (* allocate array *)
           '\n\t ret' -> out.puttext;
       #);
    computeArrayIndex:
@@ -112,7 +113,7 @@ do true -> isArm;
          (mkVDTentryName,28) -> ins.getAdr;
          '\n\t str     x28, [x29, #16]' -> out.puttext;
          '\n\t mov     x28, x29' -> out.puttext; 
-         '\n\t add     x29, x29, ' -> out.puttext; '#' -> out.puttext; objSize * 8 + 24 -> out.putint;
+         '\n\t add     x29, x29, ' -> out.puttext; '#' -> out.puttext; (objSize + 1) * 8 + 24 -> out.putint;
       #);
    QallocIndexed:
       (* op2 -> descInx; op1 -> size; op1 -> isRIndexed;
@@ -130,27 +131,30 @@ do true -> isArm;
        * rangee -> fields[arrayStrucSize - 1];
        * size -> fields[arrayStrucSize];
       *)
-      (# size,isRIndexed,sizeR,rangeR,dInxR,calleeR,cr: @ integer
+      (# size,isRIndexed,sizeR,rangeR,dInxR,calleeR,cr,origin: @ integer
       enter(size,isRIndexed)
-      do reg.getR -> calleeR; 
+      do reg.getR -> calleeR;  state.stacks.rPop -> origin; (* not used *)
          stacks.vPop -> dInxR;  (* x1, not used ?*)
          stacks.vPop -> rangeR; (* x0 *)
          reg.getV -> sizeR;     (* x2 *)
          (if false then 
-         (rangeR,RangeR,sizeR) -> ins.mulR;  
-         (sizeR,size) -> ins.movI;
-         (rangeR,RangeR,arrayStrucSize) -> ins.addI;
-         8 -> pushConst; stacks.vPop -> cr;
-         (rangeR,rangeR,cr) -> ins.mulR;
-         (rangeR,regKind) -> stacks.vPush;  (* range of array to be allocated *)
+            (rangeR,RangeR,sizeR) -> ins.mulR;  
+            (sizeR,size) -> ins.movI;
+            (rangeR,RangeR,arrayStrucSize) -> ins.addI;
+            8 -> pushConst; stacks.vPop -> cr;
+            (rangeR,rangeR,cr) -> ins.mulR;
+            (rangeR,regKind) -> stacks.vPush;  (* range of array to be allocated *)
          if);
          '\n\t bl _qAllocIndexed' -> out.puttext;
          (if false then
-         (rangeR,reg.refRegStart,arrayStrucSize - 1 - 2) -> ins.str; (* adjustment for str *)
-         (sizeR,reg.refRegStart,arrayStrucSize - 2) -> ins.str;
-         cr -> reg.freeV; sizeR -> reg.freeV; dInxR -> reg.freeV;
+            (rangeR,reg.refRegStart,arrayStrucSize - 1 - 2) -> ins.str; (*adjustment for str *)
+            (sizeR,reg.refRegStart,arrayStrucSize - 2) -> ins.str;
+            cr -> reg.freeV; sizeR -> reg.freeV; dInxR -> reg.freeV;
          if);
-         calleeR -> stacks.rPush;
+         '\n; ' -> out.puttext; sizeR -> out.putint; ' ' -> out.put;
+          dinxR -> out.putint; ' ' -> out.put; rangeR -> out.putint; ' ' -> out.put;  
+         sizeR -> state.reg.freeV; dInxR -> reg.freeV; rangeR -> reg.freeV; 
+         calleeR -> stacks.rPush; origin -> state.reg.freeR;
          state.stat
       #);
    labs: @
@@ -280,12 +284,14 @@ do true -> isArm;
          (# mkLab:
               (#
               do (if not labDone then 
+                    '\n\t.align 3' -> out.puttext;
                      '\n\nVDT_' -> out.puttext; ODid[] -> out.puttext; ':' -> out.puttext;
                  if);
                  true -> labDone
               #);
             labDone: @Boolean
          do mkLab;
+            '\n\t.quad ' -> out.puttext; (vdtTop + 1) * 8 -> out.putint; (* pointer to ODid *)
             (for i: vdtTop repeat
                (if bindings[i] > 0 then
                   '\n\t.quad ' -> out.puttext; 
@@ -297,7 +303,9 @@ do true -> isArm;
                   if)
                else
                   '\n\t.space 8' -> out.puttext
-         if)for)#);
+            if)for);
+            '\n\t.asciz "' -> out.puttext; ODid[] -> out.puttext; '"' -> out.put
+         #);
       print:
          (#
          do '---'->puttext; ODid[] -> putline;
@@ -349,7 +357,12 @@ allocParameters:
                 '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
                 params[i]->putint; newline
         if)for);
-        (if hasOrigin then reg.getR -> stacks.rPush; if);
+        (if hasOrigin then 
+            ' hasOrigin:'->out.puttext; 
+            reg.getR -> stacks.rPush; 
+         else
+             ' hasNoOrigin' -> out.puttext;
+         if);
         out.newline
     #);
 params: [0] @integer; pTop: @integer;
@@ -556,21 +569,27 @@ emitPutConst:
       (# r,dinx,r2: @integer; isInner: @boolean; L: ^Text
       enter(r,dinx,isInner)
       do (* r = callee *) 
+         (if false then
+             (state.x0,r) -> state.ins.movR; (* must save x0 *)
+             (25,r) -> ins.movR; (* save r *)
+             '_putObj' -> ins.blLab;
+             (r,25) -> ins.movR; (* restore r *)
+         if);
          state.reg.getV -> r2;
          '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
          ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
          (* r2 = callee.VDT *)
          '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
          ', [' -> out.puttext;  r2 -> state.reg.print; 
-         ',#' -> out.puttext; (dinx - 1) * 8 -> out.putint; ' ]' -> out.puttext;
-          r2 -> state.reg.freeV; r -> state.reg.freeR;
+         ',#' -> out.puttext; (dinx) * 8 -> out.putint; ' ]' -> out.puttext;
+         r2 -> state.reg.freeV; r -> state.reg.freeR;
          (* r2 = calle.vBinding *)
          (if isInner then
              labs.local -> L[];
              (r2,0) -> ins.cmpI;
              L[] -> ins.bEqZero
          if);
-         r2 -> state.ins.brR;
+         r2 -> state.ins.blR;
          (if isInner then
             L[] -> labs.def
          if)
@@ -582,12 +601,9 @@ emitPutConst:
          #);
    genHeading:
       (#
-      do '\n.bss' -> out.puttext;
+      do '\n.extern _puts' -> out.puttext;
+         '\n.bss' -> out.puttext;
          '\n.align 3' -> out.puttext;
-         '\nLR_TMP:' -> out.puttext;
-         '\n.space 8\n' -> out.puttext;
-         '\nthisObj_TMP:' -> out.puttext;
-         '\n.space 8\n' -> out.puttext;
 
          '\nheap:' -> out.puttext;
          '\n.space 8 * 1014 *1024\n' -> out.puttext;
@@ -600,23 +616,39 @@ emitPutConst:
          '\n\t bl _VM' -> out.puttext;
          '\n\t ret\n' -> out.puttext;
       #);
-gen_putc:
-   (#
-   do '\n.text'->out.puttext;
-      '\n.global _putc\n\t // write(1, sp, 1)\n' -> out.puttext;
-      '_putc:\t // Character is in x0' -> out.puttext;
-      '\n\t sub     sp, sp, #16'-> out.puttext;
-      '\n\t str     x0, [sp]'->out.puttext;
-      '\n\t str     x28, [sp, #4]\n' -> out.puttext;
-      '\t mov     x0, #1              // stdout\n'->out.puttext;
-      '\t mov     x1, sp              // address of character\n' -> out.puttext;
-      '\t mov     x2, #1              // one byte\n'  -> out.puttext;
-      '\t mov     x16, #4             // write\n'  -> out.puttext;
-      '\t svc     #0x80\n'  -> out.puttext;
-      '\t ldr     x28, [sp,#4]\n' -> out.puttext;
-      '\t add     sp, sp, #16\n'  -> out.puttext;
-      '\t ret\n'  -> out.puttext;
-   #);
+   gen_putc:
+      (#
+      do '\n.text'->out.puttext;
+         '\n.global _putc\n\t // write(1, sp, 1)\n' -> out.puttext;
+         '_putc:\t // Character is in x0' -> out.puttext;
+         '\n\t sub     sp, sp, #16'-> out.puttext;
+         '\n\t str     x0, [sp]'->out.puttext;
+         '\n\t str     x28, [sp, #8]\n' -> out.puttext;
+         '\t mov     x0, #1              // stdout\n'->out.puttext;
+         '\t mov     x1, sp              // address of character\n' -> out.puttext;
+         '\t mov     x2, #1              // one byte\n'  -> out.puttext;
+         '\t mov     x16, #4             // write\n'  -> out.puttext;
+         '\t svc     #0x80\n'  -> out.puttext;
+         '\t ldr     x28, [sp,#8]\n' -> out.puttext;
+         '\t add     sp, sp, #16\n'  -> out.puttext;
+         '\t ret\n'  -> out.puttext;
+      #);
+   gen_putObj:
+      (# 
+      do '\n.global _putObj\n' -> out.puttext;
+         '_putObj:' -> out.puttext;
+         '\n\t sub     sp, sp, #16'-> out.puttext;
+         '\n\t str     lr, [sp]'->out.puttext;
+         '\n\t str     x28, [sp, #8]\n' -> out.puttext;
+         (x0,x0,16) -> ins.ldrD; (* VDT *)
+         (x1,x0,0) -> ins.ldrD;  (* off to ODid *)
+         (x0,x0,x1) -> ins.addR; (* adr of ODid *)
+         '_puts' -> ins.blLab ;  (* bl _putS *)
+         '\n\t ldr     x28, [sp,#8]' -> out.puttext;
+         '\n\t ldr     lr, [sp,#0]' -> out.puttext;
+         '\n\t add     sp, sp, #16'  -> out.puttext;
+         '\n\t ret\n'  -> out.puttext;
+      #); 
 gen_putt:
    (* x1 = adr of text *)
    (# length: @integer
@@ -929,11 +961,16 @@ do
 ---invoke:descriptor---
 (# arg,r: @integer
 do state.stat;
-   state.stacks.rPop -> r;
-   state.reg.getR -> arg;
-   '\n\t mov '->out.puttext; arg -> state.reg.print; ', ' -> out.puttext; r -> state.reg.print;
+   state.stacks.rPop -> r; 
+   (if r
+    // state.reg.thisObj then 
+       (15,state.reg.thisObj) -> state.ins.movR
+    // 15 then (* skip *)
+    else
+       (15,r) -> state.ins.movR;
+   if); 
    (N[],staticOff) -> state.invoke;
-      r -> state.reg.freeR;
+   r -> state.reg.freeR;
 #)
 ---rtn:descriptor---
 (#
@@ -987,33 +1024,18 @@ do
 ---invokev:descriptor---
 (* adrp    x0, VDT@PAGE
  * add     x0, x0, VDT@PAGEOFF
- * ldr     x1, [x0]          // x1 = address of qAllocIndexed
+ * ldr     x1, [x0,dinx * 8]
  *)
-(# arg,r,r2: @integer
+(# arg,r: @integer
 do state.stat;
    (* load origin *)
    state.stacks.rPop -> r; 
    state.stat;
-   (if r <> 15  then  (* should we free r? *)
+   (if false and (r <> 15)  then  (* should we free r? *)
       state.reg.getR -> arg;
      '\n\t mov '->out.puttext; arg -> state.reg.print; ', ' -> out.puttext; r -> state.reg.print;
-   if);
-   (if true then
-   (r,dinx,false) -> state.invokev
-   else
-    (* r = callee *) 
-    state.reg.getV -> r2;
-    '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-    ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
-    (* r2 = callee.VDT *)
-
-    '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-    ', [' -> out.puttext;  r2 -> state.reg.print; ',#' -> out.puttext; (dinx - 1) * 8 -> out. putint; ' ]' -> out.puttext;
-    r2 -> state.reg.freeV; r -> state.reg.freeR;
-    (* r2 = calle.vBinding *)
-   
-    r2 -> state.ins.brR
-   if)
+   if); 
+   (r,dinx,false) -> state.invokev;
 #)
 ---allocIndexed:descriptor--
 (#
