@@ -29,22 +29,46 @@ do true -> isArm;
       (# cr: @ integer
       do '\n.globl _qAllocIndexed' -> out.puttext; 'a'->put;
          '\n_qAllocIndexed:' -> out.puttext; 
-         (for i:  3 repeat reg. getV for); (* alloc x0,x1,x2 *)
+         (for i: 3 repeat reg. getV for); (* alloc x0,x1,x2 *)
+         (x2,x29,arrayStrucSize * 8) -> ins.strD; (* store size *)
+         (x0,x29,(arrayStrucSize - 1) * 8) -> ins.strD; (* store range *)
+
          (x0,x0,x2) -> ins.mulR;  (* range * size -> range *) 
          (x0,x0,arrayStrucSize) -> ins.addI; (* arrayStrucSize + range -> range *)
          8 -> pushConst; stacks.vPop -> cr;
          (x0,x0,cr) -> ins.mulR;   (* range * 8 -> range *)
          
-         (x0,x29,arrayStrucSize - 1 - 2) -> ins.str; (* adjustment for str *)
-         (x2,x29,arrayStrucSize - 2) -> ins.str;
 
          (reg.refRegStart,x29) -> ins.movR; (* return start in refRegStart *)
          (29,29,x0) -> ins.addR;   (* allocate array *)
           '\n\t ret' -> out.puttext;
       #);
+   gen_qAllocTextObj:
+      (# S,Sx,L: ^Text; r: @integer
+      enter(S[],SX[])
+      do '\n.section __DATA,__data\n' -> out.puttext;
+         'STR' -> L[]; STR_lab + 1 -> STR_lab -> L.putint;
+         L[] -> out.puttext; ':'-> out.put;
+         '\n\t'->out.puttext; '.asciz "' -> out.puttext; S[] -> out.puttext; '"' -> out.put;
+         '\n.text' -> out.puttext;
+         (x0,Sx.length + 3) -> ins.movI;
+         (x2,1) -> ins.movI;   (* x2 is not alloacted here *)
+         '_qAllocIndexed' -> ins.blLab;
+         reg.getV -> r;
+         (r,Sx.length) -> ins.movI;
+         (r,reg.refRegStart, (arrayStrucSize - 1) * 8) -> ins.strD;
+         r -> reg.freeV;
+         (for i: Sx.length repeat
+              (x0,i -> Sx.inxGet) -> ins.movI;
+              (x0, reg.refRegStart, i) -> ins.str
+         for);
+         (x0,reg.refRegStart) -> ins.movR; (* Temporary hack since pt inly x0 works *)
+         x0 -> stacks.rPush
+      #);
    computeArrayIndex:
       (* copmpute arrayStrucSize + (inx - 1) * size + size + 1 -> inx; 
-       *  fields[1] 
+       *               fields[0] = not used
+       *               fields[1] = origin? 
        *               fields[2] = range
        *  fields[arrayStrucSize] = size       <- arrayStrucSize 
        *               fields[1] = 1st element
@@ -771,6 +795,23 @@ do state.reg.getV -> r;
        (r,state.regKind) -> state.stacks.vPush
    if)
 #)
+---pushFloatConst:descriptor---
+(#
+do
+#)
+---pushNone:descriptor---
+(#
+do
+#)
+---pushText:descriptor---
+(#
+do '**** pushText: length: '->puttext; 
+   T.length -> putint; ' ' -> put; T.length -> puthex; ' ' -> put; 
+   T1.length -> putint; ' ' -> put; T1.length -> puthex; newline;
+   T1.scanAll(# do ch -> puthex; ' ' -> put #); newline;
+
+   (T[],T1[]) -> state.gen_qAllocTextObj
+#)
 ---pushThis:descriptor---
 (#
 do state.reg.thisObj -> state.stacks.rPush;
@@ -813,17 +854,17 @@ do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out
 do (* p1 -> size;  op1 -> isValueObj; thisStack.rpop -> X[]; thisStack.vpop -> inx;*)
    (if false then 
       state.stat;
-   state.stacks.rPop -> Xr;
-   state.stacks.vPop -> inxR;
+      state.stacks.rPop -> Xr;
+      state.stacks.vPop -> inxR;
 
-   (if size = 0 then (*arrayStrucSize -> X.get -> size;*) if);   
-   (* (if (inx <= -2) or (inx > (arrayStrucSize - 1 -> X.get)) then Index error  if); *)
-   (*arrayStrucSize + (inx - 1) * size -> inx; *)
-   (inxR,inxR,1) -> state.ins.subI; (* inx -1 -> inx *)
-   size * 8 -> pushConst; state.stacks.vPop -> sizeR;
-   (inxR,inxR,sizeR) -> state.ins.mulR;  (* inx * size -> inx *)
-   sizeR -> state.reg.freeV;
-   (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI; (* arrayStrucSize + inx -> inx; *)
+      (if size = 0 then (*arrayStrucSize -> X.get -> size;*) if);   
+      (* (if (inx <= -2) or (inx > (arrayStrucSize - 1 -> X.get)) then Index error  if); *)
+      (*arrayStrucSize + (inx - 1) * size -> inx; *)
+      (inxR,inxR,1) -> state.ins.subI; (* inx -1 -> inx *)
+      size * 8 -> pushConst; state.stacks.vPop -> sizeR;
+      (inxR,inxR,sizeR) -> state.ins.mulR;  (* inx * size -> inx *)
+      sizeR -> state.reg.freeV;
+      (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI; (* arrayStrucSize + inx -> inx; *)
    else
       size -> state.computeArrayIndex -> (Xr,inxR)
    if);
@@ -1153,6 +1194,14 @@ do state.stat;
               if);
               out.newline;
               operator -> emit;
+#)
+---uminus:descriptor---
+(# r: @integer
+do (if state.stacks.vTopKind = state.valueKind then
+       state.stacks.vPop -> pushConst;
+       state.stacks.vPop -> r;
+   if);
+   (r,r) -> state.ins.neg
 #)
 ---vdtTable:descriptor---
 (#
