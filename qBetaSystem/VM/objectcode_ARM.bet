@@ -28,7 +28,7 @@ do true -> isArm;
        * x0 = range, x1 = dInx, x2 = size
        *)
       (# cr: @ integer
-      do '\n.globl _qAllocIndexed' -> out.puttext; 'a'->put;
+      do '\n.globl _qAllocIndexed' -> out.puttext;
          '\n_qAllocIndexed:' -> out.puttext; 
          (for i: 3 repeat reg. getV for); (* alloc x0,x1,x2 *)
          (x2,x29,arrayStrucSize * 8) -> ins.strD; (* store size *)
@@ -366,43 +366,38 @@ do true -> isArm;
 allocParameters:
    (* NOT sufficient for compound values - must need size *)
    (# theOD: ^objDescTables.ODentry
-   do (if true then
-          '\n; allocParameters:' -> out.puttext;
-          (if objDescTables.ODtable[thisDescInx][] = none then
-              leave AllocParameters
-          if);
-
-          (objDescTables.ODtable[thisDescInx][]->theOD[]).asText -> out.puttext;
-
-       else
-          '\n; allocParameters:pTop=' -> out.puttext; pTop -> out.putint; ':'->out.put;
-       if);
+   do '\n; allocParameters:' -> out.puttext;
+      (if objDescTables.ODtable[thisDescInx][] = none then
+          '!!!! No ODtable:descInx:'->puttext; thisDescInx -> out.putint; 
+          ' '->put; thisName[] -> putline;
+         leave AllocParameters
+      if);
+      (objDescTables.ODtable[thisDescInx][]->theOD[]).asText -> out.puttext;
       (for i: theoD.pTop repeat 
-            (if theOD.params[i]
-            // 0 then (reg.getV,regKind) -> stacks.vPush
-            // 1 then 
-            // 2 then reg.getR -> stacks.rPush;
-            // 3 then
-            else
+         (if theOD.params[i]
+         // 0 then (reg.getV,regKind) -> stacks.vPush
+         // 1 then 
+         // 2 then reg.getR -> stacks.rPush;
+         // 3 then
       if)for);
       (if theOD.hasOrigin then reg.getR -> stacks.rPush if)
    #);
 deAllocParameters:
-   (#
-   do '\n; deAllocParameters:pTop=' -> out.puttext; pTop -> out.putint; ':'->out.put;
-      (for i: pTop repeat 
-           params[pTop - 1 + i] -> out.putint; ' ' -> out.put;
-           (if params[i]
+   (# theOD: ^objDescTables.ODentry; descNo: @integer
+   enter descNo
+   do '\n; deAllocParameters:' -> out.puttext; 
+      (if objDescTables.ODtable[descNo][] = none then
+         leave deAllocParameters
+      if);
+      (objDescTables.ODtable[descNo][]->theOD[]).asText -> out.puttext;
+      (for i: theOD.pTop repeat
+           (if theOD.params[i]
             // 0 then stacks.vPop
-            // 1 then '\n;!!!! deAllocParameters: compound values not supported'->dumpTN
+            // 1 then
             // 2 then stacks.rPop;
             // 3 then
-            else
-                '\n;!!!! dellocParameters:illegal parameter kind: '-> puttext;
-                params[i]->putint; newline
-      if)for);
-   #); 
-params: [0] @integer; pTop: @integer;
+   if)for)#); 
+
 emitOp:
      (# op: @integer
      enter op
@@ -590,8 +585,8 @@ emitCmpOp:
              '\n\t bl _putc\n' -> out.puttext;
           #);
    invoke:
-      (# N: ^Text; off: @integer
-      enter(N[],off)
+      (# N: ^Text; off,descNo: @integer
+      enter(N[],descNo,off)
       do (*'\n\t  mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
              (* push of origin as first arg, but we dont know;
               * also, some objects have no origin
@@ -600,7 +595,7 @@ emitCmpOp:
              (*state.stacks.init;*) (* clear possible registers used for parameters  -not OK *)
              (* we need to handle possible return value *)
             (* state.reg.init;*)
-         (if false then deAllocParameters if); (* need the parameters for the pattern being invoked *)
+         (*descNo -> state.deAllocParameters;*)
          0->state.reg.vRegNo; (* temporary hack - does not fix ref args *)
          state.stat;
          '\n;\t END:invoke'->out.puttext
@@ -703,7 +698,6 @@ gen_putt:
    #);
 thisDescInx: @integer; (* this descInx *)
 thisName: ^Text; (* name of current class *)
-hasOrigin: @boolean;
 emitPutReg:
     (# r: @integer
     enter r
@@ -787,14 +781,10 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.stat;
    descNo -> state.thisDescInx;
    N[] -> state.thisName[];
-   originOff > 0 -> state.hasOrigin;
    state.newVDT;
 #)
 ---setNoOfParams:doPart---
-do (*params -> state.params; pTop -> state.pTop;
-   (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;*)
-   '**** params:'->puttext; state.thisdescInx -> putint; newline;
-   (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
+do (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
    state.allocParameters;
    
 ---actions:descriptor---
@@ -820,16 +810,11 @@ do
 #)
 ---pushNone:descriptor---
 (#
-do
+do 0 -> pushConst
 #)
 ---pushText:descriptor---
 (#
-do '**** pushText: length: '->puttext; 
-   T.length -> putint; ' ' -> put; T.length -> puthex; ' ' -> put; 
-   T1.length -> putint; ' ' -> put; T1.length -> puthex; newline;
-   T1.scanAll(# do ch -> puthex; ' ' -> put #); newline;
-
-   (T[],T1[]) -> state.gen_qAllocTextObj
+do (T[],T1[]) -> state.gen_qAllocTextObj
 #)
 ---pushThis:descriptor---
 (#
@@ -841,11 +826,6 @@ do state.stat; state.reg.getV -> r1; state.stacks.rPop -> r2;
    (r1,r2,off) -> state.ins.ldr;
    r2 -> state.reg.freeR;
    (r1,state.regKind) -> state.stacks.vPush
-   (*
-    '\n\t ldr '->out.puttext; state.reg.getV -> rv -> state.reg.print;
-    ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 8 + 24 -> out.putint; ']' -> out.put;
-    rr -> state.reg.freeR;
-    (rv,1) -> state.stacks.vPush*)
 #)
 ---rpushg:descriptor---
 (# rrs,rrd: @integer
@@ -1038,7 +1018,7 @@ do state.stat;
    if);
    (* We should deallocate possible parameters 
     *-note that ShiftUp/down may have been called *)
-   (N[],staticOff) -> state.invoke;
+   (N[],descNo,staticOff) -> state.invoke;
 #)
 ---rtn:descriptor---
 (#
@@ -1245,12 +1225,9 @@ do (if state.stacks.vTopKind = state.valueKind then
 do (inx,DescInx,isInner) -> state.addVDT
 #)
 ---vdtTableAt:descriptor---
+(* same as for VM - so elim SLOT *)
 (#
-do (if true then
-       (inx,descInx,descNo,T[]) -> VdtPatch.add
-    else
-       (inx,DescInx,false) -> state.addVDT (* should this be patch as in VM *)
-    if)
+do (inx,descInx,descNo,T[]) -> VdtPatch.add
 #)
 ---vdtPatchAdd:descriptor---
 (* same as for VM - so elim SLOT *)
@@ -1268,16 +1245,14 @@ do (if (top + 1 -> top) > index.range then
 #)
 ---vdtPatchPatch:descriptor---
 (#
-do 'vdtPatchPatch:'->putline;
-   (for i: top repeat
-                    (if false then
-                        'Patch:range:' -> puttext; index.range -> putint; 
-                        ' ' -> put;
-                        index[i] -> putint; ' ' -> put;
-                        bindinx[i] -> putint; ' ' -> put;
-                        descInx[i] -> putint;  ' ' -> put;  newline;
-                    if);
-        (index[i],bindInx[i],false) -> state.addVDT
+do (for i: top repeat
+      (if false then
+         'Patch:range:' -> puttext; index.range -> putint; ' ' -> put;
+         index[i] -> putint; ' ' -> put;
+         bindinx[i] -> putint; ' ' -> put;
+          descInx[i] -> putint;  ' ' -> put;  newline;
+      if);
+      (index[i],bindInx[i],false) -> state.addVDT
    for);
    state.mkVDTtables
 #)
