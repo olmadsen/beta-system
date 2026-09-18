@@ -1,5 +1,6 @@
 ORIGIN 'objectcode';
-INCLUDE 'ARM_instructions'
+INCLUDE 'ARM_instructions';
+INCLUDE 'qobjectcodeBody'
 ---ObjectCode_init:descriptor---
 (#
 do true -> isArm;
@@ -276,18 +277,14 @@ do true -> isArm;
          #);
       stat: 
          (#
-         do (if false then
-            '\n; vTop:'->out.puttext; vTop -> out.putint; ' rTop:'->out.puttext; rTop -> out.putint; out.newline
-            else
-               ' vStack: ' -> out.puttext;
-               (for i: vTop repeat 
-                    (if vKind[i] = valueKind then 'V:'->out.puttext else 'R:'->out.puttext if);
-                    vStack[i] -> out.putint; ' ' ->out.put
-               for);
-               'rStack: ' -> out.puttext;
-               (for i: rTop repeat rStack[i] -> out.putint; ' ' ->out.put for);
-
-         if) #);
+         do ' vStack: ' -> out.puttext;
+            (for i: vTop repeat 
+               (if vKind[i] = valueKind then 'V:'->out.puttext else 'R:'->out.puttext if);
+               vStack[i] -> out.putint; ' ' ->out.put
+            for);
+            'rStack: ' -> out.puttext;
+            (for i: rTop repeat rStack[i] -> out.putint; ' ' ->out.put for)
+         #);
    #);
  stat: (# do '\n;'->out.puttext; stacks.stat; reg.stat #);
  reg: @RegisterHandler; stacks: @StackHandler;
@@ -367,28 +364,44 @@ do true -> isArm;
                 vdtTable[i].mkVDT
     if)for)#);
 allocParameters:
-    (* NOT sufficient for compound values - must need size *)
-    (# 
-    do '\n; parameters:pTop=' -> out.puttext; pTop -> out.putint; ':'->out.put;
-        (for i: pTop repeat 
-            params[i] -> out.putint; ' ' -> out.put;
-            (if params[i]
+   (* NOT sufficient for compound values - must need size *)
+   (# theOD: ^objDescTables.ODentry
+   do (if true then
+          '\n; allocParameters:' -> out.puttext;
+          (if objDescTables.ODtable[thisDescInx][] = none then
+              leave AllocParameters
+          if);
+
+          (objDescTables.ODtable[thisDescInx][]->theOD[]).asText -> out.puttext;
+
+       else
+          '\n; allocParameters:pTop=' -> out.puttext; pTop -> out.putint; ':'->out.put;
+       if);
+      (for i: theoD.pTop repeat 
+            (if theOD.params[i]
             // 0 then (reg.getV,regKind) -> stacks.vPush
-            // 1 then '\n!!!! EmitCode:allocParameters: compound values not supported'->dumpTN
+            // 1 then 
             // 2 then reg.getR -> stacks.rPush;
             // 3 then
             else
-                '\n!!!! EmitCode:allocParameters:illegal parameter kind: '-> puttext;
+      if)for);
+      (if theOD.hasOrigin then reg.getR -> stacks.rPush if)
+   #);
+deAllocParameters:
+   (#
+   do '\n; deAllocParameters:pTop=' -> out.puttext; pTop -> out.putint; ':'->out.put;
+      (for i: pTop repeat 
+           params[pTop - 1 + i] -> out.putint; ' ' -> out.put;
+           (if params[i]
+            // 0 then stacks.vPop
+            // 1 then '\n;!!!! deAllocParameters: compound values not supported'->dumpTN
+            // 2 then stacks.rPop;
+            // 3 then
+            else
+                '\n;!!!! dellocParameters:illegal parameter kind: '-> puttext;
                 params[i]->putint; newline
-        if)for);
-        (if hasOrigin then 
-            ' hasOrigin:'->out.puttext; 
-            reg.getR -> stacks.rPush; 
-         else
-             ' hasNoOrigin' -> out.puttext;
-         if);
-        out.newline
-    #);
+      if)for);
+   #); 
 params: [0] @integer; pTop: @integer;
 emitOp:
      (# op: @integer
@@ -435,9 +448,9 @@ doRelOp:
       exit vl
       #);
 binOpImm: (* binary operator with posble immediate argument *)
-         (# op,vr,vl,r: @integer
-         enter op
-         do '\n;binOpImm:'->out.puttext;
+      (# op,vr,vl,r: @integer
+      enter op
+      do '\n;binOpImm:'->out.puttext;
             (if stacks.vTopKind = valueKind then 
                 stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
@@ -464,14 +477,14 @@ binOpImm: (* binary operator with posble immediate argument *)
                    vr -> reg.freeV;
                    (vl,regKind) -> stacks.vPush
             if)if)
-         #);
+      #);
 binOpReg: 
          (* binary operator with register argument
           * mult and other caxn only take register arguments
           *)
-         (# op,vr,vl,r: @integer
-         enter op
-         do state.stat;
+      (# op,vr,vl,r: @integer
+      enter op
+      do state.stat;
             '\n;binOpReg'->out.puttext;
              (if stacks.vTopKind = valueKind then 
                 '\nvTopKind=valueKind - should not happen?? May happen?' -> puttext;
@@ -502,9 +515,9 @@ binOpReg:
                     vr -> reg.freeV;
                     (vl,regKind) -> stacks.vPush
             if)if)
-         #);
+      #);
 emitMod:
-         (# vr,vl,vx,vy: @integer
+      (# vr,vl,vx,vy: @integer
          do (* '\n;\t Goal: Calculate X3 = X0 % X1'
              * '\n\t UDIV X2, X0, X1        // 1. Get Quotient: X2 = X0 / X1'
              * '\n\t MSUB X3, X2, X1, X0    // 2. Get Remainder: X3 = X0 - (X2 * X1)' -> out.puttext;
@@ -570,25 +583,28 @@ emitCmpOp:
             (vl,op[]) -> ins.cset;
             (vl,regKind) -> stacks.vPush
          #);
-emitPutConst:
+   emitPutConst:
           (# ch: @char
           enter ch
           do '\n\t mov x0, #' -> out.puttext; ch -> out.putint;
              '\n\t bl _putc\n' -> out.puttext;
           #);
-      invoke:
-          (# N: ^Text; off: @integer
-          enter(N[],off)
-          do (*'\n\t  mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
+   invoke:
+      (# N: ^Text; off: @integer
+      enter(N[],off)
+      do (*'\n\t  mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
              (* push of origin as first arg, but we dont know;
               * also, some objects have no origin
               *)
-             '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
-             state.stacks.init; (* clear possible registers used for parameters  -not OK *)
+         '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
+             (*state.stacks.init;*) (* clear possible registers used for parameters  -not OK *)
              (* we need to handle possible return value *)
-             state.reg.init;
-             state.stat
-          #);
+            (* state.reg.init;*)
+         (if false then deAllocParameters if); (* need the parameters for the pattern being invoked *)
+         0->state.reg.vRegNo; (* temporary hack - does not fix ref args *)
+         state.stat;
+         '\n;\t END:invoke'->out.puttext
+      #);
    invokev:
       (# r,dinx,r2: @integer; isInner: @boolean; L: ^Text
       enter(r,dinx,isInner)
@@ -775,9 +791,12 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.newVDT;
 #)
 ---setNoOfParams:doPart---
-do params -> state.params; pTop -> state.pTop;
+do (*params -> state.params; pTop -> state.pTop;
+   (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;*)
+   '**** params:'->puttext; state.thisdescInx -> putint; newline;
    (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
    state.allocParameters;
+   
 ---actions:descriptor---
 (#
 do  state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
@@ -818,10 +837,10 @@ do state.reg.thisObj -> state.stacks.rPush;
 #)
 ---pushg:descriptor---
 (# r1,r2: @integer
-do state.reg.stat; state.reg.getV -> r1; state.stacks.rPop -> r2;
+do state.stat; state.reg.getV -> r1; state.stacks.rPop -> r2;
    (r1,r2,off) -> state.ins.ldr;
-    r2 -> state.reg.freeR;
-    (r1,state.regKind) -> state.stacks.vPush
+   r2 -> state.reg.freeR;
+   (r1,state.regKind) -> state.stacks.vPush
    (*
     '\n\t ldr '->out.puttext; state.reg.getV -> rv -> state.reg.print;
     ',['->out.puttext; state.stacks.rPop -> rr -> state.reg.print; ','->out.put; off * 8 + 24 -> out.putint; ']' -> out.put;
@@ -837,10 +856,12 @@ do state.stat;
     else
        rrs -> rrd
    if);
-   state.reg.stat;
+   state.stat;
     '\n\t ldr '->out.puttext; rrd -> state.reg.print;
     ',['->out.puttext; rrs -> state.reg.print; ','->out.put; off * 8  + 24 -> out.putint; ']' -> out.put;
-    (if rrs <> rrd then '; rrs: ' -> out.puttext; rrs -> out.putint; rrs -> state.reg.freeR; if);
+    (if false and (rrs <> rrd) then 
+        '; rrs: ' -> out.puttext; rrs -> out.putint; rrs -> state.reg.freeR
+    if);
     rrd -> state.stacks.rPush;
     state.stat
 #)
@@ -1004,18 +1025,25 @@ do
 do state.stat;
    state.stacks.rPop -> r; 
    (if r
+    // 27 then 
+       '\n;\t invokee has no origin' -> out.puttext
     // state.reg.thisObj then 
        (15,state.reg.thisObj) -> state.ins.movR
     // 15 then (* skip *)
     else
        (15,r) -> state.ins.movR;
    if); 
+   (if r <> 27 then
+       r -> state.reg.freeR;
+   if);
+   (* We should deallocate possible parameters 
+    *-note that ShiftUp/down may have been called *)
    (N[],staticOff) -> state.invoke;
-   r -> state.reg.freeR;
 #)
 ---rtn:descriptor---
 (#
-do '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
+do (state.reg.refRegStart,state.reg.thisObj) -> state.ins.movR;
+   '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
    '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj *)
    '\n\t ret\n' -> out.puttext;
 #)
@@ -1056,7 +1084,16 @@ do
 #)
 ---prepareReturn:descriptor---
 (#
-do state.reg.thisObj -> state.stacks.rPush; state.reg.thisObj -> state.stacks.rPush;
+do (if true then
+   '\n\t; prepareReturn:'->out.puttext;
+   state.stat;
+       (* this should allocate x15, subsequent pushg/rpushg loads the retrn value *)
+       (*state.reg.thisObj -> state.stacks.rPush; *) (* for subseuent pushg/rpushg *)
+       state.reg.getR -> state.stacks.rPush;
+       state.stat
+    else
+       state.reg.thisObj -> state.stacks.rPush; state.reg.thisObj -> state.stacks.rPush;
+    if)
 #)
 ---tstOriginNone:descriptor---
 (#

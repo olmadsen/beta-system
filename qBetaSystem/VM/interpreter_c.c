@@ -4982,36 +4982,36 @@ case rshiftup:
 	/* We need to test for none if the stack does not contain X
 	 * Same  for traversing super
 	 */
-      popCallStack:
-	if (thisObj != X) {
-	  //fprintf(trace,"popCallStackC %s \n",nameOf(thisObj));
-	  thisStack = rPop(thisObj);
-	  thisObj = rPop(thisObj);
-	  goto popCallStack;
+    popCallStack:
+	   if (thisObj != X) {
+	      //fprintf(trace,"popCallStackC %s \n",nameOf(thisObj));
+    	  thisStack = rPop(thisObj);
+	      thisObj = rPop(thisObj);
+	      goto popCallStack;
 	};
 	//fprintf(trace,"popCallStackD %s\n",nameOf(Y));
 	glsc = cRestoreReturn(thisObj);
 	currentDescNo = cRestoreReturn(thisObj);
-      findActualSuper:
-	if (currentDescNo != arg3) {
-	  glsc = cRestoreReturn(thisObj);
-	  currentDescNo = cRestoreReturn(thisObj);
-	  thisObj = rPop(thisObj);
-	  goto findActualSuper;
+    findActualSuper:
+       if (currentDescNo != arg3) {
+	       glsc = cRestoreReturn(thisObj);
+	       currentDescNo = cRestoreReturn(thisObj);
+	       thisObj = rPop(thisObj);
+	       goto findActualSuper;
 	}
 	thisStack = thisObj;
 	bc = codeFromDescNo(currentDescNo);
 	glsc = xlabs(currentDescNo,arg2) - 1; 
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
 	break;
-      case stop: 
+   case stop: 
 #ifdef TRACE
 	fprintf(trace,"stop - threadId: %i\n",threadId);
 #endif
 	running = false;
 	threadStatus[thisBlock->threadId] = t_stopped;
 	break;
-      default:
+   default:
 #ifdef TRACE
 	fprintf(trace,"Op: %i ",bc[glsc]);
 #endif
