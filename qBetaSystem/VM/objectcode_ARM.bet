@@ -215,7 +215,9 @@ do true -> isArm;
       getV:
          (# rn: @integer
          do vRegNo -> rn;
-            (if (vRegNo + 1 -> vRegNo) >= refRegStart then '\n!!!! ARM codegen. value register overflow'-> putline if);
+            (if (vRegNo + 1 -> vRegNo) >= refRegStart then
+                 '\n;!!!! ERROR:value register overflow'-> out.putline 
+            if);
          exit rn
          #);
       freeV:
@@ -223,18 +225,21 @@ do true -> isArm;
          enter rn
          do (if rn = (vRegNo - 1) then vRegNo - 1 -> vRegNo 
             else
-                '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
+                '\n;!!!! ERROR:register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
             if)
          #);
       stat: 
          (# 
          do (if true then
-                ' vRegNo: ' -> out.puttext; vRegNo -> out.putint; ' rRegNo: ' -> out.puttext; rRegNo -> out.putint 
+                'vN:' -> out.puttext; vRegNo -> out.putint; 
+                ' rN: ' -> out.puttext; rRegNo -> out.putint 
          if)#);
       getR:
          (# rn: @integer
          do rRegNo -> rn;
-            (if (rRegNo + 1 -> rRegNo) >= thisObj then '\n!!!! ARM codegen. reference register overflow'-> putline  if);
+            (if (rRegNo + 1 -> rRegNo) >= thisObj then 
+                '\n:!!!! ERROR:reference register overflow'-> out.putline
+            if);
          exit rn
          #);
       freeR:
@@ -243,7 +248,7 @@ do true -> isArm;
          do (if rn = (rRegNo - 1) then rRegNo - 1 -> rRegNo 
             else
                 (if rn <> thisObj then
-                   '\n;!!!! register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; rRegNo->out.putint;
+                   '\n;!!!! ERROR:register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; rRegNo->out.putint;
          if)if)#);
       print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint #)
    do
@@ -268,25 +273,38 @@ do true -> isArm;
       rPush: 
          (# v: @integer
          enter v 
-         do (if (rTop + 1 -> rTop) <= rStack.range then v -> rStack[rTop] else '\n; !!! rStack overflow:'->out.putline if)
+         do (if (rTop + 1 -> rTop) <= rStack.range then
+                v -> rStack[rTop]
+            else 
+               '\n; !!! ERROR:rStack overflow:'->out.putline 
+            if)
          #);
       rPop: 
          (# r: @integer 
          do (if (rTop > 0) and (rTop <= 8) then rStack[rTop] -> r; rTop - 1 -> rTop else 27 -> r if) 
          exit r 
          #);
+      rswap:
+         (# inx,r1,r2: @integer
+         enter inx
+         do (if inx > 0 then
+            else
+               rPop -> r1; rPop -> r2;
+               r1 -> rPush; r2 -> rPush
+            if)
+         #);
       stat: 
          (#
-         do ' vStack: ' -> out.puttext;
+         do ' vS: ' -> out.puttext;
             (for i: vTop repeat 
                (if vKind[i] = valueKind then 'V:'->out.puttext else 'R:'->out.puttext if);
                vStack[i] -> out.putint; ' ' ->out.put
             for);
-            'rStack: ' -> out.puttext;
+            'rS: ' -> out.puttext;
             (for i: rTop repeat rStack[i] -> out.putint; ' ' ->out.put for)
          #);
    #);
- stat: (# do '\n;'->out.puttext; stacks.stat; reg.stat #);
+ stat: (# do '\n\t\t;'->out.puttext; stacks.stat; reg.stat #);
  reg: @RegisterHandler; stacks: @StackHandler;
  newVDT:
     (# N: ^text; 
@@ -366,7 +384,7 @@ do true -> isArm;
 allocParameters:
    (* NOT sufficient for compound values - must need size *)
    (# theOD: ^objDescTables.ODentry
-   do '\n; allocParameters:' -> out.puttext;
+   do '\n;\t\t alcPar:' -> out.puttext;
       (if objDescTables.ODtable[thisDescInx][] = none then
           '!!!! No ODtable:descInx:'->puttext; thisDescInx -> out.putint; 
           ' '->put; thisName[] -> putline;
@@ -385,18 +403,22 @@ allocParameters:
 deAllocParameters:
    (# theOD: ^objDescTables.ODentry; descNo: @integer
    enter descNo
-   do '\n; deAllocParameters:' -> out.puttext; 
+   do '\n;\t\t deAlcPar:' -> out.puttext; 
       (if objDescTables.ODtable[descNo][] = none then
+         ' ODtable[' -> out.puttext; descNo->out.putint; 
+         '] is none'->out.puttext;
          leave deAllocParameters
       if);
       (objDescTables.ODtable[descNo][]->theOD[]).asText -> out.puttext;
       (for i: theOD.pTop repeat
            (if theOD.params[i]
-            // 0 then stacks.vPop
+            // 0 then stacks.vPop -> reg.freeV
             // 1 then
-            // 2 then stacks.rPop;
+            // 2 then stacks.rPop -> reg.freeR
             // 3 then
-   if)for)#); 
+      if)for);
+      (if theOD.hasOrigin then stacks.rPop -> reg.freeR if)
+   #); 
 
 emitOp:
      (# op: @integer
@@ -585,20 +607,19 @@ emitCmpOp:
              '\n\t bl _putc\n' -> out.puttext;
           #);
    invoke:
-      (# N: ^Text; off,descNo: @integer
+      (# N: ^Text; off,descNo,r: @integer
       enter(N[],descNo,off)
-      do (*'\n\t  mov x0, ' -> out.puttext; stacks.rPop -> r -> reg.print;*)
-             (* push of origin as first arg, but we dont know;
-              * also, some objects have no origin
-              *)
+      do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
          '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
-             (*state.stacks.init;*) (* clear possible registers used for parameters  -not OK *)
-             (* we need to handle possible return value *)
-            (* state.reg.init;*)
-         (*descNo -> state.deAllocParameters;*)
-         0->state.reg.vRegNo; (* temporary hack - does not fix ref args *)
+         descNo -> state.deAllocParameters;
+         (*0->state.reg.vRegNo; *)(* temporary hack - does not fix ref args *)
          state.stat;
-         '\n;\t END:invoke'->out.puttext
+         '\n\t\t;END:invoke'->out.puttext;
+         reg.getR -> r -> stacks.rPush;
+         (if r <> reg.refRegStart then 
+             '\n\t\t; OBS! invoke: did not get refReturnReg' -> out.puttext
+         if);
+         state.stat
       #);
    invokev:
       (# r,dinx,r2: @integer; isInner: @boolean; L: ^Text
@@ -971,6 +992,66 @@ do (if true then
    Xr -> state.reg.freeR;
    state.stat
 #)
+---xrstoreg:descriptor---
+(#
+do
+#)
+---loadOrigin:descriptor---
+(# r1,r2: @integer
+do (if true then 
+     '\n;\t\t loadOrigin: ' -> out.puttext; 
+   (if state.stacks.rTop > 0 then
+       state.stacks.rStack[state.stacks.rTop]-> r1 -> out.putint;
+       (if r1 = state.reg.thisObj then 
+           state.stacks.rPop -> r1;
+           state.reg.getR -> r2; 
+           (r2,r1) -> state.ins.movR;
+           r2 -> state.stacks.rPush
+       if)
+    else 
+       ' rTop = 0 ' -> out.puttexT
+    if)if)
+#)
+---double:descriptor---
+(#
+do
+#)
+---rdouble:descriptor---
+(#
+do
+#)
+---swap:descriptor---
+(#
+do
+#)
+---rswap:descriptor---
+(#
+do rn -> state.stacks.rswap
+#)
+---rpop:descriptor---
+(#
+do state.stacks.rPop
+#)
+---vpop:descriptor---
+(#
+do state.stacks.vPop
+#)
+---rShiftUp:descriptor---
+(#
+do
+#)
+---rShiftdown:descriptor---
+(#
+do
+#)
+---vShiftUp:descriptor---
+(#
+do
+#)
+---vShiftdown:descriptor---
+(#
+do
+#)
  ---defLab:descriptor---
 (#
 do out.newline; state.labs.thisLab[] -> out.puttext; lab -> out.putint; ':' -> out.put;
@@ -1003,18 +1084,20 @@ do
 ---invoke:descriptor---
 (# arg,r: @integer
 do state.stat;
-   state.stacks.rPop -> r; 
-   (if r
-    // 27 then 
-       '\n;\t invokee has no origin' -> out.puttext
-    // state.reg.thisObj then 
-       (15,state.reg.thisObj) -> state.ins.movR
-    // 15 then (* skip *)
-    else
-       (15,r) -> state.ins.movR;
-   if); 
-   (if r <> 27 then
+   (if false then
+      state.stacks.rPop -> r; 
+      (if r
+       // 27 then 
+          '\n;\t invokee has no origin' -> out.puttext
+       // state.reg.thisObj then 
+          (15,state.reg.thisObj) -> state.ins.movR
+       // 15 then (* skip *)
+       else
+          (15,r) -> state.ins.movR;
+      if); 
+      (if r <> 27 then
        r -> state.reg.freeR;
+      if);
    if);
    (* We should deallocate possible parameters 
     *-note that ShiftUp/down may have been called *)
@@ -1064,16 +1147,17 @@ do
 #)
 ---prepareReturn:descriptor---
 (#
-do (if true then
+do (if false then
+       (if true then
    '\n\t; prepareReturn:'->out.puttext;
    state.stat;
-       (* this should allocate x15, subsequent pushg/rpushg loads the retrn value *)
+       (* this should allocate x15, subsequent pushg/rpushg loads the return value *)
        (*state.reg.thisObj -> state.stacks.rPush; *) (* for subseuent pushg/rpushg *)
        state.reg.getR -> state.stacks.rPush;
        state.stat
     else
        state.reg.thisObj -> state.stacks.rPush; state.reg.thisObj -> state.stacks.rPush;
-    if)
+    if)if)
 #)
 ---tstOriginNone:descriptor---
 (#
@@ -1219,6 +1303,15 @@ do (if state.stacks.vTopKind = state.valueKind then
        state.stacks.vPop -> r;
    if);
    (r,r) -> state.ins.neg
+#)
+---nott:descriptor---
+(#
+do
+#)
+---saveBETAworld:descriptor---
+(#
+do state.stacks.rPop; (* thisObj == BETAworld *)
+   state.stat;
 #)
 ---vdtTable:descriptor---
 (#
