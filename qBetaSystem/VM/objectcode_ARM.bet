@@ -30,7 +30,7 @@ do true -> isArm;
       (# cr: @ integer
       do '\n.globl _qAllocIndexed' -> out.puttext;
          '\n_qAllocIndexed:' -> out.puttext; 
-         (for i: 3 repeat reg. getV for); (* alloc x0,x1,x2 *)
+         (for i: 3 repeat reg.getV for); (* alloc x0,x1,x2 *)
          (x2,x29,arrayStrucSize * 8) -> ins.strD; (* store size *)
          (x0,x29,(arrayStrucSize - 1) * 8) -> ins.strD; (* store range *)
 
@@ -92,7 +92,7 @@ do true -> isArm;
          size * 8 -> pushConst; state.stacks.vPop -> c8;
          (inxR,inxR,c8) -> state.ins.mulR;
          c8 -> state.reg.freeV;
-         '\n; after sizeR -> state.reg.freeV;' -> out.puttext;
+         '\n\t\t; END:computeArrayIndex' -> out.puttext;
          state.stat;
       exit(Xr,inxR)
       #); 
@@ -176,8 +176,10 @@ do true -> isArm;
             (sizeR,reg.refRegStart,arrayStrucSize - 2) -> ins.str;
             cr -> reg.freeV; sizeR -> reg.freeV; dInxR -> reg.freeV;
          if);
-         '\n; ' -> out.puttext; sizeR -> out.putint; ' ' -> out.put;
-          dinxR -> out.putint; ' ' -> out.put; rangeR -> out.putint; ' ' -> out.put;  
+         (if false then
+            '\n\t\t; ' -> out.puttext; sizeR -> out.putint; ' ' -> out.put;
+             dinxR -> out.putint; ' ' -> out.put; rangeR -> out.putint; ' ' -> out.put;
+         if);
          sizeR -> state.reg.freeV; dInxR -> reg.freeV; rangeR -> reg.freeV; 
          calleeR -> stacks.rPush; origin -> state.reg.freeR;
          state.stat
@@ -384,7 +386,7 @@ do true -> isArm;
 allocParameters:
    (* NOT sufficient for compound values - must need size *)
    (# theOD: ^objDescTables.ODentry
-   do '\n;\t\t alcPar:' -> out.puttext;
+   do '\n\t\t; alcPar:' -> out.puttext;
       (if objDescTables.ODtable[thisDescInx][] = none then
           '!!!! No ODtable:descInx:'->puttext; thisDescInx -> out.putint; 
           ' '->put; thisName[] -> putline;
@@ -403,7 +405,7 @@ allocParameters:
 deAllocParameters:
    (# theOD: ^objDescTables.ODentry; descNo: @integer
    enter descNo
-   do '\n;\t\t deAlcPar:' -> out.puttext; 
+   do '\n\t\t; deAlcPar:' -> out.puttext; 
       (if objDescTables.ODtable[descNo][] = none then
          ' ODtable[' -> out.puttext; descNo->out.putint; 
          '] is none'->out.puttext;
@@ -467,7 +469,7 @@ doRelOp:
 binOpImm: (* binary operator with posble immediate argument *)
       (# op,vr,vl,r: @integer
       enter op
-      do '\n;binOpImm:'->out.puttext;
+      do '\n\t\t; binOpImm:'->out.puttext;
             (if stacks.vTopKind = valueKind then 
                 stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
@@ -502,7 +504,7 @@ binOpReg:
       (# op,vr,vl,r: @integer
       enter op
       do state.stat;
-            '\n;binOpReg'->out.puttext;
+            '\n\t\t; binOpReg'->out.puttext;
              (if stacks.vTopKind = valueKind then 
                 '\nvTopKind=valueKind - should not happen?? May happen?' -> puttext;
                 stacks.vPop -> vr;
@@ -540,7 +542,7 @@ emitMod:
              * '\n\t MSUB X3, X2, X1, X0    // 2. Get Remainder: X3 = X0 - (X2 * X1)' -> out.puttext;
              *)
             state.stat;
-            '\n;\temitMod:'->out.puttext;
+            '\n\t\t; emitMod:'->out.puttext;
             (if stacks.vTopKind = valueKind then 
                 stacks.vPop -> vr; 'vr:value:NOT OK'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then 
@@ -576,7 +578,7 @@ emitCmpOp:
          (# op: ^text; vr,vl: @integer
          enter op[]
          do state.stat;
-            '\n;\temitCmpOp:'->out.puttext; 
+            '\n\t\t; emitCmpOp:'->out.puttext; 
             (if stacks.vTopKind = valueKind then 
                 stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
@@ -612,6 +614,7 @@ emitCmpOp:
       do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
          '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
          descNo -> state.deAllocParameters;
+         state.stat;
          (*0->state.reg.vRegNo; *)(* temporary hack - does not fix ref args *)
          state.stat;
          '\n\t\t;END:invoke'->out.puttext;
@@ -646,9 +649,12 @@ emitCmpOp:
              L[] -> ins.bEqZero
          if);
          r2 -> state.ins.blR;
-         (if isInner then
-            L[] -> labs.def
-         if)
+         (if isInner then L[] -> labs.def if);
+         reg.getR -> r -> stacks.rPush;
+         (if r <> reg.refRegStart then 
+             '\n\t\t; OBS! invoke: did not get refReturnReg' -> out.puttext
+         if);
+         state.stat
        #);
    emitLab:
          (# lsc: @integer
@@ -871,14 +877,14 @@ do state.stat;
    state.stat;
     '\n\t ldr '->out.puttext; rrd -> state.reg.print;
     ',['->out.puttext; rrs -> state.reg.print; ','->out.put; off * 8  + 24 -> out.putint; ']' -> out.put;
-    (if false and (rrs <> rrd) then 
+    (if (rrs <> rrd) then 
         '; rrs: ' -> out.puttext; rrs -> out.putint; rrs -> state.reg.freeR
     if);
     rrd -> state.stacks.rPush;
     state.stat
 #)
 ---pushParam:doPart---
-do '\n; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out.putint;
+do '\n\t\t; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out.putint;
 ---xpushg:descriptor---
 (* rStack: ... X = Array-object
  * vStack: ... inx = index into array,   (0 < inx) and (inx <= size)
@@ -974,7 +980,7 @@ do state.stat;
     else
        '\n; rstoreg: MISSING str because of x27 registers\n'->out.puttext
    if);
-   rd -> state.reg.freeR; rs -> state.reg.freeR; 
+   rs -> state.reg.freeR; rd -> state.reg.freeR; 
    state.stat
 #)
 ---xstoreg:descriptor---
@@ -1008,7 +1014,7 @@ do (if true then
    size * 8 -> pushConst; state.stacks.vPop -> c8;
    (inxR,inxR,c8) -> state.ins.mulR;
    c8 -> state.reg.freeV;
-   '\n; after sizeR -> state.reg.freeV;' -> out.puttext;
+   '\n\t\t; after sizeR -> state.reg.freeV;' -> out.puttext;
    state.stat;
    if); 
 
@@ -1019,7 +1025,7 @@ do (if true then
         state.stat;
    for);
    inxR -> state.reg.freeV;
-   '\n; after inxR -> state.reg.freeV;' -> out.puttext;
+   '\n\t\t; after inxR -> state.reg.freeV;' -> out.puttext;
    Xr -> state.reg.freeR;
    state.stat
 #)
@@ -1030,7 +1036,7 @@ do
 ---loadOrigin:descriptor---
 (# r1,r2: @integer
 do (if true then 
-     '\n;\t\t loadOrigin: ' -> out.puttext; 
+     '\n\t\t; loadOrigin: ' -> out.puttext; 
    (if state.stacks.rTop > 0 then
        state.stacks.rStack[state.stacks.rTop]-> r1 -> out.putint;
        (if r1 = state.reg.thisObj then 
@@ -1060,8 +1066,8 @@ do
 do rn -> state.stacks.rswap
 #)
 ---rpop:descriptor---
-(#
-do state.stacks.rPop
+(# 
+do state.stacks.rPop -> state.reg.freeR
 #)
 ---vpop:descriptor---
 (#
@@ -1097,6 +1103,7 @@ do codes.jmpFalse -> emit; 0 -> emit2; Flab -> labs.mark;
    state.stacks.vPoP -> r;
    (if true then
       '\n\t cbz ' -> out.puttext; r -> state.reg.print; ',' -> out.put; Flab -> state.emitLab;
+      r -> state.reg.freeV
    else
       '\n\t bne '->out.puttext; Flab -> state.emitLab; out.newline;
    if)
