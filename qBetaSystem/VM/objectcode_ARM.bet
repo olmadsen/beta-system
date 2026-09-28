@@ -84,7 +84,7 @@ do true -> isArm;
        *)
       (# size,Xr,inxR,sizeR,valR,c8: @integer
       enter size
-      do state.stat;
+      do state.stat; (* xR and inxR allocated V/R registers, and og V/R stack *)
          state.stacks.rPop -> Xr; state.stacks.vPop -> inxR;
          (inxR,inxR,1) -> state.ins.subI;   (* inx - 1 -> inx *)
          size -> pushConst; state.stacks.vPop -> sizeR;
@@ -744,7 +744,10 @@ thisName: ^Text; (* name of current class *)
 emitPutReg:
     (# r: @integer
     enter r
-    do '\n\t mov x0, x' -> out.puttext; r -> out.putint;
+    do (if r > 0 then 
+           '\n\t mov x0, x' -> out.puttext; r -> out.putint;
+           r -> reg.freeV
+       if);
        '\n\t bl _putc' -> out.puttext; r -> state.reg.freeV
     #);
 STR_lab: @ integer;
@@ -908,37 +911,22 @@ do '\n\t\t; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] ->
  *)
 (# Xr,inxR,sizeR,vr: @integer
 do (* p1 -> size;  op1 -> isValueObj; thisStack.rpop -> X[]; thisStack.vpop -> inx;*)
-   (if false then 
-      state.stat;
-      state.stacks.rPop -> Xr;
-      state.stacks.vPop -> inxR;
-
-      (if size = 0 then (*arrayStrucSize -> X.get -> size;*) if);   
-      (* (if (inx <= -2) or (inx > (arrayStrucSize - 1 -> X.get)) then Index error  if); *)
-      (*arrayStrucSize + (inx - 1) * size -> inx; *)
-      (inxR,inxR,1) -> state.ins.subI; (* inx -1 -> inx *)
-      size * 8 -> pushConst; state.stacks.vPop -> sizeR;
-      (inxR,inxR,sizeR) -> state.ins.mulR;  (* inx * size -> inx *)
-      sizeR -> state.reg.freeV;
-      (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI; (* arrayStrucSize + inx -> inx; *)
-   else
-      size -> state.computeArrayIndex -> (Xr,inxR)
-   if);
+   size -> state.computeArrayIndex -> (Xr,inxR);
+   state.stat;
    (if (isValueObj = 0) and (size = 1) then
        (*inx + 1 -> X.get -> value -> thisStack.vpush;*)
        (inxR,inxR,1 * 8) -> state.ins.subI;
+       inxR -> state.reg.freeV; (* can we just use inxR instead of vr? *)
        state.reg.getV -> vr;
        (vr,Xr,inxR) -> state.ins.ldrR;
-       Xr -> state.reg.freeR;
+       Xr -> state.reg.freeR; 
        (vr,state.regKind) -> state.stacks.vPush
    else (* valueObject *)
        (if size > 1 then
            (for i: size repeat
                (*inx + i-> ix -> X.get -> value -> thisStack.vPush;*)
 
-           for)
-       if)
-   if)
+   for)if)if)
 #)
 ---xrpush:descriptor---
 (#
@@ -1136,6 +1124,7 @@ do
 ---evalParams:descriptor---
 (#
 do '\n\t\t; Start evaluation of parameters: ' -> out.puttext; ch -> out.put;
+   state.stat;
    (if state.reg.vRegNo > 0 then
          '\n; ERROR: value parameter registers busy'->out.puttext;
          (* '\n!!!! ERROR: value parameter registers busy: '-> puttext; state.reg.vRegNo -> putint; 
@@ -1303,8 +1292,7 @@ do
 #)
 ---callPrim:descriptor---
 (#
-do codes.prim -> emit; op -> emit;
-   (if op 
+do (if op 
     // prim.attach then 
        ' ' -> out.put;
        'D' -> out.put;
@@ -1318,15 +1306,18 @@ do codes.prim -> emit; op -> emit;
     (if op
     // prim.put then 
         (if state.stacks.vTopKind = state.valueKind then
-            state.stacks.vPop -> state.emitPutConst (* OBS! the argument may be a const or a var - check vKind *)
+            state.stacks.vPop -> state.emitPutConst
         else 
            state.stacks.vPop -> state.emitPutReg
-        if)
+        if);
+        (*(state.reg.getV,state.regKind) -> state.stacks.vPush; *)(* should check that getV returns x0 *)
+        state.stat
     // prim.asString then
        (*'___%prim: asString' -> putline*)
     else
          '\n; !!!! missing prim: ' -> out.puttext; op -> out.putint;
     if) 
+   (* do we need to allocate return register for all primitives, and is it value or ref being returned? *)
 #)
 ---callPrim2:descriptor---
 (#
