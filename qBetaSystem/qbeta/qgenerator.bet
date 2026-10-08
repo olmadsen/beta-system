@@ -2075,22 +2075,35 @@ generator: codeGenMarker
                               -> cd.vdtTable
                  if)if)#);
                HandleArgumentsAndOrigin_new:
-                  (# mainIS, theIS: ^Items; storeOrigin: @Boolean
+                  (# mainIS, theIS: ^Items; storeOrigin: @Boolean;
+                     genAllocEvent:
+                        (#
+                        do (if not theIS.encOG.isValueObj then (* why not: theIS.hasRealSuper as below? *)
+                               (if genEvents 
+                                 and not ((theIS.superDesc[] <> none) and not theIS.superDesc.isPrimitive) then
+                                 theIS.encOG.isObj -> cd.allocEventQ
+                        if)if)#)
                   enter(mainIS[],theIS[],storeOrigin)
-                  do fctracer(#do 'HandleArgumentsAndOrigin_new:'->TT; theIS.encOG.OGid->TT #);
+                  do fctracer(#do 'HandleArgumentsAndOrigin_new:'->TT; theIS.doPT->TL #);
                      (mainIS[],theIS[]) -> storeArguments_new;
                      (theIS[],storeOrigin) -> storeOrigin_new -> storeOrigin;
+                     (mainIS[],theIS[]) -> storeBindings_new;
+
                      (* allocSuper seems to do: 
                       *   (1) reload of origin for super; may perhaps be done in storeOrigin?
                       *   (2) store arguments for super? But what does storeArguments then do?
                       *  Part objects and arrays are probably handled by genAttributes
                       *)
-                     (theIS[],0 (* vArgsInSuper*)) -> allocateSuper_new; (* why not in if below? *)
+                     genAllocEvent;
                      (if theIS[] -> hasRealSuper then
+                        (theIS[],0 (* vArgsInSuper*),storeOrigin) -> allocSuper_new; (* why not in if below? *)
                         (mainIS[],theIS.superDesc[],storeOrigin) -> handleArgumentsAndOrigin_new
                      if)
                   #);
                StoreArguments_new:
+                  (* apparently binding arguments should be evaluated after storeOrigin
+                   * or after all super-chains have been evaluated for pushed argumenst and origins?
+                   *)
                   (# mainIS,theIS: ^Items; isVEQ: @boolean; off: @integer;
                      getDIoff:
                         (# arg: ^Pattern; off:@integer; D: ^Decl
@@ -2102,7 +2115,7 @@ generator: codeGenMarker
                               D[] -> arg[];
                               restart getDIoff
                            if)
-                        exit off
+                        exit(D[],off)
                         #);
                      ifBinding: BooleanValue
                         (# ISx: ^Items; di: ^DataItem
@@ -2131,59 +2144,76 @@ generator: codeGenMarker
                            true -> isVeq
                         if);
                         theIS.scanItemArgsReverse
-                        (# qual: ^ObjectDescriptor; OGSx: ^ODsequence; isString: @boolean
+                        (# qual: ^ObjectDescriptor; OGSx: ^ODsequence; isString: @boolean; theDI: ^DataItem; P: ^Pattern; ptnKind: @integer
                         do fctracer(#do 'arg:'->TT; currentArg.dopt->TT; currentArg.label->TT; currentArg.isDesignator->BB #);
                            (if currentArg.OG.primNo 
                            // this_prim then 
-                              fctracer(#do 'got:this:'->TT; currentArg.dopt->TT #)
+                              fctracer(#do 'got:this:'->TT; currentArg.dopt->TT #);
+                               (mainIS.encOG[],false,(mainIS.encOG[],false,none)->ODsequence)
+                                 -> currentArg.getVqual
+                                 -> (OGSx[],qual[],ptnKind);
+                                 qual.primNo = String_prim -> isString; 
                            // string_prim then
-                              fctracer(#do 'got:string:'->TT; currentArg.dopt->TT #)
+                              fctracer(#do 'got:string:'->TT; currentArg.dopt->TT #);
+                              true -> isString;
                            if);
                            L: 
                            (if true then
                               (if true 
+                                 // isString (*currentArg.primNo = string_prim *)then
+                                    cd.pushThis; (* we store this; should be ref on stack *)
+                                    (currentArg.sig.dopt,currentArg.newOff) -> cd.rstoreg
                                  // currentArg.isDesignator or ('Designator'->(currentArg.label).equal) (* fix *) then
                                     fctracer(#do 'designator: PUSH 0'->TT #);
+                                    0 -> cd.pushConst;
                                     leave L
                                  // currentArg.isVirtualDataItem then 
                                     (if currentArg.isPattern then
                                           fctracer(#do 'bindingOfirtualDI:doEval:' -> TT #);
-                                          currentArg[] -> getDIoff -> off
+                                          (if false then
+                                          currentArg[] -> getDIoff -> (theDI[],off); 
+                                          (true,0,0) -> currentArg.OG.gen;
+                                          (true,mainIS[]) -> theDI.store
+                                          if)
                                        else
                                           fctracer(#do 'isVirtualDI:' -> TT #);
                                           (if (currentArg[],mainIS[]) -> ifBinding then
                                               leave L 
                                           if);
-                                          currentArg.newOff -> off
+                                          (true,mainIS[]) -> currentArg.store 
                                     if)
                                  // currentArg.isDataItem then
                                     fctracer(#do 'isDataItem:' -> TT #);
+                                    (true,mainIS[]) -> currentArg.store;
                                     currentArg.newOff -> off
                                  // currentArg.isPattern then (* should not happen: only data-items *)
-                                    fctracer(#do 'isPattern:'->TT #)
+                                    currentArg[] -> P[];
+                                    fctracer(#do 'isPattern:'->TT; P.ptnKind = finalPtn -> BB; #)
                                  else
                                     fctracer(#do 'unknown:'->TT; currentArg.label->TT #)
                               if);
-                              fctracer(#do 'STORE:'->TT; currentArg.sig.dopt->TT; off->II #)
+                              fctracer(#do 'STORE:'->TT; currentArg.sig.dopt->TT; off->II #);
                         if)#)
                      if)
                   #);
                StoreOrigin_new:
                   (# theIS: ^Items; storeOrigin: @Boolean
                   enter(theIS[],storeOrigin)
-                  do fctracer(#do 'storeOrigin_new:'->TT; theIS.encOG.OGid->TT #);
+                  do fctracer(#do 'storeOrigin_new:'->TT; theIS.doPT->TL; theIS.newOriginOff->II #);
                      (if theIS.newOriginOff > 0 then (* probably also handle value objects *)
-                        (if ((theIS.noOfRefArgsInSuper -> rArgsInSuper) > 0) then
-                            (* if super has ref args, then these are on the stack above origin
-                             * Here S = origin and x,y,z are 3 ref args; rShift moves S to top of rStack
-                             * ------------      ------------
-                             * |...|S|x|y|z  ==> |...|x|y|z|S
-                             * ------------      ------------
-                             *)
-                            (*rArgsInSuper -> cd.rShiftUp*)
-                        if);
                         (if storeOrigin then
+                           (if ((theIS.noOfRefArgsInSuper -> rArgsInSuper) > 0) then
+                              (* if super has ref args, then these are on the stack above origin
+                                * Here S = origin and x,y,z are 3 ref args; rShift moves S to top of rStack
+                                * ------------      ------------
+                                * |...|S|x|y|z  ==> |...|x|y|z|S
+                                * ------------      ------------
+                              *)
+                              rArgsInSuper -> cd.rShiftUp;
+                           if);
                            fctracer(#do 'DOstoreOrigin:'->TT; storeOrigin->BB; 'orgOff:'->TT; theIS.newOriginOff->II #);
+                           cd.tstOriginIsNone;
+                           ('origin',theIS.newOriginOff) -> cd.rstore;
                         if); 
                         false -> storeOrigin;
                         (if theIS[] -> hasRealSuper then
@@ -2193,25 +2223,155 @@ generator: codeGenMarker
                    if)if)if)
                   exit storeOrigin
                   #);
-               allocateSuper_new:
-                  (# theIS: ^Items; E: ^Exp; vArgsInSuper,off: @integer; 
-                  enter(theIS[],vArgsInSuper)
-                  do (if (theIS[] <> none) and (theIS[]->hasRealSuper) then
-                        fctracer(#do 'allocateSuper_new:'->TT; theIS.encOG.OGid->TT #);
+               storeBindings_new:
+                  (# mainIS,theIS: ^Items;isVEQ: @boolean; off: @integer;  ptnKind: @integer;
+                     getDIoff:
+                        (# arg: ^Pattern; off:@integer; D: ^Decl
+                        enter arg[]
+                        do arg.vDiDcl[] -> D[];
+                           (if D.isDataItem then 
+                              D.newOff -> off
+                           else
+                              D[] -> arg[];
+                              restart getDIoff
+                           if)
+                        exit(D[],off)
+                        #);
+                     ifBinding: BooleanValue
+                        (# ISx: ^Items; di: ^DataItem
+                        enter(di[],ISx[])
+                        do L:
+                           (if true Then
+                              ISx.scanDecls 
+                              (# P: ^Pattern
+                              do (if currentDcl.isPattern then
+                                   (if (currentDcl[]->P[]).ptnKind = finalPtn then
+                                      (* Perhaps more complex: P.vDiDcl is a DataItem *)
+                                      (if P.vDiDcl[] = di[] then
+                                         fctracer(#do 'foundBinding:'->TT; P.dopt-> TT #);
+                                         true -> value;
+                                         leave L
+                              if)if)if)#);
+                              (if ISx.superDesc[] <> none then
+                                 (di[],ISx.SuperDesc) -> ifBinding -> value
+                           if)if)
+                        #); 
+                  enter(mainIS[],theIS[])
+                  do fcTracer(#do 'StoreBindings_new:'->TT; theIS.encOG.OGid->TT #);L:
+                     theIS.scanItemArgsReverse
+                        (# 
+                           theDI: ^DataItem; 
+                        do (if currentArg.isVirtualDataItem then 
+                              (if currentArg.isPattern then
+                                          fctracer(#do 'bindingOfirtualDI:doEval:' -> TT #);
+                                          
+                                          currentArg[] -> getDIoff -> (theDI[],off); 
+                                          (true,0,0) -> currentArg.OG.gen;
+                                          (true,mainIS[]) -> theDI.store
+                                          
+                              else 
+                                          fctracer(#do 'isVirtualDI:' -> TT #);
+                                          (*(if (currentArg[],mainIS[]) -> ifBinding then
+                                              leave L 
+                                          if);
+                                          (true,mainIS[]) -> currentArg.store *)
+                           if)if)
+                        #)
+                  #);
+               allocSuper_new:
+                  (# pushAddress:
+                        (* super is searched in the origin of this(OG); we must then have an additional
+                         * goOrigin from this(OG); this is handled by passing newOriginOff as an argument
+                         * of Address - superAdj;  adjustOrigin will generate this goOrigin if superAdj > 0
+                        *)
+                        (# super: ^Invocation; E: ^Exp; 
+                         valueOff: @integer; isNotRemote: @Boolean; BE: ^BracketedExp
+                        enter super[]
+                        do (if not storeOrigin then
+                              super.last -> E[];
+                              L:
+                              (if 'BracketedExp'->(E.label).equal then
+                                 '**** got BracketedExp'->dumpt; super.dopt->dumpTN;
+                                 (E[]->BE[]).IV.last -> E[]; E.label->dumpT; E.dopt -> dumpTN;
+                                 restart L
+                               if)
+                           else
+                              fctracer(#do 'genClass:before:super.handleInv:'-> TT; super.doPT -> TL; #);
+                              (false,theIS.newOriginOff,0,false) 
+                               -> super.handleInv 
+                               -> (E[],valueOff,isNotRemote);
+                              fctracer(#do 'genClass:after:super.handleInv:'-> TT; super.doPT->TL; 'E:'->TT; E.dopt->TL #)
+                           if)
+                        exit E[]
+                        #);
+                     handleSuperArgs:
+                        (* perhaps handle argumens of a super E(...) as in R.E(...){...} *)
+                        (# theIS: ^Items; E: ^Exp
+                        enter(theIS[],E[])
+                        do fctracer(#do 'handleSuperArgs:E:'->TT; E.dopt->TQ; 'theIS:'->TT; theIS.dopt->TL #);
+                           (* What does sig[] = none imply? and does it make a difference if
+                            * +/- theIS.newOriginOff is used?
+                            *)
+                           (if theIS.sig[] = none then
+                              ctracer(#do'super.sig:none:superAdj:'-> TT; newOriginOff -> II #);
+                              (theIS.newOriginOff,0) -> E.loadArgs; 
+                           else
+                              ctracer(#do'super.sig:not:none:superAdj:'->TT;  - newOriginOff -> II #);
+                              (* go ON-1, use newOriginOff first time *)
+                              (- theIS.newOriginOff,0) -> E.loadArgs;
+                           if);
+                           (******* handle virtual args of super ***)
+                           E.handleVargs;
+                        #);
+                     theIS: ^Items; E: ^Exp; vArgsInSuper,off: @integer; storeOrigin: @Boolean; ptn: ^Pattern;
+                     BE: ^BracketedExp
+                  enter(theIS[],vArgsInSuper,storeOrigin)
+                  do fctracer(#do 'allocSuper_new:'->TT; theIS.encOG.OGid->TT; 'storeOrigin:'->TT; storeOrigin-> BB #);
                      (if theIS.super.isImplSuper then
                         (* as in V ::< { ... } *)
                         fctracer(#do 'super:isImplSuper:'->TT; theIS.dopt->TL #);
                         (if theIS.super.isSingularImplSuper then
                            (* where super is as in V:< A{...} *)
                            fctracer(#do 'super:isSingularImplSuper:'->TT; theIS.super.dopt->TL #);
+                           (if storeOrigin and (not withNewProxy or not theIS.origin.encOG.isValueObj) then
+                                 cd.pushThis;
+                                 ('iOrigin',theIS.newOriginOff) -> cd.rpushg;
+                           if);
+                              (* For implicit super we may have snorf::< {...}, we thus create an empty Exp *)
+                           Exp -> E[] 
                         else
                            (* where super is as in V:< A *)
                            fctracer(#do 'super:NOT:isSingularImplSuper:'->TT; theIS.super.dopt->TL #);
+                           theIS.super.ATd.asDecl -> ptn[]; 
+                              (* snorf:< foo or snorf:< koks.foo ...
+                               * snorf:: ...
+                               * ptn = snorf:< foo or snorf:< koks.foo
+                              *)
+                           ptn.OG.super[] -> pushAddress -> E[]
                         if)
                      else
                         (* as in P: S{...} or V::< A{...} *)
                         fctracer(#do 'super:NOT:isImplSuper:'->TT; theIS.super.dopt->TL #);
-                     if)if)
+                        theIS.super[] -> pushAddress -> E[];
+                     if);
+                     
+                             
+                     
+                     (if E[] = none then
+			               (*'!!!! E is none'->putline - does happen twice for TST *)
+                     else L:
+                              (if 'BracketedExp'->(E.label).equal then
+                                 '**** got BracketedExp:AGAIN:'->dumpt; super.dopt->dumpTN;
+                                 (E[]->BE[]).IV[] -> E[]; E.label->dumpT; E.dopt -> dumpTN;
+                                 restart L
+                               if);
+                        (theIS[],E[]) -> handleSuperArgs;
+                     if);
+                     (if storeOrigin and (rArgsInSuper > 0)  then 
+                        (* Reverse of rShiftUp as described above. See rShift in VM/objectImage *)
+                        rArgsInSuper -> cd.rShiftDown; 0 -> rArgsInSuper
+                     if);
+
                   #);
                handleArgumentsAndOrigin:
                  (* mainIS was introduced in order to handle virtual
@@ -2258,9 +2418,11 @@ generator: codeGenMarker
                                (mainIS.encOG[],false,(mainIS.encOG[],false,none)->ODsequence)
                                  -> currentArg.getVqual
                                  -> (OGSx[],qual[],ptnKind);
-                               qual.primNo = String_prim -> isString
+                               qual.primNo = String_prim -> isString;
+                               fctracer(#do 'currentArg.OG.primNo:'->TT; currentArg.OG.primNo->II;
+                                  currentArg.OG.primNo = this_Prim -> BB ; isString -> BB #)
                            if);
-                           (if isVeq then ctracer(#do 'vEq:store:'->TT; currentArg.dopt -> TQ #)if);
+                           (if isVeq then fctracer(#do 'vEq:store:'->TT; currentArg.dopt -> TQ #)if);
                            (if isString then
                                (* we may have a ref arg on the stack - so use shiftUp *)
                                (*cd.rswap;*)
@@ -2397,7 +2559,7 @@ generator: codeGenMarker
                         (if not theIS.globalRestrictionsInsuper then
                            (if theIS.super.isSingularImplSuper then
                               fctracer
-                              (#do'allocSuper:isSingularImplSuper:'->TT; theIS.encOG.doPT->TQ; theIs.origin.encOG.isValueObj->BB #);
+                              (#do'allocSuper:isSingularImplSuper:'->TT; theIS.encOG.doPT->TL; theIs.origin.encOG.isValueObj->BB #);
                               (if not withNewProxy or not theIS.origin.encOG.isValueObj then
                                  cd.pushThis;
                                  ('iOrigin',theIS.newOriginOff) -> cd.rpushg;
@@ -2438,7 +2600,7 @@ generator: codeGenMarker
                      if)if)#);
                      (if rArgsInSuper > 0 then 
                         (* Reverse of rShiftUp as described above. See rShift in VM/objectImage *)
-                        rArgsInSuper -> cd.rShiftDown
+                        rArgsInSuper -> cd.rShiftDown; 0 -> rArgsInSuper
                      if);
                   else (* why only if no super? Seems to be binding of inner in object, inx = 1
                         * perhaps new method? *)
@@ -2711,16 +2873,19 @@ generator: codeGenMarker
                     * thisStack = caller
                     * Possible arguments on callerStack = thisStack
                     *)
-                   cd.bcPos -> beginBCP;
+                  cd.bcPos -> beginBCP;
                    
-                   (this(Items)[],this(Items)[]) -> handleArgumentsAndOrigin;
-                   (this(Items)[],this(Items)[],true) -> handleArgumentsAndOrigin_new;
-                   checkIfBetaWorldOrStringModule;
-                   mvStack;
-                   (if sig[] <> none then (*(false,0,0) -> sig.gen*) if);
-                   (* genAttributes for possible super - recursively *)
-                   cd.markEnterE; 
-                   this(Items)[] -> genAttributes;
+                  (if newFeature then
+                     (this(Items)[],this(Items)[],true) -> handleArgumentsAndOrigin_new;
+                  else
+                     (this(Items)[],this(Items)[]) -> handleArgumentsAndOrigin;
+                  if);
+                  checkIfBetaWorldOrStringModule;
+                  mvStack;
+                  (if sig[] <> none then (*(false,0,0) -> sig.gen*) if);
+                  (* genAttributes for possible super - recursively *)
+                  cd.markEnterE; 
+                  this(Items)[] -> genAttributes;
                    (* goSuper *)
                    (if (this(Items)[] -> hasRealSuper) then
                        (if superDesc.primNo // vEq_prim // vLE_prim then
@@ -2735,8 +2900,7 @@ generator: codeGenMarker
 		             if)if);
                    genActionPart;
                    encOG.computeGCinfo;
-                   (objSize,isIndexed,newBasicProp.visibility) 
-                     -> cd.endClass;
+                   (objSize,isIndexed,newBasicProp.visibility) -> cd.endClass;
                    cd.bcPos -> endBCP;
                    (if innerInx > 0 then
                        ctracer(#do 'before:cd.vdtTable:'->TT #);
