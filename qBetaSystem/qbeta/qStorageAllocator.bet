@@ -128,6 +128,25 @@ StorageAllocator: restrictions
                diSize -> diXsize;
                IT[] -> sig.Qalloc;
             #);
+          computeTmp::
+             (#
+             do (if traceTmp then
+                    '**** DI:computeTmp:'->dumpT; dopt -> puthead;
+                if);
+                (if true
+                // OG.isBasicPattern then
+                   (if traceTmp then ' basicPtn:' -> dumpTN if);
+                   1 -> vTmpNo
+                // OG.isValueObj then
+                   (if traceTmp then ' isValueObj:'->dumpTN if);
+                // OG.primNo = String_prim then
+                   (if traceTmp then ' isString:'->dumpTN if);
+                   1 -> rTmpNo
+                else
+                   (if traceTmp then ' isRef:'->dumpTN if);
+                   1 -> rTmpNo
+                if)
+             #);
           diXsize: @integer; (* what is the purpose ? *)
           objSize:: (#do OG.objSize -> value  #)
        #);
@@ -204,16 +223,22 @@ StorageAllocator: restrictions
                       IT[] -> current.Qalloc
             if)#)#);
           computeTmp::
-             (# args: [100] @integer; top: @integer
-             do 
-                scanSons(#do current.computeTmp -> args[top + 1 -> top] #); 
-                (if top > 0 then
-                   '**** Arguments:'->dumpT; dopt -> dumpT;
+             (# vArgs,rArgs: [100] @integer; top: @integer
+             do (if noOfSons > 0 then
+                   tmpStack.mark;
                    scanSons
-                    (# i: @integer 
-                    do 'arg:'->dumpT; current.dopt->dumpT; args[i + 1 -> i] -> dumpI
-                    #);
-                    newline
+                     (#do current.computeTmp -> (vArgs[top + 1 -> top],rArgs[top]);
+                       (vArgs[top],rArgs[top]) -> tmpStack.push
+                     #); 
+                   (if traceTmp and (top > 0) then
+                      '**** Arguments:'->dumpT; dopt -> dumpT;
+                      scanSons
+                       (# i: @integer 
+                       do 'arg:'->dumpT; current.dopt->dumpT; vArgs[i + 1 -> i]->dumpI; rArgs[i + 1 -> i]->dumpI;
+                       #);
+                       newline
+                   if);
+                   tmpStack.pop
              if)#)
        #);
       AssignmentStatement::<
@@ -232,7 +257,8 @@ StorageAllocator: restrictions
             #);
           computeTmp::
              (#
-             do '**   assign:'->dumpT; dopt -> putHeadN; right.computeTmp -> tmpNo;
+             do (if traceTmp then '**   assign:'->dumpT; dopt -> putHeadN;  if);
+                right.computeTmp -> (vTmpNo,rTmpNo)
              #)
        #);
      ObjectCall::<
@@ -456,10 +482,11 @@ StorageAllocator: restrictions
               #) ;     
           computeTmp::
              (#
-             do super.computeTmp -> tmpNo; IS.computeTmp; 
-                (if false then
-                   '**   OD:'->dumpT; dopt->dumpT; tmpNo -> dumpI; newline
-                if)
+             do (if IS.isEmpty then (* skip singular ODs *)
+                    super.computeTmp -> (vTmpNo,rTmpNo);
+                    (if traceTmp then
+                        '**   OD:'->dumpT; dopt->dumpT; vTmpNo -> dumpI; rTmpNo -> dumpI; newline
+                if)if)
              #);
              clear::< (# do false -> marked; 0 -> pTop; inner#);
        #); 
@@ -710,23 +737,31 @@ StorageAllocator: restrictions
             #);
           computeTmp::
              (#
-             do scanSons
-                 (# N: @integer 
+             do tmpStack.clear;
+                scanSons
+                 (# vN,rN: @integer 
                  do (if true
-                    // current.isDecl then 
-                    // current.isNewProp then
+                    // current.isDecl // current.isNewProp then
                     (*// isModuleItem then*)
                     else
-                      current.computeTmp -> N;
+                      current.computeTmp -> (vN,rN);
                       (if false then 
                           '**** Item:computeTmp: ' -> dumpT; current.dopt -> putHeadN; 
-                          '**   son:'->dumpT; N->dumpI; current.label->dumpt; current.dopt->putHeadN
-                 if)if)#)
+                          '**   son:'->dumpT; vN->dumpI; current.label->dumpt; current.dopt->putHeadN
+                 if)if)#);
+                 tmpStack.display
+                 (#
+                 do dopt -> putHeadN;
+                    (* super and main have each their own possible tmp-area *)
+                    (if vMax > 0 then qsize + 1 -> vTmpOff; qSize + vMax -> qSize  if);
+                    (if rMax > 0 then qsize + 1 -> rTmpOff; qSize + rMax -> qSize  if);
+                 #)
              #); 
           (* qsize is currently declared in abstractSyntaxTree, but should be here;
            * It is used in objSize, which is called in false-branch for StdBeta;
            * We may move objSize to this fragment?
            *)
+          vTmpOff,rTmpOff,
           vdtSize,originOff,innerInx: @integer;
           qOriginOff: @integer;
           restartLab,leaveLab: @LabelHandler.label;  
@@ -899,9 +934,9 @@ StorageAllocator: restrictions
             #);#);
           computeTmp::
             (#
-            do scanSons(#do current.computeTmp -> tmpNo #);
-               (if false then
-                  '**   INV:'->dumpT; dopt->dumpTN; 
+            do scanSons(#do current.computeTmp -> (vTmpNo,rTmpNo) #);
+               (if traceTmp then
+                  '**   INV:'->dumpT; dopt->dumpT; vTmpNo->dumpI; rTmpNo -> dumpI; newline
                if)
             #)
        #);
@@ -948,9 +983,11 @@ StorageAllocator: restrictions
             if)if)if)#)if)#)if)#);
           computeTmp::
              (#
-             do '**   OI:'->dumpT; dopt->dumpTN;
+             do ATd.computeTmp  -> (vTmpNo,rTmpNo);
+                (if traceTmp then
+                    '**   OI:'->dumpT; dopt->dumpT; vTmpNo->dumpI; rTmpNo->dumpI; newline;
+                if);
                 args.computeTmp;
-                1 -> tmpNo;
              #)
        #);
      LabelDecl::<
@@ -990,11 +1027,13 @@ StorageAllocator: restrictions
                   IT[] -> current.Qalloc;
             #)#);
           computeTmp::
-             (# ln,rn: @integer
-             do leftRec.computeTmp -> ln; M.computeTmp -> rn;
-                 '**   binExp:'->dumpT; dopt->dumpT; ';'->dumpT; 
-                 leftRec.dopt->dumpQ; ln->dumpI; M.dopt->dumpQ; rn->dumpI; newline;  
-                ln + rn -> tmpNo (* not correct *)
+             (# lVn,lRn,rVn,rRn: @integer
+             do leftRec.computeTmp -> (lVn,lRn); M.computeTmp -> (rVn,rRn);
+                (if traceTmp then
+                   '**   binExp:'->dumpT; dopt->dumpT; ';'->dumpT; 
+                   leftRec.dopt->dumpQ; lVn->dumpI; M.dopt->dumpQ; rVn->dumpI; newline;
+                if);
+                lVn + rVn -> vTmpNo (* not correct *)
              #)
        #);
      UnaryExp::<
@@ -1002,7 +1041,13 @@ StorageAllocator: restrictions
        #);
      BracketedExp::<
        (# Qalloc:: (# do IT[] -> IV.Qalloc #);
-          computeTmp:: (#do '**   bracketedExp:'-> dumpT; dopt->putHeadN; IV.computeTmp -> tmpNo #);
+          computeTmp:: 
+          (#
+          do (if traceTmp then
+                 '**   bracketedExp:'-> dumpT; dopt->putHeadN; 
+             if);
+             IV.computeTmp -> (vTmpNo,rTmpNo)
+          #);
        #);
      Const::< (# #);
      CharObj::< (# #);
@@ -1069,6 +1114,38 @@ StorageAllocator: restrictions
             #);
           init: (# do 0 -> labCount #);
        #);
+     tmpStack: @
+        (# vMax,rMax,localVn,localRn: @integer;
+           clear: 
+              (# 
+              do (if traceTmp then '**   clear:'->dumpT; vMax->dumpI; rMax->dumpI; newline if);
+                 0 -> vMax -> rMax 
+              #);
+           push:
+              (# vN,rN: @integer
+              enter(vN,rN)
+              do (if traceTmp then '**   push:'->dumpT; vN->dumpI; rN->dumpI; newline if);
+                 localVn + vN -> localVn; localRn + rN -> localRn
+              #);
+           mark:
+             (#
+             do (if traceTmp then  '**** MARK:'->dumpT; localVN->dumpI; localRn->dumpI; newline if);
+                (if localVn > vMax then localVn -> vMax if);
+                (if localRn > rMax then localRn -> rMaX if);
+             #);
+           pop:
+              (#
+              do 0 -> localVn -> localRn
+              #);
+           display: 
+              (# vMax,rMax: @integer;
+              do tmpStack.vMax -> vMax; tmpStack.rMax -> rMax; (* this is clumsy *)
+                 (if (vMax > 0) or (rMax > 0) then
+                     '**** TmpStorage needed, vMax:' -> dumpT; vMax->dumpI; 'rMax:'->dumpT; rMax->dumpI; newline;
+                     inner display
+                 if)
+              #)
+        #);
      BC,BCllvm: @File; ch: @integer;
      emitLLVM,traceLLVMcalls,dumpLLVMobjs: @boolean;
   do QNewDesc.init;
