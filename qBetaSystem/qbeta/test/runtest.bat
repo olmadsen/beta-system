@@ -6,6 +6,11 @@ echo %BL%
 
 rm -v A_trace.txt B_trace.txt C_trace.txt D_trace.txt E_trace.txt trace.txt
 
+cd C:/beta/r5.5/qBetaSystem/qbeta
+beta -q -o xbeta qbeta
+
+cd C:/beta/r5.5/qBetaSystem/qbeta/test/
+
 cygstart C:/beta/r5.5/qBetaSystem/qbeta/test/testrun3
 cygstart C:/beta/r5.5/qBetaSystem/qbeta/test/testrun2
 cygstart C:/beta/r5.5/qBetaSystem/qbeta/test/testrun4
