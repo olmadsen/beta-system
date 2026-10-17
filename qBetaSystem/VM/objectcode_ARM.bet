@@ -13,6 +13,10 @@ do true -> isArm;
 #)
 ---ObjectCode_state:descriptor---
 (# trace: (# exit true #);
+   com:
+      (# S: ^text
+      enter S[] do '\n\t\t\t; ' -> out.puttext; S[]-> out.puttext
+      #);
    x0: (#exit 0 #);
    x1: (#exit 1 #);
    x2: (#exit 2 #);
@@ -94,7 +98,7 @@ do true -> isArm;
          size * 8 -> pushConst; state.stacks.vPop -> c8;
          (inxR,inxR,c8) -> state.ins.mulR;
          c8 -> state.reg.freeV;
-         '\n\t\t; END:computeArrayIndex' -> out.puttext;
+         'END:computeArrayIndex' -> com;
          state.stat;
       exit(Xr,inxR)
       #); 
@@ -214,6 +218,7 @@ do true -> isArm;
       (# refRegStart: (# exit 15 #);
          thisObj: (#exit 28 #);
          lr: (#exit 30 #);
+         refRtnBusy: @Boolean;
          vRegNo,rRegNo: @integer;
          init: (# do 0 -> vRegNo; refRegStart -> rRegNo #);
          getV:
@@ -251,7 +256,10 @@ do true -> isArm;
             enter rn
             do (if rn = (rRegNo - 1) then rRegNo - 1 -> rRegNo 
                else
-                  (if rn <> thisObj then
+                  (if true
+                  // (rn = refRegStart) and refRtnBusy then
+                     (* refRtnReg = refRegStart*)
+                  // rn <> thisObj then
                     '\n;!!!! ERROR:register mismatch: '->out.puttext; rn->out.putint; ','->out.put; rRegNo->out.putint;
             if)if)#);
          print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint #)
@@ -297,7 +305,7 @@ do true -> isArm;
             if)#);
          stat: 
             (#
-            do ' vS: ' -> out.puttext;
+            do 'vS: ' -> out.puttext;
                (for i: vTop repeat 
                   (if vKind[i] = valueKind then 'V:'->out.puttext else 'R:'->out.puttext if);
                   vStack[i] -> out.putint; ' ' ->out.put
@@ -305,19 +313,94 @@ do true -> isArm;
                'rS: ' -> out.puttext;
                (for i: rTop repeat rStack[i] -> out.putint; ' ' ->out.put for)
       #)#);
-   stat: (# do '\n\t\t;'->out.puttext; stacks.stat; reg.stat #);
+   stat: (# do ''->com; stacks.stat; reg.stat #);
    reg: @RegisterHandler; stacks: @StackHandler;
    tmp: @
       (# store:
-            (#
-            do state.stat;
-               storeVtmp;
-               storeRtmp;
+            (# di: @integer
+            enter di
+            do 'tmp.store:top:'->com; top -> out.putint;
+               state.stat;
+               (if top > 0 then
+                  storeVtmp;
+                  storeRtmp;
+               if);
+               di -> pushParam;
                state.stat
             #);
+         storeVtmp:
+            (# rv: @integer
+            do 'storeVtmp:'->com; stack[top].noOfVpar ->out.putint;
+               (for i: stack[top].noOfVpar - 1 repeat
+                  (if stacks.vTopKind = regKind then 
+                        stacks.vPop -> rv;
+                        (rv,reg.thisObj,getVtmp) -> ins.str;
+                        rv -> reg.freeV;
+                        vTmpSaved + 1 -> vTmpSaved;
+                  else
+                        '\n; **** ERROR: storeVtmp:constant on vStack:' ->out.puttext;
+                        i -> out.putint;
+                        stacks.vpop -> rv
+               if)for)
+            #);
+         storeRtmp:
+            (# rr: @integer
+            do (for i: stack[top].noOfRpar - 1 repeat
+                  stacks.rPop -> rr;
+                  (rr,reg.thisObj,getRtmp->tmp.lastRtmp) -> ins.str;
+                  rr -> reg.freeR;
+               for)
+            #);
+         restoreFromTmp:
+            (# r: @integer
+            do (if top > 0 then top - 1 -> top if); (* appears strange *)
+               (if top > 0 then
+                  'storeRtmp:'->com; stack[top].noOfRpar ->out.putint;
+                  (for i: stack[top].noOfVpar - 1 repeat
+                     reg.getV -> r;
+                     (r,regKind) -> stacks.vPush;
+                     (r,reg.thisObj,nxtVtmp - 1 -> nxtVtmp) -> ins.ldr;
+                  for);
+                  (for i: stack[top].noOfRpar - 1 repeat
+                     reg.getR -> r;
+                     r -> stacks.rPush;
+                  (if i > 1 then (* do not restore x15 (origin) here *)
+                     (r,reg.thisObj,nxtRtmp - 1 -> nxtRtmp) -> ins.ldr;
+               if)for);
+               stat
+               if)
+            #);
+         restoreRefRtn:
+            (#
+            do (reg.refRegStart,reg.thisObj,lastRtmp) -> ins.ldr
+            #);
+         lastRtmp: @integer;
          stack: [10] ^tmpRecord; top: @integer;
+         pushParam:
+            (# di: @integer
+            enter di
+            do (if (top + 1 -> top) > stack.range then stack.range -> stack.extend if);
+               'pushParam:'->com; di->out.putint; ' '->out.put;   top -> out.putint;
+               di -> tmpRecord -> stack[top][]
+            #);
+         addPar:
+            (# topInv: ^tmpRecord
+            do 'tmp.addPar:'->com; top->out.putint;
+               (if (top > 0) then
+                   stack[top][] -> topInv[];
+                   topInv.noOfParPushed + 1 -> topInv.noOfParPushed;
+                  (if objDescTables.ODTable[topInv.descInx].params[topInv.noOfParPushed]
+                  // 0 then topInv.noOfVpar + 1 -> topInv.noOfVpar
+                  // 1 then
+                  // 2 then topInv.noOfRpar + 1 -> topInv.noOfRpar
+                  // 3 then 
+                   if)
+               if)
+            #);
          tmpRecord:
-            (# 
+            (# descInx,noOfParPushed,noOfVpar,noOfRpar: @integer
+            enter descInx
+            exit this(tmpRecord)[]
             #)
       #); 
    getVtmp:
@@ -332,7 +415,7 @@ do true -> isArm;
          nxtRtmp + 1 -> nxtRtmp
       exit rr
       #);
-   storeVtmp:
+   storeVtmpX:
       (# rv: @integer
       do (if reg.vRegNo > 0 then
             '\n; value parameter registers busy: '->out.puttext; 
@@ -340,21 +423,24 @@ do true -> isArm;
             ' vRegNo:'->out.puttext; reg.vRegNo->out.putint; ' vTmpOff:'->out.puttext; 
             vTmpOff->out.putint; ' rTmpOff:' -> out.puttext; rTmpOff->out.putint; 
             ' vTmpSpace:'->out.puttext; rTmpOff - vTmpOff -> out.putint;
+            0 -> vTmpSaved; (* do we need a stack? *)
             (if reg.vRegNo <= (rTmpOff - vTmpOff) then
-               (for i: reg.vRegNo repeat
-                  (if stacks.vTop = regKind then 
+               (for i: reg.vRegNo - 1 repeat
+                  (if stacks.vTopKind = regKind then 
                         stacks.vPop -> rv;
                         (rv,reg.thisObj,getVtmp) -> ins.str;
                         rv -> reg.freeV;
                         vTmpSaved + 1 -> vTmpSaved;
                   else
-                        '**** ERROR: storeVtmp:constant on vStack:' ->putline;
+                        '\n; **** ERROR: storeVtmp:constant on vStack:' ->out.puttext;
+                        i -> out.putint;
+                        stacks.vpop -> rv
                if)for)
             else
                '\n; ERROR: tmp area mismatch'->out.puttext
          if)if)
       #);
-   storeRtmp:
+   storeRtmpX:
       (# rr: @integer
       do (if reg.rRegNo > (state.reg.refRegStart + 1) then
             '\n; ref parameter registers busy: '->out.puttext;
@@ -366,15 +452,15 @@ do true -> isArm;
             (if (reg.rRegNo - reg.refRegStart) <= (objSize - rTmpOff + 1) then
                (for i: reg.rRegNo - reg.refRegStart repeat
                   stacks.rPop -> rr;
-                  (rr,reg.thisObj,getRtmp) -> ins.str;
+                  (rr,reg.thisObj,getRtmp->tmp.lastRtmp) -> ins.str;
                   rr -> reg.freeR;
-                  rTmpSaved + 1 -> rTmpSaved
+                  rTmpSaved + 1 -> rTmpSaved;
                for)
             else
                '\n; ERROR: tmp area mismatch'->out.puttext
          if)if)
       #);
-   restoreFromTmp:
+   restoreFromTmpX:
       (# r: @integer
       do (for i: vTmpSaved repeat
             reg.getV -> r;
@@ -464,13 +550,33 @@ do true -> isArm;
             (if vdtTable[i][] <> none  then
                 vdtTable[i].mkVDT
     if)for)#);
+getNoOfParam:
+   (* NOT sufficient for compound values - must need size *)
+   (# theOD: ^objDescTables.ODentry; di,vN,rN: @integer
+   enter di
+   do 'getNoOfParam:' -> com;
+      (if objDescTables.ODtable[di][] = none then
+          '\n; !!!! getNoOfParam:No ODtable:descInx:'->puttext; di -> out.putint;
+         leave getNoOfParam
+      if);
+      (objDescTables.ODtable[di][]->theOD[]).asText -> out.puttext;
+      (for i: theOD.pTop repeat 
+         (if theOD.params[i]
+         // 0 then vN + 1 -> vN
+         // 1 then 
+         // 2 then rN + 1 -> rN
+         // 3 then
+      if)for);
+      (if theOD.hasOrigin then rN + 1 -> rN if)
+   exit(vN,rN)
+   #);
 allocParameters:
    (* NOT sufficient for compound values - must need size *)
    (# theOD: ^objDescTables.ODentry
-   do '\n\t\t; alcPar:' -> out.puttext;
+   do 'allocPar:' -> com;
       (if objDescTables.ODtable[thisDescInx][] = none then
           '!!!! No ODtable:descInx:'->puttext; thisDescInx -> out.putint; 
-          ' '->put; thisName[] -> putline;
+          ' '->put; thisName[] -> out.putline;
          leave AllocParameters
       if);
       (if reg.vRegNo > 0 then
@@ -484,7 +590,7 @@ allocParameters:
          ' ' -> put; thisClassid[] -> putline;
       if);
       (objDescTables.ODtable[thisDescInx][]->theOD[]).asText -> out.puttext;
-      (for i: theoD.pTop repeat 
+      (for i: theOD.pTop repeat 
          (if theOD.params[i]
          // 0 then (reg.getV,regKind) -> stacks.vPush
          // 1 then 
@@ -496,12 +602,14 @@ allocParameters:
 deAllocParameters:
    (# theOD: ^objDescTables.ODentry; descNo: @integer
    enter descNo
-   do '\n\t\t; deAlcPar:' -> out.puttext; 
+   do 'deAllocPar:'->com;  descNo->out.putint; 
+      ' vTmpSaved:'->out.puttext; vTmpSaved->out.putint;
       (if objDescTables.ODtable[descNo][] = none then
          ' ODtable[' -> out.puttext; descNo->out.putint; '] is none'->out.puttext;
          leave deAllocParameters
       if);
       (objDescTables.ODtable[descNo][]->theOD[]).asText -> out.puttext;
+      ' theOD.pTop:'->out.puttext; theOD.pTop->out.putint;
       (for i: theOD.pTop repeat
          (if theOD.params[i]
          // 0 then stacks.vPop -> reg.freeV
@@ -510,7 +618,7 @@ deAllocParameters:
          // 3 then
       if)for);
       (if theOD.hasOrigin then stacks.rPop -> reg.freeR if);
-      restoreFromTmp
+      tmp.restoreFromTmp
    #); 
 
    emitOp:
@@ -560,8 +668,8 @@ deAllocParameters:
    binOpImm: (* binary operator with posble immediate argument *)
       (# op,vr,vl,r: @integer
       enter op
-      do '\n\t\t; binOpImm:'->out.puttext;
-            (if stacks.vTopKind = valueKind then 
+      do 'binOpImm:'->state.com;
+         (if stacks.vTopKind = valueKind then 
                 stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
                     stacks.vPop -> vl; 'vl:value'->out.puttext; vl -> out.putint; 
@@ -574,7 +682,7 @@ deAllocParameters:
                     vl -> reg.print; ','->out.put; vl -> reg.print; ',#'->out.puttext; vr -> out.putint; 
                     (vl,regKind) -> stacks.vPush
                 if)
-             else
+         else
                 'vr:reg:'->out.puttext; vr -> out.putint;
                 stacks.vPop -> vr;
                 (if stacks.vTopKind = valueKind then
@@ -586,14 +694,14 @@ deAllocParameters:
                    vl -> reg.print; ','->out.put; vl -> reg.print; ',' -> out.put; vr -> reg.print;
                    vr -> reg.freeV;
                    (vl,regKind) -> stacks.vPush
-            if)if)
+         if)if)
       #);
    binOpReg: 
       (* binary operator with register argument, mult and other can only take register arguments *)
       (# op,vr,vl,r: @integer
       enter op
       do state.stat;
-         '\n\t\t; binOpReg'->out.puttext;
+         'binOpReg'->state.com;
          (if stacks.vTopKind = valueKind then 
                 '\nvTopKind=valueKind - should not happen?? May happen?' -> puttext;
                 stacks.vPop -> vr;
@@ -631,7 +739,7 @@ deAllocParameters:
              * '\n\t MSUB X3, X2, X1, X0    // 2. Get Remainder: X3 = X0 - (X2 * X1)' -> out.puttext;
              *)
             state.stat;
-            '\n\t\t; emitMod:'->out.puttext;
+            'emitMod:'->state.com;
             (if stacks.vTopKind = valueKind then 
                 stacks.vPop -> vr; 'vr:value:NOT OK'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then 
@@ -667,7 +775,7 @@ deAllocParameters:
       (# op: ^text; vr,vl: @integer
        enter op[]
       do state.stat;
-            '\n\t\t; emitCmpOp:'->out.puttext; 
+            'emitCmpOp:'->state.com; 
             (if stacks.vTopKind = valueKind then 
                 stacks.vPop -> vr; 'vr:value'->out.puttext; vr -> out.putint; 
                 (if stacks.vTopKind = valueKind then
@@ -703,10 +811,9 @@ deAllocParameters:
       do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
          '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
          descNo -> state.deAllocParameters;
-         state.stat;
-         '\n\t\t; END:invoke'->out.puttext;
+         'END:invoke'->com;
          (if true then
-            15 -> r -> stacks.rPush;
+            15 -> r -> stacks.rPush; true -> reg.refRtnBusy;
          else
             reg.getR -> r -> stacks.rPush;
             (if r <> reg.refRegStart then 
@@ -917,8 +1024,15 @@ do codes.rpopThisObj -> emit
 #)
 ---setNoOfParams:doPart---
 do '\n\t\t; objSize:'->out.puttext; objSize -> out.putint;
-   ' vTmpOff:'->out.puttext; vTmpOff->out.putint; ' rTmpOff:'->out.puttext; rTmpOff->out.putint; 
-   objSize -> state.objSize; vTmpOff -> state.vTmpOff -> state.nxtVtmp; rTmpOff -> state.rTmpOff -> state.nxtRtmp;
+   objSize -> state.objSize; 
+   (* shall we handle vTmpOff = 0 ?*)
+   vTmpOff -> state.vTmpOff -> state.nxtVtmp; 
+   (if rTmpOff = 0 then objSize + 1 -> rTmpOff if);
+   rTmpOff -> state.rTmpOff -> state.nxtRtmp;
+
+   ' vTmpOff:'->out.puttext; vTmpOff->out.putint; 
+   ' rTmpOff:'->out.puttext; rTmpOff->out.putint; 
+   
    (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
    state.allocParameters;
    
@@ -984,7 +1098,7 @@ do state.stat;
     state.stat
 #)
 ---pushParam:doPart---
-do '\n\t\t; pushParam: '->out.puttext; state.stacks.vStack[state.stacks.vTop] -> out.putint;
+do 'pushParam: '->state.com; state.stacks.vStack[state.stacks.vTop] -> out.putint;
 ---xpushg:descriptor---
 (* rStack: ... X = Array-object
  * vStack: ... inx = index into array,   (0 < inx) and (inx <= size)
@@ -1099,7 +1213,7 @@ do (if true then
    size * 8 -> pushConst; state.stacks.vPop -> c8;
    (inxR,inxR,c8) -> state.ins.mulR;
    c8 -> state.reg.freeV;
-   '\n\t\t; after sizeR -> state.reg.freeV;' -> out.puttext;
+   'after sizeR -> state.reg.freeV;' -> state.com;
    state.stat;
    if); 
 
@@ -1120,7 +1234,7 @@ do
 #)
 ---loadOrigin:descriptor---
 (# r1,r2: @integer
-do '\n\t\t; loadOrigin_ARM: ' -> out.puttext; state.stat;
+do 'loadOrigin_ARM: ' -> state.com; state.stat;
    (if true then
       (if false and (state.reg.vRegNo > 0) then
          '\n; ERROR: value parameter registers busy: '->out.puttext; state.reg.vRegNo -> out.putint;
@@ -1212,13 +1326,19 @@ do
 #)
 ---initInvocation:descriptor---
 (#
-do '\n\t\t; INIT_INVOCATION: ' -> out.puttext;
-   state.tmp.store;
+do 'INIT_INVOCATION: ' -> state.com; di -> out.putint;
+   (* mus understand when di = 0 *)
+   (if di > 0 then di -> state.tmp.store if);
 #)
 ---evalParams:descriptor---
 (#
-do '\n\t\t; START EVAL OF PARAMETERS: ' -> out.puttext; ch -> out.put;
+do 'START EVAL OF PARAMETERS: ' -> state.com; ch -> out.put;
    state.stat;
+#)
+---pushPar:descriptor---
+(#
+do 'pushPar'->state.com;
+   state.tmp.addPar
 #)
 ---invoke:descriptor---
 (# arg,r: @integer
@@ -1290,7 +1410,8 @@ do
 #)
 ---prepareReturn:descriptor---
 (#
-do '\n\t; prepareReturn:'->out.puttext;
+do 'prepareReturn:'->state.com;
+   state.tmp.restoreRefRtn;
    (if false then
       (if true then
          state.stat;
