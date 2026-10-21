@@ -1347,8 +1347,8 @@ generator: codeGenMarker
      callInvoke:
        (# theOG: ^ObjectDescriptor; staticOff,valueOff,valDno,arrayObjSize: @integer; originIsValueObj,fromStub: @boolean;
           T: ^text; rtnOff: @integer; rec: ^Exp; org: ^Items; 
-          vOff: @integer; inValueObj,isLocal,recInValueObj,done: @Boolean
-       enter(theOG[],staticOff,fromStub,rec[],valueOff)
+          vOff: @integer; inValueObj,isLocal,recInValueObj,done,useRtnVal: @Boolean
+       enter(theOG[],staticOff,fromStub,rec[],valueOff,useRtnVal)
        do (if true or (valueOff = -1) then 
               ctracer
                  (#do 'callInvoke:'->TT; theOG.OGid->TT; 'valueOff:'->TT; valueOff->II;
@@ -1363,7 +1363,7 @@ generator: codeGenMarker
                   true -> done;
           if)if);
           (if not done then
-             (theOG.simpleOGid,theOG.IS.newDescNo,theOG.IS.objSize,staticOff,theOG.isObj) -> cd.invoke
+             (theOG.simpleOGid,theOG.IS.newDescNo,theOG.IS.objSize,staticOff,theOG.isObj,useRtnVal) -> cd.invoke
                (# topSuperId::
                      (# superDesc: ^Items
                      do (theOG.IS.topSuper->superDesc[]).encOG.OGidWdNo -> superId[];
@@ -1549,7 +1549,7 @@ generator: codeGenMarker
                                   (true,0,0) -> currentDcl.gen;
                            if)#); 
                            (* invoke the pure invocaton *)
-                           (((super.last).ATd.asDecl).OG[],staticOff,false,none,valueOff) 
+                           (((super.last).ATd.asDecl).OG[],staticOff,false,none,valueOff,useRtnVal) 
                              -> callInvoke
                              -> rtnOff  
                         else 
@@ -1560,7 +1560,7 @@ generator: codeGenMarker
                                (* This is also the case for R.S.foo{ ... } *)
                                cd.loadOrigin
                            if);
-                           (this(ObjectDescriptor)[],staticOff,false,none,valueOff) 
+                           (this(ObjectDescriptor)[],staticOff,false,none,valueOff,useRtnVal) 
                              -> callInvoke
                              -> rtnOff;
                        if);
@@ -1575,7 +1575,13 @@ generator: codeGenMarker
                                     leave L
                              if)#);
                              cd.rPop 
-                   if)if);
+                         else (* check if invokee return this *)
+                            IS.scanAllItemDecls(# do (if currentDcl.isOutArg then leave L if)#);
+                            (if true then
+                                '**** returns_this:'->dumpT; IS.encOG.OGid -> dumpTN
+                            if)
+                        if)
+                   if);
                    tracer(#do 'OG:gen:end:valueOff'->TT; valueOff->II #);
                    cd.bcPos -> endBCP;     
                if)
@@ -3349,7 +3355,7 @@ generator: codeGenMarker
                               (* (currentArg[],actArgs[argInx][]) -> handleVirtualArg; See handleVargs instead *)
                            else 
                               ctracer(#do 'E.arg:push:'->TT; currentArg.dopt->TT #);
-                              cd.pushPar;
+                              currentArg.dopt -> cd.pushPar;
                               (currentArg[],actArgs[argInx][]) -> handleNonVirtualArg
                           if)
                           (*else: E is a super as foo in foo{...} *)
@@ -3960,9 +3966,9 @@ generator: codeGenMarker
                  (# E: ^Exp;
                  enter E[]
                  do ctracer(#do 'loadOriginII:'->TT; E.dopt-> TL#);
-                    cd.loadOrigin;
                     E.pushThis;
                     superAdj -> E.loadOrigin -> (rec[],E[],orgIsVal);
+                    cd.loadOrigin;
                  #);
                getVoffDno:
                   (# Ex: ^Exp; vOff,dNo: @integer; org: ^Items;
@@ -4809,7 +4815,7 @@ generator: codeGenMarker
                    cTracer(#do 'OI:newInvoke:NonVirtual:hasVirtualArgs:'->TT; dopt->TL #);                   
                    (ATd.asDecl,'',QnewDesc->stubDescNo,(ATd.asDecl).OG.IS.newDescNo,0,0) -> ObjStubStack.add;
                    stubDescNo -> handleVargs;
-                   ('stub',stubDescNo,4,0,false) ->  cd.invoke; 
+                   ('stub',stubDescNo,4,0,false,useRtnVal) ->  cd.invoke; 
                    (if useRtnVal then
                        ((ATd.asDecl).OG[],'stub') -> pushOut -> rtnOff;
                        ctracer(#do 'OI:after:pushOut:'->TT; rtnOff->II #);
@@ -5328,14 +5334,12 @@ generator: codeGenMarker
 
                   (S[],stringDescNo) -> cd.pushText;
                   (if doAdd then
-                      (plusDecl.sig.id[],plusDecl.OG.getDescNo,
-                      plusDecl.OG.IS.objSize,0,true) 
+                      (plusDecl.sig.id[],plusDecl.OG.getDescNo,plusDecl.OG.IS.objSize,0,true,useRtnVal) 
                         -> cd.invoke;
                       getPlusRes;
                   if);
                   (true,0,0) -> current.gen;
-                  (plusDecl.sig.id[],plusDecl.OG.getDescNo
-                  ,plusDecl.OG.IS.objSize,0,true)
+                  (plusDecl.sig.id[],plusDecl.OG.getDescNo,plusDecl.OG.IS.objSize,0,true,useRtnVal)
                     -> cd.invoke;
                   getPlusRes;
                   end[n] -> prev;
@@ -5345,8 +5349,7 @@ generator: codeGenMarker
                (#do 'pushText: ' -> TT; (prev + 1,T.length) -> T.sub -> TQ #);*)
                ((prev + 1,T.length) -> T.sub,stringDescNo)  -> cd.pushText;
                (if doAdd then                    
-                   (plusDecl.sig.id[],plusDecl.OG.getDescNo
-                   ,plusDecl.OG.IS.objSize,0,true) 
+                   (plusDecl.sig.id[],plusDecl.OG.getDescNo,plusDecl.OG.IS.objSize,0,true,useRtnVal) 
                      -> cd.invoke;
                    getPlusRes;
                if);
@@ -5478,12 +5481,12 @@ generator: codeGenMarker
               (* arg 2 = staticOff,do we need it?*)
               (if not emitLLVM then
                   (if OG.IS.isEmpty and not OG.super.hasVirtualArgs then
-                      ((OG.super.ATd.asDecl).OG[],0,true,none,0) -> callInvoke
+                      ((OG.super.ATd.asDecl).OG[],0,true,none,0,false) -> callInvoke
                    else (* never happens! *)
-                      (OG[],0,true,none,0) -> callInvoke
+                      (OG[],0,true,none,0,false) -> callInvoke
               if)if)
            else
-              (encIS.sig.id[],OG.getDescNo,OG.IS.objSize,0,true)
+              (encIS.sig.id[],OG.getDescNo,OG.IS.objSize,0,true,false)
                 -> cd.invoke
           if);
           
@@ -5756,7 +5759,7 @@ generator: codeGenMarker
                    'Main: ' -> puttext; main.doPt -> putline
                if);
                markIncludes.topModule.OG.simpleOgid -> BetaWorld[];
-               (BetaWorld[],(markIncludes.topModule.theDesc).newDescno,(markIncludes.topModule.theDesc).objSize,0,true) 
+               (BetaWorld[],(markIncludes.topModule.theDesc).newDescno,(markIncludes.topModule.theDesc).objSize,0,true,false) 
                  -> cd.invoke
                (# topSuperId::
                     (#
