@@ -15,7 +15,8 @@ do true -> isArm;
 (# trace: (# exit true #);
    com:
       (# S: ^text
-      enter S[] do '\n\t\t\t; ' -> out.puttext; S[]-> out.puttext; inner
+      enter S[] do (*'\n\t\t\t; ' -> out.puttext; S[]-> out.puttext;*) 
+         fcom(#do S[]->TT #); inner
       #);
    missing:
       (# msg: ^Text
@@ -232,6 +233,7 @@ do true -> isArm;
                (if (vRegNo + 1 -> vRegNo) >= refRegStart then
                   '\n;!!!! ERROR:value register overflow'-> out.putline 
                if);
+               rn -> tmp.addV
             exit rn
             #);
          freeV:
@@ -240,7 +242,8 @@ do true -> isArm;
             do (if rn = (vRegNo - 1) then vRegNo - 1 -> vRegNo 
                else
                   '\n;!!!! ERROR:register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
-               if)
+               if);
+               rn -> tmp.freeV
             #);
          stat: 
             (# 
@@ -254,6 +257,7 @@ do true -> isArm;
                (if (rRegNo + 1 -> rRegNo) >= thisObj then 
                   '\n:!!!! ERROR:reference register overflow'-> out.putline
                if);
+               rn -> tmp.addR
             exit rn
             #);
          freeR:
@@ -266,7 +270,9 @@ do true -> isArm;
                      (* refRtnReg = refRegStart*)
                   // rn <> thisObj then
                     '\n;!!!! ERROR:register mismatch: '->out.puttext; rn->out.putint; ','->out.put; rRegNo->out.putint;
-            if)if)#);
+               if)if);
+               rn -> tmp.freeR
+            #);
          print: (# rn: @integer enter rn do 'x'->out.put; rn -> out.putint #)
       do
       #);
@@ -285,7 +291,16 @@ do true -> isArm;
                if);
                v -> vStack[vTop]; t -> vKind[vTop];
             #);
-         vPop: (# v: @integer do (if vTop > 0 then vStack[vTop] -> v; vTop - 1 -> vTop else 27 -> v if) exit v #);
+         vPop: 
+            (# v: @integer 
+            do (if vTop > 0 then
+                   vStack[vTop] -> v; vTop - 1 -> vTop 
+               else
+                 'vStack:underflow:'->com;
+                 27 -> v 
+               if) 
+            exit v 
+            #);
          vTopKind: (# k: @integer do (if vTop > 0 then vKind[vTop] -> k else 27 -> k if) exit k #);
          rPush: 
             (# v: @integer
@@ -297,7 +312,11 @@ do true -> isArm;
             if)#);
          rPop: 
             (# r: @integer 
-            do (if (rTop > 0) and (rTop <= 8) then rStack[rTop] -> r; rTop - 1 -> rTop else 27 -> r if) 
+            do (if (rTop > 0) and (rTop <= 8) then rStack[rTop] -> r; rTop - 1 -> rTop
+               else
+                 'rStack:underflow:'->com;
+                 27 -> r
+               if) 
             exit r 
             #);
          rswap:
@@ -322,15 +341,26 @@ do true -> isArm;
    stat: (# do ''->com; stacks.stat; reg.stat #);
    reg: @RegisterHandler; stacks: @StackHandler;
    tmp: @
-      (# store:
+      (# init:
+            (#
+            do 'tmp.init:'->com; initInvStack
+            #);
+         store:
             (# di: @integer
             enter di
-            do 'tmp.store:isTop:'->com(#do isTop -> out.putint #);
-               state.stat;
-               (if isTop > 0 then
+            do 'tmp.store:invTop:'->com(#do invTop -> out.putint #);
+               state.stat; display;
+               true -> noDeAlloc;
+               (if invTop > 0 then
                   storeVtmp;
                   storeRtmp;
                if);
+               (if false and ((reg.vRegNo > 0) or (reg.rRegNo > 0)) then
+                  '!!!! busy registers:' 
+                     -> com(#do reg.vRegNo ->out.putint; ' ' ->out.put; reg.rRegNo -> out.putint;  #);
+                  storeVtmpGen
+               if);
+               false -> noDeAlloc;
                di -> initPushParam;
                state.stat
             #); 
@@ -346,10 +376,30 @@ do true -> isArm;
                nxtRtmp + 1 -> nxtRtmp
             exit rr
             #);
+         storeVtmpG:
+            (# noOfReg,r: @ integer
+            do inner
+            #);
+         storeVtmpGen: storeVtmpG
+            (#
+            do reg.vRegNo -> noOfReg;
+               'storeVtmpG:'->com(#do noOfReg ->out.putint #);
+               (for i: noOfReg repeat
+                  (if stacks.vTopKind = regKind then 
+                     stacks.vPop -> r;
+                     (r,reg.thisObj,getVtmp) -> ins.str;
+                     r -> reg.freeV; 
+                  else
+                     '\n; **** ERROR: storeVtmp:constant on vStack:' ->out.puttext;
+                     i -> out.putint;
+                     stacks.vpop -> r
+            if)for)
+            #); 
          storeVtmp:
             (# rv: @integer
-            do 'storeVtmp:'->com(#do invStack[isTop].noOfVpar ->out.putint #);
-               (for i: invStack[isTop].noOfVpar - invStack[isTop].lastV repeat
+            do 'storeVtmp:'->com(#do invStack[invTop].noOfVpar ->out.putint #);
+               (for i: invStack[invTop].noOfVpar - invStack[invTop].lastV repeat
+                  'store:'->com(#do i->out.putint #);
                   (if stacks.vTopKind = regKind then 
                      stacks.vPop -> rv;
                      (rv,reg.thisObj,getVtmp) -> ins.str;
@@ -362,25 +412,25 @@ do true -> isArm;
             if)for)#);
          storeRtmp:
             (# rr: @integer; 
-            do (for i: invStack[isTop].noOfRpar - invStack[isTop].lastR + invStack[isTop].originInx repeat
+            do (for i: invStack[invTop].noOfRpar - invStack[invTop].lastR + invStack[invTop].originInx repeat
                   stacks.rPop -> rr;
                   (rr,reg.thisObj,getRtmp) -> ins.str;
                   rr -> reg.freeR;
             for)#);
          restoreFromTmp:
             (# r: @integer
-            do (if isTop > 0 then isTop - 1 -> isTop if); (* appears strange *)
-               (if isTop > 0 then
+            do (if invTop > 0 then invTop - 1 -> invTop if); (* appears strange *)
+               (if invTop > 0 then
                   'restoreFromTmp:noOfVpar:'->com
-                  (#do invStack[isTop].noOfVpar - invStack[isTop].lastV->out.putint;
-                     ' noOfRpar:'->out.puttext; invStack[isTop].noOfRpar - invStack[isTop].lastR->out.putint
+                  (#do invStack[invTop].noOfVpar - invStack[invTop].lastV->out.putint;
+                     ' noOfRpar:'->out.puttext; invStack[invTop].noOfRpar - invStack[invTop].lastR->out.putint
                   #);
-                  (for i: invStack[isTop].noOfVpar - invStack[isTop].lastV  repeat
+                  (for i: invStack[invTop].noOfVpar - invStack[invTop].lastV  repeat
                      reg.getV -> r;
                      (r,regKind) -> stacks.vPush;
                      (r,reg.thisObj,nxtVtmp - 1 -> nxtVtmp) -> ins.ldr;
                   for);
-                  (for i: invStack[isTop].noOfRpar - invStack[isTop].lastR + invStack[isTop].originInx repeat
+                  (for i: invStack[invTop].noOfRpar - invStack[invTop].lastR + invStack[invTop].originInx repeat
                      reg.getR -> r;
                      r -> stacks.rPush;
                      nxtRtmp - 1 -> nxtRtmp;
@@ -393,30 +443,75 @@ do true -> isArm;
             (* for a nested invocation, restore origin, if this invoke is part of a parameter list
              *    foo(e1,bar(e2,e3),e4)
              *                     ^restore origin for foo
-             * isTop  > 0: we are in a nested parameter-list
+             * invTop  > 0: we are in a nested parameter-list
              * originInx > 0: the enclosing ptn (foo) has an origin
              *)
             (#
-            do (if (isTop > 0) and (invStack[isTop].originInx > 0) then
+            do (if (invTop > 0) and (invStack[invTop].originInx > 0) then
                   (reg.refRegStart,reg.thisObj,nxtRtmp - 1 -> nxtRtmp) -> ins.ldr
             if)#);
-         invStack: [10] ^tmpRecord; isTop: @integer;
+         invStack: [10] ^tmpRecord; invTop: @integer;
+         noDeAlloc: @Boolean;
+         initInvStack:
+            (#
+            do 1 -> invTop;
+               'initInvStack:'->com(#do invTop -> out.putint #);
+               tmpRecord -> invStack[invTop][];
+            #);
+         superAdd:
+            (# topInv: ^tmpRecord
+            do (if (invTop = 0) (*or (invTop > 1)*) then leave superAdd if);
+               'tmp.superAdd:'->com(#do invTop->out.putint #);
+               display;
+               invStack[invTop][] -> topInv[];
+               topInv.noOfParPushed + 1 -> topInv.noOfParPushed;
+               inner superAdd
+            #);
+         addV: superAdd
+            (# r: @integer
+            enter R
+            do topInv.noOfVpar + 1 -> topInv.noOfVpar;
+            #);
+         addR: superAdd
+            (# r: @integer
+            enter R
+            do topInv.noOfRpar + 1 -> topInv.noOfRpar;
+            #); 
+         superFree:
+            (# topInv: ^tmpRecord
+            do (if (invTop = 0) or (*(invTop > 1)*) noDeAlloc then leave superFree if);
+               'tmp.superFree:'->com(#do invTop->out.putint #);
+               display;
+               invStack[invTop][] -> topInv[];
+               topInv.noOfParPushed - 1 -> topInv.noOfParPushed;
+               inner superFree
+            #);
+         freeV: superFree
+            (# r: @integer
+            enter R
+            do topInv.noOfVpar - 1 -> topInv.noOfVpar;
+            #);
+         freeR: superFree
+            (# r: @integer
+            enter R
+            do topInv.noOfRpar - 1 -> topInv.noOfRpar;
+            #);
          initPushParam:
             (# di: @integer
             enter di
-            do (if (isTop + 1 -> isTop) > invStack.range then invStack.range -> invStack.extend if);
-               'initPushParam:'->com(#do di->out.putint; ' '->out.put;   isTop -> out.putint #);
-               di -> tmpRecord -> invStack[isTop][];
+            do (if (invTop + 1 -> invTop) > invStack.range then invStack.range -> invStack.extend if);
+               'initPushParam:'->com(#do di->out.putint; ' '->out.put; invTop -> out.putint #);
+               di -> tmpRecord -> invStack[invTop][];
                (if objDescTables.ODTable[di].hasOrigin then
-                  1 -> invStack[isTop].originInx
-               if)
-            #);
+                  1 -> invStack[invTop].originInx
+            if)#);
          pushPar:
             (# topInv: ^tmpRecord
-            do 'tmp.pushPar:'->com(#do isTop->out.putint #);
-               (if (isTop > 0) then
-                  invStack[isTop][] -> topInv[];
+            do 'tmp.pushPar:'->com(#do invTop->out.putint #);
+               (if (invTop > 0) then
+                  invStack[invTop][] -> topInv[];
                   topInv.noOfParPushed + 1 -> topInv.noOfParPushed;
+                  (if topInv.descInx = 0 then 'descInx = 0'->com; leave pushPar if);
                   (if objDescTables.ODTable[topInv.descInx].params[topInv.noOfParPushed]
                   // 0 then
                      topInv.noOfVpar + 1 -> topInv.noOfVpar;
@@ -426,9 +521,7 @@ do true -> isArm;
                      topInv.noOfRpar + 1 -> topInv.noOfRpar;
                      1 -> topInv.lastR; 0 -> topInv.lastV
                   // 3 then 
-                   if)
-               if)
-            #);
+            if)if)#);
          tmpRecord:
             (# descInx, (* current active invocation *)
                noOfParPushed, (* no of parameters pushed *)
@@ -439,6 +532,23 @@ do true -> isArm;
                originInx: @integer (* 1, if this invocation has an origin *)
             enter descInx
             exit this(tmpRecord)[]
+            #);
+         display:
+            (# topInv: ^tmpRecord
+            do 'tmp:invTop:'->com (# do invTop->out.putint #);
+               (for i: invTop repeat
+                  invStack[i][] -> topInv[];
+                  'tmpRecord:'->com
+                     (#
+                     do i -> out.putint; ' descInx:'->out.puttext; topInv.descInx->out.putint;
+                        ' noOfParPushed:' -> out.puttext; topInv.noOfParPushed -> out.putint;
+                        ' noOfVpar:' -> out.puttext; topInv.noOfVpar -> out.putint;
+                        ' noOfRpar:' -> out.puttext; topInv.noOfRpar -> out.putint;
+                        ' lastV:' -> out.puttext; topInv.lastV -> out.putint;
+                        ' lastR:' -> out.puttext; topInv.lastR -> out.putint;
+                        ' originInx:' -> out.puttext; topInv.originInx -> out.putint;
+                     #)
+               for)
             #)
       #);
    newVDT:
@@ -574,6 +684,7 @@ deAllocParameters:
          ' ODtable[' -> out.puttext; descNo->out.putint; '] is none'->out.puttext;
          leave deAllocParameters
       if);
+      true -> tmp.noDeAlloc;
       (objDescTables.ODtable[descNo][]->theOD[]).asText -> out.puttext;
       ' theOD.pTop:'->out.puttext; theOD.pTop->out.putint;
       (for i: theOD.pTop repeat
@@ -588,7 +699,11 @@ deAllocParameters:
       'BOBSA:'->com;
       (if theOD.hasOrigin then stacks.rPop -> reg.freeR if);
       'BOBSB:'->com;
+      (* OBS! in general freeV/freeR should count down in tmpRecord
+       * BUT freeV/freeR above in deAlloc should not
+       *)
       tmp.restoreFromTmp;
+      false -> tmp.noDealloc;
       'BOBSC:'->com;
    #); 
 
@@ -780,19 +895,20 @@ deAllocParameters:
       (# N: ^Text; off,descNo,r: @integer; useRtnVal: @boolean
       enter(N[],descNo,off,useRtnVal)
       do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
-         state.stat;
+         state.stat; state.tmp.display;
          '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
          state.stat;
          descNo -> state.deAllocParameters; (* and restoreTmp *)
          'END:invoke'->com;
          state.stat;
+         state.tmp.display;
          (* x15 refer to the callee after it has returned
           * we use x15 to fetch possible return value(s) later
           * we circumvent the allocation mechanism using getR/freeR using refRtnBusy
           *)
          (if useRtnVal then
-            'invoke:push:x15'->com;
             reg.getR -> r;
+            'invoke:push: x15 to: x'->com(#do r->out.putint #);
             (if r <> 15 then (r,15) -> ins.movR if);
             r -> stacks.rPush; true -> reg.refRtnBusy; 
             state.stat
@@ -1011,9 +1127,14 @@ do '\n\t\t; objSize:'->out.puttext; objSize -> out.putint;
    
 ---actions:descriptor---
 (#
-do  state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
-    out.newline;state.thisName[] -> state.mkODname -> out.puttext; '_DO:' -> out.puttext;
-    (if state.trace then state.thisName[] -> state.printTrace if);
+do state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
+   state.tmp.init; 
+   out.newline;state.thisName[] -> state.mkODname -> out.puttext; '_DO:' -> out.puttext;
+   (if state.trace then state.thisName[] -> state.printTrace if);
+#)
+---initStmt:descriptor---
+(#
+do state.stat; state.tmp.init; state.tmp.display
 #)
 ---mvStack:descriptor---
 (#
@@ -1313,8 +1434,10 @@ do 'START EVAL OF PARAMETERS: no effect: ' -> state.com(#do ch -> out.put #);
 #)
 ---pushPar:descriptor---
 (#
-do 'pushPar: '->state.com(#do par[] -> out.puttext #);
-   state.tmp.pushPar
+do (if false then
+     'pushPar: '->state.com(#do par[] -> out.puttext #);
+     state.tmp.pushPar
+   if)
 #)
 ---invoke:descriptor---
 (* generate invoke *)
@@ -1514,6 +1637,7 @@ do state.stat;
                else
                   operator -> out.putint;
    if);
+   (*state.tmp.restoreFromTmp*)
 #)
 ---uminus:descriptor---
 (# r: @integer
