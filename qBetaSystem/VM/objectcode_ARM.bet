@@ -849,6 +849,41 @@ deAllocParameters:
       do '\n\t mov x0, #' -> out.puttext; ch -> out.putint;
          '\n\t bl _putc\n' -> out.puttext;
       #);
+   doInvoke:
+      (# N: ^Text; off,descNo,staticOff,r: @integer; useRtnVal,isInn: @boolean
+      do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
+         state.stat; state.tmp.display;
+         INNER doInvoke;
+         state.stat;
+         (if true then 
+            'doInvoke:deAlloc'->com;
+            true -> tmp.noDealloc;
+            (for i: stacks.vTop repeat stacks.vPop -> reg.freeV for);
+            (for i: stacks.rTop - reg.refBase repeat stacks.rPop -> reg.freeR for);
+            tmp.restoreFromTmp;
+            false -> tmp.noDealloc;
+            stat;
+         else
+           descNo -> state.deAllocParameters; (* and restoreTmp *) 
+         if); 
+         'END:invoke'->com; 
+         tmp.display;
+         (* x15 refer to the callee after it has returned
+          * we use x15 to fetch possible return value(s) later
+          * we circumvent the allocation mechanism using getR/freeR using refRtnBusy
+          *)
+         (if useRtnVal then
+            reg.getR -> r;
+            'invoke:push: x15 to: x'->com(#do r->out.putint #);
+            (if r <> 15 then (r,15) -> ins.movR if);
+            r -> stacks.rPush; true -> reg.refRtnBusy; 
+            state.stat
+         if);
+         (if staticOff > 0 then
+            'staticOff:'->com(#do staticOff->out.putint #);
+            (15,reg.thisObj,staticOff) -> ins.str
+         if)
+      #);
    invoke:
       (# N: ^Text; off,descNo,staticOff,r: @integer; useRtnVal: @boolean
       enter(N[],descNo,off,useRtnVal,staticOff)
@@ -876,9 +911,30 @@ deAllocParameters:
             (15,reg.thisObj,staticOff) -> ins.str
          if)
       #);
-   invokev:
+   invokev: doInvoke
       (# r,dinx,r2: @integer; isInner: @boolean; L: ^Text
-      enter(r,dinx,isInner)
+      enter(r,dinx,isInner,useRtnVal)
+      do state.reg.getV -> r2;
+         '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+         ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
+         (* r2 = callee.VDT *)
+         '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
+         ', [' -> out.puttext;  r2 -> state.reg.print; 
+         ',#' -> out.puttext; (dinx) * 8 -> out.putint; ' ]' -> out.puttext;
+         r2 -> state.reg.freeV; r -> state.reg.freeR;
+         (* r2 = callee.vBinding *)
+         (if isInner then
+             labs.local -> L[];
+             (r2,0) -> ins.cmpI;
+             L[] -> ins.bEqZero
+         if);
+         r2 -> state.ins.blR;
+         (if isInner then L[] -> labs.def if);
+         isInner -> isInn
+      #);
+   invokevX:
+      (# r,dinx,r2: @integer; isInner,useRtnVal: @boolean; L: ^Text
+      enter(r,dinx,isInner,useRtnVal)
       do (* r = callee *) 
          (if false then
              (state.x0,r) -> state.ins.movR; (* must save x0 *)
@@ -902,7 +958,18 @@ deAllocParameters:
          if);
          r2 -> state.ins.blR;
          (if isInner then L[] -> labs.def if);
-         reg.getR -> r -> stacks.rPush;
+         (if true then
+         (* do we miss deallocation of parameters? Perhaps common super for invoe and invokeV ? *)
+         (if useRtnVal then (* check if true and isInner *)
+            reg.getR -> r;
+            'invoke:push: x15 to: x'->com(#do r->out.putint #);
+            (if r <> 15 then (r,15) -> ins.movR if);
+            r -> stacks.rPush; true -> reg.refRtnBusy; 
+            state.stat
+         if);
+         else
+            reg.getR -> r -> stacks.rPush;
+         if);
          (if r <> reg.refBase then 
              '\n; ERROR! invokev: did not get refReturnReg' -> out.puttext
          if);
@@ -1040,7 +1107,7 @@ do ' descInx: ' -> out.puttext; descInx -> out.putint;
    (X,state.reg.thisObj,innerOff) -> state.ins.str;
    (state.reg.lr,state.reg.thisObj,innerOff + 1) -> state.ins.str;
    (* In betaVM, it is checked that VDT[inx] > 0 and if not, no jump - MUST be FIXED *)
-   (X,inx,true) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+   (X,inx,true,false) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
 #)
 ---classDef:descriptor---
 (##)
@@ -1477,7 +1544,7 @@ do state.stat;
       state.reg.getR -> arg;
      '\n\t mov '->out.puttext; arg -> state.reg.print; ', ' -> out.puttext; r -> state.reg.print;
    if); 
-   (r,dinx,false) -> state.invokev;
+   (r,dinx,false,useRtnVal) -> state.invokev;
 #)
 ---allocIndexed:descriptor--
 (#
