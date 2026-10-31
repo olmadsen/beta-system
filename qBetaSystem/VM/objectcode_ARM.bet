@@ -108,6 +108,15 @@ do true -> isArm;
          state.stat;
       exit(Xr,inxR)
       #); 
+   mkEntryName: (* should unify with mkODname *)
+      (# n: ^Text; T: ^text
+      enter n[]
+      do (if (n[] -> mkOprName -> T[]) = none then
+             '_' -> T[];
+             n.scanAll(#do (if ch = ':' then '$' -> T.put else ch -> T.put if) #)
+         if)
+      exit T[]
+      #);
    mkODname:
       (# n: ^Text; T: ^text
       enter n[]
@@ -857,17 +866,7 @@ deAllocParameters:
          INNER doInvoke;
          state.stat;
          (if isInner then 'isInner'-> out.puttext if);
-         (if false then 
-            'doInvoke:deAlloc'->com;
-            true -> tmp.noDealloc;
-            (for i: stacks.vTop repeat stacks.vPop -> reg.freeV for);
-            (for i: stacks.rTop - reg.refBase repeat stacks.rPop -> reg.freeR for);
-            tmp.restoreFromTmp;
-            false -> tmp.noDealloc;
-            stat;
-         else
-            (if not isInner then descNo -> state.deAllocParameters if); (* and restoreTmp *) 
-         if); 
+         (if not isInner then descNo -> state.deAllocParameters if); (* and restoreTmp *)
          'END:invoke'->com; 
          tmp.display;
          (* x15 refer to the callee after it has returned
@@ -891,7 +890,11 @@ deAllocParameters:
       enter(N[],descNo,staticOff,useRtnVal)
       do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
          state.stat; state.tmp.display;
+         (if true then
+            N[] -> mkEntryName -> ins.blLab
+         else
          '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
+         if);
          state.stat;
          descNo -> state.deAllocParameters; (* and restoreTmp *)
          'END:invoke'->com;
@@ -917,15 +920,19 @@ deAllocParameters:
       (# r,dinx,r2: @integer; L: ^Text
       enter(descNo,r,dinx,isInner,useRtnVal)
       do state.reg.getV -> r2;
+         (if true then
+            (r2,r,16) -> ins.ldrD;
+            (r2,r2,dinx * 8) -> ins.ldrD (* r2 = callee.vBinding *)
+         else
          '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
          ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
          (* r2 = callee.VDT *)
          '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
          ', [' -> out.puttext;  r2 -> state.reg.print; 
          ',#' -> out.puttext; (dinx) * 8 -> out.putint; ' ]' -> out.puttext;
+         if);
          r2 -> state.reg.freeV;
           (*r -> state.reg.freeR;*)
-         (* r2 = callee.vBinding *)
          r -> stacks.rPush; (* origin of callee *)
          (if isInner then
              labs.local -> L[];
@@ -935,49 +942,6 @@ deAllocParameters:
          r2 -> state.ins.blR;
          (if isInner then L[] -> labs.def if);
       #);
-   invokevX:
-      (# r,dinx,r2: @integer; isInner,useRtnVal: @boolean; L: ^Text
-      enter(r,dinx,isInner,useRtnVal)
-      do (* r = callee *) 
-         (if false then
-             (state.x0,r) -> state.ins.movR; (* must save x0 *)
-             (25,r) -> ins.movR; (* save r *)
-             '_putObj' -> ins.blLab;
-             (r,25) -> ins.movR; (* restore r *)
-         if);
-         state.reg.getV -> r2;
-         '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-         ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
-         (* r2 = callee.VDT *)
-         '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
-         ', [' -> out.puttext;  r2 -> state.reg.print; 
-         ',#' -> out.puttext; (dinx) * 8 -> out.putint; ' ]' -> out.puttext;
-         r2 -> state.reg.freeV; r -> state.reg.freeR;
-         (* r2 = calle.vBinding *)
-         (if isInner then
-             labs.local -> L[];
-             (r2,0) -> ins.cmpI;
-             L[] -> ins.bEqZero
-         if);
-         r2 -> state.ins.blR;
-         (if isInner then L[] -> labs.def if);
-         (if true then
-         (* do we miss deallocation of parameters? Perhaps common super for invoe and invokeV ? *)
-         (if useRtnVal then (* check if true and isInner *)
-            reg.getR -> r;
-            'invoke:push: x15 to: x'->com(#do r->out.putint #);
-            (if r <> 15 then (r,15) -> ins.movR if);
-            r -> stacks.rPush; true -> reg.refRtnBusy; 
-            state.stat
-         if);
-         else
-            reg.getR -> r -> stacks.rPush;
-         if);
-         (if r <> reg.refBase then 
-             '\n; ERROR! invokev: did not get refReturnReg' -> out.puttext
-         if);
-         state.stat
-       #);
    emitLab:
          (# lsc: @integer
          enter lsc
