@@ -640,7 +640,7 @@ deAllocParameters:
    (# theOD: ^objDescTables.ODentry; descNo: @integer
    enter descNo
    do 'deAllocPar:'->com; descNo->out.putint; 
-      ' vTmpSaved:'->out.puttext; vTmpSaved->out.putint; (* not used ? *)
+      ' vTmpSaved:'->out.puttext; vTmpSaved->out.putint; (* not used ? *) ' '->out.put;
       (if objDescTables.ODtable[descNo][] = none then
          ' ODtable[' -> out.puttext; descNo->out.putint; '] is none'->out.puttext;
          leave deAllocParameters
@@ -650,13 +650,14 @@ deAllocParameters:
       ' theOD.pTop:'->out.puttext; theOD.pTop->out.putint;
       (for i: theOD.pTop repeat
          (if theOD.params[i]
-         // 0 then stacks.vPop -> reg.freeV
+         // 0 then 'freeV'->com; stacks.vPop -> reg.freeV
          // 1 then
-         // 2 then stacks.rPop -> reg.freeR
+         // 2 then 'freeR'->com; stacks.rPop -> reg.freeR
          // 3 then
          if);
          stat
       for);
+      'before:origin'->com;
       (if theOD.hasOrigin then stacks.rPop -> reg.freeR if);
       (* OBS! in general freeV/freeR should count down in tmpRecord
        * BUT freeV/freeR above in deAlloc should not
@@ -850,12 +851,13 @@ deAllocParameters:
          '\n\t bl _putc\n' -> out.puttext;
       #);
    doInvoke:
-      (# N: ^Text; off,descNo,staticOff,r: @integer; useRtnVal,isInn: @boolean
+      (# N: ^Text; off,descNo,staticOff,r: @integer; useRtnVal,isInner: @boolean
       do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
          state.stat; state.tmp.display;
          INNER doInvoke;
          state.stat;
-         (if true then 
+         (if isInner then 'isInner'-> out.puttext if);
+         (if false then 
             'doInvoke:deAlloc'->com;
             true -> tmp.noDealloc;
             (for i: stacks.vTop repeat stacks.vPop -> reg.freeV for);
@@ -864,7 +866,7 @@ deAllocParameters:
             false -> tmp.noDealloc;
             stat;
          else
-           descNo -> state.deAllocParameters; (* and restoreTmp *) 
+            (if not isInner then descNo -> state.deAllocParameters if); (* and restoreTmp *) 
          if); 
          'END:invoke'->com; 
          tmp.display;
@@ -885,8 +887,8 @@ deAllocParameters:
          if)
       #);
    invoke:
-      (# N: ^Text; off,descNo,staticOff,r: @integer; useRtnVal: @boolean
-      enter(N[],descNo,off,useRtnVal,staticOff)
+      (# N: ^Text; descNo,staticOff,r: @integer; useRtnVal: @boolean
+      enter(N[],descNo,staticOff,useRtnVal)
       do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
          state.stat; state.tmp.display;
          '\n\t bl _'-> out.puttext; N[] -> mkODname -> state.mkODname -> out.puttext;
@@ -912,8 +914,8 @@ deAllocParameters:
          if)
       #);
    invokev: doInvoke
-      (# r,dinx,r2: @integer; isInner: @boolean; L: ^Text
-      enter(r,dinx,isInner,useRtnVal)
+      (# r,dinx,r2: @integer; L: ^Text
+      enter(descNo,r,dinx,isInner,useRtnVal)
       do state.reg.getV -> r2;
          '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
          ', [' -> out.puttext;  r -> state.reg.print; ',#16]' -> out.puttext;
@@ -921,8 +923,10 @@ deAllocParameters:
          '\n\t ldr ' -> out.puttext; r2 -> state.reg.print; 
          ', [' -> out.puttext;  r2 -> state.reg.print; 
          ',#' -> out.puttext; (dinx) * 8 -> out.putint; ' ]' -> out.puttext;
-         r2 -> state.reg.freeV; r -> state.reg.freeR;
+         r2 -> state.reg.freeV;
+          (*r -> state.reg.freeR;*)
          (* r2 = callee.vBinding *)
+         r -> stacks.rPush; (* origin of callee *)
          (if isInner then
              labs.local -> L[];
              (r2,0) -> ins.cmpI;
@@ -930,7 +934,6 @@ deAllocParameters:
          if);
          r2 -> state.ins.blR;
          (if isInner then L[] -> labs.def if);
-         isInner -> isInn
       #);
    invokevX:
       (# r,dinx,r2: @integer; isInner,useRtnVal: @boolean; L: ^Text
@@ -1100,14 +1103,11 @@ deAllocParameters:
    for Main, inner(Super) should be Main.DO
 *)
 (# X: @integer 
-do ' descInx: ' -> out.puttext; descInx -> out.putint;
-   ' inx:'->out.puttext; inx -> out.putint;
-   ' innerOff: '->out.puttext; innerOff -> out.putint;
-   state.stacks.rPop -> X;  (* callee *)
+do state.stacks.rPop -> X;  (* callee *)
    (X,state.reg.thisObj,innerOff) -> state.ins.str;
    (state.reg.lr,state.reg.thisObj,innerOff + 1) -> state.ins.str;
    (* In betaVM, it is checked that VDT[inx] > 0 and if not, no jump - MUST be FIXED *)
-   (X,inx,true,false) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+   (descInx,X,inx,true,false) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
 #)
 ---classDef:descriptor---
 (##)
@@ -1461,15 +1461,28 @@ do 'INIT_INVOCATION: ' -> state.com; di -> out.putint;
 ---evalParams:descriptor---
 (* called before evaluation of parameters *)
 (#
-do 'START EVAL OF PARAMETERS: no effect: ' -> state.com(#do ch -> out.put #);
+do 'START EVAL OF PARAMETERS: no effect: ' -> state.com;
    state.stat;
 #)
 ---pushPar:descriptor---
 (#   #)
 ---invoke:descriptor---
-(* generate invoke *)
-(# arg,r: @integer
-do (N[],descNo,staticOff,useRtnVal,staticOff) -> state.invoke;
+(# 
+do (N[],descNo,staticOff,useRtnVal) -> state.invoke;
+#)
+---invokeVal:descriptor---
+(#
+do 'invokeVal'->state.missing
+#)
+---invokev:descriptor---
+(* adrp    x0, VDT@PAGE
+ * add     x0, x0, VDT@PAGEOFF
+ * ldr     x1, [x0,dinx * 8]
+ *)
+(# r: @integer
+do state.stat;
+   state.stacks.rPop -> r;
+   (descNo,r,dinx,false,useRtnVal) -> state.invokev;
 #)
 ---rtn:descriptor---
 (#
@@ -1530,22 +1543,6 @@ do 'prepareReturn:restoreOrigin:'->state.com;
 (#
 do 'tstOriginNone'->state.missing
 #)
----invokev:descriptor---
-(* adrp    x0, VDT@PAGE
- * add     x0, x0, VDT@PAGEOFF
- * ldr     x1, [x0,dinx * 8]
- *)
-(# arg,r: @integer
-do state.stat;
-   (* load origin *)
-   state.stacks.rPop -> r; 
-   state.stat;
-   (if false and (r <> 15)  then  (* should we free r? *)
-      state.reg.getR -> arg;
-     '\n\t mov '->out.puttext; arg -> state.reg.print; ', ' -> out.puttext; r -> state.reg.print;
-   if); 
-   (r,dinx,false,useRtnVal) -> state.invokev;
-#)
 ---allocIndexed:descriptor--
 (#
 do (* op2 -> descInx; op1 -> size; op1 -> isRIndexed;
@@ -1571,10 +1568,6 @@ do 'mkRindexed'->state.missing
 (# #)
 ---restoreThis:descriptor---
 (#
-#)
----invokeVal:descriptor---
-(#
-do 'invokeVal'->state.missing
 #)
 ---mkValueProxy:descriptor---
 (#
