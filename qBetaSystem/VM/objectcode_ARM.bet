@@ -260,7 +260,7 @@ do true -> isArm;
             (# rn: @integer
             do rRegNo -> rn;
                (if (rRegNo + 1 -> rRegNo) >= thisObj then 
-                  '\n:!!!! ERROR:reference register overflow'-> out.putline
+                  '\;!!!! ERROR:reference register overflow'-> out.putline
                if);
                rn -> tmp.addR
             exit rn
@@ -890,34 +890,7 @@ deAllocParameters:
       enter(N[],descNo,staticOff,useRtnVal)
       do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
          N[] -> mkEntryName -> ins.blLab;
-      #);
-   invokeX:
-      (# N: ^Text; descNo,staticOff,r: @integer; useRtnVal: @boolean
-      enter(N[],descNo,staticOff,useRtnVal)
-      do (* vStack: x0,x1,x2;  rStack r1,r2, where r1 is origin *)
-         state.stat; state.tmp.display;
-         N[] -> mkEntryName -> ins.blLab;
-         state.stat;
-         descNo -> state.deAllocParameters; (* and restoreTmp *)
-         'END:invoke'->com;
-         state.stat;
-         state.tmp.display;
-         (* x15 refer to the callee after it has returned
-          * we use x15 to fetch possible return value(s) later
-          * we circumvent the allocation mechanism using getR/freeR using refRtnBusy
-          *)
-         (if useRtnVal then
-            reg.getR -> r;
-            'invoke:push: x15 to: x'->com(#do r->out.putint #);
-            (if r <> 15 then (r,15) -> ins.movR if);
-            r -> stacks.rPush; true -> reg.refRtnBusy; 
-            state.stat
-         if);
-         (if staticOff > 0 then
-            'staticOff:'->com(#do staticOff->out.putint #);
-            (15,reg.thisObj,staticOff) -> ins.str
-         if)
-      #);
+      #); 
    invokev: doInvoke
       (# r,dinx,r2: @integer; L: ^Text
       enter(descNo,r,dinx,isInner,useRtnVal)
@@ -1168,8 +1141,12 @@ do state.stat;
        rrs -> rrd
    if);
    state.stat;
+   (if true then
+     (rrd,rrs,off) -> state.ins.ldr;
+   else
     '\n\t ldr '->out.puttext; rrd -> state.reg.print;
     ',['->out.puttext; rrs -> state.reg.print; ','->out.put; off * 8  + 24 -> out.putint; ']' -> out.put;
+   if);
     (if (rrs <> rrd) then 
         '; rrs: ' -> out.puttext; rrs -> out.putint; rrs -> state.reg.freeR
     if);
@@ -1205,47 +1182,55 @@ do (* p1 -> size;  op1 -> isValueObj; thisStack.rpop -> X[]; thisStack.vpop -> i
 #)
 ---xrpush:descriptor---
 (#
-do
+do 'xrpush'->state.missing
 #)
 ---xrpushg:descriptor---
 (#
-do 
+do 'xrpushg'->state.missing
 #)
 ---store:descriptor---
  (#
- do 
+ do 'store'->state.missing
  #)
  ---storex:descriptor---
  (#
- do 
+ do 'storex'->state.missing
  #)
 ---storeg:descriptor---
- (# vr,rr: @integer
- do state.stat;
-    state.stacks.vPop -> vr; 
-    state.stacks.rPop -> rr;
-    (if (vr <> 27) and (rr <> 27) then
+(# vr,rr: @integer
+do state.stat;
+   state.stacks.vPop -> vr; 
+   state.stacks.rPop -> rr;
+   (if (vr <> 27) and (rr <> 27) then
+      (if true then
+         (vr,rr,off) -> state.ins.str
+      else    
        '\n\t str '->out.puttext;  vr -> state.reg.print;
        ',['->out.puttext; rr -> state.reg.print; ','->out.put; off * 8 + 24 -> out.putint; ']' -> out.put;
-       vr -> state.reg.freeV; rr -> state.reg.freeR;
-       state.stat;
-    else
+      if);
+      vr -> state.reg.freeV; rr -> state.reg.freeR;
+      state.stat;
+   else
        '\n; MISSING str because of x27 registers\n'->out.puttext
-    if)
+   if)
  #)
 ---rstore:descriptor---
 (* store in thisObj, which is not on rStack *)
 (# rs: @integer
 do state.stat;
-    state.stacks.rPop -> rs;
-    (if (rs <> 27) then
+   state.stacks.rPop -> rs;
+   (if (rs <> 27) then
+      (if true then
+         (rs,state.reg.thisObj,off) -> state.ins.str
+      else
        '\n\t str '->out.puttext;  rs -> state.reg.print;
        ',['->out.puttext; state.reg.thisObj -> state.reg.print; ','->out.put; off * 8 + 24 -> out.putint; ']' -> out.put;
+      if);
        rs -> state.reg.freeR;
        state.stat;
-    else
+   else
        '\n; storeg:MISSING str because of x27 registers\n'->out.puttext
-    if)
+   if)
 #)
 ---rstoreX:descriptor---
 (#
@@ -1281,37 +1266,21 @@ do state.stat;
    for);
  *)
 (# Xr,inxR,sizeR,valR,c8: @integer
-do (if true then
-       size -> state.computeArrayIndex -> (Xr,inxR)
-    else
-    state.stat;
-   state.stacks.rPop -> Xr; state.stacks.vPop -> inxR;
-   (inxR,inxR,1) -> state.ins.subI;   (* inx - 1 -> inx *)
-   size -> pushConst; state.stacks.vPop -> sizeR;
-   (inxR,inxR,sizeR) -> state.ins.mulR; (* inx * size -> inx *)
-   (inxR,inxR,arrayStrucSize + size + 1) -> state.ins.addI; (* arrayStrucSize + size + 1 -> inx *)
-   sizeR -> state.reg.freeV;
-   size * 8 -> pushConst; state.stacks.vPop -> c8;
-   (inxR,inxR,c8) -> state.ins.mulR;
-   c8 -> state.reg.freeV;
-   'after sizeR -> state.reg.freeV;' -> state.com;
-   state.stat;
-   if); 
-
+do size -> state.computeArrayIndex -> (Xr,inxR);
    (for i: size repeat
-        (inxR,inxR,i * 8) -> state.ins.subI;
-        state.stacks.vPoP -> valR;
-        (valR,Xr,inxR) -> state.ins.strR;
-        state.stat;
+      (inxR,inxR,i * 8) -> state.ins.subI;
+      state.stacks.vPoP -> valR;
+      (valR,Xr,inxR) -> state.ins.strR;
+      state.stat;
    for);
    inxR -> state.reg.freeV;
-   '\n\t\t; after inxR -> state.reg.freeV;' -> out.puttext;
+   'after inxR -> state.reg.freeV' -> state.com;
    Xr -> state.reg.freeR;
    state.stat
 #)
 ---xrstoreg:descriptor---
 (#
-do
+do 'xrstoreg'->state.missing
 #)
 ---loadOrigin:descriptor---
 (* is apparently called before origin code is generated, i.e. no thisObj on rStack *)
