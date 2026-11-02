@@ -208,10 +208,16 @@ do true -> isArm;
       #);
    labs: @
       (# labNo,localLabNo: @integer; thisLab: ^Text;
-         new: 
+         new:  (* is called in actions, but label not used; *)
             (# 
             do labNo + 1 -> labNo; 
-               'L' -> thisLab[]; labNo -> thisLab.putint; '_'->thisLab.put
+               'L' -> thisLab[]; labNo -> thisLab.putint; '_'->thisLab.put (* ??? *)
+            #);
+         newL: 
+            (# lab: ^text
+            do labNo + 1 -> labNo; 
+               'L' -> lab[]; labNo -> lab.putint; 
+            exit lab[]
             #);
          newLocal:
             (#
@@ -228,7 +234,7 @@ do true -> isArm;
             (# lab: ^Text
             enter lab[]
             do '\n'->out.put; lab[] -> out.puttext; ':'->out.put
-            #)
+            #);
       #);
    RegisterHandler:
       (# valueBase: (#exit 0 #);
@@ -1031,12 +1037,19 @@ deAllocParameters:
    Invoke Main: Main.exe.; ...; toSuper; Super.DO; ...; inner(Super); ...;  main.RtnInner; ...; Super.rtn
    for Main, inner(Super) should be Main.DO
 *)
-(# X: @integer 
-do state.stacks.rPop -> X;  (* callee *)
-   (X,state.reg.thisObj,innerOff) -> state.ins.str;
-   (state.reg.lr,state.reg.thisObj,innerOff + 1) -> state.ins.str;
-   (* In betaVM, it is checked that VDT[inx] > 0 and if not, no jump - MUST be FIXED *)
-   (descInx,X,inx,true,false) -> state.invokeV; (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+(# X: @integer; lab: ^text
+do state.labs.newL -> lab[];
+   state.stacks.rPop -> X;  (* callee *)
+   (X,state.reg.thisObj,innerRtnOff) -> state.ins.str;
+   (if true then (* pehaps alloce a register *)
+      (0,lab[]) -> state.ins.adr; 
+      (0,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
+   else
+      (state.reg.lr,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
+   if);
+   (descInx,X,inx,true,false) -> state.invokeV; 
+   (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+   lab[] -> state.labs.def
 #)
 ---classDef:descriptor---
 (##)
@@ -1087,7 +1100,8 @@ do '\n\t\t; objSize:'->out.puttext; objSize -> out.putint;
 (#
 do state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
    state.tmp.init; 
-   out.newline;state.thisName[] -> state.mkODname -> out.puttext; '_DO:' -> out.puttext;
+   out.newline;
+   state.thisName[] -> state.mkODname -> out.puttext; '_DO:' -> out.puttext;
    (if state.trace then state.thisName[] -> state.printTrace if);
 #)
 ---initStmt:descriptor---
@@ -1407,32 +1421,32 @@ do 'rtnv'->state.missing
    descs.OD[descInx].BC[] -> thisCode[];
  *)
 (# T: ^Text; rtn: @integer
-do  (* we need innerOff of super 
+do  (* we need innerRtnOff of super 
     * restore caller
     * branch return
     *)
    ' descInx:'->out.puttext; descInx -> out.putint; 
-   ' superInnerOff:'->out.puttext; superInnerOff -> out.putint; out.newline;
-   (* it seems that superInnerOff may be 0 
+   ' superInnerRtnOff:'->out.puttext; superInnerRtnOff -> out.putint; out.newline;
+   (* it seems that superInnerRtnOff may be 0 
     * and it seems that rtnInner is also generated even if no super?
     * but probably not harmful, since it will never be excuted because of no inner in super
     *)
-   (if superInnerOff > 0 then
+   (if superInnerRtnOff > 0 then
        (if false then
-           '\\nRtnInner:' -> T[]; descInx -> T.putint; ' superInnerOff:'->T.puttext; 
-           superInnerOff -> T.putint; '\\n'->T.puttext;
+           '\\nRtnInner:' -> T[]; descInx -> T.putint; ' superInnerRtnOff:'->T.puttext; 
+           superInnerRtnOff -> T.putint; '\\n'->T.puttext;
            T[] -> state.printString;
        if);
        state.reg.getV -> rtn;
-       (rtn,state.reg.thisObj,superInnerOff + 1) -> state.ins.ldr;
-       (state.reg.thisObj,state.reg.thisObj,superInnerOff) -> state.ins.ldr;
-       (rtn,rtn,28) -> state.ins.addI;
+       (rtn,state.reg.thisObj,superInnerRtnOff + 1) -> state.ins.ldr;
+       (state.reg.thisObj,state.reg.thisObj,superInnerRtnOff) -> state.ins.ldr;
+       (if false then (rtn,rtn,28) -> state.ins.addI if);
        rtn -> state.ins.brR;
        rtn -> state.reg.freeV
    if)
 #)
 ---rtnAlloc:descriptor---
-(* we need innerOff of super *)
+(* we need innerRtnOff of super *)
 (# 
 do 
 #)
