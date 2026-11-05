@@ -4990,12 +4990,12 @@ case rshiftup:
 	      goto popCallStack;
 	};
 	//fprintf(trace,"popCallStackD %s\n",nameOf(Y));
-	glsc = cRestoreReturn(thisObj);
-	currentDescNo = cRestoreReturn(thisObj);
+	glsc = cRestoreReturn(thisObj);  // here we assign to glsc
+	currentDescNo = cRestoreReturn(thisObj); // and here to currentDescNo
     findActualSuper:
        if (currentDescNo != arg3) {
-	       glsc = cRestoreReturn(thisObj);
-	       currentDescNo = cRestoreReturn(thisObj);
+	       glsc = cRestoreReturn(thisObj);          // BUM
+	       currentDescNo = cRestoreReturn(thisObj); // BUM BUM
 	       thisObj = rPop(thisObj);
 	       goto findActualSuper;
 	}

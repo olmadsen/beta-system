@@ -15,8 +15,11 @@ do true -> isArm;
 (# trace: (# exit traceInvoke #);
    com:
       (# S: ^text
-      enter S[] do (*'\n\t\t\t; ' -> out.puttext; S[]-> out.puttext;*) 
-         fcom(#do S[]->TT #); inner
+      enter S[] do fcom(#do S[]->TT #); inner
+      #);
+   appCom:
+      (# S: ^text
+      enter S[] do ' ; ' -> out.puttext; S[]-> out.puttext
       #);
    missing:
       (# msg: ^Text
@@ -142,7 +145,12 @@ do true -> isArm;
       
    mkVDTentryName:
       (# T: ^text
-      do 'VDT_'-> T[]; thisName[] -> mkODname-> T.append
+      do (if ODtemplates.noHead then
+            'ODT_'-> T[]; 
+         else
+            'VDT_'-> T[];
+         if);
+         thisName[] -> mkODname-> T.append
       exit T[]
       #);
    gen_allocTemplate:
@@ -528,6 +536,60 @@ do true -> isArm;
                         ' refBaseTmp:' -> out.puttext; topInv.refBaseTmp -> out.putint;
             #)for)#)
       #);
+   descNoInx: (#exit 8 #);
+   originOffInx: (# exit 16 #);
+   restartLabInx: (#exit 24 #);
+   leaveLabInx: (#exit 32 #);
+   VDTinx: (#exit 40 #);
+   ODtemplates: @
+      (* 00: pointer to ODid
+         08: descNo
+         16: originOff
+         24: restartLab
+         32: leaveLab
+         40: VDT
+         ...
+         DD: ODid
+      *)
+      (# noHead: (#exit true #);
+         ODT: [100] ^ODtemplate; ODTtop: @ integer;
+         ODtemplate:
+            (# ODid: ^text; descNo,originOff: @integer; restartLab,leaveLab: ^Text;
+               ODidInx: (#exit (vdtTable[descNo].vdtTop + 5) * 8 #);
+               make:
+                  (# t: ^text
+                  do '\n\n\t.align 3' -> out.puttext;
+                     '\nODT_' -> out.puttext; ODid[]->out.puttext; ':' -> out.puttext;
+                     ODidInx -> ins.quad;         '00: OID' -> appCom;
+                     descNo -> ins.quad;          '08: descNo' -> appCom;
+                     originOff -> ins.quad;       '16: originOff' -> appCom;
+                     restartLab[] -> ins.quadLab; '24: restartLab' -> appCom;
+                     leaveLab[] -> ins.quadLab;   '32: leaveLab' -> appCom;
+                     '40: VDT' ->Com;
+                     vdtTable[descNo].mkVDT;
+                     ''->t[]; ODidInx->T.putint; ':ODid'->t.append; t[]->com;
+                     ODid[] -> ins.asciz
+                  #)
+            enter(ODid[],descNo,originOff)
+            do '' -> restartLab[];  labs.thisLab[] -> restartLab.append; 1 -> restartLab.putint;
+               '' -> leaveLab[];  labs.thisLab[] -> leaveLab.append; 2 -> leaveLab.putint;
+            exit this(ODtemplate)[]
+            #);
+         add:
+            (# ODid: ^text; descNo,originOff: @integer; restartLab,leaveLab: @integer
+            enter(ODid[],descNo,originOff)
+            do (if (ODTtop + 1 -> ODTtop) > ODT.range then ODT.range -> ODT.extend if);
+               (ODid[]->mkODname,descNo,originOff) -> ODtemplate -> ODT[ODTtop][]
+            #);
+         make:
+            (#
+            do '\n\n; **** OD templaes:' -> out.puttext;
+               '\n.section __DATA,__data' -> out.puttext;
+               (for i: ODTtop repeat
+                  ODT[i].make
+               for)
+            #)
+      #);
    newVDT:
       (# N: ^text; 
       enter N[]
@@ -539,21 +601,22 @@ do true -> isArm;
          thisName[] -> mkODname -> thisVDTentry.ODid[];
       #);
    vdtTable: [4] ^ VDTentry; thisVDTentry: ^VDTentry;
- VDTentry:
-   (# ODid: ^text; bindings: [8] @integer; isInner: [8] @Boolean;  vdtTop: @integer;
-      mkVDT:
-         (# mkLab:
-              (#
-              do (if not labDone then 
+   VDTentry:
+      (# ODid: ^text; bindings: [8] @integer; isInner: [8] @Boolean;  vdtTop: @integer;
+         mkVDT:
+            (# mkLab:
+               (#
+               do (if not labDone then 
                     '\n\t.align 3' -> out.puttext;
                      '\n\nVDT_' -> out.puttext; ODid[] -> out.puttext; ':' -> out.puttext;
-                 if);
-                 true -> labDone
-              #);
-            labDone: @Boolean
-         do mkLab;
-            '\n\t.quad ' -> out.puttext; (vdtTop + 1) * 8 -> out.putint; (* pointer to ODid *)
-            (for i: vdtTop repeat
+                  if);
+                  true -> labDone
+               #);
+               labDone: @Boolean
+            do (if not ODtemplates.noHead then
+                  '\n\t.quad ' -> out.puttext; (vdtTop + 1) * 8 -> out.putint; (* pointer to ODid *)
+               if);
+               (for i: vdtTop repeat
                (if bindings[i] > 0 then
                   '\n\t.quad ' -> out.puttext; 
                   (if isInner[i] then 
@@ -564,45 +627,47 @@ do true -> isArm;
                   if)
                else
                   '\n\t.space 8' -> out.puttext
-            if)for);
-            '\n\t.asciz "' -> out.puttext; ODid[] -> out.puttext; '"' -> out.put
-         #);
-      print:
-         (#
-         do '---'->puttext; ODid[] -> putline;
-            (for i: vdtTop repeat
+               if)for);
+               (if not ODtemplates.noHead then '\n\t.asciz "' -> out.puttext; ODid[] -> out.puttext; '"' -> out.put if)
+            #);
+         print:
+            (#
+            do '---'->puttext; ODid[] -> putline;
+               (for i: vdtTop repeat
                  (if bindings[i] > 0 then
                      i -> putint; ':'->put; bindings[i] -> putint;
                      newline
-         if)for)#)
-   #);
- addVDT:
-    (# inx,bDI: @integer; isInn: @Boolean;
-    enter(inx,bDI,isInn)
-    do (if inx > thisVDTentry.bindings.range then 
+            if)for)#)
+      #);
+   addVDT:
+      (# inx,bDI: @integer; isInn: @Boolean;
+      enter(inx,bDI,isInn)
+      do (if inx > thisVDTentry.bindings.range then 
            (inx - thisVDTentry.bindings.range) + 10 -> thisVDTentry.bindings.extend
-       if);
-       (*'**** addVDT:'->puttext; inx -> putint; ' ' -> put; bDI->putint; ' ' -> put; isInn->putBoolean; newline;*)
-       (if inx > thisVDTentry.vdtTop then inx -> thisVDTentry.vdtTop if);
-       bDI -> thisVDTentry.bindings[inx]; isInn -> thisVDTentry.isInner[inx]
-    #);
- printVDT:
-    (#
-    do (for i: vdtTable.range repeat
+         if);
+         (*'**** addVDT:'->puttext; inx -> putint; ' ' -> put; bDI->putint; ' ' -> put; isInn->putBoolean; newline;*)
+         (if inx > thisVDTentry.vdtTop then inx -> thisVDTentry.vdtTop if);
+         bDI -> thisVDTentry.bindings[inx]; isInn -> thisVDTentry.isInner[inx]
+      #);
+   printVDT:
+      (#
+      do (for i: vdtTable.range repeat
             (if vdtTable[i][] <> none  then
-                vdtTable[i].print
+               vdtTable[i].print
             if)
-       for);
-    #);
- mkVDTtables:
-    (#
-    do '\n\n; **** VDT tables:' -> out.puttext;
-       '\n.section __DATA,__data' -> out.puttext;
-       '\n.align 3' -> out.puttext;
-       (for i: vdtTable.range repeat
+         for);
+      #);
+   mkVDTtables:
+      (# 
+      do (if not ODtemplates.noHead then 
+            '\n\n; **** VDT tables:' -> out.puttext;
+            '\n.section __DATA,__data' -> out.puttext;
+            '\n.align 3' -> out.puttext;
+         if);
+         (for i: vdtTable.range repeat
             (if vdtTable[i][] <> none  then
-                vdtTable[i].mkVDT
-    if)for)#);
+               vdtTable[i].mkVDT
+      if)for)#);
 getNoOfParam:
    (* NOT sufficient for compound values - must need size *)
    (# theOD: ^objDescTables.ODentry; di,vN,rN: @integer
@@ -902,8 +967,8 @@ deAllocParameters:
       (# r,dinx,r2: @integer; L: ^Text
       enter(descNo,r,dinx,isInner,useRtnVal)
       do state.reg.getV -> r2;
-         (r2,r,16) -> ins.ldrD;
-         (r2,r2,dinx * 8) -> ins.ldrD; (* r2 = callee.vBinding *)
+         (r2,r,16) -> ins.ldrD; (* ODtemplate *)
+         (r2,r2,state.VDTinx - 8 + dinx * 8) -> ins.ldrD; (* r2 = callee.vBinding *)
          r2 -> state.reg.freeV;
          r -> stacks.rPush; (* origin of callee *)
          (if isInner then
@@ -1078,6 +1143,7 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    descNo -> state.thisDescInx;
    N[] -> state.thisName[];
    state.newVDT;
+   (N[],descNo,originOff) -> state.ODtemplates.add
 #)
 ---setThisStack:descriptor---
 (##)
@@ -1110,8 +1176,7 @@ do state.reg.init; (* OBS! to clear registers after possible parameter allocatio
 do state.stat; state.tmp.init; state.tmp.display
 #)
 ---mvStack:descriptor---
-(#
-#)
+(# #)
 ---pushConst:descriptor---
 (# r: @integer
 do state.reg.getV -> r;
@@ -1125,7 +1190,7 @@ do state.reg.getV -> r;
 #)
 ---pushFloatConst:descriptor---
 (#
-do
+do 'pushFloatConst'->state.missing
 #)
 ---pushNone:descriptor---
 (#
@@ -1284,13 +1349,11 @@ do 'xrstoreg'->state.missing
 #)
 ---loadOrigin:descriptor---
 (* is apparently called before origin code is generated, i.e. no thisObj on rStack *)
-
 (# r1,r2: @integer
 do 'loadOrigin: ' -> state.com; state.stat;
    (if (state.stacks.rTop > 0) then
          state.stacks.rStack[state.stacks.rTop]-> r1;
          ' topRreg:' ->out.puttext; r1 -> out.putint;
-         
          (if r1 = state.reg.thisObj then 
             state.stacks.rPop -> r1;
             state.reg.getR -> r2; 
@@ -1367,8 +1430,14 @@ do state.stat;
 do 'jmpTrue'->state.missing
 #)
 ---break:descriptor---
+(* on, lab, descInx,pn *)
 (#
-do 'break'->state.missing
+do 'break'->state.missing;
+   'break'->state.com
+    (#do 'on:'->out.puttext; on->out.putint; ' lab:'->out.puttext; lab->out.putint; 
+         ' descInx:'->out.puttext; descInx->out.putint; ' pn:'->out.puttext; pn->out.putint;
+    #);
+   
 #)
 ---initInvocation:descriptor---
 (* if this invocation is in a parameter-list, 
@@ -1393,7 +1462,9 @@ do (N[],descNo,staticOff,useRtnVal) -> state.invoke;
 #)
 ---plainInvoke:descriptor---
 (#
-do N[] -> state.mkEntryName -> state.ins.blLab;
+do 1 -> defLab;
+   N[] -> state.mkEntryName -> state.ins.blLab;
+   2 -> defLab;
    '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
    '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj *)
    '\n\t ret' -> out.puttext;
@@ -1495,8 +1566,7 @@ do 'mkRindexed'->state.missing
 ---saveAndSetThis:descriptor---
 (# #)
 ---restoreThis:descriptor---
-(#
-#)
+(# #)
 ---mkValueProxy:descriptor---
 (#
 do 'mkValueProxy'->state.missing
@@ -1645,7 +1715,8 @@ do (for i: top repeat
       if);
       (index[i],bindInx[i],false) -> state.addVDT
    for);
-   state.mkVDTtables
+   (if not state.ODtemplates.noHead then state.mkVDTtables if);
+   state.ODtemplates.make
 #)
 ---vdtTableCopy:doPart---
 do (if state.vdtTable[superDescNo][] <> none then 
@@ -1662,8 +1733,7 @@ do (* jump to super.DO *)
 do (*state.printVDT*)
 #)
 ---mkLLVMvirtualDefs:descriptor---
-(#
-#)
+(# #)
 ---prepareStub:descriptor---
 (#
 do 'prepareStub'->state.com;
@@ -1673,8 +1743,7 @@ do 'prepareStub'->state.com;
 (# sh: @File; nm: ^text;
    nl: (* we must use Mac newline - character code 10 *)
       (# do ascii.nl -> sh.put #)
-do  
-(1,(BC.name).length - 1) -> (BC.name).sub -> nm[]; 'sh' -> nm.puttext; nm[] -> sh.name;
+do (1,(BC.name).length - 1) -> (BC.name).sub -> nm[]; 'sh' -> nm.puttext; nm[] -> sh.name;
    sh.openWrite;
    '#!/bin/bash' -> sh.puttext;  nl;
    'set -e' -> sh.puttext;  nl;
@@ -1685,7 +1754,7 @@ do
    'QBA="$QB"/VM/MAC-ARM' -> sh.puttext; nl;
    'echo "$QBA"' -> sh.puttext; nl;
    'as -g -arch arm64 -o ' -> sh.puttext; mainFN[] -> sh.puttext; '.o ' -> sh.puttext; mainFN[] -> sh.puttext; 
-   '..a  ' -> sh.puttext;  nl;
+   '..a  ' -> sh.puttext; nl;
 
    'ld -macos_version_min 26.0 \\' -> sh.puttext; nl;
    '   -o ' -> sh.puttext; mainFN[] -> sh.puttext; ' \\' -> sh.puttext; nl;
