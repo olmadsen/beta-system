@@ -3287,7 +3287,7 @@ case rshiftup:
 #endif
 	thisObj = rPop(thisObj);
         break;
-      case toSuper:
+    case toSuper:
 	arg1 = op2(bc,&glsc);
 #ifdef TRACE
 	fprintf(trace,"toSuper %i thisObj: %s",arg1,nameOf(thisObj));
@@ -3299,27 +3299,23 @@ case rshiftup:
 	fprintf(trace," bc: %i glsc: %i\n",(int)bc,glsc);
 #endif
 	break;
-      case call:
-	/*return*/
-
-	saveContext();
-	doCall(thisBlock,false,true);
-	restoreContext();
-
-	break;
-      case susp:
+    case call:
+		/*return*/
+		saveContext();
+		doCall(thisBlock,false,true);
+		restoreContext();
+		break;
+    case susp:
 #ifdef TRACE
-	fprintf(trace,"susp ");
+		fprintf(trace,"susp ");
 #endif
-	callee = rPop(thisStack);
-	if ((suspendEnabled == 1) && (callee == enablee)) suspendEnabled = suspendEnabled - 1;
-
-	saveContext();
-	doSuspend(thisBlock,callee,false);
-	restoreContext();
-
-	break;
-      case alloc:
+		callee = rPop(thisStack);
+		if ((suspendEnabled == 1) && (callee == enablee)) suspendEnabled = suspendEnabled - 1;
+		saveContext();
+		doSuspend(thisBlock,callee,false);
+		restoreContext();
+		break;
+    case alloc:
 	arg1 = op2(bc,&glsc);
 	arg2 = op1(bc,&glsc);
 #ifdef TRACE
