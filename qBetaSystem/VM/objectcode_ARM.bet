@@ -533,6 +533,7 @@ do true -> isArm;
                         ' refBaseTmp:' -> out.puttext; topInv.refBaseTmp -> out.putint;
             #)for)#)
       #);
+   lscInx: (#exit 0 #);
    callerInx: (# exit 8 #); (* to be handled by storage allocation *)
    (* indexes in OD-template *)
    descNoInx: (#exit 8 #);
@@ -768,6 +769,43 @@ allocParameters:
          (0,r,16) -> ins.ldrD; (* ODtemplate *)
          (0,0,restartLabInx + (lab - 1) * 8) -> ins.ldrD; (* x0 = origin off *)
          0 -> ins.brR
+      #);
+   doSwap:
+      (* pcx := R.RtnPC
+       * rx := R.caller
+       * R.rtnPC := pc
+       * R.caller := thisObj
+       * pc := X
+       * thisObj := Y 
+       *)
+      (# R,pcx,rx,lab,resumeAdr: @integer; resumeLab: ^text
+      do 'swap'->state.com;
+         stacks.rpop -> R;
+         reg.getR -> rx;
+         reg.getV -> pcx;
+         reg.getV -> resumeAdr;
+         labs.newL -> resumeLab[];
+         (resumeAdr,resumeLab[]) -> ins.adr;
+         (pcx,R,lscInx) -> ins.ldrD;
+         (rx,R,callerInx) -> ins.ldrD;
+         (resumeAdr,R,lscInx) -> ins.strD;
+         (reg.thisObj,R,callerInx) -> ins.strD;
+         (reg.thisObj,rx) -> ins.movR;
+         pcx -> ins.bR;
+         resumeLab[] -> labs.def;
+         resumeAdr -> reg.freeV;
+         pcx -> reg.freeV;
+         rx -> reg.freeR
+      #);
+   doSuspend:
+      (#
+      do 'doSuspend'->com;
+         doSwap
+      #);
+   docall:
+      (#
+      do 'doCall'->com;
+         doSwap
       #);
    emitOp:
      (# op: @integer
@@ -1555,6 +1593,16 @@ do
 (#
 do 'prepareReturn:restoreOrigin:'->state.com;
    state.tmp.restoreOrigin;
+#)
+---suspendd:descriptor---
+(# pcx,rx,lab: @integer
+do 'suspend'->state.com;
+   state.doSuspend
+#)
+---call:descriptor---
+(#
+do 'call'->state.com;
+   state.doCall
 #)
 ---tstOriginNone:descriptor---
 (#
