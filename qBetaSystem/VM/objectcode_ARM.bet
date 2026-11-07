@@ -112,27 +112,32 @@ do true -> isArm;
       exit(Xr,inxR)
       #); 
    mkEntryName: (* should unify with mkODname *)
-      (# n: ^Text; T: ^text
+      (# n: ^Text; T,S: ^text
       enter n[]
       do (if (n[] -> mkOprName -> T[]) = none then
-             '_' -> T[];
-             n.scanAll(#do (if ch = ':' then '$' -> T.put else ch -> T.put if) #)
-         if)
-      exit T[]
+             n[] -> T[];
+         if);
+         '_' -> S[];
+         T.scanAll(#do (if ch // '$' // ':' then '_' -> S.put else ch -> S.put if) #)
+      exit S[]
       #);
    mkODname:
-      (# n: ^Text; T: ^text
+      (# n: ^Text; T,S: ^text
       enter n[]
       do (if (n[] -> mkOprName -> T[]) = none then
-             '' -> T[];
-             n.scanAll(#do (if ch = ':' then '$' -> T.put else ch -> T.put if) #)
-         if)
-      exit T[]
+             n[] -> T[];
+         if);
+         '' -> S[];
+         T.scanAll(#do (if ch // '$' // ':' then '_' -> S.put else ch -> S.put if) #)
+      exit S[]
       #);
    mkOprName:
       (# n: ^text; T: ^text
       enter n[]
-      do (if true 
+      do (if true
+         // '===' -> ((1,3)->n.sub).equal then '$EQ_Rx' -> T[]; (4,n.length)->n.sub -> T.append;
+         // '==' -> ((1,2)->n.sub).equal then '$NE_R' -> T[]; (3,n.length)->n.sub -> T.append;
+         // '=/=' -> ((1,3)->n.sub).equal then '$EQ_R' -> T[]; (4,n.length)->n.sub -> T.append;
          // '+' -> ((1,1)->n.sub).equal then '$PLUS' -> T[]; (2,n.length)->n.sub -> T.append;
          // '-' -> ((1,1)->n.sub).equal then '$MINUS' -> T[]; (2,n.length)->n.sub -> T.append;
          // '*' -> ((1,1)->n.sub).equal then '$MULT' -> T[]; (2,n.length)->n.sub -> T.append;
@@ -144,8 +149,8 @@ do true -> isArm;
       #);
       
    mkVDTentryName:
-      (# T: ^text
-      do 'ODT_'-> T[]; thisName[] -> mkODname-> T.append
+      (# T: ^text; s: ^Text
+      do 'ODT_'-> T[]; thisName[] -> mkODname-> T.append;
       exit T[]
       #);
    gen_allocTemplate:
@@ -327,12 +332,12 @@ do true -> isArm;
          rPush: 
             (# v: @integer
             enter v 
-            do (if (rTop + 1 -> rTop) <= rStack.range then
-                  v -> rStack[rTop]
-               else 
-                  '\n; !!! ERROR:rStack overflow:'->out.putline 
-            if)#);
-         rdouble: (#do rStack[rTop] -> rPush #);
+            do (if (rTop + 1 -> rTop) > rStack.range then
+                   rStack.range -> rStack.extend
+               if);
+               v -> rStack[rTop]
+            #);
+         rdouble: (#do (if rTop > 0 then rStack[rTop] -> rPush if)#);
          rPop: 
             (# r: @integer 
             do (if (rTop > 0) and (rTop <= 8) then rStack[rTop] -> r; rTop - 1 -> rTop
@@ -362,6 +367,13 @@ do true -> isArm;
                (for i: rTop repeat rStack[i] -> out.putint; (if i < rTop then ',' ->out.put if) for);
                ']'->out.put
       #)#);
+   isRegEmpty:
+      (#
+      do (if (reg.vRegNo > 0) or (reg.rRegNo > reg.refBase) then
+             'ERROR: reg not EMPTY'->com;
+             0 -> reg.vRegNo; reg.refBase -> reg.rRegNo 
+         if)
+      #);
    stat: (# do ''->com; stacks.stat; reg.stat #);
    reg: @RegisterHandler; stacks: @StackHandler;
    tmp: @
@@ -630,8 +642,9 @@ do true -> isArm;
    addVDT:
       (# inx,bDI: @integer; isInn: @Boolean;
       enter(inx,bDI,isInn)
-      do (if inx > thisVDTentry.bindings.range then 
-           (inx - thisVDTentry.bindings.range) + 10 -> thisVDTentry.bindings.extend
+      do (if inx > thisVDTentry.bindings.range then
+           (inx - thisVDTentry.bindings.range) + 10 -> thisVDTentry.bindings.extend;
+           (inx - thisVDTentry.isInner.range) + 10 -> thisVDTentry.isInner.extend
          if);
          (*'**** addVDT:'->puttext; inx -> putint; ' ' -> put; bDI->putint; ' ' -> put; isInn->putBoolean; newline;*)
          (if inx > thisVDTentry.vdtTop then inx -> thisVDTentry.vdtTop if);
@@ -749,7 +762,7 @@ allocParameters:
             (#do 'on:'->out.puttext; on->out.putint; ' lab:'->out.puttext; lab->out.putint; 
                ' descInx:'->out.puttext; descInx->out.putint; ' pn:'->out.puttext; pn->out.putint;
             #);
-         reg.getR -> r; (* no getR here since thisObj below*)
+         (*reg.getR -> r;*) (* no getR here since thisObj below*)
          reg.thisObj -> r;
          (* register allocation needed *)
          (if false then (0,r) -> ins.movR; '_putObj' -> ins.blLab; if);
@@ -1033,8 +1046,9 @@ allocParameters:
          (r2,r2,state.VDTinx - 8 + dinx * 8) -> ins.ldrD; (* r2 = callee.vBinding *)
          r2 -> state.reg.freeV;
          r -> stacks.rPush; (* origin of callee *)
+         r -> reg.freeR;
          (if isInner then
-             labs.local -> L[];
+             labs.newL -> L[];
              (r2,0) -> ins.cmpI;
              L[] -> ins.bEqZero
          if);
@@ -1159,27 +1173,6 @@ allocParameters:
    objSize,vTmpOff,rTmpOff,nxtVtmp,nxtRtmp,vTmpSaved,rTmpSaved: @integer
 #)
 
----innerP:descriptor---
-(* Main: Super{...; DO: ...; }; Super: S{...; DO: ...; inner(Super); ...; rtn  }
-   Main.s: ...; toSuper DO: ...; rtnInner
-   Super.S: ... DO ...; inner(Super); ...
-   Invoke Main: Main.exe.; ...; toSuper; Super.DO; ...; inner(Super); ...;  main.RtnInner; ...; Super.rtn
-   for Main, inner(Super) should be Main.DO
-*)
-(# X: @integer; lab: ^text
-do state.labs.newL -> lab[];
-   state.stacks.rPop -> X;  (* callee *)
-   (X,state.reg.thisObj,innerRtnOff) -> state.ins.str;
-   (if true then (* pehaps alloce a register *)
-      (0,lab[]) -> state.ins.adr; 
-      (0,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
-   else
-      (state.reg.lr,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
-   if);
-   (descInx,X,inx,true,false) -> state.invokeV; 
-   (* Note inx - 1! The VDT is one (1) element shorter than expected*)
-   lab[] -> state.labs.def
-#)
 ---classDef:descriptor---
 (##)
 ---class:descriptor---
@@ -1208,10 +1201,6 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.newVDT;
    (N[],descNo,originOff) -> state.ODtemplates.add
 #)
----setThisStack:descriptor---
-(##)
----rPopThisObj:descriptor---
-(##)
 ---setNoOfParams:doPart---
 do '\n\t\t; objSize:'->out.puttext; objSize -> out.putint;
    objSize -> state.objSize; 
@@ -1225,7 +1214,8 @@ do '\n\t\t; objSize:'->out.puttext; objSize -> out.putint;
    
    (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
    state.allocParameters;
-   
+
+
 ---actions:descriptor---
 (#
 do state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
@@ -1236,10 +1226,112 @@ do state.reg.init; (* OBS! to clear registers after possible parameter allocatio
 #)
 ---initStmt:descriptor---
 (#
-do state.stat; state.tmp.init; state.tmp.display
+do state.isRegEmpty;  state.stat; state.tmp.init; state.tmp.display
 #)
 ---mvStack:descriptor---
 (# #)
+---innerP:descriptor---
+(* Main: Super{...; DO: ...; }; Super: S{...; DO: ...; inner(Super); ...; rtn  }
+   Main.s: ...; toSuper DO: ...; rtnInner
+   Super.S: ... DO ...; inner(Super); ...
+   Invoke Main: Main.exe.; ...; toSuper; Super.DO; ...; inner(Super); ...;  main.RtnInner; ...; Super.rtn
+   for Main, inner(Super) should be Main.DO
+*)
+(# X: @integer; lab: ^text
+do state.labs.newL -> lab[];
+   state.stacks.rPop -> X;  (* callee *)
+   (X,state.reg.thisObj,innerRtnOff) -> state.ins.str;
+   (if true then (* pehaps alloce a register *)
+      (0,lab[]) -> state.ins.adr; 
+      (0,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
+   else
+      (state.reg.lr,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
+   if);
+   (descInx,X,inx,true,false) -> state.invokeV; 
+   (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+   lab[] -> state.labs.def
+#)
+---setThisStack:descriptor---
+(##)
+---rPopThisObj:descriptor---
+(##)
+---rtn:descriptor---
+(#
+do (state.reg.refBase,state.reg.thisObj) -> state.ins.movR;
+   '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
+   '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj *)
+   '\n\t ret' -> out.puttext;
+#)
+---rtnv:descriptor---
+(#
+do 'rtnv'->state.missing
+#)
+---rtnInner:descriptor---
+(*'rtnInner' -> exe;
+   thisObj.restoreReturn -> (descInx,glsc);
+   descs.OD[descInx].BC[] -> thisCode[];
+ *)
+(# T: ^Text; rtn: @integer
+do  (* we need innerRtnOff of super 
+    * restore caller
+    * branch return
+    *)
+   ' descInx:'->out.puttext; descInx -> out.putint; 
+   ' superInnerRtnOff:'->out.puttext; superInnerRtnOff -> out.putint; out.newline;
+   (* it seems that superInnerRtnOff may be 0 
+    * and it seems that rtnInner is also generated even if no super?
+    * but probably not harmful, since it will never be excuted because of no inner in super
+    *)
+   (if superInnerRtnOff > 0 then
+       (if false then
+           '\\nRtnInner:' -> T[]; descInx -> T.putint; ' superInnerRtnOff:'->T.puttext; 
+           superInnerRtnOff -> T.putint; '\\n'->T.puttext;
+           T[] -> state.printString;
+       if);
+       state.reg.getV -> rtn;
+       (rtn,state.reg.thisObj,superInnerRtnOff + 1) -> state.ins.ldr;
+       (state.reg.thisObj,state.reg.thisObj,superInnerRtnOff) -> state.ins.ldr;
+       (if false then (rtn,rtn,28) -> state.ins.addI if);
+       rtn -> state.ins.brR;
+       rtn -> state.reg.freeV
+   if)
+#)
+---rtnAlloc:descriptor---
+(* we need innerRtnOff of super *)
+(# #)
+---prepareReturn:descriptor---
+(* for a nested invocation, restore origin, if this invoke is part of a parameter list
+ *    foo(e1,bar(e2,e3),e4)
+ *                     ^restore origin for foo
+ *)
+(#
+do 'prepareReturn:restoreOrigin:'->state.com;
+   state.tmp.restoreOrigin;
+#)
+---defLab:descriptor---
+(#
+do out.newline; state.labs.thisLab[] -> out.puttext; lab -> out.putint; ':' -> out.put;
+#)
+---jmp:descriptor---
+(#
+do '\n\t b '->out.puttext; lab -> state.emitLab; out.newline;
+#)
+---jmpFalse:descriptor---
+(# r: @ integer
+do state.stat;
+   state.stacks.vPop -> r;
+   '\n\t cbz ' -> out.puttext; r -> state.reg.print; ',' -> out.put; Flab -> state.emitLab;
+   r -> state.reg.freeV
+#)
+---jmpTrue:descriptor---
+(#
+do 'jmpTrue'->state.missing
+#)
+---break:descriptor---
+(* on, lab, descInx,pn *)
+(#
+do (on,lab,descInx,pn) -> state.doBreak
+#)
 ---pushConst:descriptor---
 (# r: @integer
 do state.reg.getV -> r;
@@ -1256,8 +1348,11 @@ do state.reg.getV -> r;
 do 'pushFloatConst'->state.missing
 #)
 ---pushNone:descriptor---
-(#
-do 0 -> pushConst
+(# r: @integer
+do (*0 -> pushConst - none is not a value *)
+   state.reg.getR -> r;
+   (r,0) -> state.ins.movI;
+   r -> state.stacks.rPush
 #)
 ---pushText:descriptor---
 (#
@@ -1421,7 +1516,7 @@ do 'loadOrigin: ' -> state.com; state.stat;
             state.stacks.rPop -> r1;
             state.reg.getR -> r2; 
             (if r2 <> state.reg.refBase then
-               '  ERROR: r2 not refBase:r2:'->out.puttext; r2 -> out.putint
+               '\n;  ERROR: r2 not refBase:r2:'->out.puttext; r2 -> out.putint
             if);
             (r2,r1) -> state.ins.movR;
             r2 -> state.stacks.rPush
@@ -1473,30 +1568,6 @@ do 'vShiftUp'->state.missing
 (#
 do 'vShiftDown'->state.missing
 #)
- ---defLab:descriptor---
-(#
-do out.newline; state.labs.thisLab[] -> out.puttext; lab -> out.putint; ':' -> out.put;
-#)
----jmp:descriptor---
-(#
-do '\n\t b '->out.puttext; lab -> state.emitLab; out.newline;
-#)
----jmpFalse:descriptor---
-(# r: @ integer
-do state.stat;
-   state.stacks.vPoP -> r;
-   '\n\t cbz ' -> out.puttext; r -> state.reg.print; ',' -> out.put; Flab -> state.emitLab;
-   r -> state.reg.freeV
-#)
----jmpTrue:descriptor---
-(#
-do 'jmpTrue'->state.missing
-#)
----break:descriptor---
-(* on, lab, descInx,pn *)
-(#
-do (on,lab,descInx,pn) -> state.doBreak
-#)
 ---initInvocation:descriptor---
 (* if this invocation is in a parameter-list, 
  * store the preceeding paremters in the tmp-area
@@ -1541,61 +1612,7 @@ do state.stat;
    state.stacks.rPop -> r;
    (descNo,r,dinx,false,useRtnVal) -> state.invokev;
 #)
----rtn:descriptor---
-(#
-do (state.reg.refBase,state.reg.thisObj) -> state.ins.movR;
-   '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
-   '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj *)
-   '\n\t ret' -> out.puttext;
-#)
----rtnv:descriptor---
-(#
-do 'rtnv'->state.missing
-#)
----rtnInner:descriptor---
-(*'rtnInner' -> exe;
-   thisObj.restoreReturn -> (descInx,glsc);
-   descs.OD[descInx].BC[] -> thisCode[];
- *)
-(# T: ^Text; rtn: @integer
-do  (* we need innerRtnOff of super 
-    * restore caller
-    * branch return
-    *)
-   ' descInx:'->out.puttext; descInx -> out.putint; 
-   ' superInnerRtnOff:'->out.puttext; superInnerRtnOff -> out.putint; out.newline;
-   (* it seems that superInnerRtnOff may be 0 
-    * and it seems that rtnInner is also generated even if no super?
-    * but probably not harmful, since it will never be excuted because of no inner in super
-    *)
-   (if superInnerRtnOff > 0 then
-       (if false then
-           '\\nRtnInner:' -> T[]; descInx -> T.putint; ' superInnerRtnOff:'->T.puttext; 
-           superInnerRtnOff -> T.putint; '\\n'->T.puttext;
-           T[] -> state.printString;
-       if);
-       state.reg.getV -> rtn;
-       (rtn,state.reg.thisObj,superInnerRtnOff + 1) -> state.ins.ldr;
-       (state.reg.thisObj,state.reg.thisObj,superInnerRtnOff) -> state.ins.ldr;
-       (if false then (rtn,rtn,28) -> state.ins.addI if);
-       rtn -> state.ins.brR;
-       rtn -> state.reg.freeV
-   if)
-#)
----rtnAlloc:descriptor---
-(* we need innerRtnOff of super *)
-(# 
-do 
-#)
----prepareReturn:descriptor---
-(* for a nested invocation, restore origin, if this invoke is part of a parameter list
- *    foo(e1,bar(e2,e3),e4)
- *                     ^restore origin for foo
- *)
-(#
-do 'prepareReturn:restoreOrigin:'->state.com;
-   state.tmp.restoreOrigin;
-#)
+
 ---suspendd:descriptor---
 (# pcx,rx,lab: @integer
 do 'suspend'->state.com;
@@ -1656,16 +1673,8 @@ do 'invokeWithProxy'->state.missing
 do 'invokeExternal'->state.missing
 #)
 ---callPrim:descriptor---
-(#
-do (if op 
-   // prim.attach then 
-   // prim.fork // prim.cmpAndSwap // prim.thisCore then
-      (* perhaps more prims require C-mode, 
-      * but we are probably shure with the above ones
-      *)
-      true -> descs.onlyCinterpreter;
-   if);
-   (if op
+(# n,callee: @integer
+do (if op
    // prim.put then 
       (if state.stacks.vTopKind = state.valueKind then
          state.stacks.vPop -> state.emitPutConst
@@ -1674,6 +1683,9 @@ do (if op
       if);
       (*(state.reg.getV,state.regKind) -> state.stacks.vPush; *)(* should check that getV returns x0 *)
       state.stat
+   // prim.attach then 
+      state.stacks.vPop -> n -> state.reg.freeV; 
+      state.stacks.rPop -> callee -> state.reg.freeR
    // prim.asString then
       (*'___%prim: asString' -> putline*)
    else
@@ -1696,12 +1708,12 @@ do state.stat;
                // codes.rdiv then 'div' -> emitOp (* not used? *)
     // codes.idiv then codes.idiv -> state.binOpReg
     // codes.modd then state.emitMod
-               // codes.eq then 'eq' -> emitOp
+               // codes.eq then 'eq' -> state.emitCmpOp
     // codes.lt then 'lt' -> state.emitCmpOp; 
     // codes.le then 'le' -> state.emitCmpOp; 
     // codes.gt then 'gt' -> state.emitCmpOp; 
     // codes.ge then 'ge' -> state.emitCmpOp; 
-               // codes.ne then 'ne' -> emitOp
+               // codes.ne then 'ne' -> state.emitCmpOp
                // codes.andd then 'andd' -> emitOp
                // codes.orr then 'orr' -> emitOp
                // codes.xorr then 'xorr' -> emitOp
