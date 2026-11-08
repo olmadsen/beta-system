@@ -34,7 +34,8 @@ do true -> isArm;
    sp: (#exit 31 #); (* apparently not really*)
    ins: @ ARM_instructions;
    gen_qAllocindexed:
-      (*                      fields[1], [8] = origin, but perhaps not used?
+      (*                      fields[0], [0] = ODT
+       *                      fields[1], [8] = origin, but perhaps not used?
        *     fields[arrayStrucSize - 1],[16] = range,  in 16-bit words
        *         fields[arrayStrucSize],[24] = size,   in 16-bit words
        *     fields[arrayStrucSize + 1],[32] = rep[1]
@@ -60,26 +61,35 @@ do true -> isArm;
           '\n\t ret' -> out.puttext;
       #);
    gen_qAllocTextObj:
-      (# S,Sx,L: ^Text; r: @integer
+      (# S,Sx,L: ^Text; r,dst: @integer
       enter(S[],SX[])
       do '\n.section __DATA,__data\n' -> out.puttext;
          'STR' -> L[]; STR_lab + 1 -> STR_lab -> L.putint;
          L[] -> out.puttext; ':'-> out.put;
-         '\n\t'->out.puttext; '.asciz "' -> out.puttext; S[] -> out.puttext; '"' -> out.put;
+         S[] -> ins.asciz;
+         ';qAllocTextObj:'->com(#do objDescTables.StringId[]->out.puttext #);
          '\n.text' -> out.puttext;
          (x0,Sx.length + 3) -> ins.movI;
          (x2,1) -> ins.movI;   (* x2 is not alloacted here *)
          '_qAllocIndexed' -> ins.blLab;
          reg.getV -> r;
          (r,Sx.length) -> ins.movI;
+         reg.getR -> dst;
+         (if dst <> reg.refBase then
+            '\n; ERROR: qAllocTextObj: dst no refBase' -> out.puttext
+         if);
          (r,reg.refBase, (arrayStrucSize - 1) * 8) -> ins.strD;
          r -> reg.freeV;
          (for i: Sx.length repeat
               (x0,i -> Sx.inxGet) -> ins.movI;
               (x0, reg.refBase, i) -> ins.str
          for);
-         (x0,reg.refBase) -> ins.movR; (* Temporary hack since pt only x0 works *)
-         x0 -> stacks.rPush
+         (if true then
+            reg.refBase -> stacks.rPush
+         else
+            (x0,reg.refBase) -> ins.movR; (* Temporary hack since pt only x0 works *)
+            x0 -> stacks.rPush
+         if)
       #);
    computeArrayIndex:
       (* copmpute arrayStrucSize + (inx - 1) * size + size + 1 -> inx; 
@@ -162,10 +172,17 @@ do true -> isArm;
          (* allocate object on heap - missing check for out-of-memory 
           * x29 points to next free area of heap
           *)
-         '\n\t str     lr, [x29, #0]' -> out.puttext;
-         '\n\t str     x28, [x29, #8]' -> out.puttext;
-         (mkVDTentryName,28) -> ins.getAdr;
-         '\n\t str     x28, [x29, #16]' -> out.puttext;
+         (if true then
+            (lr,reg.heapTop,lscInx) -> ins.strD;
+            (reg.thisObj,reg.heapTop,callerInx) -> ins.strD;
+            (mkVDTentryName,reg.thisObj) -> ins.getAdr;
+            (reg.thisObj,reg.heapTop,ODTinx) -> ins.strD;
+         else
+            '\n\t str     lr, [x29, #0]' -> out.puttext;
+            '\n\t str     x28, [x29, #8]' -> out.puttext;
+            (mkVDTentryName,28) -> ins.getAdr;
+            '\n\t str     x28, [x29, #16]' -> out.puttext;
+         if);
          '\n\t mov     x28, x29' -> out.puttext; 
          '\n\t add     x29, x29, ' -> out.puttext; '#' -> out.puttext; (objSize + 1) * 8 + 24 -> out.putint;
       #);
@@ -185,31 +202,14 @@ do true -> isArm;
        * rangee -> fields[arrayStrucSize - 1];
        * size -> fields[arrayStrucSize];
       *)
-      (# size,isRIndexed,sizeR,rangeR,dInxR,calleeR,cr,origin: @ integer
+      (# size,isRIndexed,sizeR,rangeR,dInxR,calleeR,origin: @ integer
       enter(size,isRIndexed)
       do reg.getR -> calleeR;  state.stacks.rPop -> origin; (* not used *)
          stacks.vPop -> dInxR;  (* x1, not used ?*)
          stacks.vPop -> rangeR; (* x0 *)
          reg.getV -> sizeR;     (* x2 *) 
          (sizeR,size) -> ins.movI;
-         (if false then 
-            (rangeR,RangeR,sizeR) -> ins.mulR;  
-            (sizeR,size) -> ins.movI;
-            (rangeR,RangeR,arrayStrucSize) -> ins.addI;
-            8 -> pushConst; stacks.vPop -> cr;
-            (rangeR,rangeR,cr) -> ins.mulR;
-            (rangeR,regKind) -> stacks.vPush;  (* range of array to be allocated *)
-         if);
          '\n\t bl _qAllocIndexed' -> out.puttext;
-         (if false then
-            (rangeR,reg.refBase,arrayStrucSize - 1 - 2) -> ins.str; (*adjustment for str *)
-            (sizeR,reg.refBase,arrayStrucSize - 2) -> ins.str;
-            cr -> reg.freeV; sizeR -> reg.freeV; dInxR -> reg.freeV;
-         if);
-         (if false then
-            '\n\t\t; ' -> out.puttext; sizeR -> out.putint; ' ' -> out.put;
-             dinxR -> out.putint; ' ' -> out.put; rangeR -> out.putint; ' ' -> out.put;
-         if);
          sizeR -> state.reg.freeV; dInxR -> reg.freeV; rangeR -> reg.freeV; 
          calleeR -> stacks.rPush; origin -> state.reg.freeR;
          state.stat
@@ -269,7 +269,7 @@ do true -> isArm;
                   vRegNo - 1 -> vRegNo;
                   rn -> tmp.freeV
                else
-                  '\n;!!!! ERROR:register mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
+                  '\n;!!!! ERROR:VALregister mismatch: ' ->out.puttext; rn -> out.putint; ','->out.put; vRegNo->out.putint;
             if)#);
          getR:
             (# rn: @integer
@@ -291,7 +291,7 @@ do true -> isArm;
                   // (rn = refBase) and refRtnBusy then
                      (* refRtnReg = refBase*)
                   // rn <> thisObj then
-                    '\n;!!!! ERROR:register mismatch: '->out.puttext; rn->out.putint; ','->out.put; rRegNo->out.putint;
+                    '\n;!!!! ERROR:REFregister mismatch: '->out.puttext; rn->out.putint; ','->out.put; rRegNo->out.putint;
             if)if)#);
          stat: 
             (# 
@@ -546,8 +546,9 @@ do true -> isArm;
                         ' refBaseTmp:' -> out.puttext; topInv.refBaseTmp -> out.putint;
             #)for)#)
       #);
-   lscInx: (#exit 0 #);
+   ODTinx: (#exit 0 #);
    callerInx: (# exit 8 #); (* to be handled by storage allocation *)
+   lscInx: (#exit 16 #);
    (* indexes in OD-template *)
    descNoInx: (#exit 8 #);
    originOffInx: (# exit 16 #);
@@ -744,7 +745,7 @@ allocParameters:
       (# r: @integer
       enter r
       do 'goOrigin'-> com;
-         (0,r,16) -> ins.ldrD; (* ODtemplate *)
+         (0,r,ODTinx) -> ins.ldrD; (* ODtemplate *)
          (0,0,originOffInx) -> ins.ldrD; (* x0 = origin off *)
          (0,r,0) -> ins.ldrR; (* x0 = r.origin *)
       exit 0
@@ -780,7 +781,7 @@ allocParameters:
          (* OBS! we need to follow pn to a possible super *)
 
          xLab[] -> labs.def; 'fetch lab adr'->appcom;
-         (0,r,16) -> ins.ldrD; (* ODtemplate *)
+         (0,r,ODTinx) -> ins.ldrD; (* ODtemplate *)
          (0,0,restartLabInx + (lab - 1) * 8) -> ins.ldrD; (* x0 = origin off *)
          0 -> ins.brR
       #);
@@ -1042,7 +1043,7 @@ allocParameters:
       (# r,dinx,r2: @integer; L: ^Text
       enter(descNo,r,dinx,isInner,useRtnVal)
       do state.reg.getV -> r2;
-         (r2,r,16) -> ins.ldrD; (* ODtemplate *)
+         (r2,r,ODTinx) -> ins.ldrD; (* ODtemplate *)
          (r2,r2,state.VDTinx - 8 + dinx * 8) -> ins.ldrD; (* r2 = callee.vBinding *)
          r2 -> state.reg.freeV;
          r -> stacks.rPush; (* origin of callee *)
@@ -1054,6 +1055,17 @@ allocParameters:
          if);
          r2 -> state.ins.blR;
          (if isInner then L[] -> labs.def if);
+      #);
+   rtn:
+      (#
+      do (reg.lr,reg.thisObj,lscInx) -> ins.ldrD;
+         (reg.thisObj,reg.thisObj,callerInx) -> ins.ldrD;
+         ins.rtn;
+         (*
+         '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr * )
+         '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj * )
+         '\n\t ret' -> out.puttext;
+         *)
       #);
    emitLab:
          (# lsc: @integer
@@ -1258,9 +1270,13 @@ do state.labs.newL -> lab[];
 ---rtn:descriptor---
 (#
 do (state.reg.refBase,state.reg.thisObj) -> state.ins.movR;
+   (if true then
+       state.rtn
+   else
    '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
    '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj *)
    '\n\t ret' -> out.puttext;
+   if)
 #)
 ---rtnv:descriptor---
 (#
@@ -1594,9 +1610,13 @@ do (N[],descNo,staticOff,useRtnVal) -> state.invoke;
 do 1 -> defLab;
    N[] -> state.mkEntryName -> state.ins.blLab;
    2 -> defLab;
+   (if true then 
+      state.rtn
+   else
    '\n\t ldr lr, [x28,#0]' -> out.puttext;  (* restore lr *)
    '\n\t ldr x28, [x28,#8]' -> out.puttext; (* restore thisObj *)
    '\n\t ret' -> out.puttext;
+  if)
 #)
 ---invokeVal:descriptor---
 (#
@@ -1753,6 +1773,10 @@ do 'nott'->state.missing
 (#
 do state.stacks.rPop; (* thisObj == BETAworld *)
    state.stat;
+#)
+---saveStringOrigin:descriptor---
+(#
+do 'saveStringOrigin' -> state.missing
 #)
 ---nop:descriptor---
 (#
