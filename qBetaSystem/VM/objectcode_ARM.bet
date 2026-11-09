@@ -26,6 +26,7 @@ do true -> isArm;
       enter msg[]
       do '\n; OBS! MISSING implementation: '->out.puttext; msg[] -> out.puttext
       #);
+   StringIdODT: ^text;
    x0: (#exit 0 #);
    x1: (#exit 1 #);
    x2: (#exit 2 #);
@@ -80,6 +81,9 @@ do true -> isArm;
          if);
          (r,reg.refBase, (arrayStrucSize - 1) * 8) -> ins.strD;
          r -> reg.freeV;
+         reg.getR -> r;
+         (stringIdODT[],r) -> ins.getAdr;
+         (r,reg.refBase,ODTinx) -> ins.strD; 'store stringODT'->appcom;
          (for i: Sx.length repeat
               (x0,i -> Sx.inxGet) -> ins.movI;
               (x0, reg.refBase, i) -> ins.str
@@ -158,9 +162,15 @@ do true -> isArm;
       exit T[]
       #);
       
-   mkVDTentryName:
+   mkODTentryName:
       (# T: ^text; s: ^Text
       do 'ODT_'-> T[]; thisName[] -> mkODname-> T.append;
+      exit T[]
+      #);
+   mkODTentryNameX:
+      (# S,T: ^text
+      enter S[]
+      do 'ODT_'-> T[]; S[] -> mkODname-> T.append;
       exit T[]
       #);
    gen_allocTemplate:
@@ -175,12 +185,12 @@ do true -> isArm;
          (if true then
             (lr,reg.heapTop,lscInx) -> ins.strD;
             (reg.thisObj,reg.heapTop,callerInx) -> ins.strD;
-            (mkVDTentryName,reg.thisObj) -> ins.getAdr;
+            (mkODTentryName,reg.thisObj) -> ins.getAdr;
             (reg.thisObj,reg.heapTop,ODTinx) -> ins.strD;
          else
             '\n\t str     lr, [x29, #0]' -> out.puttext;
             '\n\t str     x28, [x29, #8]' -> out.puttext;
-            (mkVDTentryName,28) -> ins.getAdr;
+            (mkODTentryName,28) -> ins.getAdr;
             '\n\t str     x28, [x29, #16]' -> out.puttext;
          if);
          '\n\t mov     x28, x29' -> out.puttext; 
@@ -356,6 +366,40 @@ do true -> isArm;
                   rPop -> r1; rPop -> r2;
                   r1 -> rPush; r2 -> rPush
             if)#);
+         rShiftUp:
+            (# inx,obj: @integer;
+            enter inx
+            do (* shift S up
+                    * ------------      ------------
+                    * |...|S|x|y|z  ==> |...|x|y|z|S
+                    * ------------      ------------
+               *)
+               (if (rtop - inx) < 1 then
+                  'rShiftUp: index error' -> com ; leave rShiftUp
+               if);
+               rstack[rtop - inx] -> obj;
+               (for i: inx repeat
+                  rstack[rtop - inx + i] -> rstack[rtop - inx + i - 1];
+               for);
+               obj -> rstack[rtop]
+            #);
+         rShiftDown:
+            (# inx,obj: @integer;
+            enter inx
+            do (* shift S down
+                    * ------------      ------------
+                    * |...|x|y|z|S  ==> |...|S|x|y|z
+                    * ------------      ------------
+               *)
+               (if (rtop - inx) < 1 then 
+                  'rShiftDown: index error' -> com ; leave rShiftDown
+               if);
+               rstack[rtop] -> obj;
+               (for i: inx repeat
+                        rstack[rtop - i] -> rstack[rtop - i + 1]
+               for);
+               obj -> rstack[rtop - inx]
+            #);
          stat: 
             (#
             do 'vS[' -> out.puttext;
@@ -1210,6 +1254,7 @@ do  (N[],descNo,originOff,originDescNo,isValueObj,out[]) -> descs.setCurrent;
    state.stat;
    descNo -> state.thisDescInx;
    N[] -> state.thisName[];
+   objDescTables.stringId[] -> state.mkODTentryNameX -> state.StringIdODT[];
    state.newVDT;
    (N[],descNo,originOff) -> state.ODtemplates.add
 #)
@@ -1570,11 +1615,13 @@ do state.stacks.vPop
 #)
 ---rShiftUp:descriptor---
 (#
-do 'rShiftUp'->state.missing
+do 'rShiftUp'->state.missing;
+   rn -> state.stacks.rShiftUp
 #)
 ---rShiftdown:descriptor---
 (#
-do 'rShifDown'->state.missing
+do 'rShifDown'->state.missing;
+   rn -> state.stacks.rShiftDown
 #)
 ---vShiftUp:descriptor---
 (#
