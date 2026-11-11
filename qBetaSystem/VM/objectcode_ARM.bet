@@ -432,8 +432,8 @@ do true -> isArm;
                state.stat; display;
                true -> noDeAlloc;
                (if tmpTop > 0 then
-                  storeVtmp;
-                  storeRtmp;
+                  (if vTmpOff > 0 then storeVtmp if);
+                  (if rTmpOff > 0 then storeRtmp if);
                if);
                false -> noDeAlloc;
                di -> newTmpRecord;
@@ -483,11 +483,14 @@ do true -> isArm;
                   (#do tmpStack[tmpTop].vRegNo ->out.putint;
                      ' rRegNo:'->out.puttext; tmpStack[tmpTop].rRegNo ->out.putint
                   #);
+                  (if vTmpOff > 0 then 
                   (for i: tmpStack[tmpTop].vRegNo repeat
                      reg.getV -> r;
                      (r,regKind) -> stacks.vPush;
                      (r,reg.thisObj,nxtVtmp - 1 -> nxtVtmp) -> ins.ldr;
                   for);
+                  if);
+                  (if rTmpOff > 0 then 
                   (for i: tmpStack[tmpTop].rRegNo repeat
                      reg.getR -> r;
                      r -> stacks.rPush;
@@ -496,7 +499,7 @@ do true -> isArm;
                         (r,reg.thisObj,nxtRtmp) -> ins.ldr;
                      else
                         nxtRtmp -> tmpStack[tmpTop].refBaseTmp
-               if)for);
+               if)for)if);
                tmp.display;
                stat
             if)#);
@@ -759,7 +762,7 @@ allocParameters:
       if)for);
       (if theOD.hasOrigin then reg.getR -> stacks.rPush if)
    #);
-   deAllocParameters:
+deAllocParameters:
     (# theOD: ^objDescTables.ODentry; descNo: @integer
     enter descNo
     do 'deAllocPar:'->com; descNo->out.putint; 
@@ -789,13 +792,15 @@ allocParameters:
       false -> tmp.noDealloc;
     #); 
    myOrigin:
-      (# r: @integer
+      (# r,org: @integer
       enter r
       do 'goOrigin'-> com;
          (0,r,ODTinx) -> ins.ldrD; (* ODtemplate *)
          (0,0,originOffInx) -> ins.ldrD; (* x0 = origin off *)
-         (0,r,0) -> ins.ldrR; (* x0 = r.origin *)
-      exit 0
+         r -> reg.freeR;
+         reg.getR -> org;
+         (org,r,0) -> ins.ldrR; (* x0 = r.origin *)
+      exit org
       #);
    getReturn:
       (# r: @integer
@@ -1266,7 +1271,7 @@ do '\n\t\t; objSize:'->out.puttext; objSize -> out.putint;
    objSize -> state.objSize; 
    (* shall we handle vTmpOff = 0 ?*)
    vTmpOff -> state.vTmpOff -> state.nxtVtmp; 
-   (if rTmpOff = 0 then objSize + 1 -> rTmpOff if);
+   (if false and (rTmpOff = 0) then objSize + 1 -> rTmpOff if);
    rTmpOff -> state.rTmpOff -> state.nxtRtmp;
 
    ' vTmpOff:'->out.puttext; vTmpOff->out.putint; 
@@ -1274,11 +1279,9 @@ do '\n\t\t; objSize:'->out.puttext; objSize -> out.putint;
    
    (state.thisDescInx,true,0,0,objSize)  ->  state.gen_allocTemplate;
    state.allocParameters;
-
-
 ---actions:descriptor---
 (#
-do state.reg.init; (* OBS! to clear registers after possible parameter allocations - not OK *)
+do state.reg.init; (* OBS! clear registers after possible parameter allocations - not OK *)
    state.tmp.init; 
    out.newline;
    state.thisName[] -> state.mkODname -> out.puttext; '_DO:' -> out.puttext;
@@ -1776,12 +1779,12 @@ do state.stat;
                // codes.rdiv then 'div' -> emitOp (* not used? *)
     // codes.idiv then codes.idiv -> state.binOpReg
     // codes.modd then state.emitMod
-               // codes.eq then 'eq' -> state.emitCmpOp
+    // codes.eq then 'eq' -> state.emitCmpOp
     // codes.lt then 'lt' -> state.emitCmpOp; 
     // codes.le then 'le' -> state.emitCmpOp; 
     // codes.gt then 'gt' -> state.emitCmpOp; 
     // codes.ge then 'ge' -> state.emitCmpOp; 
-               // codes.ne then 'ne' -> state.emitCmpOp
+    // codes.ne then 'ne' -> state.emitCmpOp
                // codes.andd then 'andd' -> emitOp
                // codes.orr then 'orr' -> emitOp
                // codes.xorr then 'xorr' -> emitOp
