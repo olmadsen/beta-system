@@ -1108,16 +1108,63 @@ deAllocParameters:
          (r2,r,ODTinx) -> ins.ldrD; (* ODtemplate *)
          (r2,r2,state.VDTinx - 8 + dinx * 8) -> ins.ldrD; (* r2 = callee.vBinding *)
          r2 -> state.reg.freeV;
-         r -> stacks.rPush; (* origin of callee *)
-         r -> reg.freeR;
          (if isInner then
              labs.newL -> L[];
              (r2,0) -> ins.cmpI;
              L[] -> ins.bEqZero;
              (if r <> reg.thisObj then (reg.thisObj,r) -> ins.movI if)
+         else
+            r -> stacks.rPush; (* origin of callee - if inner, no origin *)
+            r -> reg.freeR;
          if);
          r2 -> state.ins.blR;
          (if isInner then L[] -> labs.def if);
+      #);
+   doInner:
+      (# descNo,callee,dinx,innerRtnOff,r2: @integer; useRtnVal: @boolean; lab: ^Text
+      enter(descNo,dinx,innerRtnOff,useRtnVal)
+      do labs.newL -> lab[];
+         stacks.rPop -> callee;
+         (reg.thisObj,callee,innerRtnOff) -> ins.str; 
+         (0,lab[]) -> ins.adr; 
+         (0,callee,innerRtnOff + 1) -> ins.str;
+         state.reg.getV -> r2;
+         (r2,callee,ODTinx) -> ins.ldrD; (* ODtemplate *)
+         (r2,r2,state.VDTinx - 8 + dinx * 8) -> ins.ldrD; (* r2 = callee.vBinding *)
+         r2 -> state.reg.freeV;
+         (r2,0) -> ins.cmpI;
+         lab[] -> ins.bEqZero;
+         (if callee <> reg.thisObj then (reg.thisObj,callee) -> ins.movR if);
+         r2 -> state.ins.blR;
+         callee -> reg.freeR;
+         lab[] -> state.labs.def; 
+         'rtnInner:here:'->com;
+         stat;
+         (if useRtnVal then 
+              (* if inner retursn value, value in x0 ; if ref in x15 - CHECK *)
+              reg.getV -> r2;
+              (r2,regKind) -> stacks.vPush;
+              state
+          if)
+      #);
+   doInnerX:
+      (# descNo,callee,dinx,innerRtnOff,r2: @integer; useRtnVal: @boolean; lab: ^Text
+      enter(descNo,dinx,innerRtnOff,useRtnVal)
+      do labs.newL -> lab[];
+         stacks.rPop -> callee;
+         (reg.thisObj,callee,innerRtnOff) -> ins.str; 
+         (0,lab[]) -> ins.adr; 
+         (0,callee,innerRtnOff + 1) -> ins.str;
+         state.reg.getV -> r2;
+         (r2,callee,ODTinx) -> ins.ldrD; (* ODtemplate *)
+         (r2,r2,state.VDTinx - 8 + dinx * 8) -> ins.ldrD; (* r2 = callee.vBinding *)
+         r2 -> state.reg.freeV;
+         (*labs.newL -> lab[];*)
+         (r2,0) -> ins.cmpI;
+         lab[] -> ins.bEqZero;
+         (if callee <> reg.thisObj then (reg.thisObj,callee) -> ins.movR if);
+         r2 -> state.ins.blR;
+         lab[] -> state.labs.def
       #);
    rtn:
       (#
@@ -1314,30 +1361,53 @@ do state.isRegEmpty;  state.stat; state.tmp.init; state.tmp.display
    Super.S: ... DO ...; inner(Super); ...
    Invoke Main: Main.exe.; ...; toSuper; Super.DO; ...; inner(Super); ...;  main.RtnInner; ...; Super.rtn
    for Main, inner(Super) should be Main.DO
+   inner(P)
+         -- thisObj -> callee
+         push P.adr   -- P = thisObj, or P <> thisObj
+         rPop -> callee
+         thisObj -> X.innerRtnOff
+         @lab -> X.innerRtnOff + 1
+         X.DVT[inx] -> r
+         if r = 0 jmp lab
+         X -> thisObj
+         jmp r
+         -- thisObj = callee - restored from rtnInner
+         -- v[], r[], perhaps nothing on the stacks
+      lab: 
+         if useRtn then
+            push thisObj -- rtnVal is a DI of thisObj
+                         -- if no inner rtnVal is its value before inner
 *)
 (# X: @integer; lab: ^text
-do state.labs.newL -> lab[];
-   state.stacks.rPop -> X;  (* callee *)
-   (if true then
+do (if true then
+      (descInx,inx,innerRtnOff,useRtnVal) -> state.doInner; 
+   else
+      state.labs.newL -> lab[];
+      state.stacks.rPop -> X;  (* callee *)
       (state.reg.thisObj,X,innerRtnOff) -> state.ins.str; 
       (0,lab[]) -> state.ins.adr; 
       (0,X,innerRtnOff + 1) -> state.ins.str;
-   else
-      (X,state.reg.thisObj,innerRtnOff) -> state.ins.str;
-      (if true then (* pehaps alloce a register *)
-         (0,lab[]) -> state.ins.adr; 
-         (0,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
-      else
-         (state.reg.lr,state.reg.thisObj,innerRtnOff + 1) -> state.ins.str;
-   if)if);
-   (descInx,X,inx,true,false) -> state.invokeV; 
-   (* Note inx - 1! The VDT is one (1) element shorter than expected*)
-   lab[] -> state.labs.def
+      (descInx,X,inx,true,useRtnVal) -> state.invokeV; 
+      (* Note inx - 1! The VDT is one (1) element shorter than expected*)
+      lab[] -> state.labs.def
+   if)
+#)
+---innerX:descriptor---
+(#
+do 'innerX'->state.missing; '!!! innerX'->putline
 #)
 ---setThisStack:descriptor---
 (##)
 ---rPopThisObj:descriptor---
-(##)
+(# r: @integer
+do (if false then
+      state.stacks.rPop -> r;
+      (if r <> state.reg.thisObj then
+         (state.reg.thisObj,r) -> state.ins.movR;
+         r -> state.reg.freeR
+      if)
+   if)
+#)
 ---rtn:descriptor---
 (#
 do (state.reg.refBase,state.reg.thisObj) -> state.ins.movR;
