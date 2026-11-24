@@ -110,48 +110,38 @@ do true -> isArm;
        * x0 = range, x1 = dInx, x2 = size
        *)
       (# descInx: @integer; isRef: @Boolean; 
-         length,V,size,isRindexed,r,ri: @integer; 
+         range,V,size,isRindexed,r,ri: @integer; 
          trace: (# exit false #);
-      enter(descInx,isRef)
+      enter(descInx,range,isRef)
       do stat;
-         stacks.vpop -> length; (* why not an argument? *)
-         'mkIndexed:' -> com(#do (if isRef then 'isRef:'->out.puttext if); length->out.putint #);
+         'mkIndexed:' -> com(#do (if isRef then 'isRef:'->out.puttext if); range->out.putint #);
          (if isRef then 1 -> isRindexed if);
-               
-         1 -> size; (* probably size of elements???*)
-         (* args for QallocIndexed may be busy holding values of list
-          * R := (e1,e2,e3) - stack = [x0,x1,x2]
-          *)
-         (size,isRindexed) -> QallocIndexed; 
+         (* x0 = range, x1 = dInx, x2 = size *)
+         (x0,range + 3) -> ins.movI;
+         (x2,1) -> ins.movI;   (* x2 is not alloacted here *)
+         '_qAllocIndexed' -> ins.blLab;
+         reg.getR -> r -> stacks.rPush;
+         stat;
          (* need ODT -> X[0] - we need ODT for Indexed/rIndexed
           *   origin -> X[1]
           *    range -> X[2] - done by qAllocIndexed?
           *     size -> X[3] - done by qAllocIndexed
           *)
-         (* compute 1 + length - i + arrayStrucSize -> ri *)
-         (* we may have many registers on the stack - problem if list is too long
-          * we probably need to evaluate each element and then put it into the array
-          *)
-         (if isRef then
-            (*thisStack.rpop;*) (* X is pushed by QallocIndexed *)
-            (for i: length repeat
-               stacks.rpop -> r;
-               (*R -> X.fields[1 + length - i + arrayStrucSize];*)
-               (* r -> X[ri - i] *)
-            for);
-         else
-            (for i: length repeat
-               (if stacks.vTopKind = valueKind then
-                  stacks.vPop -> v;
-                  (r,v) -> ins.movI;
-                else (* r: register *)
-                    stacks.vPop -> r
-                if) 
-               (* V -> X.fields[1 + length - i + arrayStrucSize]; *)
-               (* r -> X[ri - i] *)
-            for)if);
-            (if trace then out.newline if)
-         #);
+         (* compute 1 + length - i + arrayStrucSize -> ri *) 
+         arrayStrucsize * 8 -> arrayListInx;
+         range -> listLgth
+      #);
+   arrayListInx,listLgth,listInx: @integer;
+   addArrayListElm:
+      (#
+      do arrayListInx + 8  -> arrayListInx;
+         (x0,reg.refBase,arrayListInx) -> ins.strD;
+         stacks.vPop;
+         (if (listInx + 1 -> listInx) >= listLgth then
+             'ArrayList:last'->com;
+             stat
+         if)
+      #);
    computeArrayIndex:
       (* copmpute arrayStrucSize + (inx - 1) * size + size + 1 -> inx; 
        *               fields[0] = not used
@@ -1854,15 +1844,24 @@ do (* op2 -> descInx; op1 -> size; op1 -> isRIndexed;
    state.stat;
    (size,isRefIndexed) -> state.QallocIndexed
 #)
+---initArrayList:descriptor---
+(#
+do (descInx,range,isRef) -> state.mkIndexed
+#)
+---addArrayListElm:descriptor---
+(# 
+do state.stat;
+   state.addArrayListElm;
+   0 -> state.reg.freeV (* must no index and isRef *)
+#)
 ---mkVindexed:descriptor---
 (#
-do 'mkVindexed'->state.missing;
-   (descInx,false) -> state.mkIndexed
+do state.stacks.rswap;
+   state.stat
 #)
 ---mkRindexed:descriptor---
 (#
 do 'mkRindexed'->state.missing;
-   (descInx,true) -> state.mkIndexed
 #)
 ---saveAndSetThis:descriptor---
 (# #)
